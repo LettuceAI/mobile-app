@@ -1,0 +1,43 @@
+{
+  "name": "lettuceai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:android": "bash -lc 'SDK=${ANDROID_SDK_ROOT:-\"$HOME/Android/Sdk\"}; \"${SDK}/emulator/emulator\" -avd tauri_avd -gpu host -no-snapshot -no-boot-anim -verbose > /tmp/emulator.log 2>&1 & \"${SDK}/platform-tools/adb\" wait-for-device; until [ \"$(\"${SDK}/platform-tools/adb\" shell getprop sys.boot_completed 2>/dev/null | tr -d \"\\r\")\" = \"1\" ]; do printf \".\"; sleep 1; done; echo \"emulator booted\"; npm run tauri -- android dev'"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.12",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-http": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "framer-motion": "^12.23.12",
+    "lucide-react": "^0.542.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "tailwindcss": "^4.1.12",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx,js,jsx,json,css,md}": [
+      "prettier -w",
+      "eslint --fix"
+    ]
+  }
+}
