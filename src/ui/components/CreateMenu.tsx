@@ -1,0 +1,38 @@
+import { Brain, User } from "lucide-react";
+import { BottomMenu, MenuButton, MenuSection } from "./BottomMenu";
+
+export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+    return (
+        <BottomMenu
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Create New"
+            includeExitIcon={true}
+            location="bottom"
+        >
+            <MenuSection>
+                <MenuButton
+                    icon={User}
+                    title="Create Character"
+                    description="Design a unique AI character with personality traits"
+                    color="from-blue-500 to-blue-600"
+                    onClick={() => {
+                        console.log("Create Character clicked");
+                        onClose();
+                    }}
+                />
+
+                <MenuButton
+                    icon={Brain}
+                    title="Create Persona"
+                    description="Define a roleplay persona with specific behaviors"
+                    color="from-purple-500 to-purple-600"
+                    onClick={() => {
+                        console.log("Create Persona clicked");
+                        onClose();
+                    }}
+                />
+            </MenuSection>
+        </BottomMenu>
+    );
+}

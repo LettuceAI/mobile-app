@@ -9,10 +9,10 @@ import {
   ChevronDown,
   MessageCircle
 } from "lucide-react";
-import { readSettings } from "../../core/storage/repo";
-import type { Message } from "../../core/providers/types";
-import { sendChatTurn } from "../../core/chat/runner";
-import type { ProviderCredential, Model } from "../../core/storage/schemas";
+import { readSettings } from "../../../core/storage/repo";
+import type { Message } from "../../../core/providers/types";
+import { sendChatTurn } from "../../../core/chat/runner";
+import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 
 export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);

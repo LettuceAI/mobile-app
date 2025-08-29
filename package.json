@@ -20,7 +20,6 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2",
-    "tailwindcss": "^4.1.12",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -31,6 +30,7 @@
     "husky": "^9.1.6",
     "lint-staged": "^15.2.10",
     "prettier": "^3.3.3",
+    "tailwindcss": "^4.1.12",
     "typescript": "~5.6.2",
     "vite": "^6.0.3"
   },
