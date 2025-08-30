@@ -125,6 +125,7 @@ export function SettingsPage() {
     fileCount: number;
     estimatedSessions: number;
   } | null>(null);
+  const [isPureModeEnabled, setIsPureModeEnabled] = useState(true); // Default to enabled (no NSFW)
 
   useEffect(() => {
     loadSettings();
@@ -514,10 +515,90 @@ export function SettingsPage() {
         title="Security"
       >
         <div className="p-6">
-          <div className="text-center py-12">
-            <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Security Settings</h3>
-            <p className="text-gray-500 dark:text-gray-400">Security features will be available soon.</p>
+          <div className="space-y-6">
+            {/* Pure Mode Toggle */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 pr-4">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pure Mode</h3>
+                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          isPureModeEnabled 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                        }`}>
+                          {isPureModeEnabled ? 'Protected' : 'Unrestricted'}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                      Restrict NSFW content in AI responses. When enabled, bots will not generate adult content or inappropriate material.
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <button
+                      onClick={() => setIsPureModeEnabled(!isPureModeEnabled)}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 ${
+                        isPureModeEnabled
+                          ? 'bg-blue-600 shadow-lg'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                    >
+                      <span className="sr-only">Toggle Pure Mode</span>
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-all duration-300 ${
+                          isPureModeEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Status Bar */}
+              <div className={`border-t transition-colors ${
+                isPureModeEnabled 
+                  ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800' 
+                  : 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800'
+              }`}>
+                <div className="px-6 py-4">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      isPureModeEnabled 
+                        ? 'bg-green-500' 
+                        : 'bg-orange-500'
+                    }`}></div>
+                    <span className={`text-sm font-medium ${
+                      isPureModeEnabled 
+                        ? 'text-green-700 dark:text-green-400' 
+                        : 'text-orange-700 dark:text-orange-400'
+                    }`}>
+                      {isPureModeEnabled 
+                        ? 'Content filtering is active' 
+                        : 'Content filtering is disabled'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Additional Security Features */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
+              <div className="text-center py-8">
+                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <Shield className="w-6 h-6 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">More Security Features</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                  Additional privacy and security options coming soon.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </BottomSheet>
