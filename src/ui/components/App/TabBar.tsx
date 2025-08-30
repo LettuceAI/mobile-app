@@ -10,21 +10,21 @@ export function TabBar({ onCreateClick }: { onCreateClick: () => void }) {
 
     return (
         <motion.nav
-            className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-2"
+            className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-3"
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             transition={{ type: "spring", stiffness: 100, delay: 0.1 }}
         >
-            <div className="flex justify-center items-center max-w-md mx-auto">
-                <div className="w-20 flex justify-center">
+            <div className="flex justify-between items-center max-w-lg mx-auto">
+                <div className="flex-1 flex justify-center">
                     <TabItem to="/chat" icon={MessageCircle} label="Chat" active={pathname === "/chat" || pathname === "/"} />
                 </div>
 
-                <div className="flex-shrink-0 mx-4">
+                <div className="flex-shrink-0 mx-8">
                     <CreateButton onClick={onCreateClick} />
                 </div>
 
-                <div className="w-20 flex justify-center">
+                <div className="flex-1 flex justify-center">
                     <TabItem to="/settings" icon={Settings} label="Settings" active={pathname.startsWith("/settings")} />
                 </div>
             </div>
