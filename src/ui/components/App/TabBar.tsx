@@ -15,14 +15,18 @@ export function TabBar({ onCreateClick }: { onCreateClick: () => void }) {
             animate={{ y: 0 }}
             transition={{ type: "spring", stiffness: 100, delay: 0.1 }}
         >
-            <div className="flex justify-around items-center max-w-md mx-auto">
-                <TabItem to="/chat" icon={MessageCircle} label="Chat" active={pathname === "/chat" || pathname === "/"} />
+            <div className="flex justify-center items-center max-w-md mx-auto">
+                <div className="w-20 flex justify-center">
+                    <TabItem to="/chat" icon={MessageCircle} label="Chat" active={pathname === "/chat" || pathname === "/"} />
+                </div>
 
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 mx-4">
                     <CreateButton onClick={onCreateClick} />
                 </div>
 
-                <TabItem to="/settings" icon={Settings} label="Settings" active={pathname.startsWith("/settings")} />
+                <div className="w-20 flex justify-center">
+                    <TabItem to="/settings" icon={Settings} label="Settings" active={pathname.startsWith("/settings")} />
+                </div>
             </div>
         </motion.nav>
     );

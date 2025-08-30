@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Settings, ArrowRight, AlertTriangle, X } from "lucide-react";
 import { localStorage_ } from "../../../core/storage/localstorage";
-import { ThemeToggle } from "../../components/ThemeToggle";
 import logoSvg from "../../../assets/logo.svg";
 
 export function WelcomePage() {
@@ -25,11 +24,6 @@ export function WelcomePage() {
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900 transition-colors">
-      {/* Header */}
-      <div className="flex justify-end p-6">
-        <ThemeToggle size="md" />
-      </div>
-
       {/* Content */}
       <div className="flex-1 flex flex-col justify-center px-8 -mt-12">
         <div className="text-center space-y-10 max-w-md mx-auto">

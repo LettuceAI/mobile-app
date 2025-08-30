@@ -12,8 +12,7 @@ import {
   Trash2,
   RotateCcw,
   AlertTriangle,
-  BookOpen,
-  Palette
+  BookOpen
 } from "lucide-react";
 
 import { 
@@ -28,7 +27,6 @@ import {
 import { providerRegistry } from "../../../core/providers/registry";
 import { setSecret, getSecret } from "../../../core/secrets";
 import { ResetManager } from "../../../core/storage/reset";
-import { ThemeToggle } from "../../components/ThemeToggle";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 
 interface BottomSheetProps {
@@ -88,7 +86,7 @@ function MenuItem({ icon, title, subtitle, onClick, badge }: MenuItemProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
     >
       <div className="flex items-center space-x-4">
         <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
@@ -114,7 +112,7 @@ function MenuItem({ icon, title, subtitle, onClick, badge }: MenuItemProps) {
 export function SettingsPage() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSheet, setActiveSheet] = useState<"providers" | "models" | "security" | "reset" | "appearance" | null>(null);
+  const [activeSheet, setActiveSheet] = useState<"providers" | "models" | "security" | "reset" | null>(null);
   const [providers, setProviders] = useState<ProviderCredential[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
@@ -139,7 +137,7 @@ export function SettingsPage() {
     setDefaultModelId(settings.defaultModelId);
   };
 
-  const openSheet = async (sheet: "providers" | "models" | "security" | "reset" | "appearance") => {
+  const openSheet = async (sheet: "providers" | "models" | "security" | "reset") => {
     if (sheet === "reset") {
       try {
         const summary = await ResetManager.getResetSummary();
@@ -247,8 +245,7 @@ export function SettingsPage() {
   return (
     <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-        <div className="p-6 space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-6 pt-12 space-y-4">
             <MenuItem
               icon={<Key className="w-5 h-5" />}
               title="Providers"
@@ -264,20 +261,12 @@ export function SettingsPage() {
               onClick={() => openSheet("models")}
             />
             <MenuItem
-              icon={<Palette className="w-5 h-5" />}
-              title="Appearance"
-              subtitle="Theme and display settings"
-              onClick={() => openSheet("appearance")}
-            />
-            <MenuItem
               icon={<Shield className="w-5 h-5" />}
               title="Security"
               subtitle="Privacy and security settings"
               onClick={() => openSheet("security")}
             />
-          </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
             <MenuItem
               icon={<BookOpen className="w-5 h-5" />}
               title="Setup Guide"
@@ -290,7 +279,6 @@ export function SettingsPage() {
               subtitle="Clear all app data and start fresh"
               onClick={() => openSheet("reset")}
             />
-          </div>
         </div>
       </div>
 
@@ -405,30 +393,6 @@ export function SettingsPage() {
               </div>
             </div>
           )}
-        </div>
-      </BottomSheet>
-
-      <BottomSheet
-        isOpen={isOpen && activeSheet === "appearance"}
-        onClose={closeSheet}
-        title="Appearance"
-      >
-        <div className="p-6">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white">Theme</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Choose your preferred theme</p>
-              </div>
-              <ThemeToggle size="lg" variant="button" />
-            </div>
-            
-            <div className="text-center py-8">
-              <Palette className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">More Customization Coming Soon</h3>
-              <p className="text-gray-500 dark:text-gray-400">Additional appearance options will be available in future updates.</p>
-            </div>
-          </div>
         </div>
       </BottomSheet>
 
