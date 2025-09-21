@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Loader, Info, Settings } from "lucide-react";
+import { ArrowLeft, Check, Loader, Settings, Sparkles } from "lucide-react";
+
 import { readSettings, addOrUpdateModel } from "../../../core/storage/repo";
 import { localStorage_ } from "../../../core/storage/localstorage";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
@@ -22,11 +23,11 @@ export function ModelSetupPage() {
     try {
       const settings = await readSettings();
       setProviders(settings.providerCredentials);
-      
+
       if (settings.providerCredentials.length > 0) {
         const firstProvider = settings.providerCredentials[0];
         setSelectedProvider(firstProvider);
-        
+
         const defaultModel = getDefaultModelName(firstProvider.providerId);
         setModelName(defaultModel);
         setDisplayName(defaultModel);
@@ -43,22 +44,21 @@ export function ModelSetupPage() {
 
     setIsSaving(true);
     try {
-      const model: Omit<Model, 'id'> = {
+      const model: Omit<Model, "id"> = {
         name: modelName.trim(),
         providerId: selectedProvider.id,
         displayName: displayName.trim(),
-        createdAt: Date.now()
+        createdAt: Date.now(),
       };
 
       await addOrUpdateModel(model);
-      
+
       localStorage_.setOnboardingCompleted(true);
       localStorage_.setModelSetupCompleted(true);
-      
+
       navigate("/chat?firstTime=true");
     } catch (error: any) {
       console.error("Failed to save model:", error);
-      // TODO: Show error to user
     } finally {
       setIsSaving(false);
     }
@@ -73,217 +73,167 @@ export function ModelSetupPage() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-white">
-        <div className="flex items-center space-x-3 text-gray-600">
-          <Loader size={24} className="animate-spin" />
-          <span>Loading providers...</span>
+      <div className="flex h-full items-center justify-center rounded-3xl border border-white/5 bg-black/40 text-gray-300">
+        <div className="flex items-center gap-3 text-sm">
+          <Loader size={20} className="animate-spin" />
+          Loading providers...
         </div>
       </div>
     );
   }
 
+  if (providers.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6 rounded-3xl border border-white/5 bg-black/40 text-center text-gray-300">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/10 text-gray-200">
+          <Settings size={26} />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-white">No providers configured</h2>
+          <p className="max-w-md text-sm text-gray-400">
+            You'll need to connect a provider before choosing a default model.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate("/onboarding/provider")}
+          className="rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
+        >
+          Go to provider setup
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900 transition-colors">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate("/onboarding/provider")}
-            className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-          >
-            <ArrowLeft size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
-          <div className="text-center">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Model Setup</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Step 2 of 2</p>
+    <div className="flex h-full flex-col gap-6 pb-12 text-gray-200">
+      <header className="relative overflow-hidden rounded-3xl border border-white/5 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),_rgba(5,5,5,0.85))] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.5)]">
+        <div className="absolute right-[-4rem] top-[-4rem] h-48 w-48 rounded-full bg-white/10 blur-3xl opacity-50" />
+        <div className="absolute bottom-[-5rem] left-[-6rem] h-64 w-64 rounded-full bg-white/10 blur-3xl opacity-35" />
+        <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4 text-sm text-gray-400">
+            <button
+              onClick={() => navigate("/onboarding/provider")}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:border-white/30 hover:text-white"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.35em] text-gray-500">Step 2 of 2</p>
+              <h1 className="text-xl font-semibold text-white">Set your default model</h1>
+            </div>
           </div>
-          <div className="w-10"></div>
+          <p className="max-w-[220px] text-xs text-gray-400">
+            Choose which provider and model name LettuceAI should use by default. You'll be able to add more later.
+          </p>
         </div>
       </header>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {providers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mb-4">
-              <Settings size={24} className="text-gray-500 dark:text-gray-400" />
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1.05fr_1.05fr]">
+        <section className="space-y-5 rounded-3xl border border-white/5 bg-black/45 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.4)]">
+          <header className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-white">Select a provider</h2>
+              <p className="text-xs text-gray-500">We'll save the model under this provider.</p>
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Providers Found</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              No providers configured. Please add a provider first.
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.35em] text-gray-400">
+              Linked
+            </span>
+          </header>
+
+          <div className="space-y-3">
+            {providers.map((provider) => {
+              const isActive = selectedProvider?.id === provider.id;
+              return (
+                <button
+                  key={provider.id}
+                  className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                    isActive
+                      ? "border-white/25 bg-white/15 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                      : "border-white/5 bg-black/40 hover:border-white/15 hover:bg-black/35"
+                  }`}
+                  onClick={() => {
+                    setSelectedProvider(provider);
+                    const defaultModel = getDefaultModelName(provider.providerId);
+                    setModelName(defaultModel);
+                    setDisplayName(defaultModel);
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">{provider.label}</h3>
+                      <p className="text-xs text-gray-400">{getProviderDisplayName(provider.providerId)}</p>
+                    </div>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs ${
+                      isActive
+                        ? "border-emerald-300/60 bg-emerald-400/20 text-emerald-200"
+                        : "border-white/10 text-gray-500"
+                    }`}>
+                      <Check size={14} />
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="space-y-6 rounded-3xl border border-white/5 bg-black/45 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.4)]">
+          <header>
+            <h2 className="text-base font-semibold text-white">Model details</h2>
+            <p className="text-xs text-gray-500">
+              Define the API identifier and the label you'll see inside the app.
             </p>
+          </header>
+
+          {selectedProvider && (
+            <div className="space-y-5">
+              <Field label="Model name" description="Exact identifier used for API calls.">
+                <input
+                  type="text"
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                  placeholder="gpt-4o, claude-3-sonnet"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
+                />
+              </Field>
+
+              <Field label="Display name" description="How this model appears in menus.">
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Creative mentor"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
+                />
+              </Field>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
-              onClick={() => navigate("/onboarding/provider")}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              onClick={handleSkip}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
             >
-              Add Provider
+              Skip for now
+            </button>
+            <button
+              onClick={handleSaveModel}
+              disabled={!canSave || isSaving}
+              className="flex-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/80 hover:bg-emerald-400/30 disabled:cursor-not-allowed disabled:border-emerald-400/10 disabled:bg-emerald-400/5 disabled:text-emerald-400"
+            >
+              {isSaving ? "Saving..." : "Finish"}
             </button>
           </div>
-        ) : (
-          <div className="p-6 space-y-6">
-            {/* Provider Selection */}
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Select Provider
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  Choose which provider to use for this model
-                </p>
-              </div>
-              
-              <div className="space-y-3">
-                {providers.map((provider) => (
-                  <button
-                    key={provider.id}
-                    className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                      selectedProvider?.id === provider.id
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
-                    }`}
-                    onClick={() => {
-                      setSelectedProvider(provider);
-                      const defaultModel = getDefaultModelName(provider.providerId);
-                      setModelName(defaultModel);
-                      setDisplayName(defaultModel);
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">
-                          {provider.label}
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          {getProviderDisplayName(provider.providerId)}
-                        </p>
-                      </div>
-                      {selectedProvider?.id === provider.id && (
-                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                          <Check size={12} className="text-white" />
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            {/* Model Configuration */}
-            {selectedProvider && (
-              <div className="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Configure Model
-                  </h2>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">
-                    Set up the AI model you want to use
-                  </p>
-                </div>
-
-                {/* Model Name */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-900 dark:text-white">
-                    Model Name
-                  </label>
-                  <input
-                    type="text"
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    placeholder="e.g., gpt-4, claude-3-sonnet"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    The exact model identifier for API calls
-                  </p>
-                </div>
-
-                {/* Display Name */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-900 dark:text-white">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g., GPT-4, Claude 3 Sonnet"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Friendly name shown in the UI
-                  </p>
-                </div>
-
-                {/* Popular Models Info */}
-                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-                  <div className="flex items-start space-x-3">
-                    <Info size={20} className="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-blue-900 dark:text-blue-300 mb-2">
-                        Popular {getProviderDisplayName(selectedProvider.providerId)} Models:
-                      </h4>
-                      <div className="space-y-1 text-sm text-blue-800 dark:text-blue-300">
-                        {getPopularModels(selectedProvider.providerId).map((model, index) => (
-                          <div key={index}>• {model}</div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          {!canSave && (
+            <p className="text-xs text-gray-500">
+              Fill out both fields above to enable the finish button.
+            </p>
+          )}
+        </section>
       </div>
-
-      {/* Footer */}
-      {selectedProvider && (
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-3">
-          <button
-            onClick={handleSaveModel}
-            disabled={!canSave || isSaving}
-            className={`w-full px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
-              canSave && !isSaving
-                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                : "bg-gray-400 text-white cursor-not-allowed"
-            }`}
-          >
-            {isSaving ? (
-              <>
-                <Loader size={20} className="animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : (
-              <>
-                <span>Complete Setup</span>
-                <ArrowRight size={20} />
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={handleSkip}
-            className="w-full px-6 py-3 rounded-lg font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
-          >
-            Skip Model Setup
-          </button>
-        </div>
-      )}
     </div>
   );
-}
-
-function getDefaultModelName(providerId: string): string {
-  switch (providerId) {
-    case "openai":
-      return "gpt-4";
-    case "anthropic":
-      return "claude-3-sonnet-20240229";
-    case "openrouter":
-      return "openai/gpt-4";
-    default:
-      return "gpt-3.5-turbo";
-  }
 }
 
 function getProviderDisplayName(providerId: string): string {
@@ -295,23 +245,33 @@ function getProviderDisplayName(providerId: string): string {
     case "openrouter":
       return "OpenRouter";
     case "openai-compatible":
-      return "OpenAI-Compatible";
-    case "custom-json":
-      return "Custom";
+      return "OpenAI compatible";
+    case "custom":
+      return "Custom endpoint";
     default:
-      return "Provider";
+      return providerId;
   }
 }
 
-function getPopularModels(providerId: string): string[] {
+function getDefaultModelName(providerId: string): string {
   switch (providerId) {
     case "openai":
-      return ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"];
+      return "gpt-4o";
     case "anthropic":
-      return ["claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-opus-20240229"];
+      return "claude-3-sonnet";
     case "openrouter":
-      return ["openai/gpt-4", "anthropic/claude-3-sonnet", "meta-llama/llama-2-70b-chat"];
+      return "meta-llama/llama-3-70b-instruct";
     default:
-      return ["gpt-3.5-turbo", "gpt-4"];
+      return "custom-model";
   }
+}
+
+function Field({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2 text-sm">
+      <label className="text-sm font-semibold text-white">{label}</label>
+      {description && <p className="text-xs text-gray-500">{description}</p>}
+      {children}
+    </div>
+  );
 }

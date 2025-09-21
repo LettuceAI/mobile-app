@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls, type PanInfo } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { 
-  X, 
-  Plus, 
-  ChevronRight, 
-  Cpu, 
-  Key, 
+import {
+  X,
+  Plus,
+  ChevronRight,
+  Cpu,
+  Key,
   Shield,
   Check,
   Trash2,
@@ -15,9 +15,9 @@ import {
   BookOpen
 } from "lucide-react";
 
-import { 
-  readSettings, 
-  addOrUpdateProviderCredential, 
+import {
+  readSettings,
+  addOrUpdateProviderCredential,
   removeProviderCredential,
   addOrUpdateModel,
   removeModel,
@@ -37,6 +37,19 @@ interface BottomSheetProps {
 }
 
 function BottomSheet({ isOpen, onClose, children, title }: BottomSheetProps) {
+  const dragControls = useDragControls();
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    const hasPulledFarEnough = info.offset.y > 120;
+    const hasQuickSwipe = info.velocity.y > 900 && info.offset.y > 30;
+    if (hasPulledFarEnough || hasQuickSwipe) {
+      onClose();
+      return;
+    }
+
+    dragControls.stop();
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -45,26 +58,41 @@ function BottomSheet({ isOpen, onClose, children, title }: BottomSheetProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-40"
+            className="fixed inset-0 z-40 bg-black/70 backdrop-blur"
             onClick={onClose}
           />
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl z-50 max-h-[85vh] overflow-hidden"
+            transition={{ type: "spring", damping: 24, stiffness: 320 }}
+            className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-h-[85vh] max-w-3xl overflow-hidden rounded-t-3xl border border-white/10 bg-[#0b0b0d] shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 240 }}
+            dragElastic={{ top: 0, bottom: 0.15 }}
+            dragMomentum={false}
+            onDragEnd={handleDragEnd}
           >
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
+            <div className="flex justify-center pt-4 pb-2">
               <button
-                onClick={onClose}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  dragControls.start(event);
+                }}
+                style={{ touchAction: "none" }}
+                className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none"
+                aria-label="Drag to close menu"
               >
-                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                <span className="h-1.5 w-24 rounded-full bg-white/60" />
               </button>
             </div>
-            <div className="overflow-y-auto max-h-[calc(85vh-80px)]">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 pb-4">
+              <h2 className="text-lg font-semibold text-white">{title}</h2>
+            </div>
+            <div className="max-h-[calc(85vh-64px)] overflow-y-auto px-6 py-6">
               {children}
             </div>
           </motion.div>
@@ -86,24 +114,24 @@ function MenuItem({ icon, title, subtitle, onClick, badge }: MenuItemProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+      className="group flex h-full w-full items-center justify-between rounded-3xl border border-white/10 bg-[#0c0d13]/85 p-5 text-left text-white transition hover:border-white/20 hover:bg-white/10"
     >
-      <div className="flex items-center space-x-4">
-        <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+      <div className="flex items-start gap-4">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white/80">
           {icon}
         </div>
-        <div className="text-left">
-          <div className="font-medium text-gray-900 dark:text-white">{title}</div>
-          {subtitle && <div className="text-sm text-gray-500 dark:text-gray-400">{subtitle}</div>}
+        <div className="space-y-1">
+          <div className="text-sm font-semibold text-white">{title}</div>
+          {subtitle && <div className="text-xs text-gray-400">{subtitle}</div>}
         </div>
       </div>
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         {badge && (
-          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded-full">
+          <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.35em] text-gray-300">
             {badge}
           </span>
         )}
-        <ChevronRight className="w-5 h-5 text-gray-400" />
+        <ChevronRight className="h-4 w-4 text-gray-500 transition group-hover:text-white" />
       </div>
     </button>
   );
@@ -168,7 +196,7 @@ export function SettingsPage() {
     if (editingProvider.apiKeyRef && apiKey) {
       await setSecret(editingProvider.apiKeyRef, apiKey);
     }
-    
+
     await loadSettings();
     setEditingProvider(null);
     setApiKey("");
@@ -181,7 +209,7 @@ export function SettingsPage() {
 
   const handleSaveModel = async () => {
     if (!editingModel) return;
-    
+
     await addOrUpdateModel(editingModel);
     await loadSettings();
     setEditingModel(null);
@@ -201,13 +229,13 @@ export function SettingsPage() {
     try {
       setIsResetting(true);
       await ResetManager.resetAllData();
-      
+
       await loadSettings();
-      
+
       closeSheet();
-      
+
       alert("All data has been reset successfully. The app will restart.");
-      
+
       window.location.reload();
     } catch (error: any) {
       console.error("Reset failed:", error);
@@ -226,7 +254,7 @@ export function SettingsPage() {
       apiKeyRef: { providerId: providerRegistry[0].id, key: "apiKey", credId: newId }
     };
     setEditingProvider(newProvider as ProviderCredential);
-    
+
     if (provider?.apiKeyRef) {
       const ref = { ...provider.apiKeyRef, credId: provider.id };
       getSecret(ref).then(key => setApiKey(key || ""));
@@ -245,42 +273,43 @@ export function SettingsPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-        <div className="p-6 pt-12 space-y-4">
+      <div className="flex h-full flex-col gap-6 pb-16 text-gray-200">
+        <section className="flex-1 overflow-y-auto px-4 pt-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <MenuItem
-              icon={<Key className="w-5 h-5" />}
+              icon={<Key className="h-5 w-5" />}
               title="Providers"
               subtitle="Manage API providers and credentials"
               badge={providers.length.toString()}
               onClick={() => openSheet("providers")}
             />
             <MenuItem
-              icon={<Cpu className="w-5 h-5" />}
+              icon={<Cpu className="h-5 w-5" />}
               title="Models"
               subtitle="Add and manage AI models"
               badge={models.length.toString()}
               onClick={() => openSheet("models")}
             />
             <MenuItem
-              icon={<Shield className="w-5 h-5" />}
+              icon={<Shield className="h-5 w-5" />}
               title="Security"
               subtitle="Privacy and security settings"
               onClick={() => openSheet("security")}
             />
-          
             <MenuItem
-              icon={<BookOpen className="w-5 h-5" />}
+              icon={<BookOpen className="h-5 w-5" />}
               title="Setup Guide"
-              subtitle="Rerun the welcome and setup process"
+              subtitle="Rerun the welcome and onboarding flow"
               onClick={() => navigate("/welcome")}
             />
             <MenuItem
-              icon={<RotateCcw className="w-5 h-5" />}
+              icon={<RotateCcw className="h-5 w-5" />}
               title="Reset"
               subtitle="Clear all app data and start fresh"
               onClick={() => openSheet("reset")}
             />
-        </div>
+          </div>
+        </section>
       </div>
 
       <BottomSheet
@@ -293,31 +322,31 @@ export function SettingsPage() {
             <>
               <button
                 onClick={() => startEditProvider()}
-                className="w-full flex items-center justify-center space-x-2 p-4 bg-blue-600 text-white rounded-xl mb-4 hover:bg-blue-700 transition-colors"
+                className="group mb-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/20"
               >
                 <Plus className="w-5 h-5" />
                 <span>Add Provider</span>
               </button>
-              
+
               <div className="space-y-3">
                 {providers.map((provider) => (
-                  <div key={provider.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                  <div key={provider.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/45 px-5 py-4">
                     <div>
-                      <div className="font-medium text-gray-900 dark:text-white">{provider.label}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="text-base font-semibold text-white">{provider.label}</div>
+                      <div className="text-sm text-gray-500">
                         {providerRegistry.find(p => p.id === provider.providerId)?.name}
                       </div>
                     </div>
                     <div className="flex space-x-2">
                       <button
                         onClick={() => startEditProvider(provider)}
-                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                        className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:text-white"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDeleteProvider(provider.id)}
-                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                        className="rounded-full border border-red-400/40 px-3 py-2 text-xs font-semibold text-red-200 transition hover:border-red-400/70 hover:text-red-100"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -329,65 +358,65 @@ export function SettingsPage() {
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Provider Type</label>
+                <label className="mb-2 block text-sm font-semibold text-white">Provider Type</label>
                 <select
                   value={editingProvider.providerId}
-                  onChange={(e) => setEditingProvider({ 
-                    ...editingProvider, 
+                  onChange={(e) => setEditingProvider({
+                    ...editingProvider,
                     providerId: e.target.value,
                     apiKeyRef: { ...editingProvider.apiKeyRef!, providerId: e.target.value, credId: editingProvider.id }
                   })}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white focus:border-white/30 focus:outline-none"
                 >
                   {providerRegistry.map((provider) => (
                     <option key={provider.id} value={provider.id}>{provider.name}</option>
                   ))}
                 </select>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Label</label>
+                <label className="mb-2 block text-sm font-semibold text-white">Label</label>
                 <input
                   type="text"
                   value={editingProvider.label}
                   onChange={(e) => setEditingProvider({ ...editingProvider, label: e.target.value })}
                   placeholder="My OpenAI Account"
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Key</label>
+                <label className="mb-2 block text-sm font-semibold text-white">API Key</label>
                 <input
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="Enter your API key"
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Base URL (Optional)</label>
+                <label className="mb-2 block text-sm font-semibold text-white">Base URL (Optional)</label>
                 <input
                   type="url"
                   value={editingProvider.baseUrl || ""}
                   onChange={(e) => setEditingProvider({ ...editingProvider, baseUrl: e.target.value })}
                   placeholder="https://api.openai.com"
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
                 />
               </div>
-              
+
               <div className="flex space-x-3 pt-4">
                 <button
                   onClick={handleSaveProvider}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition-colors"
+                  className="flex-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-400/30"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setEditingProvider(null)}
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="flex-1 rounded-full border border-white/10 bg-white/10 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:text-white"
                 >
                   Cancel
                 </button>
@@ -407,23 +436,23 @@ export function SettingsPage() {
             <>
               <button
                 onClick={() => startEditModel()}
-                className="w-full flex items-center justify-center space-x-2 p-4 bg-blue-600 text-white rounded-xl mb-4 hover:bg-blue-700 transition-colors"
+                className="group mb-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/20"
               >
                 <Plus className="w-5 h-5" />
                 <span>Add Model</span>
               </button>
-              
+
               <div className="space-y-3">
                 {models.map((model) => (
-                  <div key={model.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                  <div key={model.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/45 px-5 py-4">
                     <div>
                       <div className="flex items-center space-x-2">
-                        <div className="font-medium text-gray-900 dark:text-white">{model.displayName}</div>
+                        <div className="text-base font-semibold text-white">{model.displayName}</div>
                         {model.id === defaultModelId && (
-                          <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          <Check className="h-4 w-4 text-emerald-300" />
                         )}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="text-sm text-gray-500">
                         {model.name} • {providerRegistry.find(p => p.id === model.providerId)?.name}
                       </div>
                     </div>
@@ -431,20 +460,20 @@ export function SettingsPage() {
                       {model.id !== defaultModelId && (
                         <button
                           onClick={() => handleSetDefaultModel(model.id)}
-                          className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors text-sm"
+                          className="rounded-full border border-emerald-400/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70 hover:text-emerald-100"
                         >
                           Set Default
                         </button>
                       )}
                       <button
                         onClick={() => startEditModel(model)}
-                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                        className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:text-white"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDeleteModel(model.id)}
-                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                        className="rounded-full border border-red-400/40 px-3 py-2 text-xs font-semibold text-red-200 transition hover:border-red-400/70 hover:text-red-100"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -456,50 +485,50 @@ export function SettingsPage() {
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Display Name</label>
+                <label className="mb-2 block text-sm font-semibold text-white">Display Name</label>
                 <input
                   type="text"
                   value={editingModel.displayName}
                   onChange={(e) => setEditingModel({ ...editingModel, displayName: e.target.value })}
                   placeholder="GPT-4 Turbo"
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Model Name</label>
+                <label className="mb-2 block text-sm font-semibold text-white">Model Name</label>
                 <input
                   type="text"
                   value={editingModel.name}
                   onChange={(e) => setEditingModel({ ...editingModel, name: e.target.value })}
                   placeholder="gpt-4-turbo-preview"
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Provider</label>
+                <label className="mb-2 block text-sm font-semibold text-white">Provider</label>
                 <select
                   value={editingModel.providerId}
                   onChange={(e) => setEditingModel({ ...editingModel, providerId: e.target.value })}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white focus:border-white/30 focus:outline-none"
                 >
                   {providers.map((provider) => (
                     <option key={provider.id} value={provider.providerId}>{provider.label}</option>
                   ))}
                 </select>
               </div>
-              
+
               <div className="flex space-x-3 pt-4">
                 <button
                   onClick={handleSaveModel}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition-colors"
+                  className="flex-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-400/30"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setEditingModel(null)}
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="flex-1 rounded-full border border-white/10 bg-white/10 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:text-white"
                 >
                   Cancel
                 </button>
@@ -514,90 +543,52 @@ export function SettingsPage() {
         onClose={closeSheet}
         title="Security"
       >
-        <div className="p-6">
-          <div className="space-y-6">
-            {/* Pure Mode Toggle */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 pr-4">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                        <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pure Mode</h3>
-                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          isPureModeEnabled 
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
-                        }`}>
-                          {isPureModeEnabled ? 'Protected' : 'Unrestricted'}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-                      Restrict NSFW content in AI responses. When enabled, bots will not generate adult content or inappropriate material.
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <button
-                      onClick={() => setIsPureModeEnabled(!isPureModeEnabled)}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 ${
-                        isPureModeEnabled
-                          ? 'bg-blue-600 shadow-lg'
-                          : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
-                    >
-                      <span className="sr-only">Toggle Pure Mode</span>
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-all duration-300 ${
-                          isPureModeEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-white/10 bg-black/40 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-1 items-start gap-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white">
+                  <Shield className="h-5 w-5" />
                 </div>
-              </div>
-              
-              {/* Status Bar */}
-              <div className={`border-t transition-colors ${
-                isPureModeEnabled 
-                  ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800' 
-                  : 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800'
-              }`}>
-                <div className="px-6 py-4">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      isPureModeEnabled 
-                        ? 'bg-green-500' 
-                        : 'bg-orange-500'
-                    }`}></div>
-                    <span className={`text-sm font-medium ${
-                      isPureModeEnabled 
-                        ? 'text-green-700 dark:text-green-400' 
-                        : 'text-orange-700 dark:text-orange-400'
-                    }`}>
-                      {isPureModeEnabled 
-                        ? 'Content filtering is active' 
-                        : 'Content filtering is disabled'}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-semibold text-white">Pure Mode</h3>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] ${isPureModeEnabled
+                      ? 'border-emerald-400/50 bg-emerald-400/15 text-emerald-200'
+                      : 'border-orange-400/50 bg-orange-400/15 text-orange-200'
+                      }`}>
+                      {isPureModeEnabled ? 'Protected' : 'Open'}
                     </span>
                   </div>
+                  <p className="max-w-md text-sm text-gray-400">
+                    Restrict NSFW content in AI responses. When enabled, your characters stay within safe, respectful boundaries.
+                  </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPureModeEnabled((v) => !v)}
+                role="switch"
+                aria-checked={isPureModeEnabled}
+                className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer items-center rounded-full px-1 transition-colors duration-200 focus:outline-none ${isPureModeEnabled ? 'bg-emerald-500/70' : 'bg-gray-600'}`}
+              >
+                <span className="sr-only">Toggle Pure Mode</span>
+                <span
+                  className={`block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-out ${
+                    isPureModeEnabled ? 'translate-x-7' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
-            
-            {/* Additional Security Features */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
-              <div className="text-center py-8">
-                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-6 h-6 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">More Security Features</h3>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  Additional privacy and security options coming soon.
-                </p>
-              </div>
+            <div
+              className={`mt-6 rounded-2xl border px-4 py-3 text-xs font-medium ${
+                isPureModeEnabled
+                  ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+                  : 'border-orange-400/40 bg-orange-400/10 text-orange-200'
+              }`}
+            >
+              {isPureModeEnabled ? 'Content filtering is active' : 'Content filtering is disabled'}
             </div>
           </div>
         </div>
@@ -608,70 +599,71 @@ export function SettingsPage() {
         onClose={closeSheet}
         title="Reset App Data"
       >
-        <div className="p-6">
-          <div className="text-center mb-6">
-            <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Reset All Data</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
-              This will permanently delete all your app data including providers, models, chat sessions, and settings.
+        <div className="space-y-6">
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl border border-red-500/50 bg-red-500/10 text-red-200">
+              <AlertTriangle className="h-8 w-8" />
+            </div>
+            <h3 className="text-lg font-semibold text-white">Reset all data</h3>
+            <p className="mt-2 text-sm text-gray-400">
+              This permanently deletes providers, models, chat sessions, and stored preferences from this device.
             </p>
           </div>
 
           {resetSummary && (
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6">
-              <h4 className="font-medium text-gray-900 dark:text-white mb-3">What will be deleted:</h4>
-              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex justify-between">
-                  <span>Providers & Models:</span>
-                  <span>{providers.length + models.length} items</span>
+            <div className="rounded-3xl border border-white/10 bg-black/35 p-6 text-sm text-gray-300">
+              <h4 className="text-base font-semibold text-white">What will be cleared</h4>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span>Providers & models</span>
+                  <span>{providers.length + models.length}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Chat Sessions:</span>
-                  <span>{resetSummary.estimatedSessions} sessions</span>
+                <div className="flex items-center justify-between">
+                  <span>Stored chats</span>
+                  <span>≈ {resetSummary.estimatedSessions}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>App Settings:</span>
-                  <span>{Object.keys(resetSummary.localStorageItems).length} items</span>
+                <div>
+                  <span className="font-semibold text-white">LocalStorage keys</span>
+                  <ul className="mt-1 space-y-1 text-xs text-gray-500">
+                    {Object.keys(resetSummary.localStorageItems).map((key) => (
+                      <li key={key} className="truncate">{key}</li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="flex justify-between">
-                  <span>Data Files:</span>
-                  <span>{resetSummary.fileCount + resetSummary.estimatedSessions} files</span>
+                <div className="flex items-center justify-between">
+                  <span>Files stored</span>
+                  <span>{resetSummary.fileCount}</span>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-medium text-red-900 dark:text-red-300">Warning</h4>
-                <p className="text-sm text-red-700 dark:text-red-400 mt-1">
-                  This action cannot be undone. All your data will be permanently deleted and the app will restart.
-                </p>
-              </div>
-            </div>
+          <div className="rounded-3xl border border-red-500/40 bg-red-500/10 p-5 text-left text-sm text-red-100">
+            <h4 className="text-base font-semibold text-red-100">Warning</h4>
+            <p className="mt-2 text-sm text-red-100/80">
+              This action cannot be undone. The app will restart after the reset completes.
+            </p>
           </div>
 
-          <div className="flex space-x-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               onClick={closeSheet}
-              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 rounded-full border border-white/10 bg-white/10 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:text-white"
             >
               Cancel
             </button>
             <button
               onClick={handleReset}
               disabled={isResetting}
-              className="flex-1 bg-red-600 text-white py-3 rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-full border border-red-500/50 bg-red-500/20 px-6 py-3 text-sm font-semibold text-red-100 transition hover:border-red-500/70 hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isResetting ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Resetting...</span>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-red-100 border-t-transparent" />
+                  Resetting...
                 </div>
               ) : (
-                "Reset All Data"
+                'Reset all data'
               )}
             </button>
           </div>

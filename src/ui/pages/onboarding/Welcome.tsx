@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, ArrowRight, AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
+
 import { localStorage_ } from "../../../core/storage/localstorage";
 import logoSvg from "../../../assets/logo.svg";
 
@@ -12,10 +13,6 @@ export function WelcomePage() {
     navigate("/onboarding/provider");
   };
 
-  const handleSkipWarning = () => {
-    setShowSkipWarning(true);
-  };
-
   const handleConfirmSkip = () => {
     localStorage_.setOnboardingCompleted(true);
     localStorage_.setOnboardingSkipped(true);
@@ -23,112 +20,126 @@ export function WelcomePage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900 transition-colors">
-      {/* Content */}
-      <div className="flex-1 flex flex-col justify-center px-8 -mt-12">
-        <div className="text-center space-y-10 max-w-md mx-auto">
-          {/* Logo and Title */}
-          <div className="space-y-8">
-            <div className="w-28 h-28 mx-auto">
-              <img 
-                src={logoSvg} 
-                alt="LettuceAI Logo" 
-                className="w-full h-full object-contain"
-              />
-            </div>
-            
-            <div className="space-y-4">
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">
-                Welcome to LettuceAI
-              </h1>
-              <p className="text-xl text-gray-600 dark:text-gray-400 font-light">
-                Your privacy-first AI companion
-              </p>
+    <div className="flex min-h-screen flex-col text-gray-200">
+      <div className="flex flex-1 flex-col items-center justify-center space-y-8">
+        {/* Logo and branding */}
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-full bg-gradient-to-r from-purple-500/20 to-emerald-400/20 blur-xl"></div>
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-white/10 to-white/5 shadow-2xl">
+              <img src={logoSvg} alt="LettuceAI" className="h-12 w-12" />
             </div>
           </div>
-
-          {/* Description */}
-          <div className="space-y-4">
-            <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-lg">
-              Start chatting with AI characters by configuring your preferred provider.
+          
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-bold text-white">LettuceAI</h1>
+            <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
+              Your personal AI assistant that keeps everything private and on-device
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
-              Your credentials are stored securely on your device.
-            </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="space-y-4 pt-6">
-            {/* Primary Button - Get Started */}
-            <button
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white p-6 rounded-3xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 flex items-center justify-center space-x-4"
-              onClick={handleAddProvider}
-            >
-              <div className="w-7 h-7 bg-white/20 rounded-xl flex items-center justify-center">
-                <Settings size={20} className="text-white" />
-              </div>
-              <span>Get Started</span>
-              <ArrowRight size={22} />
-            </button>
-
-            {/* Secondary Button - Skip */}
-            <button
-              className="w-full text-gray-600 dark:text-gray-400 p-5 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 rounded-3xl transition-all duration-300 border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-lg"
-              onClick={handleSkipWarning}
-            >
-              Skip for now
-            </button>
           </div>
         </div>
+
+        {/* Features */}
+        <div className="flex items-center justify-center gap-3">
+          {quickFacts.map(({ icon: Icon, label }) => (
+            <div key={label} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 backdrop-blur-sm">
+              <Icon size={16} className="text-emerald-400" />
+              <span className="text-xs font-medium text-gray-300">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Call to action */}
+        <div className="w-full max-w-xs space-y-3">
+          <button
+            className="group w-full flex items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-semibold text-white transition-all hover:border-white/30 hover:bg-white/15 hover:scale-[1.02]"
+            onClick={handleAddProvider}
+          >
+            <Settings size={18} />
+            <span>Get started</span>
+            <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+          </button>
+
+          <button
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-gray-400 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+            onClick={() => setShowSkipWarning(true)}
+          >
+            Skip for now
+          </button>
+        </div>
+
+        {/* Bottom hint */}
+        <p className="text-xs text-gray-500 text-center max-w-sm">
+          Quick setup takes less than 2 minutes
+        </p>
       </div>
 
-      {/* Skip Warning Modal */}
       {showSkipWarning && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end z-50">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-3xl p-8 space-y-6 border-t border-gray-200 dark:border-gray-700 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Skip Setup?</h3>
-              <button
-                onClick={() => setShowSkipWarning(false)}
-                className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-              >
-                <X size={22} className="text-gray-500 dark:text-gray-400" />
-              </button>
-            </div>
+        <SkipWarning
+          onClose={() => setShowSkipWarning(false)}
+          onConfirm={handleConfirmSkip}
+          onAddProvider={handleAddProvider}
+        />
+      )}
+    </div>
+  );
+}
 
-            <div className="flex items-start space-x-4">
-              <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
-                <AlertTriangle size={28} className="text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">
-                  Provider Setup Recommended
-                </h4>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Without a provider, you won't be able to chat with AI characters. 
-                  You can add one later in Settings.
-                </p>
-              </div>
-            </div>
+const quickFacts = [
+  { icon: ShieldCheck, label: "On-device only" },
+  { icon: Sparkles, label: "Character ready" },
+];
 
-            <div className="space-y-4 pt-4">
-              <button
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white p-5 rounded-3xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                onClick={handleAddProvider}
-              >
-                Add Provider Now
-              </button>
-              
-              <button
-                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 p-5 rounded-3xl font-semibold text-lg transition-all duration-300"
-                onClick={handleConfirmSkip}
-              >
-                Skip Anyway
-              </button>
-            </div>
+function SkipWarning({
+  onClose,
+  onConfirm,
+  onAddProvider,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+  onAddProvider: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0b0d] p-8 shadow-[0_30px_120px_rgba(0,0,0,0.7)]">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-semibold text-white">Skip setup?</h3>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-white/10 bg-white/5 p-2 text-gray-400 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-6 flex items-start gap-4 rounded-2xl border border-white/5 bg-black/40 p-5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-300">
+            <AlertTriangle size={26} />
+          </div>
+          <div className="space-y-2 text-sm text-gray-300">
+            <h4 className="text-base font-semibold text-white">Provider setup recommended</h4>
+            <p>
+              Without connecting a provider you won't be able to send messages yet. You can add one anytime from settings.
+            </p>
           </div>
         </div>
-      )}
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <button
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
+            onClick={onAddProvider}
+          >
+            Go to provider setup
+            <ArrowRight size={16} />
+          </button>
+          <button
+            className="flex-1 rounded-full border border-emerald-400/30 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400/60 hover:bg-emerald-400/30"
+            onClick={onConfirm}
+          >
+            Skip anyway
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

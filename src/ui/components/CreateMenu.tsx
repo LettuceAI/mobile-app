@@ -1,13 +1,15 @@
 import { Brain, User } from "lucide-react";
 import { BottomMenu, MenuButton, MenuSection } from "./BottomMenu";
+import { useNavigate } from "react-router-dom";
 
 export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+    const navigate = useNavigate();
     return (
         <BottomMenu
             isOpen={isOpen}
             onClose={onClose}
             title="Create New"
-            includeExitIcon={true}
+            includeExitIcon={false}
             location="bottom"
         >
             <MenuSection>
@@ -17,8 +19,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                     description="Design a unique AI character with personality traits"
                     color="from-blue-500 to-blue-600"
                     onClick={() => {
-                        console.log("Create Character clicked");
                         onClose();
+                        navigate("/create/character");
                     }}
                 />
 

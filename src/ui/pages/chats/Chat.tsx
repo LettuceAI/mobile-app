@@ -1,38 +1,20 @@
 import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { listCharacters } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
+import { getDemoCharacters } from "./demoCharacters";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
       try {
         let list = await listCharacters();
-        // load mock data
-        if (!list.length) {
-          list = [
-            {
-              id: "1",
-              name: "Alice",
-              persona: "A friendly and helpful AI assistant.",
-              avatarPath: "",
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            },
-            {
-              id: "2",
-              name: "Bob",
-              persona: "A witty and sarcastic AI companion.",
-              avatarPath: "",
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            },
-          ];
-        }
         setCharacters(list);
       } finally {
         setLoading(false);
@@ -41,7 +23,7 @@ export function ChatPage() {
   }, []);
 
   const startChat = (character: Character) => {
-    console.log("Starting chat with:", character.name);
+    navigate(`/chat/${character.id}`);
   };
 
   return (
@@ -64,15 +46,14 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
     <div className="space-y-3">
       {characters.map((character) => {
         const personaPreview = character.persona?.trim() || "Tap to add a persona description.";
-        const stylePreview = character.style?.trim();
-        const boundariesPreview = character.boundaries?.trim();
         const updatedLabel = formatUpdatedAt(character.updatedAt);
 
         return (
           <button
             key={character.id}
             onClick={() => onSelect(character)}
-            className="group relative flex h-[96px] items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/90 px-4 text-left transition hover:border-white/25"
+            className="group relative flex h-[96px] w-full min-w-0 max-w-full items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/90 px-4 text-left transition hover:border-white/25"
+            style={{ width: "100%" }}
           >
             <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-emerald-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
 
@@ -94,23 +75,6 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
               </div>
 
               <p className="text-[11px] leading-5 text-gray-400 line-clamp-2">{personaPreview}</p>
-
-              {(stylePreview || boundariesPreview) && (
-                <div className="flex flex-wrap gap-2">
-                  {stylePreview && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-white/70">
-                      Tone
-                      <span className="font-normal normal-case text-white/80">· {truncateText(stylePreview, 30)}</span>
-                    </span>
-                  )}
-                  {boundariesPreview && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-white/70">
-                      Limits
-                      <span className="font-normal normal-case text-white/80">· {truncateText(boundariesPreview, 30)}</span>
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
 
             <span className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition group-hover:border-white/25 group-hover:text-white">

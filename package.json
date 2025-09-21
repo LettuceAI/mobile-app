@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri:android": "bash -lc 'SDK=${ANDROID_SDK_ROOT:-\"$HOME/Android/Sdk\"}; \"${SDK}/emulator/emulator\" -avd tauri_avd -gpu host -no-snapshot -no-boot-anim -verbose > /tmp/emulator.log 2>&1 & \"${SDK}/platform-tools/adb\" wait-for-device; until [ \"$(\"${SDK}/platform-tools/adb\" shell getprop sys.boot_completed 2>/dev/null | tr -d \"\\r\")\" = \"1\" ]; do printf \".\"; sleep 1; done; echo \"emulator booted\"; npm run tauri -- android dev'"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.12",

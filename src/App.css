@@ -30,8 +30,8 @@
   line-height: 24px;
   font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  color: #f5f5f5;
+  background-color: #050505;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -40,18 +40,18 @@
   -webkit-text-size-adjust: 100%;
 }
 
-html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; overscroll-behavior: none; min-height: -webkit-fill-available; }
+html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow-x: hidden; overscroll-behavior: none; min-height: -webkit-fill-available; }
 #root { height: 100%; width: 100%; }
-.app-shell { height: 100dvh; max-height: 100dvh; min-height: -webkit-fill-available; width: 100vw; max-width: 100vw; display: flex; flex-direction: column; background: var(--bg, #f6f6f6); overflow: hidden; }
-.app-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 0.5rem 0.75rem; padding-top: calc(0.5rem + env(safe-area-inset-top)); background: #fff; border-bottom: 1px solid #eee; }
+.app-shell { height: 100dvh; max-height: 100dvh; min-height: -webkit-fill-available; width: 100vw; max-width: 100vw; display: flex; flex-direction: column; background: #050505; overflow: hidden; }
+.app-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 0.5rem 0.75rem; padding-top: calc(0.5rem + env(safe-area-inset-top)); background: #050505; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
 .app-title { font-size: 1.1rem; margin: 0; }
 .app-main { flex: 1; overflow: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0.75rem; padding-bottom: calc(4rem + env(safe-area-inset-bottom)); max-width: 900px; width: 100%; margin: 0 auto; box-sizing: border-box; }
-.app-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; gap: 0.5rem; justify-content: space-around; padding: 0.5rem 0.75rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #eee; }
-.app-tabbar a { flex: 1; text-align: center; padding: 0.5rem; border-radius: 8px; color: #333; }
-.app-tabbar a.active { background: #eef3ff; color: #1f4ed8; }
+.app-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; gap: 0.5rem; justify-content: space-around; padding: 0.5rem 0.75rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)); background: #0b0b0d; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.app-tabbar a { flex: 1; text-align: center; padding: 0.5rem; border-radius: 12px; color: #e5e5e5; }
+.app-tabbar a.active { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
 
 *, *::before, *::after { box-sizing: border-box; }
-body, .app-shell, .app-main { overflow-x: hidden; }
+body, .app-shell, .app-main { overflow-x: hidden; background-color: #050505; color: #f5f5f5; }
 
 .container {
   margin: 0;
@@ -157,20 +157,20 @@ button { padding: 0.6em 0.9em; }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+    color: #f5f5f5;
+    background-color: #050505;
   }
 
   a:hover {
-    color: #24c8db;
+    color: #9b87f5;
   }
 
   input,
   button {
     color: #ffffff;
-    background-color: #0f0f0f98;
+    background-color: #111111;
   }
   button:active {
-    background-color: #0f0f0f69;
+    background-color: #1a1a1a;
   }
 }
