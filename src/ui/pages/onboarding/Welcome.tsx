@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
 
-import { localStorage_ } from "../../../core/storage/localstorage";
+import {
+  setOnboardingCompleted,
+  setOnboardingSkipped,
+} from "../../../core/storage/appState";
 import logoSvg from "../../../assets/logo.svg";
 
 export function WelcomePage() {
@@ -13,9 +16,9 @@ export function WelcomePage() {
     navigate("/onboarding/provider");
   };
 
-  const handleConfirmSkip = () => {
-    localStorage_.setOnboardingCompleted(true);
-    localStorage_.setOnboardingSkipped(true);
+  const handleConfirmSkip = async () => {
+    await setOnboardingCompleted(true);
+    await setOnboardingSkipped(true);
     navigate("/chat");
   };
 
@@ -34,7 +37,7 @@ export function WelcomePage() {
           <div className="text-center space-y-2">
             <h1 className="text-2xl font-bold text-white">LettuceAI</h1>
             <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
-              Your personal AI assistant that keeps everything private and on-device
+              Your personal AI Roleplay that keeps everything private and on-device
             </p>
           </div>
         </div>
@@ -96,7 +99,7 @@ function SkipWarning({
   onAddProvider,
 }: {
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onAddProvider: () => void;
 }) {
   return (
@@ -134,7 +137,9 @@ function SkipWarning({
           </button>
           <button
             className="flex-1 rounded-full border border-emerald-400/30 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400/60 hover:bg-emerald-400/30"
-            onClick={onConfirm}
+            onClick={() => {
+              void onConfirm();
+            }}
           >
             Skip anyway
           </button>

@@ -31,14 +31,61 @@ export const ModelSchema = z.object({
 });
 export type Model = z.infer<typeof ModelSchema>;
 
+export const OnboardingStateSchema = z.object({
+  completed: z.boolean(),
+  skipped: z.boolean(),
+  providerSetupCompleted: z.boolean(),
+  modelSetupCompleted: z.boolean(),
+});
+export type OnboardingState = z.infer<typeof OnboardingStateSchema>;
+
+export function createDefaultOnboardingState(): OnboardingState {
+  return {
+    completed: false,
+    skipped: false,
+    providerSetupCompleted: false,
+    modelSetupCompleted: false,
+  };
+}
+
+export const TooltipsStateSchema = z.record(z.boolean());
+export type TooltipsState = z.infer<typeof TooltipsStateSchema>;
+
+export const AppStateSchema = z.object({
+  onboarding: OnboardingStateSchema,
+  theme: z.enum(["light", "dark"]),
+  tooltips: TooltipsStateSchema,
+});
+export type AppState = z.infer<typeof AppStateSchema>;
+
+export function createDefaultAppState(): AppState {
+  return {
+    onboarding: createDefaultOnboardingState(),
+    theme: "light",
+    tooltips: {},
+  };
+}
+
 export const SettingsSchema = z.object({
-  $version: z.literal(1),
+  $version: z.literal(2),
   defaultProviderCredentialId: z.string().uuid().nullable(),
   defaultModelId: z.string().uuid().nullable(),
   providerCredentials: z.array(ProviderCredentialSchema),
   models: z.array(ModelSchema),
+  appState: AppStateSchema,
 });
 export type Settings = z.infer<typeof SettingsSchema>;
+
+export function createDefaultSettings(): Settings {
+  return {
+    $version: 2,
+    defaultProviderCredentialId: null,
+    defaultModelId: null,
+    providerCredentials: [],
+    models: [],
+    appState: createDefaultAppState(),
+  };
+}
 
 export const CharacterSchema = z.object({
   id: z.string().uuid(),

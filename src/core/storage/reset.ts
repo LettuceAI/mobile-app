@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { localStorage_ } from "./localstorage";
+import { getAppStateSummary, resetAppState } from "./appState";
 import { dataFiles } from "./files";
 
 export class ResetManager {
@@ -44,21 +44,21 @@ export class ResetManager {
     }
   }
 
-  static clearLocalStorage(): void {
+  static async clearAppState(): Promise<void> {
     try {
-      localStorage_.clearAll();
-      console.log("localStorage cleared successfully");
+      await resetAppState();
+      console.log("App state cleared successfully");
     } catch (error) {
-      console.error("Failed to clear localStorage:", error);
-      throw new Error("Failed to clear localStorage. Please try again.");
+      console.error("Failed to clear app state:", error);
+      throw new Error("Failed to clear app state. Please try again.");
     }
   }
 
   static async resetAllData(): Promise<void> {
     try {
-      this.clearLocalStorage();
-      
       await this.clearAppFiles();
+
+      await this.clearAppState();
       
       console.log("All app data reset successfully");
     } catch (error) {
@@ -68,11 +68,11 @@ export class ResetManager {
   }
 
   static async getResetSummary(): Promise<{
-    localStorageItems: Record<string, string | null>;
+    appState: Awaited<ReturnType<typeof getAppStateSummary>>;
     fileCount: number;
     estimatedSessions: number;
   }> {
-    const localStorageItems = localStorage_.getAll();
+    const appState = await getAppStateSummary();
     
     let sessionCount = 0;
     try {
@@ -82,7 +82,7 @@ export class ResetManager {
     } catch { }
 
     return {
-      localStorageItems,
+      appState,
       fileCount: 3, 
       estimatedSessions: sessionCount,
     };

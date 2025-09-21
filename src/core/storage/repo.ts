@@ -9,6 +9,7 @@ import {
   type Settings,
   type ProviderCredential,
   type Model,
+  createDefaultSettings,
 } from "./schemas";
 
 function now() {
@@ -36,15 +37,17 @@ function uuidv4(): string {
 
 export async function readSettings(): Promise<Settings> {
   await ensureDataDir();
-  const fallback: Settings = { 
-    $version: 1, 
-    defaultProviderCredentialId: null, 
-    defaultModelId: null,
-    providerCredentials: [],
-    models: []
-  };
+  const fallback = createDefaultSettings();
   const data = await fileIO.readJson(dataFiles.settings, fallback);
-  return SettingsSchema.parse(data);
+
+  const parsed = SettingsSchema.safeParse(data);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const defaults = createDefaultSettings();
+  await writeSettings(defaults);
+  return defaults;
 }
 
 export async function writeSettings(s: Settings): Promise<void> {

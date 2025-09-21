@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
@@ -9,7 +9,7 @@ import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage } from "./ui/pages/characters";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
-import { localStorage_ } from "./core/storage/localstorage";
+import { isOnboardingCompleted } from "./core/storage/appState";
 import { TopNav, TabBar } from "./ui/components/App";
 
 function App() {
@@ -149,8 +149,11 @@ function OnboardingCheck() {
   const [shouldShowOnboarding, setShouldShowOnboarding] = useState(false);
 
   useEffect(() => {
-    const checkOnboarding = () => {
-      const onboardingCompleted = localStorage_.isOnboardingCompleted();
+    let cancelled = false;
+
+    const checkOnboarding = async () => {
+      const onboardingCompleted = await isOnboardingCompleted();
+      if (cancelled) return;
       if (!onboardingCompleted) {
         setShouldShowOnboarding(true);
       }
@@ -158,6 +161,10 @@ function OnboardingCheck() {
     };
 
     checkOnboarding();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (isChecking) {
@@ -169,7 +176,7 @@ function OnboardingCheck() {
   }
 
   if (shouldShowOnboarding) {
-    return <WelcomePage />;
+    return <Navigate to="/welcome" replace />;
   }
 
   return <ChatPage />;

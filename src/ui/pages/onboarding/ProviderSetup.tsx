@@ -12,7 +12,7 @@ import {
 
 import { providerRegistry } from "../../../core/providers/registry";
 import { addOrUpdateProviderCredential } from "../../../core/storage/repo";
-import { localStorage_ } from "../../../core/storage/localstorage";
+import { setProviderSetupCompleted } from "../../../core/storage/appState";
 import { setSecret } from "../../../core/secrets";
 import type { ProviderCredential } from "../../../core/storage/schemas";
 
@@ -99,7 +99,7 @@ export function ProviderSetupPage() {
         await setSecret(credential.apiKeyRef, apiKey);
       }
 
-      localStorage_.setProviderSetupCompleted(true);
+      await setProviderSetupCompleted(true);
       navigate("/onboarding/models");
     } catch (error: any) {
       setTestResult({

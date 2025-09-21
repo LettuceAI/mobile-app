@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { localStorage_ } from "../storage/localstorage";
+import { getTheme as getStoredTheme, setTheme as setStoredTheme } from "../storage/appState";
 
 type Theme = "light" | "dark";
 
@@ -27,10 +27,18 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>("light");
 
   useEffect(() => {
-    const savedTheme = localStorage_.getTheme() as Theme;
-    setThemeState(savedTheme);
-    
-    updateDocumentTheme(savedTheme);
+    let cancelled = false;
+
+    (async () => {
+      const savedTheme = (await getStoredTheme()) as Theme;
+      if (cancelled) return;
+      setThemeState(savedTheme);
+      updateDocumentTheme(savedTheme);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const updateDocumentTheme = (newTheme: Theme) => {
@@ -44,7 +52,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage_.setTheme(newTheme);
+    void setStoredTheme(newTheme);
     updateDocumentTheme(newTheme);
   };
 

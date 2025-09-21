@@ -27,7 +27,7 @@ import {
 import { providerRegistry } from "../../../core/providers/registry";
 import { setSecret, getSecret } from "../../../core/secrets";
 import { ResetManager } from "../../../core/storage/reset";
-import type { ProviderCredential, Model } from "../../../core/storage/schemas";
+import type { ProviderCredential, Model, OnboardingState } from "../../../core/storage/schemas";
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -149,7 +149,7 @@ export function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const [resetSummary, setResetSummary] = useState<{
-    localStorageItems: Record<string, string | null>;
+    appState: { onboarding: OnboardingState; theme: "light" | "dark"; tooltipCount: number };
     fileCount: number;
     estimatedSessions: number;
   } | null>(null);
@@ -623,11 +623,34 @@ export function SettingsPage() {
                   <span>≈ {resetSummary.estimatedSessions}</span>
                 </div>
                 <div>
-                  <span className="font-semibold text-white">LocalStorage keys</span>
+                  <span className="font-semibold text-white">Preferences snapshot</span>
                   <ul className="mt-1 space-y-1 text-xs text-gray-500">
-                    {Object.keys(resetSummary.localStorageItems).map((key) => (
-                      <li key={key} className="truncate">{key}</li>
-                    ))}
+                    <li className="flex items-center justify-between text-gray-400">
+                      <span>Onboarding completed</span>
+                      <span className="text-gray-300">
+                        {resetSummary.appState.onboarding.completed ? "Yes" : "No"}
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between text-gray-400">
+                      <span>Provider setup</span>
+                      <span className="text-gray-300">
+                        {resetSummary.appState.onboarding.providerSetupCompleted ? "Done" : "Pending"}
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between text-gray-400">
+                      <span>Model setup</span>
+                      <span className="text-gray-300">
+                        {resetSummary.appState.onboarding.modelSetupCompleted ? "Done" : "Pending"}
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between text-gray-400">
+                      <span>Theme</span>
+                      <span className="text-gray-300">{resetSummary.appState.theme}</span>
+                    </li>
+                    <li className="flex items-center justify-between text-gray-400">
+                      <span>Tooltips seen</span>
+                      <span className="text-gray-300">{resetSummary.appState.tooltipCount}</span>
+                    </li>
                   </ul>
                 </div>
                 <div className="flex items-center justify-between">

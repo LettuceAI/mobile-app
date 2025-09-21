@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Loader, Settings, Sparkles } from "lucide-react";
 
 import { readSettings, addOrUpdateModel } from "../../../core/storage/repo";
-import { localStorage_ } from "../../../core/storage/localstorage";
+import {
+  setModelSetupCompleted,
+  setOnboardingCompleted,
+} from "../../../core/storage/appState";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 
 export function ModelSetupPage() {
@@ -53,8 +56,8 @@ export function ModelSetupPage() {
 
       await addOrUpdateModel(model);
 
-      localStorage_.setOnboardingCompleted(true);
-      localStorage_.setModelSetupCompleted(true);
+      await setOnboardingCompleted(true);
+      await setModelSetupCompleted(true);
 
       navigate("/chat?firstTime=true");
     } catch (error: any) {
@@ -64,8 +67,8 @@ export function ModelSetupPage() {
     }
   };
 
-  const handleSkip = () => {
-    localStorage_.setOnboardingCompleted(true);
+  const handleSkip = async () => {
+    await setOnboardingCompleted(true);
     navigate("/chat");
   };
 

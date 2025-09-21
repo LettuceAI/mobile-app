@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowUp } from "lucide-react";
-import { localStorage_ } from "../../core/storage/localstorage";
+import { hasSeenTooltip, setTooltipSeen } from "../../core/storage/appState";
 
 interface TooltipProps {
   isVisible: boolean;
@@ -104,15 +104,23 @@ export function useFirstTimeTooltip(key: string) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const hasSeenTooltip = localStorage_.hasSeenTooltip(key);
-    if (!hasSeenTooltip) {
-      setIsVisible(true);
-    }
+    let cancelled = false;
+
+    (async () => {
+      const seen = await hasSeenTooltip(key);
+      if (!cancelled && !seen) {
+        setIsVisible(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [key]);
 
   const dismissTooltip = () => {
     setIsVisible(false);
-    localStorage_.setTooltipSeen(key, true);
+    void setTooltipSeen(key, true);
   };
 
   return {
