@@ -1,181 +1,185 @@
-import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowLeft, Settings } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { listCharacters } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
-import { getDemoCharacters } from "./demoCharacters";
 
-export function ChatPage() {
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [loading, setLoading] = useState(true);
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+}
+
+const mockMessages: ChatMessage[] = [
+  {
+    id: "1",
+    role: "assistant",
+    content: "Hey there! I'm ready whenever you are.",
+    timestamp: Date.now() - 1000 * 60 * 5,
+  },
+  {
+    id: "2",
+    role: "user",
+    content: "Awesome, let's brainstorm some character ideas.",
+    timestamp: Date.now() - 1000 * 60 * 4,
+  },
+  {
+    id: "3",
+    role: "assistant",
+    content: "Great! Do you have a genre or vibe in mind to start with?",
+    timestamp: Date.now() - 1000 * 60 * 3,
+  },
+];
+
+export function ChatConversationPage() {
+  const { characterId } = useParams<{ characterId: string }>();
   const navigate = useNavigate();
 
+  const [character, setCharacter] = useState<Character | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [messages] = useState<ChatMessage[]>(mockMessages);
+  const [draft, setDraft] = useState("");
+
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         let list = await listCharacters();
-        setCharacters(list);
+        const match = list.find((c) => c.id === characterId) ?? null;
+        if (!cancelled) {
+          setCharacter(match);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
-  }, []);
 
-  const startChat = (character: Character) => {
-    navigate(`/chat/${character.id}`);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [characterId]);
 
-  return (
-    <div className="flex h-full flex-col pb-6 text-gray-200">
-      <main className="flex-1 overflow-y-auto px-4 pt-4">
-        {loading ? (
-          <CharacterSkeleton />
-        ) : characters.length ? (
-          <CharacterList characters={characters} onSelect={startChat} />
-        ) : (
-          <EmptyState />
-        )}
-      </main>
-    </div>
-  );
-}
+  const headerTitle = useMemo(() => character?.name ?? "Unknown" , [character?.name]);
 
-function CharacterList({ characters, onSelect }: { characters: Character[]; onSelect: (character: Character) => void }) {
-  return (
-    <div className="space-y-3">
-      {characters.map((character) => {
-        const descriptionPreview = character.description?.trim() || "Tap to add a character description.";
-        const updatedLabel = formatUpdatedAt(character.updatedAt);
+  const avatarDisplay = useMemo(() => {
+    if (character?.avatarPath && isImageLike(character.avatarPath)) {
+      return <img src={character.avatarPath} alt={character?.name ?? "avatar"} className="h-10 w-10 rounded-xl object-cover" />;
+    }
 
-        return (
-          <button
-            key={character.id}
-            onClick={() => onSelect(character)}
-            className="group relative flex h-[96px] w-full min-w-0 max-w-full items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/90 px-4 text-left transition hover:border-white/25"
-            style={{ width: "100%" }}
-          >
-            <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-emerald-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-
-            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-white">
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-40" />
-              <div className="relative z-10 flex h-full w-full items-center justify-center">
-                {renderAvatar(character, true)}
-              </div>
-            </div>
-
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold text-white">{character.name}</p>
-                {updatedLabel && (
-                  <span className="ml-auto shrink-0 text-[10px] uppercase tracking-[0.2em] text-gray-500">
-                    {updatedLabel}
-                  </span>
-                )}
-              </div>
-
-              <p className="text-[11px] leading-5 text-gray-400 line-clamp-2">{descriptionPreview}</p>
-            </div>
-
-            <span className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition group-hover:border-white/25 group-hover:text-white">
-              <ArrowRight size={16} />
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function CharacterSkeleton() {
-  return (
-    <div className="space-y-3">
-      {[0, 1, 2].map((index) => (
-        <div
-          key={index}
-          className="animate-pulse h-[96px] rounded-2xl border border-white/5 bg-white/5 px-4"
-        >
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-white/10" />
-            <div className="flex-1 space-y-3">
-              <div className="h-3 w-1/3 rounded-full bg-white/10" />
-              <div className="h-3 w-full rounded-full bg-white/5" />
-              <div className="flex gap-2">
-                <div className="h-3 w-24 rounded-full bg-white/5" />
-                <div className="h-3 w-28 rounded-full bg-white/5" />
-              </div>
-            </div>
-            <div className="h-9 w-9 rounded-full border border-white/10 bg-white/5" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-3xl border border-dashed border-white/12 bg-[#0b0c12] p-8 text-center shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-white">No characters yet</h3>
-        <p className="text-xs text-gray-400">
-          Create a new character from the tab bar below to start your first conversation.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function isImageLike(s?: string) {
-  if (!s) return false;
-  const lower = s.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
-}
-
-function renderAvatar(c: Character, isLarge = false) {
-  const v = c.avatarPath || "";
-  if (isImageLike(v)) {
+    const initials = character?.name ? character.name.slice(0, 2).toUpperCase() : "?";
     return (
-      <img
-        src={v}
-        alt="avatar"
-        className={`object-cover ${isLarge ? "h-12 w-12" : "h-10 w-10"}`}
-      />
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold text-white">
+        {initials}
+      </div>
+    );
+  }, [character]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-3 border-white/10 border-t-white/70" />
+      </div>
     );
   }
-  const display = v || c.name.slice(0, 2).toUpperCase();
-  return <span className="text-white">{display}</span>;
-}
 
-function truncateText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength).trimEnd()}…`;
-}
-
-function formatUpdatedAt(timestamp: number) {
-  if (!timestamp) return "";
-  const now = Date.now();
-  const diffSeconds = Math.round((now - timestamp) / 1000);
-  if (!Number.isFinite(diffSeconds) || diffSeconds < 0) return "";
-
-  if (diffSeconds < 45) return "Updated just now";
-
-  const units: Array<{ label: string; seconds: number }> = [
-    { label: "minute", seconds: 60 },
-    { label: "hour", seconds: 3600 },
-    { label: "day", seconds: 86400 },
-    { label: "week", seconds: 604800 },
-    { label: "month", seconds: 2592000 },
-    { label: "year", seconds: 31536000 },
-  ];
-
-  for (let i = units.length - 1; i >= 0; i -= 1) {
-    const unit = units[i];
-    if (diffSeconds >= unit.seconds) {
-      const value = Math.floor(diffSeconds / unit.seconds);
-      return `Updated ${value} ${unit.label}${value > 1 ? "s" : ""} ago`;
-    }
+  if (!character) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6 text-center text-gray-400">
+        <p className="text-lg font-semibold text-white">Character not found</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white transition hover:border-white/30"
+        >
+          Go back
+        </button>
+      </div>
+    );
   }
 
-  return "Updated moments ago";
+  return (
+    <div className="flex min-h-screen flex-col bg-[#050505] pt-5">
+      <header className="sticky top-0 z-20 bg-[#050505]/95 px-3 pb-3 pt-5 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+              aria-label="Back"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            {avatarDisplay}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{headerTitle}</p>
+              {character.description && (
+                <p className="truncate text-xs text-gray-400">{character.description}</p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => console.log("open settings")}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+            aria-label="Conversation settings"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
+      </header>
+
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <div className="relative flex-1 space-y-4 overflow-y-auto px-3 pt-4 pb-24">
+          {messages.map((message) => (
+            <motion.div
+              key={message.id}
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-[0_18px_40px_rgba(0,0,0,0.25)] ${
+                message.role === "user"
+                  ? "ml-auto bg-gradient-to-br from-emerald-500/60 to-emerald-400/40 text-white"
+                  : "bg-white/5 text-gray-100"
+              }`}
+            >
+              {message.content}
+            </motion.div>
+          ))}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#050505] via-[#050505e6] to-transparent" />
+        </div>
+      </div>
+
+      <footer className="sticky bottom-0 z-20 border-t border-white/10 bg-[#050505]/95 px-3 pb-6 pt-3 backdrop-blur">
+        <div className="flex items-end gap-3 rounded-2xl border border-white/15 bg-white/5 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.4)]">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={`Message ${character.name}`}
+            rows={1}
+            className="max-h-32 flex-1 resize-none bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
+          />
+          <button
+            onClick={() => {
+              console.log("send", draft);
+              setDraft("");
+            }}
+            disabled={!draft.trim()}
+            className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Send
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function isImageLike(value?: string) {
+  if (!value) return false;
+  const lower = value.toLowerCase();
+  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
