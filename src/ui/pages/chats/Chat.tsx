@@ -45,7 +45,7 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
   return (
     <div className="space-y-3">
       {characters.map((character) => {
-        const personaPreview = character.persona?.trim() || "Tap to add a persona description.";
+        const descriptionPreview = character.description?.trim() || "Tap to add a character description.";
         const updatedLabel = formatUpdatedAt(character.updatedAt);
 
         return (
@@ -74,7 +74,7 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
                 )}
               </div>
 
-              <p className="text-[11px] leading-5 text-gray-400 line-clamp-2">{personaPreview}</p>
+              <p className="text-[11px] leading-5 text-gray-400 line-clamp-2">{descriptionPreview}</p>
             </div>
 
             <span className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition group-hover:border-white/25 group-hover:text-white">

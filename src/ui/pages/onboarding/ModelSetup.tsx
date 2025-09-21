@@ -49,7 +49,8 @@ export function ModelSetupPage() {
     try {
       const model: Omit<Model, "id"> = {
         name: modelName.trim(),
-        providerId: selectedProvider.id,
+        providerId: selectedProvider.providerId,
+        providerLabel: selectedProvider.label,
         displayName: displayName.trim(),
         createdAt: Date.now(),
       };

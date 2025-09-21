@@ -25,6 +25,7 @@ async function writeJson<T>(path: string, value: T): Promise<void> {
 export const dataFiles = {
   settings: "lettuce/settings.json",
   characters: "lettuce/characters.json",
+  personas: "lettuce/personas.json",
   sessionsIndex: "lettuce/sessions/index.json",
   session: (id: string) => `lettuce/sessions/${id}.json`,
 };

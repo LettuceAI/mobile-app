@@ -27,11 +27,11 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                 <MenuButton
                     icon={Brain}
                     title="Create Persona"
-                    description="Define a roleplay persona with specific behaviors"
+                    description="Define a reusable writing style or personality"
                     color="from-purple-500 to-purple-600"
                     onClick={() => {
-                        console.log("Create Persona clicked");
                         onClose();
+                        navigate("/create/persona");
                     }}
                 />
             </MenuSection>

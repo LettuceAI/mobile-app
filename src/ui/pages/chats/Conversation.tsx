@@ -117,8 +117,8 @@ export function ChatConversationPage() {
             {avatarDisplay}
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">{headerTitle}</p>
-              {character.persona && (
-                <p className="truncate text-xs text-gray-400">{character.persona}</p>
+              {character.description && (
+                <p className="truncate text-xs text-gray-400">{character.description}</p>
               )}
             </div>
           </div>

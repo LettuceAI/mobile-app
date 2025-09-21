@@ -4,9 +4,11 @@ import {
   CharacterSchema,
   SessionSchema,
   SettingsSchema,
+  PersonaSchema,
   type Character,
   type Session,
   type Settings,
+  type Persona,
   type ProviderCredential,
   type Model,
   createDefaultSettings,
@@ -42,7 +44,22 @@ export async function readSettings(): Promise<Settings> {
 
   const parsed = SettingsSchema.safeParse(data);
   if (parsed.success) {
-    return parsed.data;
+    const settings = parsed.data;
+    // Migrate models to include providerLabel if missing
+    let needsUpdate = false;
+    for (const model of settings.models) {
+      if (!model.providerLabel) {
+        const providerCred = settings.providerCredentials.find(p => p.providerId === model.providerId);
+        if (providerCred) {
+          (model as any).providerLabel = providerCred.label;
+          needsUpdate = true;
+        }
+      }
+    }
+    if (needsUpdate) {
+      await writeSettings(settings);
+    }
+    return settings;
   }
 
   const defaults = createDefaultSettings();
@@ -121,20 +138,37 @@ export async function listCharacters(): Promise<Character[]> {
 export async function saveCharacter(c: Partial<Character> & { id?: string; name: string }): Promise<Character> {
   const list = await listCharacters();
   const idx = c.id ? list.findIndex((x) => x.id === c.id) : -1;
-  const entity: Character = idx >= 0
-    ? { ...list[idx], ...c, updatedAt: now() } as Character
-    : {
-        id: (c.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
-        name: c.name,
-        avatarPath: c.avatarPath,
-        persona: c.persona,
-        style: c.style,
-        boundaries: c.boundaries,
-        createdAt: now(),
-        updatedAt: now(),
-      };
-  const out = idx >= 0 ? (list[idx] = entity) : list.concat([entity]);
-  await fileIO.writeJson(dataFiles.characters, out as Character[]);
+  let entity: Character;
+  let updated: Character[];
+
+  if (idx >= 0) {
+    const existing = list[idx];
+    entity = {
+      ...existing,
+      ...c,
+      defaultModelId:
+        c.defaultModelId === undefined ? existing.defaultModelId ?? null : c.defaultModelId ?? null,
+      updatedAt: now(),
+    } as Character;
+    list[idx] = entity;
+    updated = list;
+  } else {
+    const timestamp = now();
+    entity = {
+      id: (c.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+      name: c.name,
+      avatarPath: c.avatarPath,
+      description: c.description,
+      style: c.style,
+      boundaries: c.boundaries,
+      defaultModelId: c.defaultModelId ?? null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    } as Character;
+    updated = [...list, entity];
+  }
+
+  await fileIO.writeJson(dataFiles.characters, updated);
   return entity;
 }
 
@@ -183,4 +217,53 @@ export async function createSession(characterId: string, title: string, systemPr
   };
   await saveSession(s);
   return s;
+}
+
+// Persona management functions
+export async function listPersonas(): Promise<Persona[]> {
+  await ensureDataDir();
+  const fallback: Persona[] = [];
+  const data = await fileIO.readJson<Persona[]>(dataFiles.personas, fallback);
+  return z.array(PersonaSchema).parse(data);
+}
+
+export async function savePersona(p: Partial<Persona> & { id?: string; title: string; description: string }): Promise<Persona> {
+  const list = await listPersonas();
+  const idx = p.id ? list.findIndex((x) => x.id === p.id) : -1;
+  const timestamp = now();
+  
+  const entity: Persona = idx >= 0
+    ? { ...list[idx], ...p, updatedAt: timestamp } as Persona
+    : {
+        id: (p.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+        title: p.title,
+        description: p.description,
+        isDefault: p.isDefault ?? false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+
+  // If this persona is being set as default, unset other defaults
+  if (entity.isDefault) {
+    list.forEach(persona => {
+      if (persona.id !== entity.id) {
+        persona.isDefault = false;
+      }
+    });
+  }
+
+  const out = idx >= 0 ? (list[idx] = entity, list) : list.concat([entity]);
+  await fileIO.writeJson(dataFiles.personas, out);
+  return entity;
+}
+
+export async function deletePersona(id: string): Promise<void> {
+  const list = await listPersonas();
+  const out = list.filter((p) => p.id !== id);
+  await fileIO.writeJson(dataFiles.personas, out);
+}
+
+export async function getDefaultPersona(): Promise<Persona | null> {
+  const personas = await listPersonas();
+  return personas.find(p => p.isDefault) || null;
 }

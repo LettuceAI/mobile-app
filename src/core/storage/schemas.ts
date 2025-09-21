@@ -26,6 +26,7 @@ export const ModelSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   providerId: z.string(),
+  providerLabel: z.string().min(1),
   displayName: z.string().min(1),
   createdAt: z.number().int(),
 });
@@ -91,9 +92,10 @@ export const CharacterSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   avatarPath: z.string().optional(),
-  persona: z.string().optional(),
+  description: z.string().optional(),
   style: z.string().optional(),
   boundaries: z.string().optional(),
+  defaultModelId: z.string().uuid().nullable().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
@@ -110,3 +112,13 @@ export const SessionSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type Session = z.infer<typeof SessionSchema>;
+
+export const PersonaSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  isDefault: z.boolean().default(false),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type Persona = z.infer<typeof PersonaSchema>;

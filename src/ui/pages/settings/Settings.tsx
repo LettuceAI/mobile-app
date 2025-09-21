@@ -266,7 +266,8 @@ export function SettingsPage() {
       id: crypto.randomUUID(),
       name: "",
       displayName: "",
-      providerId: providers[0]?.providerId || providerRegistry[0].id
+      providerId: providers[0]?.providerId || providerRegistry[0].id,
+      providerLabel: providers[0]?.label || providerRegistry[0].name
     };
     setEditingModel(newModel as Model);
   };
@@ -453,7 +454,7 @@ export function SettingsPage() {
                         )}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {model.name} • {providerRegistry.find(p => p.id === model.providerId)?.name}
+                        {model.name} • {model.providerLabel || providerRegistry.find(p => p.id === model.providerId)?.name}
                       </div>
                     </div>
                     <div className="flex space-x-2">
@@ -510,7 +511,14 @@ export function SettingsPage() {
                 <label className="mb-2 block text-sm font-semibold text-white">Provider</label>
                 <select
                   value={editingModel.providerId}
-                  onChange={(e) => setEditingModel({ ...editingModel, providerId: e.target.value })}
+                  onChange={(e) => {
+                    const selectedProvider = providers.find(p => p.providerId === e.target.value);
+                    setEditingModel({ 
+                      ...editingModel, 
+                      providerId: e.target.value,
+                      providerLabel: selectedProvider?.label || e.target.value
+                    });
+                  }}
                   className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white focus:border-white/30 focus:outline-none"
                 >
                   {providers.map((provider) => (

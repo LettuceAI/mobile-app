@@ -7,6 +7,7 @@ import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ChatPage, ChatConversationPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage } from "./ui/pages/characters";
+import { CreatePersonaPage } from "./ui/pages/personas";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { isOnboardingCompleted } from "./core/storage/appState";
@@ -105,6 +106,7 @@ function AppContent() {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
+              <Route path="/create/persona" element={<CreatePersonaPage />} />
             </Routes>
           </motion.div>
         </main>
