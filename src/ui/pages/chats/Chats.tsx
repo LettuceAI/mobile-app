@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 
 import { listCharacters } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
-import { getDemoCharacters } from "./demoCharacters";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);

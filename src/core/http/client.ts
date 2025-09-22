@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type HttpRequest = {
@@ -32,87 +35,45 @@ export async function httpRequest<T = unknown>(
   onStreamChunk?: StreamHandler,
   signal?: AbortSignal,
 ): Promise<HttpResponse<T>> {
-  let fetchFn: typeof fetch;
-  try {
-    const tauriHttp = await import("@tauri-apps/plugin-http");
-    fetchFn = tauriHttp.fetch;
-  } catch {
-    fetchFn = globalThis.fetch;
-  }
-  let url = req.url;
-  if (req.query) {
-    const queryParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(req.query)) {
-      if (value !== undefined) {
-        queryParams.append(key, String(value));
-      }
-    }
-    const queryString = queryParams.toString();
-    if (queryString) {
-      url += (url.includes('?') ? '&' : '?') + queryString;
-    }
+  if (signal?.aborted) {
+    throw new HttpError("Request aborted", 0);
   }
 
-  const headers: Record<string, string> = {};
-  if (req.headers) {
-    for (const [k, v] of Object.entries(req.headers)) {
-      if (typeof v === "string") headers[k] = v;
-    }
-  }
-
-  const method = req.method ?? "POST";
-
-  let body: string | undefined;
-  if (req.body !== undefined) {
-    if (typeof req.body === 'string') {
-      body = req.body;
-    } else {
-      body = JSON.stringify(req.body);
-      headers['Content-Type'] = 'application/json';
-    }
-  }
-
-  const fetchOptions: RequestInit = {
-    method,
-    headers,
-    body,
-    signal,
-  };
+  let unlisten: (() => void) | undefined;
+  let requestId: string | undefined;
 
   try {
-    const resp = await fetchFn(url, fetchOptions);
+    if (req.stream && onStreamChunk) {
+      requestId = crypto.randomUUID();
+      const eventName = `api://${requestId}`;
+      const listener = await listen<string>(eventName, (event) => {
+        onStreamChunk(event.payload);
+      });
+      unlisten = () => listener();
+    }
 
-    const allHeaders: Record<string, string> = {};
-    resp.headers.forEach((value: string, key: string) => {
-      allHeaders[key] = value;
+    const response = await invoke<HttpResponse<T>>("api_request", {
+      req: {
+        ...req,
+        requestId,
+      },
     });
 
-    const ok = resp.ok;
-    const status = resp.status;
-
-    const text = await resp.text();
-
-    if (req.stream && onStreamChunk) {
-      onStreamChunk(text);
+    if (!response.ok) {
+      const message = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
+      throw new HttpError(`HTTP ${response.status}: ${message}`.slice(0, 4096), response.status);
     }
 
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch (_) {
-      data = text as any;
-    }
-
-    if (!ok) {
-      throw new HttpError(`HTTP ${status}: ${typeof data === "string" ? data : text}`.slice(0, 4096), status);
-    }
-
-    return { status, ok, headers: allHeaders, data } as HttpResponse<T>;
+    return response;
   } catch (error) {
     if (error instanceof HttpError) {
       throw error;
     }
-    
-    throw new HttpError(`Request failed: ${error instanceof Error ? error.message : String(error)}`, 0);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new HttpError(`Request failed: ${message}`, 0);
+  } finally {
+    if (unlisten) {
+      unlisten();
+    }
   }
 }

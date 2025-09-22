@@ -1,10 +1,20 @@
 import { z } from "zod";
 
+const TokenCount = z.number().int().nonnegative();
+
+export const UsageSummarySchema = z.object({
+  promptTokens: TokenCount.optional(),
+  completionTokens: TokenCount.optional(),
+  totalTokens: TokenCount.optional(),
+});
+export type UsageSummary = z.infer<typeof UsageSummarySchema>;
+
 export const MessageSchema = z.object({
   id: z.string().uuid(),
   role: z.enum(["system", "user", "assistant"]),
   content: z.string(),
   createdAt: z.number().int(),
+  usage: UsageSummarySchema.optional().nullable(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
 

@@ -7,25 +7,6 @@
   ],
   "permissions": [
     "core:default",
-    "opener:default",
-    {
-      "identifier": "http:default",
-      "allow": [
-        { "url": "https://api.openai.com/*" },
-        { "url": "https://api.anthropic.com/*" },
-        { "url": "https://*.openai.com/*" },
-        { "url": "https://*.anthropic.com/*" },
-        { "url": "https://*.googleapis.com/*" },
-        { "url": "https://*.huggingface.co/*" },
-        { "url": "https://*.cohere.ai/*" },
-        { "url": "https://*.replicate.com/*" },
-        { "url": "https://*.together.xyz/*" },
-        { "url": "https://*.fireworks.ai/*" },
-        { "url": "https://openrouter.ai/*" },
-        { "url": "https://*.openrouter.ai/*" },
-        { "url": "http://localhost:*/*" },
-        { "url": "http://127.0.0.1:*/*" }
-      ]
-    }
+    "opener:default"
   ]
 }

@@ -1,5 +1,5 @@
 import { Brain, User } from "lucide-react";
-import { BottomMenu, MenuButton, MenuSection } from "./BottomMenu";
+import { BottomMenu, MenuButton, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
 
 export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {

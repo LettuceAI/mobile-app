@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fileIO, dataFiles, ensureDataDir } from "./files";
+import { storageBridge } from "./files";
 import {
   CharacterSchema,
   SessionSchema,
@@ -38,18 +38,16 @@ function uuidv4(): string {
 }
 
 export async function readSettings(): Promise<Settings> {
-  await ensureDataDir();
   const fallback = createDefaultSettings();
-  const data = await fileIO.readJson(dataFiles.settings, fallback);
+  const data = await storageBridge.readSettings<Settings>(fallback);
 
   const parsed = SettingsSchema.safeParse(data);
   if (parsed.success) {
     const settings = parsed.data;
-    // Migrate models to include providerLabel if missing
     let needsUpdate = false;
     for (const model of settings.models) {
       if (!model.providerLabel) {
-        const providerCred = settings.providerCredentials.find(p => p.providerId === model.providerId);
+        const providerCred = settings.providerCredentials.find((p) => p.providerId === model.providerId);
         if (providerCred) {
           (model as any).providerLabel = providerCred.label;
           needsUpdate = true;
@@ -62,14 +60,13 @@ export async function readSettings(): Promise<Settings> {
     return settings;
   }
 
-  const defaults = createDefaultSettings();
-  await writeSettings(defaults);
-  return defaults;
+  await writeSettings(fallback);
+  return fallback;
 }
 
 export async function writeSettings(s: Settings): Promise<void> {
   SettingsSchema.parse(s);
-  await fileIO.writeJson(dataFiles.settings, s);
+  await storageBridge.writeSettings(s);
 }
 
 export async function addOrUpdateProviderCredential(cred: Omit<ProviderCredential, "id"> & { id?: string }): Promise<ProviderCredential> {
@@ -129,9 +126,8 @@ export async function setDefaultModel(id: string): Promise<void> {
 }
 
 export async function listCharacters(): Promise<Character[]> {
-  await ensureDataDir();
   const fallback: Character[] = [];
-  const data = await fileIO.readJson<Character[]>(dataFiles.characters, fallback);
+  const data = await storageBridge.readCharacters<Character[]>(fallback);
   return z.array(CharacterSchema).parse(data);
 }
 
@@ -168,34 +164,33 @@ export async function saveCharacter(c: Partial<Character> & { id?: string; name:
     updated = [...list, entity];
   }
 
-  await fileIO.writeJson(dataFiles.characters, updated);
+  await storageBridge.writeCharacters(updated);
   return entity;
 }
 
 export async function deleteCharacter(id: string): Promise<void> {
   const list = await listCharacters();
   const out = list.filter((c) => c.id !== id);
-  await fileIO.writeJson(dataFiles.characters, out);
+  await storageBridge.writeCharacters(out);
 }
 
 export async function listSessionIds(): Promise<string[]> {
   const fallback: string[] = [];
-  return fileIO.readJson<string[]>(dataFiles.sessionsIndex, fallback);
+  return storageBridge.readSessionsIndex<string[]>(fallback);
 }
 
 export async function writeSessionIndex(ids: string[]): Promise<void> {
-  await fileIO.writeJson(dataFiles.sessionsIndex, ids);
+  await storageBridge.writeSessionsIndex(ids);
 }
 
 export async function getSession(id: string): Promise<Session | null> {
-  const fallback = null as any;
-  const data = await fileIO.readJson<Session | null>(dataFiles.session(id), fallback);
+  const data = await storageBridge.readSession<Session | null>(id, null);
   return data ? SessionSchema.parse(data) : null;
 }
 
 export async function saveSession(s: Session): Promise<void> {
   SessionSchema.parse(s);
-  await fileIO.writeJson(dataFiles.session(s.id), s);
+  await storageBridge.writeSession(s.id, s);
   const ids = await listSessionIds();
   if (!ids.includes(s.id)) {
     ids.push(s.id);
@@ -221,9 +216,8 @@ export async function createSession(characterId: string, title: string, systemPr
 
 // Persona management functions
 export async function listPersonas(): Promise<Persona[]> {
-  await ensureDataDir();
   const fallback: Persona[] = [];
-  const data = await fileIO.readJson<Persona[]>(dataFiles.personas, fallback);
+  const data = await storageBridge.readPersonas<Persona[]>(fallback);
   return z.array(PersonaSchema).parse(data);
 }
 
@@ -253,14 +247,14 @@ export async function savePersona(p: Partial<Persona> & { id?: string; title: st
   }
 
   const out = idx >= 0 ? (list[idx] = entity, list) : list.concat([entity]);
-  await fileIO.writeJson(dataFiles.personas, out);
+  await storageBridge.writePersonas(out);
   return entity;
 }
 
 export async function deletePersona(id: string): Promise<void> {
   const list = await listPersonas();
   const out = list.filter((p) => p.id !== id);
-  await fileIO.writeJson(dataFiles.personas, out);
+  await storageBridge.writePersonas(out);
 }
 
 export async function getDefaultPersona(): Promise<Persona | null> {

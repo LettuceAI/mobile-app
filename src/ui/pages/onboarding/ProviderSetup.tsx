@@ -92,8 +92,15 @@ export function ProviderSetupPage() {
         },
         baseUrl: baseUrl || undefined,
       };
+      
 
-      await addOrUpdateProviderCredential(credential);
+      const result = await addOrUpdateProviderCredential(credential);
+
+      if (result) {
+        console.log("Provider credential saved successfully:", result);
+      } else {
+        throw new Error("Failed to save provider credential");
+      }
 
       if (credential.apiKeyRef && apiKey) {
         await setSecret(credential.apiKeyRef, apiKey);
@@ -102,6 +109,7 @@ export function ProviderSetupPage() {
       await setProviderSetupCompleted(true);
       navigate("/onboarding/models");
     } catch (error: any) {
+      console.log(error)
       setTestResult({
         success: false,
         message: error.message || "Failed to save provider",
