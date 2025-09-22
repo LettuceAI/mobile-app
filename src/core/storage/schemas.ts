@@ -24,7 +24,7 @@ export const MessageSchema = z.object({
   createdAt: z.number().int(),
   usage: UsageSummarySchema.optional().nullable(),
   variants: z.array(MessageVariantSchema).optional(),
-  selectedVariantId: z.string().uuid().optional(),
+  selectedVariantId: z.string().uuid().nullish(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
 

@@ -52,24 +52,18 @@ export function Tooltip({
           >
             <div className="bg-indigo-600 text-white p-3 rounded-xl shadow-2xl max-w-sm mx-auto relative">
               {/* Arrow */}
-              <div className={`absolute ${getArrowClasses(position)}`}>
+                <div className={`absolute ${getArrowClasses(position)}`}>
                 <ArrowUp 
                   size={16} 
-                  className={`text-indigo-600 ${position === "top" ? "rotate-180" : ""}`} 
+                  className={`text-indigo-600 ${position === "bottom" ? "rotate-180" : ""}`} 
                 />
-              </div>
+                </div>
               
               {/* Content */}
               <div className="flex items-center space-x-2">
                 <div className="flex-1">
                   <p className="text-sm leading-relaxed">{message}</p>
                 </div>
-                <button
-                  onClick={onClose}
-                  className="p-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors flex-shrink-0"
-                >
-                  <X size={14} />
-                </button>
               </div>
               
               {/* Dismiss hint */}

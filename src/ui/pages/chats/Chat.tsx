@@ -658,21 +658,21 @@ export function ChatConversationPage() {
             const layoutEnabled = !enableSwipe;
 
             return (
-              <div
+                <div
                 key={message.id}
                 className={`relative flex ${message.role === "user" ? "justify-end" : "justify-start"
                   }`}
-              >
+                >
                 <motion.div
                   layout={layoutEnabled}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed transition ${message.role === "user"
-                      ? `ml-auto bg-gradient-to-br from-emerald-500/60 to-emerald-400/40 text-white ${heldMessageId === message.id ? "ring-2 ring-white/60" : ""
-                      }`
-                      : `bg-white/5 text-gray-100 ${heldMessageId === message.id ? "border border-white/30" : "border border-transparent"
-                      }`
-                    }`}
+                    ? `ml-auto bg-gradient-to-br from-emerald-500/60 to-emerald-400/40 text-white ${heldMessageId === message.id ? "ring-2 ring-white/60" : ""
+                    }`
+                    : `bg-white/5 text-gray-100 ${heldMessageId === message.id ? "border border-white/30" : "border border-transparent"
+                    }`
+                  }`}
                   {...eventHandlers}
                   {...dragProps}
                   whileDrag={enableSwipe ? { scale: 0.995 } : undefined}
@@ -681,40 +681,40 @@ export function ChatConversationPage() {
                   <MarkdownRenderer content={message.content} className="text-inherit" />
 
                   {isAssistant && totalVariants > 1 && (
-                    <div className="mt-3 flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.18em] text-gray-400">
-                        <span>
-                          Variant {selectedVariantIndex >= 0 ? selectedVariantIndex + 1 : 1}
-                          {totalVariants > 0 ? ` / ${totalVariants}` : ""}
-                        </span>
-                      {regeneratingMessageId === message.id && (
-                        <span className="flex items-center gap-1 text-emerald-200">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Regenerating
-                        </span>
-                      )}
-                    </div>
+                  <div className="mt-3 flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.18em] text-gray-400">
+                    <span>
+                      Variant {selectedVariantIndex >= 0 ? selectedVariantIndex + 1 : 1}
+                      {totalVariants > 0 ? ` / ${totalVariants}` : ""}
+                    </span>
+                    {regeneratingMessageId === message.id && (
+                    <span className="flex items-center gap-1 text-emerald-200">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Regenerating
+                    </span>
+                    )}
+                  </div>
                   )}
                 </motion.div>
 
                 {isLatestAssistant && (
                   <div className="absolute -bottom-4 right-0 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleRegenerate(message)}
-                      disabled={regeneratingMessageId === message.id || sending}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:border-white/40 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      aria-label="Regenerate response"
-                    >
+                  <button
+                    type="button"
+                    onClick={() => handleRegenerate(message)}
+                    disabled={regeneratingMessageId === message.id || sending}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:border-white/40 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label="Regenerate response"
+                  >
 
-                      {regeneratingMessageId === message.id ? (
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-6 w-6" />
-                      )}
-                    </button>
+                    {regeneratingMessageId === message.id ? (
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                    <RefreshCw className="h-8 w-8" />
+                    )}
+                  </button>
                   </div>
                 )}
-              </div>
+                </div>
             );
           })}
         </div>
