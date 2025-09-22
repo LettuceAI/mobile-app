@@ -9,6 +9,12 @@ export interface ChatTurnResult {
   usage?: UsageSummary;
 }
 
+export interface ChatRegenerateResult {
+  sessionId: string;
+  requestId?: string;
+  assistantMessage: StoredMessage;
+}
+
 export async function sendChatTurn(params: {
   sessionId: string;
   characterId: string;
@@ -31,5 +37,22 @@ export async function sendChatTurn(params: {
       stream,
       requestId: requestId ?? null,
     }
+  });
+}
+
+export async function regenerateAssistantMessage(params: {
+  sessionId: string;
+  messageId: string;
+  stream?: boolean;
+  requestId?: string;
+}): Promise<ChatRegenerateResult> {
+  const { sessionId, messageId, stream = true, requestId } = params;
+  return invoke<ChatRegenerateResult>("chat_regenerate", {
+    args: {
+      sessionId,
+      messageId,
+      stream,
+      requestId: requestId ?? null,
+    },
   });
 }

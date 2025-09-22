@@ -27,6 +27,7 @@ pub fn run() {
             storage_manager::storage_clear_all,
             storage_manager::storage_usage_summary,
             chat_manager::chat_completion,
+            chat_manager::chat_regenerate,
             secrets::secret_get,
             secrets::secret_set,
             secrets::secret_delete,

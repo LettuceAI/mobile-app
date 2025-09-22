@@ -9,12 +9,22 @@ export const UsageSummarySchema = z.object({
 });
 export type UsageSummary = z.infer<typeof UsageSummarySchema>;
 
+export const MessageVariantSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  createdAt: z.number().int(),
+  usage: UsageSummarySchema.optional().nullable(),
+});
+export type MessageVariant = z.infer<typeof MessageVariantSchema>;
+
 export const MessageSchema = z.object({
   id: z.string().uuid(),
   role: z.enum(["system", "user", "assistant"]),
   content: z.string(),
   createdAt: z.number().int(),
   usage: UsageSummarySchema.optional().nullable(),
+  variants: z.array(MessageVariantSchema).optional(),
+  selectedVariantId: z.string().uuid().optional(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
 
@@ -115,7 +125,7 @@ export const SessionSchema = z.object({
   id: z.string().uuid(),
   characterId: z.string().uuid(),
   title: z.string(),
-  systemPrompt: z.string().optional(),
+  systemPrompt: z.string().nullish(),
   messages: z.array(MessageSchema),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),
