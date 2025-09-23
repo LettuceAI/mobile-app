@@ -61,6 +61,7 @@ android {
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()
             )
+            isDebuggable = true
         }
     }
     kotlinOptions {

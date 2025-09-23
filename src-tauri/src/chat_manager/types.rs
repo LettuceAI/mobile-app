@@ -162,9 +162,31 @@ pub struct ChatRegenerateArgs {
     pub request_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatContinueArgs {
+    #[serde(alias = "sessionId")]
+    pub session_id: String,
+    #[serde(alias = "characterId")]
+    pub character_id: String,
+    #[serde(alias = "personaId")]
+    pub persona_id: Option<String>,
+    pub stream: Option<bool>,
+    #[serde(alias = "requestId")]
+    pub request_id: Option<String>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegenerateResult {
+    pub session_id: String,
+    pub request_id: Option<String>,
+    pub assistant_message: StoredMessage,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinueResult {
     pub session_id: String,
     pub request_id: Option<String>,
     pub assistant_message: StoredMessage,

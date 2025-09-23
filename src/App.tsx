@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 import { WelcomePage, ProviderSetupPage, ModelSetupPage } from "./ui/pages/onboarding";
 import { SettingsPage } from "./ui/pages/settings/Settings";
-import { ChatPage, ChatConversationPage } from "./ui/pages/chats";
+import { ChatPage, ChatConversationPage, ChatSettingsPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage } from "./ui/pages/personas";
@@ -105,6 +105,7 @@ function AppContent() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
+              <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
             </Routes>

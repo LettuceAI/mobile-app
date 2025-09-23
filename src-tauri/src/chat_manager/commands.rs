@@ -17,7 +17,7 @@ use super::storage::{
     load_settings, recent_messages, save_session, select_model,
 };
 use super::types::{
-    ChatCompletionArgs, ChatRegenerateArgs, ChatTurnResult, RegenerateResult, StoredMessage,
+    ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult, RegenerateResult, StoredMessage,
 };
 
 #[tauri::command]
@@ -315,8 +315,11 @@ pub async fn chat_regenerate(
     }
 
     let preceding_index = target_index - 1;
-    if session.messages[preceding_index].role != "user" {
-        return Err("Expected preceding user message before assistant response".into());
+    // Allow regeneration of continue messages (assistant messages that follow other assistant messages)
+    // or normal assistant messages (that follow user messages)
+    let preceding_message = &session.messages[preceding_index];
+    if preceding_message.role != "user" && preceding_message.role != "assistant" {
+        return Err("Expected preceding user or assistant message before assistant response".into());
     }
 
     if session.messages[target_index].role != "assistant" {
@@ -513,5 +516,215 @@ pub async fn chat_regenerate(
         session_id: session.id,
         request_id,
         assistant_message: assistant_clone,
+    })
+}
+
+#[tauri::command]
+pub async fn chat_continue(
+    app: AppHandle,
+    args: ChatContinueArgs,
+) -> Result<ContinueResult, String> {
+    let ChatContinueArgs {
+        session_id,
+        character_id,
+        persona_id,
+        stream,
+        request_id,
+    } = args;
+
+    let settings = load_settings(&app)?;
+    let characters = load_characters(&app)?;
+    let personas = load_personas(&app)?;
+
+    let mut session =
+        load_session(&app, &session_id)?.ok_or_else(|| "Session not found".to_string())?;
+
+    emit_debug(
+        &app,
+        "continue_start",
+        json!({
+            "sessionId": session.id,
+            "characterId": character_id,
+            "messageCount": session.messages.len(),
+        }),
+    );
+
+    let character = characters
+        .into_iter()
+        .find(|c| c.id == character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    let persona = choose_persona(&personas, persona_id.as_ref());
+
+    let (model, provider_cred) = select_model(&settings, &character)?;
+
+    emit_debug(
+        &app,
+        "continue_model_selected",
+        json!({
+            "providerId": provider_cred.provider_id,
+            "model": model.name,
+            "credentialId": provider_cred.id,
+        }),
+    );
+
+    let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
+        secret_for_cred_get(
+            app.clone(),
+            api_ref.provider_id.clone(),
+            api_ref
+                .cred_id
+                .clone()
+                .unwrap_or_else(|| provider_cred.id.clone()),
+            api_ref.key.clone(),
+        )?
+        .ok_or_else(|| "Missing API key".to_string())?
+    } else {
+        return Err("Provider credential missing API key reference".into());
+    };
+
+    let system_prompt = build_system_prompt(&character, persona, &session);
+    let recent_msgs = recent_messages(&session);
+
+    let mut messages_for_api = Vec::new();
+    if let Some(system) = &system_prompt {
+        messages_for_api.push(json!({ "role": "system", "content": system }));
+    }
+    for msg in &recent_msgs {
+        messages_for_api.push(json!({
+            "role": msg.role,
+            "content": message_text_for_api(msg)
+        }));
+    }
+
+    let should_stream = stream.unwrap_or(true);
+    let request_id = if should_stream {
+        request_id.or_else(|| Some(Uuid::new_v4().to_string()))
+    } else {
+        None
+    };
+
+    let base_url = provider_base_url(provider_cred);
+    let endpoint = chat_completions_endpoint(&base_url);
+    let headers = normalize_headers(provider_cred, &api_key);
+
+    let body = json!({
+        "model": model.name,
+        "messages": messages_for_api,
+        "stream": should_stream,
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "max_tokens": 1024,
+    });
+
+    emit_debug(
+        &app,
+        "continue_request",
+        json!({
+            "providerId": provider_cred.provider_id,
+            "model": model.name,
+            "stream": should_stream,
+            "requestId": request_id,
+            "endpoint": endpoint,
+        }),
+    );
+
+    let api_response = api_request(
+        app.clone(),
+        ApiRequest {
+            url: endpoint,
+            method: Some("POST".into()),
+            headers: Some(headers),
+            query: None,
+            body: Some(body),
+            timeout_ms: Some(120_000),
+            stream: Some(should_stream),
+            request_id: request_id.clone(),
+        },
+    )
+    .await?;
+
+    emit_debug(
+        &app,
+        "continue_response",
+        json!({
+            "status": api_response.status,
+            "ok": api_response.ok,
+        }),
+    );
+
+    if !api_response.ok {
+        let fallback = format!("Provider returned status {}", api_response.status);
+        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+        emit_debug(
+            &app,
+            "continue_provider_error",
+            json!({
+                "status": api_response.status,
+                "message": err_message,
+            }),
+        );
+        return if err_message == fallback {
+            Err(err_message)
+        } else {
+            Err(format!("{} (status {})", err_message, api_response.status))
+        };
+    }
+
+    let text = extract_text(api_response.data())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            let preview =
+                serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+            emit_debug(
+                &app,
+                "continue_empty_response",
+                json!({ "preview": preview }),
+            );
+            "Empty response from provider".to_string()
+        })?;
+
+    emit_debug(
+        &app,
+        "continue_assistant_reply",
+        json!({
+            "length": text.len(),
+        }),
+    );
+
+    let usage = extract_usage(api_response.data());
+
+    let assistant_created_at = now_millis()?;
+    let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
+    let variant_id = variant.id.clone();
+
+    let assistant_message = StoredMessage {
+        id: Uuid::new_v4().to_string(),
+        role: "assistant".into(),
+        content: text.clone(),
+        created_at: assistant_created_at,
+        usage: usage.clone(),
+        variants: vec![variant],
+        selected_variant_id: Some(variant_id),
+    };
+
+    session.messages.push(assistant_message.clone());
+    session.updated_at = now_millis()?;
+    save_session(&app, &session)?;
+
+    emit_debug(
+        &app,
+        "continue_session_saved",
+        json!({
+            "sessionId": session.id,
+            "messageCount": session.messages.len(),
+            "updatedAt": session.updated_at,
+        }),
+    );
+
+    Ok(ContinueResult {
+        session_id: session.id,
+        request_id,
+        assistant_message,
     })
 }

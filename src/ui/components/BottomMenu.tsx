@@ -1,6 +1,6 @@
 import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
 import { X, LucideIcon } from "lucide-react";
-import { ReactNode } from "react";
+import { ReactNode, useCallback, useMemo } from "react";
 
 export interface MenuButtonProps {
   icon: LucideIcon;
@@ -43,10 +43,10 @@ export function BottomMenu({
   const isBottomMenu = location === "bottom";
   const dragControls = useDragControls();
 
-  const handleDragEnd = (_: unknown, info: PanInfo) => {
+  const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (!isBottomMenu) return;
-    const hasPulledFarEnough = info.offset.y > 120;
-    const hasQuickSwipe = info.velocity.y > 900 && info.offset.y > 30;
+    const hasPulledFarEnough = info.offset.y > 100; // Reduced threshold for faster response
+    const hasQuickSwipe = info.velocity.y > 600 && info.offset.y > 20; // More responsive swipe
     if (hasPulledFarEnough || hasQuickSwipe) {
       onClose();
       return;
@@ -54,9 +54,14 @@ export function BottomMenu({
 
     // snap back into place when not closing
     dragControls.stop();
-  };
+  }, [isBottomMenu, onClose, dragControls]);
 
-  const menuVariants = {
+  const handlePointerDown = useCallback((event: React.PointerEvent) => {
+    event.preventDefault();
+    dragControls.start(event);
+  }, [dragControls]);
+
+  const menuVariants = useMemo(() => ({
     hidden: {
       y: isBottomMenu ? "100%" : "-100%",
       opacity: 0,
@@ -69,7 +74,7 @@ export function BottomMenu({
       y: isBottomMenu ? "100%" : "-100%",
       opacity: 0,
     },
-  };
+  }), [isBottomMenu]);
 
   const menuClasses = isBottomMenu
     ? "fixed bottom-0 left-0 right-0 rounded-t-3xl"
@@ -80,11 +85,13 @@ export function BottomMenu({
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
             onClick={onClose}
+            style={{ willChange: 'opacity' }}
           />
 
           <motion.div
@@ -93,43 +100,55 @@ export function BottomMenu({
             initial="hidden"
             animate="visible"
             exit="exit"
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            transition={{ 
+              type: "tween", 
+              duration: 0.25, 
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            style={{ 
+              willChange: 'transform, opacity',
+              transform: 'translate3d(0,0,0)' // Force GPU acceleration
+            }}
             {...(isBottomMenu
               ? {
                   drag: "y" as const,
                   dragControls,
                   dragListener: false,
-                  dragConstraints: { top: 0, bottom: 240 },
-                  dragElastic: { top: 0, bottom: 0.15 },
+                  dragConstraints: { top: 0, bottom: 200 }, // Reduced for better feel
+                  dragElastic: { top: 0, bottom: 0.1 }, // Less elastic for snappier feel
                   dragMomentum: false,
                   onDragEnd: handleDragEnd,
                 }
               : {})}
           >
             {isBottomMenu && (
-              <div className="flex justify-center pt-4 pb-2">
+              <motion.div 
+                className="flex justify-center pt-4 pb-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2, delay: 0.1 }}
+              >
               <button
                 type="button"
-                onPointerDown={(event) => {
-                event.preventDefault();
-                dragControls.start(event);
-                }}
+                onPointerDown={handlePointerDown}
                 style={{ touchAction: "none" }}
-                className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none"
+                className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none transition-opacity duration-150 hover:opacity-80 active:opacity-60"
                 aria-label="Drag to close menu"
               >
-                <span className="h-1.5 w-24 rounded-full bg-white/60" />
+                <span className="h-1.5 w-24 rounded-full bg-white/60 transition-all duration-150 hover:bg-white/70 active:bg-white/80" />
               </button>
-              </div>
+              </motion.div>
             )}
 
             <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"}`}>
               <h3 className="text-xl font-semibold text-white">{title}</h3>
               {includeExitIcon && (
                 <motion.button
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/70 transition hover:border-white/20 hover:text-white"
-                  whileTap={{ scale: 0.95 }}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/70 transition-all duration-150 hover:border-white/20 hover:text-white hover:bg-white/15"
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ type: "tween", duration: 0.1 }}
                   onClick={onClose}
+                  style={{ willChange: 'transform' }}
                 >
                   <X size={18} />
                 </motion.button>
@@ -142,7 +161,7 @@ export function BottomMenu({
       )}
     </AnimatePresence>
   );
-}
+};
 
 export function MenuButton({
   icon: Icon,
@@ -152,15 +171,20 @@ export function MenuButton({
   onClick,
   disabled = false,
 }: MenuButtonProps) {
+  const handleClick = useCallback(() => {
+    if (!disabled) onClick();
+  }, [disabled, onClick]);
+
   return (
     <motion.button
-      className={`w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-white transition shadow-[0_18px_60px_rgba(0,0,0,0.35)] ${
-        disabled ? "cursor-not-allowed opacity-50" : "hover:border-white/25 hover:bg-white/10"
+      className={`w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-white transition-all duration-150 shadow-[0_18px_60px_rgba(0,0,0,0.35)] ${
+        disabled ? "cursor-not-allowed opacity-50" : "hover:border-white/25 hover:bg-white/10 hover:shadow-[0_20px_70px_rgba(0,0,0,0.4)]"
       }`}
-      whileTap={disabled ? {} : { scale: 0.97 }}
-      whileHover={disabled ? {} : { scale: 1.01 }}
-      onClick={disabled ? undefined : onClick}
+      whileTap={disabled ? {} : { scale: 0.98 }}
+      transition={{ type: "tween", duration: 0.1 }}
+      onClick={handleClick}
       disabled={disabled}
+      style={{ willChange: disabled ? 'auto' : 'transform' }}
     >
       <div className="flex items-center gap-4">
         <div
@@ -202,16 +226,37 @@ export function MenuDivider({ label, className = "" }: MenuDividerProps) {
 }
 
 export function MenuButtonGroup({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`space-y-3 ${className}`}>{children}</div>;
+  return (
+    <motion.div 
+      className={`space-y-3 ${className}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 export function MenuSection({ label, children, className = "" }: { label?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`space-y-3 ${className}`}>
+    <motion.div 
+      className={`space-y-3 ${className}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+    >
       {label && (
-        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">{label}</p>
+        <motion.p 
+          className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15, delay: 0.1 }}
+        >
+          {label}
+        </motion.p>
       )}
       {children}
-    </div>
+    </motion.div>
   );
 }

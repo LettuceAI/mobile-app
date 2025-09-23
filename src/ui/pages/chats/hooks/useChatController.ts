@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
-import { regenerateAssistantMessage, sendChatTurn } from "../../../../core/chat/manager";
-
-export interface MessageActionState {
-  message: StoredMessage;
-  mode: "view" | "edit";
-}
+import { continueConversation, regenerateAssistantMessage, sendChatTurn } from "../../../../core/chat/manager";
+import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 
 export interface VariantState {
   variants: StoredMessage["variants"];
@@ -18,30 +14,36 @@ export interface VariantState {
 }
 
 export interface ChatController {
+  // State
   character: Character | null;
   persona: Persona | null;
   session: Session | null;
   messages: StoredMessage[];
   draft: string;
-  setDraft: (value: string) => void;
   loading: boolean;
   sending: boolean;
   error: string | null;
-  setError: (value: string | null) => void;
   messageAction: MessageActionState | null;
-  setMessageAction: (value: MessageActionState | null) => void;
   actionError: string | null;
-  setActionError: (value: string | null) => void;
   actionStatus: string | null;
-  setActionStatus: (value: string | null) => void;
   actionBusy: boolean;
-  setActionBusy: (value: boolean) => void;
   editDraft: string;
-  setEditDraft: (value: string) => void;
   heldMessageId: string | null;
-  setHeldMessageId: (value: string | null) => void;
   regeneratingMessageId: string | null;
+  
+  // Setters 
+  setDraft: (value: string) => void;
+  setError: (value: string | null) => void;
+  setMessageAction: (value: MessageActionState | null) => void;
+  setActionError: (value: string | null) => void;
+  setActionStatus: (value: string | null) => void;
+  setActionBusy: (value: boolean) => void;
+  setEditDraft: (value: string) => void;
+  setHeldMessageId: (value: string | null) => void;
+  
+  // Actions
   handleSend: (message: string) => Promise<void>;
+  handleContinue: () => Promise<void>;
   handleRegenerate: (message: StoredMessage) => Promise<void>;
   getVariantState: (message: StoredMessage) => VariantState;
   applyVariantSelection: (messageId: string, variantId: string) => Promise<void>;
@@ -49,27 +51,13 @@ export interface ChatController {
   handleVariantDrag: (messageId: string, offsetX: number) => Promise<void>;
   handleSaveEdit: () => Promise<void>;
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
+  handleRewindToMessage: (message: StoredMessage) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
 }
 
 export function useChatController(characterId?: string): ChatController {
-  const [character, setCharacter] = useState<Character | null>(null);
-  const [persona, setPersona] = useState<Persona | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [messages, setMessages] = useState<StoredMessage[]>([]);
-  const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
-  const [messageAction, setMessageAction] = useState<MessageActionState | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionStatus, setActionStatus] = useState<string | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
-  const [editDraft, setEditDraft] = useState("");
-  const [heldMessageId, setHeldMessageId] = useState<string | null>(null);
-  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(chatReducer, initialChatState);
 
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
@@ -94,14 +82,14 @@ export function useChatController(characterId?: string): ChatController {
 
     (async () => {
       try {
-        setLoading(true);
-        setError(null);
+        dispatch({ type: "SET_LOADING", payload: true });
+        dispatch({ type: "SET_ERROR", payload: null });
 
         const list = await listCharacters();
         const match = list.find((c) => c.id === characterId) ?? null;
         if (!match) {
           if (!cancelled) {
-            setCharacter(null);
+            dispatch({ type: "SET_CHARACTER", payload: null });
           }
           return;
         }
@@ -133,19 +121,19 @@ export function useChatController(characterId?: string): ChatController {
         const normalizedSession: Session = { ...existingSession, messages: orderedMessages };
 
         if (!cancelled) {
-          setCharacter(match);
-          setPersona(personaDefault ?? null);
-          setSession(normalizedSession);
-          setMessages(orderedMessages);
+          dispatch({ type: "SET_CHARACTER", payload: match });
+          dispatch({ type: "SET_PERSONA", payload: personaDefault ?? null });
+          dispatch({ type: "SET_SESSION", payload: normalizedSession });
+          dispatch({ type: "SET_MESSAGES", payload: orderedMessages });
         }
       } catch (err) {
         console.error("ChatController: failed to load chat", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
         }
       } finally {
         if (!cancelled) {
-          setLoading(false);
+          dispatch({ type: "SET_LOADING", payload: false });
         }
       }
     })();
@@ -156,21 +144,14 @@ export function useChatController(characterId?: string): ChatController {
   }, [characterId]);
 
   const clearLongPress = useCallback(() => {
-    if (longPressTimer !== null) {
-      window.clearTimeout(longPressTimer);
-      setLongPressTimer(null);
+    if (state.longPressTimer !== null) {
+      window.clearTimeout(state.longPressTimer);
+      dispatch({ type: "SET_LONG_PRESS_TIMER", payload: null });
     }
-  }, [longPressTimer]);
+  }, [state.longPressTimer]);
 
   const resetMessageActions = useCallback(() => {
-    setMessageAction(null);
-    setEditDraft("");
-    setActionError(null);
-    setActionStatus(null);
-  }, []);
-
-  const initializeLongPressTimer = useCallback((timer: number | null) => {
-    setLongPressTimer(timer);
+    dispatch({ type: "RESET_MESSAGE_ACTIONS" });
   }, []);
 
   const getVariantState = useCallback((message: StoredMessage): VariantState => {
@@ -195,8 +176,8 @@ export function useChatController(characterId?: string): ChatController {
 
   const applyVariantSelection = useCallback(
     async (messageId: string, variantId: string) => {
-      if (!session || regeneratingMessageId) return;
-      const currentMessage = messages.find((msg) => msg.id === messageId);
+      if (!state.session || state.regeneratingMessageId) return;
+      const currentMessage = state.messages.find((msg) => msg.id === messageId);
       if (!currentMessage) return;
       const variants = currentMessage.variants ?? [];
       const targetVariant = variants.find((variant) => variant.id === variantId);
@@ -209,18 +190,18 @@ export function useChatController(characterId?: string): ChatController {
         selectedVariantId: targetVariant.id,
       };
 
-      const updatedMessages = messages.map((msg) => (msg.id === messageId ? updatedMessage : msg));
-      setMessages(updatedMessages);
+      const updatedMessages = state.messages.map((msg) => (msg.id === messageId ? updatedMessage : msg));
+      dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
 
       const updatedSession: Session = {
-        ...session,
+        ...state.session,
         messages: updatedMessages,
         updatedAt: Date.now(),
       } as Session;
-      setSession(updatedSession);
+      dispatch({ type: "SET_SESSION", payload: updatedSession });
 
-      if (messageAction?.message.id === messageId) {
-        setMessageAction({ message: updatedMessage, mode: messageAction.mode });
+      if (state.messageAction?.message.id === messageId) {
+        dispatch({ type: "SET_MESSAGE_ACTION", payload: { message: updatedMessage, mode: state.messageAction.mode } });
       }
 
       try {
@@ -229,26 +210,26 @@ export function useChatController(characterId?: string): ChatController {
         console.error("ChatController: failed to persist variant selection", err);
       }
     },
-    [messageAction, messages, regeneratingMessageId, session],
+    [state.messageAction, state.messages, state.regeneratingMessageId, state.session],
   );
 
   const handleVariantSwipe = useCallback(
     async (messageId: string, direction: "prev" | "next") => {
-      if (!session || regeneratingMessageId) return;
-      if (messages.length === 0 || messages[messages.length - 1]?.id !== messageId) return;
-      const currentMessage = messages.find((msg) => msg.id === messageId);
+      if (!state.session || state.regeneratingMessageId) return;
+      if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== messageId) return;
+      const currentMessage = state.messages.find((msg) => msg.id === messageId);
       if (!currentMessage || currentMessage.role !== "assistant") return;
       const variants = currentMessage.variants ?? [];
       if (variants.length <= 1) return;
 
-      const state = getVariantState(currentMessage);
-      const currentIndex = state.selectedIndex >= 0 ? state.selectedIndex : variants.length - 1;
+      const variantState = getVariantState(currentMessage);
+      const currentIndex = variantState.selectedIndex >= 0 ? variantState.selectedIndex : variants.length - 1;
       const nextIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
       if (nextIndex < 0 || nextIndex >= variants.length) return;
       const nextVariant = variants[nextIndex];
       await applyVariantSelection(messageId, nextVariant.id);
     },
-    [applyVariantSelection, getVariantState, messages, regeneratingMessageId, session],
+    [applyVariantSelection, getVariantState, state.messages, state.regeneratingMessageId, state.session],
   );
 
   const handleVariantDrag = useCallback(
@@ -264,14 +245,14 @@ export function useChatController(characterId?: string): ChatController {
 
   const handleSend = useCallback(
     async (message: string) => {
-      if (!session || !character) return;
+      if (!state.session || !state.character) return;
       const requestId = crypto.randomUUID();
 
       const userPlaceholder = createPlaceholderMessage("user", message);
       const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
-      setSending(true);
-      setMessages((prev) => [...prev, userPlaceholder, assistantPlaceholder]);
+      dispatch({ type: "SET_SENDING", payload: true });
+      dispatch({ type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] });
 
       let unlisten: UnlistenFn | null = null;
 
@@ -279,157 +260,218 @@ export function useChatController(characterId?: string): ChatController {
         unlisten = await listen<string>(`api://${requestId}`, (event) => {
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantPlaceholder.id
-                ? { ...msg, content: msg.content + delta }
-                : msg,
-            ),
-          );
+          dispatch({ 
+            type: "UPDATE_MESSAGE_CONTENT", 
+            payload: { messageId: assistantPlaceholder.id, content: delta } 
+          });
         });
 
         const result = await sendChatTurn({
-          sessionId: session.id,
-          characterId: character.id,
+          sessionId: state.session.id,
+          characterId: state.character.id,
           message,
-          personaId: persona?.id,
+          personaId: state.persona?.id,
           stream: true,
           requestId,
         });
 
-        setSession((prev) => {
-          if (!prev) return prev;
-          const updatedMessages = [...(prev.messages ?? []), result.userMessage, result.assistantMessage];
-          return {
-            ...prev,
-            messages: updatedMessages,
-            updatedAt: result.assistantMessage.createdAt,
-          } as Session;
-        });
+        const updatedSession: Session = {
+          ...state.session,
+          messages: [...(state.session.messages ?? []), result.userMessage, result.assistantMessage],
+          updatedAt: result.assistantMessage.createdAt,
+        } as Session;
 
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id === userPlaceholder.id) {
-              return result.userMessage;
-            }
-            if (msg.id === assistantPlaceholder.id) {
-              return result.assistantMessage;
-            }
-            return msg;
-          }),
-        );
+        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ 
+          type: "REPLACE_PLACEHOLDER_MESSAGES", 
+          payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage } 
+        });
       } catch (err) {
         console.error("ChatController: send failed", err);
-        setError(err instanceof Error ? err.message : String(err));
-        const latest = await getSession(session.id).catch(() => null);
+        dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        const latest = await getSession(state.session.id).catch(() => null);
         if (latest) {
           const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          setSession({ ...latest, messages: ordered });
-          setMessages(ordered);
+          dispatch({ type: "SET_SESSION", payload: { ...latest, messages: ordered } });
+          dispatch({ type: "SET_MESSAGES", payload: ordered });
         } else {
-          setMessages((prev) => prev.filter((msg) => msg.id !== assistantPlaceholder.id));
+          dispatch({ 
+            type: "SET_MESSAGES", 
+            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id) 
+          });
         }
       } finally {
         if (unlisten) {
           unlisten();
         }
-        setSending(false);
+        dispatch({ type: "SET_SENDING", payload: false });
       }
     },
-    [character, persona?.id, session],
+    [state.character, state.persona?.id, state.session, state.messages],
   );
 
-  const handleRegenerate = useCallback(
-    async (message: StoredMessage) => {
-      if (!session) return;
-      if (messages.length === 0 || messages[messages.length - 1]?.id !== message.id) return;
-      if (message.role !== "assistant") return;
-      if (regeneratingMessageId) return;
-
+  const handleContinue = useCallback(
+    async () => {
+      if (!state.session || !state.character) return;
       const requestId = crypto.randomUUID();
+
+      const assistantPlaceholder = createPlaceholderMessage("assistant", "");
+
+      dispatch({ type: "SET_SENDING", payload: true });
+      dispatch({ type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] });
+
       let unlisten: UnlistenFn | null = null;
-
-      setRegeneratingMessageId(message.id);
-      setError(null);
-      setHeldMessageId(null);
-
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg)),
-      );
 
       try {
         unlisten = await listen<string>(`api://${requestId}`, (event) => {
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === message.id
-                ? {
-                    ...msg,
-                    content: msg.content + delta,
-                  }
-                : msg,
-            ),
-          );
+          dispatch({ 
+            type: "UPDATE_MESSAGE_CONTENT", 
+            payload: { messageId: assistantPlaceholder.id, content: delta } 
+          });
+        });
+
+        const result = await continueConversation({
+          sessionId: state.session.id,
+          characterId: state.character.id,
+          personaId: state.persona?.id,
+          stream: true,
+          requestId,
+        });
+
+        const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
+        const updatedSession: Session = {
+          ...state.session,
+          messages: [...currentMessages, result.assistantMessage],
+          updatedAt: result.assistantMessage.createdAt,
+        } as Session;
+
+        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ 
+          type: "SET_MESSAGES", 
+          payload: [...currentMessages, result.assistantMessage]
+        });
+      } catch (err) {
+        console.error("ChatController: continue failed", err);
+        dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        dispatch({ 
+          type: "SET_MESSAGES", 
+          payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id) 
+        });
+        if (state.session) {
+          const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
+          const syncedSession: Session = {
+            ...state.session,
+            messages: currentMessages,
+            updatedAt: Date.now(),
+          };
+          try {
+            await saveSession(syncedSession);
+            dispatch({ type: "SET_SESSION", payload: syncedSession });
+          } catch (saveErr) {
+            console.error("ChatController: failed to sync session after continue error", saveErr);
+          }
+        }
+      } finally {
+        if (unlisten) {
+          unlisten();
+        }
+        dispatch({ type: "SET_SENDING", payload: false });
+      }
+    },
+    [state.character, state.persona?.id, state.session, state.messages],
+  );
+
+  const handleRegenerate = useCallback(
+    async (message: StoredMessage) => {
+      if (!state.session) return;
+      if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== message.id) return;
+      if (message.role !== "assistant") return;
+      if (state.regeneratingMessageId) return;
+
+      const requestId = crypto.randomUUID();
+      let unlisten: UnlistenFn | null = null;
+
+      dispatch({ type: "SET_REGENERATING_MESSAGE_ID", payload: message.id });
+      dispatch({ type: "SET_ERROR", payload: null });
+      dispatch({ type: "SET_HELD_MESSAGE_ID", payload: null });
+
+      dispatch({ 
+        type: "SET_MESSAGES", 
+        payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg)) 
+      });
+
+      try {
+        unlisten = await listen<string>(`api://${requestId}`, (event) => {
+          const delta = parseStreamDelta(event.payload ?? "");
+          if (!delta) return;
+          dispatch({ 
+            type: "UPDATE_MESSAGE_CONTENT", 
+            payload: { messageId: message.id, content: delta } 
+          });
         });
 
         const result = await regenerateAssistantMessage({
-          sessionId: session.id,
+          sessionId: state.session.id,
           messageId: message.id,
           stream: true,
           requestId,
         });
 
-        setSession((prev) => {
-          if (!prev) return prev;
-          const updatedMessages = [...(prev.messages ?? [])].map((msg) =>
-            msg.id === message.id ? result.assistantMessage : msg,
-          );
-          return {
-            ...prev,
-            messages: updatedMessages,
-            updatedAt: Date.now(),
-          } as Session;
-        });
-
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === message.id ? result.assistantMessage : msg)),
+        const updatedMessages = [...(state.session.messages ?? [])].map((msg) =>
+          msg.id === message.id ? result.assistantMessage : msg,
         );
-        if (messageAction?.message.id === message.id) {
-          setMessageAction({ message: result.assistantMessage, mode: messageAction.mode });
+        const updatedSession: Session = {
+          ...state.session,
+          messages: updatedMessages,
+          updatedAt: Date.now(),
+        } as Session;
+
+        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ 
+          type: "SET_MESSAGES", 
+          payload: state.messages.map((msg) => (msg.id === message.id ? result.assistantMessage : msg)) 
+        });
+        
+        if (state.messageAction?.message.id === message.id) {
+          dispatch({ 
+            type: "SET_MESSAGE_ACTION", 
+            payload: { message: result.assistantMessage, mode: state.messageAction.mode } 
+          });
         }
       } catch (err) {
         console.error("ChatController: regenerate failed", err);
-        setError(err instanceof Error ? err.message : String(err));
-        const latest = await getSession(session.id).catch(() => null);
+        dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        const latest = await getSession(state.session.id).catch(() => null);
         if (latest) {
           const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          setSession({ ...latest, messages: ordered });
-          setMessages(ordered);
+          dispatch({ type: "SET_SESSION", payload: { ...latest, messages: ordered } });
+          dispatch({ type: "SET_MESSAGES", payload: ordered });
         }
       } finally {
         if (unlisten) {
           unlisten();
         }
-        setRegeneratingMessageId(null);
+        dispatch({ type: "SET_REGENERATING_MESSAGE_ID", payload: null });
       }
     },
-    [messageAction, messages, regeneratingMessageId, session],
+    [state.messageAction, state.messages, state.regeneratingMessageId, state.session],
   );
 
   const handleSaveEdit = useCallback(async () => {
-    if (!session || !messageAction) return;
-    const updatedContent = editDraft.trim();
+    if (!state.session || !state.messageAction) return;
+    const updatedContent = state.editDraft.trim();
     if (!updatedContent) {
-      setActionError("Message cannot be empty");
+      dispatch({ type: "SET_ACTION_ERROR", payload: "Message cannot be empty" });
       return;
     }
-    setActionBusy(true);
-    setActionError(null);
-    setActionStatus(null);
+    dispatch({ type: "SET_ACTION_BUSY", payload: true });
+    dispatch({ type: "SET_ACTION_ERROR", payload: null });
+    dispatch({ type: "SET_ACTION_STATUS", payload: null });
     try {
-      const updatedMessages = (session.messages ?? []).map((msg) =>
-        msg.id === messageAction.message.id
+      const updatedMessages = (state.session.messages ?? []).map((msg) =>
+        msg.id === state.messageAction!.message.id
           ? {
               ...msg,
               content: updatedContent,
@@ -442,82 +484,127 @@ export function useChatController(characterId?: string): ChatController {
           : msg,
       );
       const updatedSession: Session = {
-        ...session,
+        ...state.session,
         messages: updatedMessages,
         updatedAt: Date.now(),
       };
       await saveSession(updatedSession);
-      setSession(updatedSession);
-      setMessages(updatedMessages);
+      dispatch({ type: "SET_SESSION", payload: updatedSession });
+      dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
       resetMessageActions();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
     } finally {
-      setActionBusy(false);
+      dispatch({ type: "SET_ACTION_BUSY", payload: false });
     }
-  }, [editDraft, messageAction, resetMessageActions, session]);
+  }, [state.editDraft, state.messageAction, resetMessageActions, state.session]);
 
   const handleDeleteMessage = useCallback(
     async (message: StoredMessage) => {
-      if (!session) return;
+      if (!state.session) return;
       const confirmed = window.confirm("Delete this message?");
       if (!confirmed) return;
-      setActionBusy(true);
-      setActionError(null);
-      setActionStatus(null);
+      dispatch({ type: "SET_ACTION_BUSY", payload: true });
+      dispatch({ type: "SET_ACTION_ERROR", payload: null });
+      dispatch({ type: "SET_ACTION_STATUS", payload: null });
       try {
-        const updatedMessages = (session.messages ?? []).filter((msg) => msg.id !== message.id);
+        const updatedMessages = (state.session.messages ?? []).filter((msg) => msg.id !== message.id);
         const updatedSession: Session = {
-          ...session,
+          ...state.session,
           messages: updatedMessages,
           updatedAt: Date.now(),
         };
         await saveSession(updatedSession);
-        setSession(updatedSession);
-        setMessages(updatedMessages);
+        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
         resetMessageActions();
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : String(err));
+        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
       } finally {
-        setActionBusy(false);
+        dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
     },
-    [resetMessageActions, session],
+    [resetMessageActions, state.session],
+  );
+
+  const handleRewindToMessage = useCallback(
+    async (message: StoredMessage) => {
+      if (!state.session) return;
+      const confirmed = window.confirm(
+        "Rewind conversation to this message? All messages after this point will be removed."
+      );
+      if (!confirmed) return;
+      
+      dispatch({ type: "SET_ACTION_BUSY", payload: true });
+      dispatch({ type: "SET_ACTION_ERROR", payload: null });
+      dispatch({ type: "SET_ACTION_STATUS", payload: null });
+      
+      try {
+        const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+        if (messageIndex === -1) {
+          dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
+          return;
+        }
+        
+        const updatedMessages = state.session.messages.slice(0, messageIndex + 1);
+        const updatedSession: Session = {
+          ...state.session,
+          messages: updatedMessages,
+          updatedAt: Date.now(),
+        };
+        
+        await saveSession(updatedSession);
+        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ type: "REWIND_TO_MESSAGE", payload: { messageId: message.id, messages: updatedMessages } });
+        resetMessageActions();
+      } catch (err) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+      } finally {
+        dispatch({ type: "SET_ACTION_BUSY", payload: false });
+      }
+    },
+    [resetMessageActions, state.session],
   );
 
   useEffect(() => {
     return () => {
-      if (longPressTimer !== null) {
-        window.clearTimeout(longPressTimer);
+      if (state.longPressTimer !== null) {
+        window.clearTimeout(state.longPressTimer);
       }
     };
-  }, [longPressTimer]);
+  }, [state.longPressTimer]);
 
   return {
-    character,
-    persona,
-    session,
-    messages,
-    draft,
-    setDraft,
-    loading,
-    sending,
-    error,
-    setError,
-    messageAction,
-    setMessageAction,
-    actionError,
-    setActionError,
-    actionStatus,
-    setActionStatus,
-    actionBusy,
-    setActionBusy,
-    editDraft,
-    setEditDraft,
-    heldMessageId,
-    setHeldMessageId,
-    regeneratingMessageId,
+    // State
+    character: state.character,
+    persona: state.persona,
+    session: state.session,
+    messages: state.messages,
+    draft: state.draft,
+    loading: state.loading,
+    sending: state.sending,
+    error: state.error,
+    messageAction: state.messageAction,
+    actionError: state.actionError,
+    actionStatus: state.actionStatus,
+    actionBusy: state.actionBusy,
+    editDraft: state.editDraft,
+    heldMessageId: state.heldMessageId,
+    regeneratingMessageId: state.regeneratingMessageId,
+    
+    // Setters
+    setDraft: useCallback((value: string) => dispatch({ type: "SET_DRAFT", payload: value }), []),
+    setError: useCallback((value: string | null) => dispatch({ type: "SET_ERROR", payload: value }), []),
+    setMessageAction: useCallback((value: MessageActionState | null) => dispatch({ type: "SET_MESSAGE_ACTION", payload: value }), []),
+    setActionError: useCallback((value: string | null) => dispatch({ type: "SET_ACTION_ERROR", payload: value }), []),
+    setActionStatus: useCallback((value: string | null) => dispatch({ type: "SET_ACTION_STATUS", payload: value }), []),
+    setActionBusy: useCallback((value: boolean) => dispatch({ type: "SET_ACTION_BUSY", payload: value }), []),
+    setEditDraft: useCallback((value: string) => dispatch({ type: "SET_EDIT_DRAFT", payload: value }), []),
+    setHeldMessageId: useCallback((value: string | null) => dispatch({ type: "SET_HELD_MESSAGE_ID", payload: value }), []),
+    
+    // Actions
     handleSend,
+    handleContinue,
     handleRegenerate,
     getVariantState,
     applyVariantSelection,
@@ -525,12 +612,13 @@ export function useChatController(characterId?: string): ChatController {
     handleVariantDrag,
     handleSaveEdit,
     handleDeleteMessage,
+    handleRewindToMessage,
     resetMessageActions,
     initializeLongPressTimer: (timer) => {
       if (timer === null) {
         clearLongPress();
       } else {
-        setLongPressTimer(timer);
+        dispatch({ type: "SET_LONG_PRESS_TIMER", payload: timer });
       }
     },
   };

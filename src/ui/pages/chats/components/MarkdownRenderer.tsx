@@ -174,16 +174,16 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     flushParagraph(paragraphBuffer, nodes, keyIndex);
   };
 
-  lines.forEach((rawLine, lineIndex) => {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const rawLine = lines[lineIndex];
     const line = rawLine ?? "";
 
     if (line.trim().startsWith("```") && !line.trim().endsWith("```")) {
-      // start code block with language
       flushAll();
       inCodeBlock = true;
       codeLang = line.trim().slice(3).trim();
       codeLines.length = 0;
-      return;
+      continue;
     }
 
     if (inCodeBlock) {
@@ -199,24 +199,23 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       } else {
         codeLines.push(rawLine);
       }
-      return;
+      continue;
     }
 
     if (line.trim().startsWith("```")) {
-      // handle single-line code block start/end
       if (line.trim().endsWith("````")) {
-        return;
+        continue;
       }
       flushAll();
       inCodeBlock = true;
       codeLang = line.trim().slice(3).trim();
       codeLines.length = 0;
-      return;
+      continue;
     }
 
     if (line.trim() === "") {
       flushAll();
-      return;
+      continue;
     }
 
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
@@ -229,14 +228,14 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           {parseInline(headingMatch[2].trim(), `heading-${keyIndex.value}`)}
         </HeadingTag>,
       );
-      return;
+      continue;
     }
 
     if (/^>\s?/.test(line)) {
       listBuffer = flushList(listBuffer, nodes, keyIndex);
       paragraphBuffer.length = 0;
       quoteBuffer.push(line.replace(/^>\s?/, ""));
-      return;
+      continue;
     }
 
     if (/^[-*+]\s+/.test(line)) {
@@ -247,7 +246,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         listBuffer = { type: "unordered", items: [] };
       }
       listBuffer.items.push(item);
-      return;
+      continue;
     }
 
     if (/^\d+\.\s+/.test(line)) {
@@ -258,15 +257,14 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         listBuffer = { type: "ordered", items: [] };
       }
       listBuffer.items.push(item);
-      return;
+      continue;
     }
 
     listBuffer = flushList(listBuffer, nodes, keyIndex);
     flushQuote(quoteBuffer, nodes, keyIndex);
     paragraphBuffer.push(line);
-  });
+  }
 
-  // Flush remaining buffers
   flushAll();
   if (inCodeBlock && codeLines.length > 0) {
     nodes.push(
