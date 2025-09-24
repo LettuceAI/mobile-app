@@ -186,99 +186,6 @@ npm run format
 npm run build
 ```
 
-### Code Quality
-
-**Husky Setup** (optional):
-```bash
-npx husky install
-# Adds pre-commit hooks for lint-staged
-```
-
-**Linting & Formatting**:
-- TypeScript strict mode enabled
-- ESLint for code quality
-- Prettier for consistent formatting
-- Lint-staged for pre-commit quality gates
-
-### Adding New Providers
-
-1. **Create Provider File**: Add new provider in `src/core/providers/`
-2. **Implement Interface**: Follow the `Provider` interface specification
-3. **Register Provider**: Add to `src/core/providers/registry.ts`
-4. **UI Integration**: Add provider configuration in Settings
-
-Example provider implementation:
-```typescript
-import { Provider } from './types';
-
-export const myProvider: Provider = {
-  info: { id: 'my-provider', name: 'My Provider' },
-  async listModels(config) {
-    // Fetch available models
-  },
-  async chat(config, params, callbacks) {
-    // Implement chat with streaming support
-  }
-};
-```
-
-## Security Notes
-
-LettuceAI prioritizes security and privacy:
-
-- **No Data Collection**: Zero telemetry or user tracking
-- **Secure Storage**: API keys never stored in plaintext
-- **OS Keychain**: Credentials stored via Rust `keyring` through Tauri commands
-- **Local Data**: All conversations and settings stored locally
-- **Encrypted Transit**: HTTPS-only communication (or localhost for development)
-- **Sandboxed**: Tauri security model protects system resources
-- **Minimal Permissions**: Only required capabilities enabled
-
-**Network Security**:
-- Only HTTPS endpoints allowed (except localhost for development)
-- Network requests go directly to configured AI provider endpoints
-- No proxy servers or intermediary services
-- Certificate validation enforced
-
-## Architecture
-
-### Streaming Implementation
-
-Real-time streaming uses Server-Sent Events (SSE) with delta updates:
-
-```typescript
-// Streaming callback in chat
-onDelta: (delta: string) => {
-  streamedContent += delta;
-  setMessages(prev => prev.map((msg, idx) => 
-    idx === prev.length - 1 ? { ...msg, content: streamedContent } : msg
-  ));
-}
-```
-
-### File System
-
-Custom Rust commands replace Tauri plugins for reliability:
-
-```rust
-#[tauri::command]
-async fn ensure_data_dir() -> Result<String, String> {
-    // Custom file system operations
-}
-```
-
-### Provider System
-
-Modular provider architecture supports multiple AI services:
-
-```typescript
-interface Provider {
-  info: ProviderInfo;
-  listModels(config: ProviderConfig): Promise<string[]>;
-  chat(config: ProviderConfig, params: ChatParams, callbacks?: ChatCallbacks): Promise<ChatResponse>;
-}
-```
-
 ## Roadmap
 
 - [ ] **iOS Support** - Native iOS application
@@ -300,14 +207,6 @@ We welcome contributions! Please:
 5. **Commit** with meaningful messages
 6. **Push** to your branch: `git push origin feature/amazing-feature`
 7. **Open** a Pull Request
-
-### Code Style Guidelines
-
-- Use functional components with hooks
-- Implement proper error handling
-- Add TypeScript types for all interfaces
-- Follow the existing project structure
-- Write clear, descriptive commit messages
 
 ## License
 

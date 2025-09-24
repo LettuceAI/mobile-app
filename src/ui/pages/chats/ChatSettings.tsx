@@ -115,8 +115,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
             <ArrowLeft size={18} />
           </button>
           <div className="flex flex-col items-start min-w-0 flex-1">
-            <h1 className="text-lg font-semibold text-white">Chat Settings</h1>
-            <p className="text-sm text-gray-400">Manage conversation preferences</p>
+            <h1 className="text-base font-semibold text-white">Chat Settings</h1>
+            <p className="text-xs text-gray-400 mt-0.5">Manage conversation preferences</p>
           </div>
         </div>
       </header>
@@ -134,9 +134,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
             <div className="flex items-center gap-3">
               {avatarDisplay}
               <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-semibold text-white">{characterName}</h3>
+                <h3 className="text-base font-semibold text-white">{characterName}</h3>
                 {currentCharacter?.description && (
-                  <p className="mt-1 text-xs text-gray-400 line-clamp-1">{currentCharacter.description}</p>
+                  <p className="mt-1 text-xs text-gray-400 leading-relaxed line-clamp-2">{currentCharacter.description}</p>
                 )}
               </div>
             </div>
@@ -147,32 +147,32 @@ function ChatSettingsContent({ character }: { character: Character }) {
             {/* New Chat */}
             <button
               onClick={handleNewChat}
-              className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition hover:border-white/20 hover:bg-white/10"
+              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
             >
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white/80">
-                  <MessageSquarePlus className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
+                  <MessageSquarePlus className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-white">New Chat</div>
-                  <div className="text-xs text-gray-400">Start a fresh conversation</div>
+                  <div className="text-sm font-medium text-white">New Chat</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Start a fresh conversation</div>
                 </div>
               </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition group-hover:text-white" />
+              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
             </button>
 
             {/* Change Model */}
             <button
               onClick={() => setShowModelSelector(true)}
-              className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition hover:border-white/20 hover:bg-white/10"
+              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
             >
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white/80">
-                  <Cpu className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
+                  <Cpu className="h-4 w-4" />
                 </div>
-                <div>
-                  <div className="text-sm font-semibold text-white">Change Model</div>
-                  <div className="text-xs text-gray-400">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-white">Change Model</div>
+                  <div className="text-xs text-gray-400 mt-0.5 truncate">
                     {currentModel ? (
                       <>
                         {currentModel.displayName}
@@ -184,7 +184,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   </div>
                 </div>
               </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition group-hover:text-white" />
+              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
             </button>
           </section>
         </motion.div>

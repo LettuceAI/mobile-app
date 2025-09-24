@@ -51,29 +51,24 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
           <button
             key={character.id}
             onClick={() => onSelect(character)}
-            className="group relative flex h-[96px] w-full min-w-0 max-w-full items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/90 px-4 text-left transition hover:border-white/25"
-            style={{ width: "100%" }}
+            className="group relative flex h-20 w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-[#0b0c12]/90 px-4 py-3 text-left transition-all duration-200 hover:border-white/25 hover:bg-[#0c0d13]/95 active:scale-[0.995]"
           >
             <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-emerald-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
 
-            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-white">
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-40" />
-              <div className="relative z-10 flex h-full w-full items-center justify-center">
-                {renderAvatar(character, true)}
-              </div>
+            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-white/8 text-sm font-semibold text-white">
+              {renderAvatar(character, true)}
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold text-white">{character.name}</p>
+            <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+              <div className="flex items-center justify-between">
+                <h3 className="truncate text-sm font-semibold text-white">{character.name}</h3>
                 {updatedLabel && (
-                  <span className="ml-auto shrink-0 text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.15em] text-gray-500">
                     {updatedLabel}
                   </span>
                 )}
               </div>
-
-              <p className="text-[11px] leading-5 text-gray-400 line-clamp-2">{descriptionPreview}</p>
+              <p className="text-xs leading-relaxed text-gray-400 line-clamp-1">{descriptionPreview}</p>
             </div>
 
             <span className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition group-hover:border-white/25 group-hover:text-white">
@@ -92,19 +87,15 @@ function CharacterSkeleton() {
       {[0, 1, 2].map((index) => (
         <div
           key={index}
-          className="animate-pulse h-[96px] rounded-2xl border border-white/5 bg-white/5 px-4"
+          className="animate-pulse h-20 rounded-xl border border-white/5 bg-white/5 px-4 py-3"
         >
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-white/10" />
-            <div className="flex-1 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-lg bg-white/10" />
+            <div className="flex-1 space-y-2">
               <div className="h-3 w-1/3 rounded-full bg-white/10" />
-              <div className="h-3 w-full rounded-full bg-white/5" />
-              <div className="flex gap-2">
-                <div className="h-3 w-24 rounded-full bg-white/5" />
-                <div className="h-3 w-28 rounded-full bg-white/5" />
-              </div>
+              <div className="h-2.5 w-full rounded-full bg-white/5" />
             </div>
-            <div className="h-9 w-9 rounded-full border border-white/10 bg-white/5" />
+            <div className="h-8 w-8 rounded-full border border-white/10 bg-white/5" />
           </div>
         </div>
       ))}
@@ -114,10 +105,10 @@ function CharacterSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="rounded-3xl border border-dashed border-white/12 bg-[#0b0c12] p-8 text-center shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-white">No characters yet</h3>
-        <p className="text-xs text-gray-400">
+    <div className="rounded-2xl border border-dashed border-white/12 bg-[#0b0c12]/50 p-8 text-center backdrop-blur-sm">
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold text-white">No characters yet</h3>
+        <p className="text-sm text-gray-400 leading-relaxed">
           Create a new character from the tab bar below to start your first conversation.
         </p>
       </div>
@@ -146,10 +137,7 @@ function renderAvatar(c: Character, isLarge = false) {
   return <span className="text-white">{display}</span>;
 }
 
-function truncateText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength).trimEnd()}…`;
-}
+
 
 function formatUpdatedAt(timestamp: number) {
   if (!timestamp) return "";

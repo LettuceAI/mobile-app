@@ -43,10 +43,10 @@ export function WelcomePage() {
         </div>
 
         {/* Features */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2">
           {quickFacts.map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 backdrop-blur-sm">
-              <Icon size={16} className="text-emerald-400" />
+            <div key={label} className="flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-2 backdrop-blur-sm">
+              <Icon size={14} className="text-emerald-400" />
               <span className="text-xs font-medium text-gray-300">{label}</span>
             </div>
           ))}
@@ -55,7 +55,7 @@ export function WelcomePage() {
         {/* Call to action */}
         <div className="w-full max-w-xs space-y-3">
           <button
-            className="group w-full flex items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-semibold text-white transition-all hover:border-white/30 hover:bg-white/15 hover:scale-[1.02]"
+            className="group w-full flex min-h-[48px] items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-semibold text-white transition-all duration-200 hover:border-white/30 hover:bg-white/15 active:scale-[0.98]"
             onClick={handleAddProvider}
           >
             <Settings size={18} />
@@ -64,7 +64,7 @@ export function WelcomePage() {
           </button>
 
           <button
-            className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-gray-400 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="w-full min-h-[44px] rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-gray-400 backdrop-blur-sm transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.98]"
             onClick={() => setShowSkipWarning(true)}
           >
             Skip for now
