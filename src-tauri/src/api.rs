@@ -76,26 +76,45 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         }
     }
 
-    if let Some(headers) = &req.headers {
-        let mut header_map = HeaderMap::new();
-        for (key, value) in headers {
-            if let (Ok(name), Ok(header_value)) = (
-                HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_str(value),
-            ) {
-                header_map.insert(name, header_value);
+        if let Some(headers) = &req.headers {
+            let mut header_map = HeaderMap::new();
+            for (key, value) in headers {
+                if let (Ok(name), Ok(header_value)) = (
+                    HeaderName::from_bytes(key.as_bytes()),
+                    HeaderValue::from_str(value),
+                ) {
+                    header_map.insert(name, header_value);
+                }
+            }
+            header_map.insert(
+                HeaderName::from_static("HTTP-Referer"),
+                HeaderValue::from_static("https://github.com/LettuceAI/"),
+            );
+            header_map.insert(
+                HeaderName::from_static("X-Title"),
+                HeaderValue::from_static("LettuceAI"),
+            );
+            request_builder = request_builder.headers(header_map);
+        } else {
+            let mut header_map = HeaderMap::new();
+            header_map.insert(
+                HeaderName::from_static("http-referer"),
+                HeaderValue::from_static("https://github.com/LettuceAI/"),
+            );
+            header_map.insert(
+                HeaderName::from_static("x-title"),
+                HeaderValue::from_static("LettuceAI"),
+            );
+            request_builder = request_builder.headers(header_map);
+        }
+
+        if let Some(body) = req.body {
+            if let Some(text) = body.as_str() {
+                request_builder = request_builder.body(text.to_owned());
+            } else if !body.is_null() {
+                request_builder = request_builder.json(&body);
             }
         }
-        request_builder = request_builder.headers(header_map);
-    }
-
-    if let Some(body) = req.body {
-        if let Some(text) = body.as_str() {
-            request_builder = request_builder.body(text.to_owned());
-        } else if !body.is_null() {
-            request_builder = request_builder.json(&body);
-        }
-    }
 
     let stream = req.stream.unwrap_or(false);
     let request_id = req.request_id.clone();
@@ -105,12 +124,6 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let ok = status.is_success();
 
     let mut headers = HashMap::new();
-
-    headers.insert(
-        "HTTP-Referer".to_string(),
-        "https://github.com/LettuceAI/".to_string(),
-    );
-    headers.insert("X-Title".to_string(), "LettuceAI".to_string());
 
     for (key, value) in response.headers().iter() {
         if let Ok(text) = value.to_str() {

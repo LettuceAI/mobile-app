@@ -1,15 +1,19 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 
 interface TopNavProps {
   currentPath: string;
-  onCreateClick: () => void;
+  onCreateClick: () => void; // (reserved for future primary action button if needed)
 }
 
 export function TopNav({ currentPath }: TopNavProps) {
   const navigate = useNavigate();
   const title = useMemo(() => {
+    if (currentPath === "/settings/providers") return "Providers";
+    if (currentPath === "/settings/models") return "Models";
+    if (currentPath === "/settings/security") return "Security";
+    if (currentPath === "/settings/reset") return "Reset";
     if (currentPath.startsWith("/settings")) return "Settings";
     if (currentPath.startsWith("/create")) return "Create";
     if (currentPath.startsWith("/onboarding")) return "Setup";
@@ -18,19 +22,25 @@ export function TopNav({ currentPath }: TopNavProps) {
     return "Chats";
   }, [currentPath]);
 
+  const showBackButton = useMemo(() => {
+    if (currentPath === "/create/character") return true;
+    if (currentPath.startsWith("/settings/") && currentPath !== "/settings") return true;
+    return false;
+  }, [currentPath]);
+
   const handleBack = () => {
-    // Special handling for CreateCharacter page
     if (currentPath === "/create/character") {
       const handler = (window as any).__createCharacterBackHandler;
-      if (handler && handler()) {
-        return; // Handler managed the navigation
-      }
+      if (handler && handler()) return;
+      navigate(-1);
+      return;
     }
-    
+    if (currentPath.startsWith("/settings/") && currentPath !== "/settings") {
+      navigate("/settings");
+      return;
+    }
     navigate(-1);
   };
-
-  const showBackButton = currentPath === "/create/character";
 
   return (
     <header
@@ -50,8 +60,26 @@ export function TopNav({ currentPath }: TopNavProps) {
         <div className="flex flex-col items-center">
           <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500">LettuceAI</span>
           <span className="text-sm font-semibold text-white">{title}</span>
+          </div>
+        {(currentPath === "/settings/models" || currentPath === "/settings/providers") && (
+          <button
+            onClick={() => {
+              const g: any = window;
+              if (currentPath === "/settings/models") {
+                if (typeof g.__openAddModel === "function") g.__openAddModel();
+                else window.dispatchEvent(new CustomEvent("models:add"));
+              } else if (currentPath === "/settings/providers") {
+                if (typeof g.__openAddProvider === "function") g.__openAddProvider();
+                else window.dispatchEvent(new CustomEvent("providers:add"));
+              }
+            }}
+            aria-label={currentPath === "/settings/models" ? "Add model" : "Add provider"}
+            className="absolute right-4 top-1/2 flex -translate-y-1/2 items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-200 transition hover:border-white/30 hover:text-white"
+          >
+            <Plus size={14} />
+          </button>
+        )}
         </div>
-      </div>
     </header>
   );
 }

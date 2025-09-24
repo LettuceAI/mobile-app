@@ -118,3 +118,16 @@ pub fn secret_for_cred_delete(
     let account = format!("{}:{}", provider_id, cred_id);
     secret_delete(app, service, account)
 }
+
+// Internal helper (non-command) for other Rust modules to read secrets without exposing new commands.
+pub(crate) fn internal_secret_for_cred_get(
+    app: &tauri::AppHandle,
+    provider_id: String,
+    cred_id: String,
+    key: String,
+) -> Result<Option<String>, String> {
+    let service = format!("{}:{}", SERVICE, key);
+    let account = format!("{}:{}", provider_id, cred_id);
+    let s = read_secrets(app)?;
+    Ok(s.entries.get(&format!("{}|{}", service, account)).cloned())
+}

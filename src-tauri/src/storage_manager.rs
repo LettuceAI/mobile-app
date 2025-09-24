@@ -282,3 +282,9 @@ pub fn storage_usage_summary(app: tauri::AppHandle) -> Result<StorageUsageSummar
         last_updated_ms,
     })
 }
+
+// Internal accessor for raw settings JSON (unenforced schema) for other backend modules.
+pub(crate) fn internal_read_settings(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = settings_path(app)?;
+    read_encrypted_file(&path)
+}

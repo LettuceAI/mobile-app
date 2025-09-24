@@ -4,6 +4,10 @@ import { motion } from "framer-motion";
 
 import { WelcomePage, ProviderSetupPage, ModelSetupPage } from "./ui/pages/onboarding";
 import { SettingsPage } from "./ui/pages/settings/Settings";
+import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
+import { ModelsPage } from "./ui/pages/settings/ModelsPage";
+import { SecurityPage } from "./ui/pages/settings/SecurityPage";
+import { ResetPage } from "./ui/pages/settings/ResetPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage } from "./ui/pages/characters";
@@ -103,6 +107,10 @@ function AppContent() {
               <Route path="/onboarding/provider" element={<ProviderSetupPage />} />
               <Route path="/onboarding/models" element={<ModelSetupPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/providers" element={<ProvidersPage />} />
+              <Route path="/settings/models" element={<ModelsPage />} />
+              <Route path="/settings/security" element={<SecurityPage />} />
+              <Route path="/settings/reset" element={<ResetPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />

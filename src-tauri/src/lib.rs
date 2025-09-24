@@ -1,6 +1,7 @@
 mod api;
 mod chat_manager;
 mod models_cache;
+mod model_verify;
 mod secrets;
 mod storage_manager;
 mod utils;
@@ -13,6 +14,7 @@ pub fn run() {
             api::api_request,
             models_cache::models_cache_get,
             models_cache::models_cache_update,
+            model_verify::verify_model_exists,
             storage_manager::storage_read_settings,
             storage_manager::storage_write_settings,
             storage_manager::storage_read_characters,

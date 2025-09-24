@@ -1,0 +1,229 @@
+import { useState, useEffect, useCallback } from "react";
+import { Trash2, ChevronRight, Edit3 } from "lucide-react";
+import { readSettings, addOrUpdateProviderCredential, removeProviderCredential } from "../../../core/storage/repo";
+import { providerRegistry } from "../../../core/providers/registry";
+import { setSecret, getSecret } from "../../../core/secrets";
+import type { ProviderCredential } from "../../../core/storage/schemas";
+import { BottomMenu, MenuButton } from "../../components/BottomMenu";
+
+export function ProvidersPage() {
+  const [providers, setProviders] = useState<ProviderCredential[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderCredential | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorProvider, setEditorProvider] = useState<ProviderCredential | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const loadProviders = async () => {
+    const settings = await readSettings();
+    setProviders(settings.providerCredentials);
+  };
+
+  const openEditor = (provider?: ProviderCredential) => {
+    const newId = crypto.randomUUID();
+    const newProvider: ProviderCredential = provider || {
+      id: newId,
+      providerId: providerRegistry[0].id,
+      label: "",
+      apiKeyRef: { providerId: providerRegistry[0].id, key: "apiKey", credId: newId }
+    } as ProviderCredential;
+    setEditorProvider(newProvider);
+    setIsEditorOpen(true);
+    setSelectedProvider(null);
+    setApiKey("");
+    if (provider?.apiKeyRef) {
+      const ref = { ...provider.apiKeyRef, credId: provider.id };
+      getSecret(ref).then(key => setApiKey(key || ""));
+    }
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditorProvider(null);
+    setApiKey("");
+  };
+
+  useEffect(() => {
+    loadProviders();
+    (window as any).__openAddProvider = () => openEditor();
+    const listener = () => openEditor();
+    window.addEventListener("providers:add", listener);
+    return () => {
+      if ((window as any).__openAddProvider) delete (window as any).__openAddProvider;
+      window.removeEventListener("providers:add", listener);
+    };
+  }, []);
+
+  const handleSaveProvider = useCallback(async () => {
+    if (!editorProvider) return;
+    setIsSaving(true);
+    try {
+      if (editorProvider.apiKeyRef) {
+        editorProvider.apiKeyRef.credId = editorProvider.id;
+      }
+      await addOrUpdateProviderCredential(editorProvider);
+      if (editorProvider.apiKeyRef && apiKey) {
+        await setSecret(editorProvider.apiKeyRef, apiKey);
+      }
+      await loadProviders();
+      setIsEditorOpen(false);
+      setEditorProvider(null);
+      setApiKey("");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editorProvider, apiKey]);
+
+  const handleDeleteProvider = useCallback(async (id: string) => {
+    setIsDeleting(true);
+    try {
+      await removeProviderCredential(id);
+      await loadProviders();
+      setSelectedProvider(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, []);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        {providers.length === 0 && (
+          <div className="mt-8 text-center text-sm text-white/50">No providers yet. Add one.</div>
+        )}
+        {providers.map(provider => {
+          const registryInfo = providerRegistry.find(p => p.id === provider.providerId);
+          console.log('registryInfo for provider', provider, registryInfo);
+          return (
+            <button
+              key={provider.id}
+              onClick={() => setSelectedProvider(provider)}
+              className="group w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-white">{provider.label || registryInfo?.name}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-white/50">
+                    <span className="truncate">{registryInfo?.name}</span>
+                    {provider.baseUrl && (
+                      <>
+                        <span className="opacity-40">•</span>
+                        <span className="truncate max-w-[120px]">{provider.baseUrl.replace(/^https?:\/\//, '')}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60 transition" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <BottomMenu
+        isOpen={!!selectedProvider}
+        onClose={() => setSelectedProvider(null)}
+        title={selectedProvider?.label || 'Provider'}
+      >
+        {selectedProvider && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+              <p className="truncate text-sm font-medium text-white">{selectedProvider.label || providerRegistry.find(p => p.id === selectedProvider.providerId)?.name}</p>
+              <p className="mt-0.5 truncate text-[11px] text-white/50">{providerRegistry.find(p => p.id === selectedProvider.providerId)?.name}</p>
+            </div>
+            <MenuButton
+              icon={Edit3}
+              title="Edit"
+              description="Change provider settings"
+              onClick={() => openEditor(selectedProvider)}
+              color="from-indigo-500 to-blue-600"
+            />
+            <MenuButton
+              icon={Trash2}
+              title={isDeleting ? 'Deleting...' : 'Delete'}
+              description="Remove this provider"
+              onClick={() => handleDeleteProvider(selectedProvider.id)}
+              disabled={isDeleting}
+              color="from-rose-500 to-red-600"
+            />
+          </div>
+        )}
+      </BottomMenu>
+
+      <BottomMenu
+        isOpen={isEditorOpen}
+        onClose={closeEditor}
+        title={editorProvider?.label ? 'Edit Provider' : 'Add Provider'}
+      >
+        {editorProvider && (
+          <div className="space-y-4 pb-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-white/70">Provider Type</label>
+              <select
+                value={editorProvider.providerId}
+                onChange={(e) => setEditorProvider({
+                  ...editorProvider,
+                  providerId: e.target.value,
+                  apiKeyRef: { ...editorProvider.apiKeyRef!, providerId: e.target.value, credId: editorProvider.id }
+                })}
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+              >
+                {providerRegistry.map(p => (
+                  <option key={p.id} value={p.id} className="bg-black">{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-white/70">Label</label>
+              <input
+                type="text"
+                value={editorProvider.label}
+                onChange={(e) => setEditorProvider({ ...editorProvider, label: e.target.value })}
+                placeholder="My OpenAI Account"
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-white/70">API Key</label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter your API key"
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-white/70">Base URL (optional)</label>
+              <input
+                type="url"
+                value={editorProvider.baseUrl || ''}
+                onChange={(e) => setEditorProvider({ ...editorProvider, baseUrl: e.target.value })}
+                placeholder="https://api.openai.com"
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={closeEditor}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProvider}
+                disabled={isSaving || !editorProvider.label}
+                className="flex-1 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+      </BottomMenu>
+    </div>
+  );
+}
