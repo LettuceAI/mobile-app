@@ -1,5 +1,4 @@
 import { AnthropicProvider } from "./anthropic";
-import { CustomJsonProvider } from "./custom";
 import { OpenAICompatibleProvider } from "./openai";
 import type { Provider, ProviderConfig } from "./types";
 
@@ -33,11 +32,6 @@ export const providerRegistry: RegisteredProvider[] = [
     id: "openai-compatible",
     name: "OpenAI-Compatible",
     make: () => OpenAICompatibleProvider,
-  },
-  {
-    id: "custom-json",
-    name: "Custom HTTP (JSON)",
-    make: () => CustomJsonProvider,
   },
 ];
 

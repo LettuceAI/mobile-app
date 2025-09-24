@@ -1,10 +1,8 @@
-# LettuceAI
-
 <div align="center">
 
-![LettuceAI Logo](src-tauri/icons/icon.png)
+<img src="https://github.com/LettuceAI/.github/blob/main/profile/LettuceAI-banner.png" alt="LettuceAI Banner" />
 
-**A Modern Cross-Platform AI Roleplay Application**
+**A Private, Cross-Platform AI Roleplay App**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-blue.svg)](https://tauri.app/)
@@ -17,70 +15,31 @@
 
 ## Overview
 
-LettuceAI is a sleek, cross-platform AI roleplay application built with Tauri v2, React, and TypeScript. It provides a modern, mobile-first interface for engaging conversations with AI characters through multiple provider integrations including OpenAI, Anthropic, and custom endpoints.
+**LettuceAI** is a sleek, privacy-first AI roleplay application built with Tauri v2, React, and TypeScript. It gives you a modern, mobile-first experience for creating characters, writing stories, and chatting with AI models — entirely on your own device. You bring your own API keys and choose which models to use.
 
-**Core Principles**: Privacy-first design, bring-your-own credentials, local-first persistence, modular providers, and secure keychain storage.
-
-## Features
-
-### 🤖 **Multi-Provider AI Support**
-- **OpenAI Integration**: GPT-4, GPT-3.5-turbo, and other OpenAI models
-- **Anthropic Integration**: Claude models with native streaming
-- **Custom Providers**: Support for OpenRouter, local models, and custom endpoints
-- **Provider Management**: Easy credential management with secure OS keychain storage
-
-### 💬 **Advanced Chat Experience**
-- **Real-time Streaming**: Token-by-token streaming responses with visual typing indicators
-- **Character Roleplay**: Create and manage AI characters with custom personas
-- **Session Management**: Persistent chat sessions with message history
-- **System Prompts**: Customizable system instructions for character behavior
-
-### 🎨 **Modern UI/UX**
-- **Mobile-First Design**: Optimized for touch devices and small screens
-- **Smooth Animations**: Powered by Framer Motion for fluid interactions
-- **Clean Interface**: Full-height chat UI with bottom sheet settings
-- **Responsive Layout**: Works seamlessly on desktop, tablet, and mobile
-
-### 🔒 **Security & Privacy**
-- **No Telemetry**: Zero user data collection or tracking
-- **Encrypted Storage**: API keys stored securely in OS keychain via Rust `keyring`
-- **Local-First**: All data stored locally on your device
-- **HTTPS Only**: Secure communication with AI providers (or localhost for development)
-
-### 🚀 **Technical Features**
-- **Cross-Platform**: Desktop (Windows, macOS, Linux) and Android support
-- **Custom File System**: Robust file operations without external plugins
-- **Type Safety**: Full TypeScript implementation with Zod validation
-- **Modular Architecture**: Clean separation of concerns and extensible design
+**Our focus:** privacy, customization, and creative freedom so your stories stay yours.
 
 ## Technology Stack
 
-### Frontend
-- **React 18** - Modern React with hooks and concurrent features
-- **TypeScript** - Type-safe development with strict mode
-- **Tailwind CSS v4** - Utility-first styling with custom design system
-- **Framer Motion** - Smooth animations and transitions
-- **Lucide React** - Beautiful and consistent iconography
-- **Zod** - Runtime type validation and schema management
-
-### Backend
-- **Tauri v2** - Secure and lightweight desktop app framework
-- **Rust** - High-performance systems programming language
-- **Keyring** - Secure credential storage using OS keyring
-- **Custom Commands** - Direct file system operations without plugins
+* **Frontend:** React 18, TypeScript 5, Tailwind CSS v4, Framer Motion, Lucide React, Zod
+* **Backend:** Tauri v2 (Rust), Keyring, custom Tauri commands
 
 ## Quick Start
 
 ### Prerequisites
-- **Node.js** 18+ and npm
-- **Rust** 1.70+ with cargo
-- **Android SDK** (for Android builds, optional)
+
+* Node.js 18+ & npm
+* Rust 1.70+ & Cargo
+* Android SDK (for Android builds, optional)
+  * Install [Android Studio](https://developer.android.com/studio) and set up the SDK
+  * Ensure `ANDROID_SDK_ROOT` is set in your environment variables
+  * Add platform tools to your `PATH` (e.g., `export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH`)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/lettuceai.git
+git clone https://github.com/LettuceAI/mobile-app.git
 cd lettuceai
 
 # Install dependencies
@@ -90,135 +49,110 @@ npm install
 npm run dev
 
 # Run Tauri app (native desktop)
-npm run tauri dev
+npm run tauri android dev
 
 # Build for production
-npm run tauri build
+npm run tauri android build
 ```
 
 ### Android Development
 
 ```bash
-# Setup Android development environment
 # Ensure ANDROID_SDK_ROOT is set to your Android SDK path
 
 # Run on Android emulator
-npm run tauri:android
+npm run tauri android dev
 
 # Build Android APK
-npm run tauri -- android build
+npm run tauri android dev
 ```
 
-## Configuration
+---
 
-### Provider Setup
+## Using LettuceAI
 
-1. **Open Settings** → Navigate to Settings → Providers
-2. **Add Provider** → Choose from:
-   - OpenAI (GPT-4, GPT-3.5-turbo)
-   - Anthropic (Claude models)
-   - OpenRouter (Multiple model access)
-   - OpenAI-Compatible (Local models, custom endpoints)
-   - Custom JSON (Advanced configurations)
-3. **API Key** → Paste your API key (stored securely in OS keychain)
-4. **Configuration** → Optionally set base URL and default model
-5. **Test Connection** → Use Quick Test to validate (no conversation content sent)
+### Providers
 
-### Chat Usage
+1. Open Settings → Providers
+2. Add a provider (OpenAI, Anthropic, OpenRouter, local/custom)
+3. Paste your API key (stored securely in the OS keychain)
+4. Optionally set base URL & default model
+5. Test connection without sending conversation content
 
-1. **Navigate to Chat** → Open the chat interface
-2. **Select Provider** → Choose your configured provider
-3. **Set Model** → Pick the specific AI model
-4. **System Prompt** → Add custom instructions (optional)
-5. **Start Messaging** → Begin your conversation with real-time streaming
+### Chat
 
-### Character Creation
+1. Open the chat interface
+2. Select your provider and model
+3. (Optional) Add custom system prompts
+4. Start roleplaying — responses stream in real time
 
-Create AI characters with:
-- **Name & Identity**: Character name and background
-- **Persona**: Personality traits and characteristics
-- **Communication Style**: How the character speaks and behaves
-- **Boundaries**: Content guidelines and limitations
+### Characters
 
-## Development
+* Name & identity
+* Personality traits and style
+* Boundaries and content guidelines
 
-### Project Structure
+---
+
+## Project Structure
 
 ```
 src/
-├── core/                    # Core business logic
-│   ├── chat/               # Chat functionality and streaming
-│   ├── providers/          # AI provider integrations (OpenAI, Anthropic, Custom)
-│   ├── storage/            # Data persistence and file operations
-│   └── secrets/            # Secure credential management
-├── ui/                     # User interface components
-│   ├── pages/              # Main pages (Chat, Settings)
-│   └── components/         # Reusable UI components
-└── assets/                 # Static assets and resources
+  core/        # Chat logic, providers, storage, secure creds
+  ui/          # Pages and reusable components
+  assets/      # Static assets and resources
 
 src-tauri/
-├── src/                    # Rust backend code
-│   ├── lib.rs             # Custom file system commands
-│   └── main.rs            # Application entry point
-├── capabilities/           # Tauri security capabilities
-└── icons/                  # Application icons
+  src/         # Rust backend (custom commands, entry point)
+  capabilities/ 
+  icons/
 ```
 
-### Development Commands
+---
+
+## Development Commands
 
 ```bash
-# Development server with hot reload
-npm run dev
-
-# Tauri development (native app)
-npm run tauri dev
-
-# Type checking
-npx tsc --noEmit
-
-# Linting (TypeScript strict + ESLint)
-npm run lint
-
-# Code formatting (Prettier)
-npm run format
-
-# Build for production
-npm run build
+npm run dev         # Hot reload (web view)
+npm run tauri dev   # Native app dev
+npx tsc --noEmit    # Type check
+npm run lint        # ESLint
+npm run format      # Prettier
+npm run build       # Production build
 ```
+
+---
 
 ## Roadmap
 
-- [ ] **iOS Support** - Native iOS application
-- [ ] **Voice Integration** - Speech-to-text and text-to-speech
-- [ ] **Plugin System** - Third-party extensions
-- [ ] **Multi-Character Chats** - Group conversations
-- [ ] **Advanced Characters** - More detailed character creation
-- [ ] **Export/Import** - Data portability features
-- [ ] **Themes** - Custom UI themes and layouts
+* [ ] Enhanced chat controls
+* [ ] Character and persona library
+* [ ] Built-in guides for character creation
+* [ ] Fully customizable defaults
+* [ ] Multi-character conversations
+* [ ] Import chats and characters from SillyTavern and similar platforms
+* [ ] Export/Import data
+* [ ] iOS support
+* [ ] Plugin ecosystem
+
+---
 
 ## Contributing
 
-We welcome contributions! Please:
+We welcome contributions!
 
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **Follow** TypeScript and React best practices
-4. **Test** your changes thoroughly
-5. **Commit** with meaningful messages
-6. **Push** to your branch: `git push origin feature/amazing-feature`
-7. **Open** a Pull Request
+1. Fork the repo
+2. Create a feature branch `git checkout -b feature/amazing-feature`
+3. Follow TypeScript & React best practices
+4. Test thoroughly
+5. Commit with meaningful messages
+6. Push and open a PR
+
+---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Tauri](https://tauri.app/) - Amazing desktop app framework
-- [React](https://reactjs.org/) - Powerful UI library
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
-- [Lucide](https://lucide.dev/) - Beautiful icon set
-- [Framer Motion](https://www.framer.com/motion/) - Smooth animations
+MIT — see [LICENSE](LICENSE)
 
 ---
 
