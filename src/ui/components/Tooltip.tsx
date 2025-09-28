@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowUp } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { hasSeenTooltip, setTooltipSeen } from "../../core/storage/appState";
 
 interface TooltipProps {

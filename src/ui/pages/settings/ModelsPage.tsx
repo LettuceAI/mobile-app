@@ -6,7 +6,8 @@ import {
     readSettings,
     addOrUpdateModel,
     removeModel,
-    setDefaultModel
+    setDefaultModel,
+    SETTINGS_UPDATED_EVENT,
 } from "../../../core/storage/repo";
 
 import { providerRegistry } from "../../../core/providers/registry";
@@ -25,6 +26,13 @@ export function ModelsPage() {
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isVerifying, setIsVerifying] = useState(false);
 
+    const loadData = useCallback(async () => {
+        const settings = await readSettings();
+        setProviders(settings.providerCredentials);
+        setModels(settings.models);
+        setDefaultModelId(settings.defaultModelId);
+    }, []);
+
     useEffect(() => {
         loadData();
         (window as any).__openAddModel = () => openEditor();
@@ -36,20 +44,31 @@ export function ModelsPage() {
             }
             window.removeEventListener("models:add", listener);
         };
-    }, []);
+    }, [loadData]);
 
-    const loadData = async () => {
-        const settings = await readSettings();
-        setProviders(settings.providerCredentials);
-        setModels(settings.models);
-        setDefaultModelId(settings.defaultModelId);
-    };
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const handler = () => {
+            loadData();
+        };
+        window.addEventListener(SETTINGS_UPDATED_EVENT, handler);
+        return () => {
+            window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
+        };
+    }, [loadData]);
 
     const handleSaveModel = useCallback(async () => {
         if (!editorModel) return;
         setValidationError(null);
 
-        const providerCred = providers.find(p => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel);
+        const providerCred = providers.find(p => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel)
+            ?? providers.find(p => p.providerId === editorModel.providerId);
+
+        if (!providerCred) {
+            setValidationError('Select a provider that has valid credentials');
+            return;
+        }
+
         const shouldVerify = providerCred && ["openai", "anthropic"].includes(providerCred.providerId);
         if (providerCred && shouldVerify) {
             try {
@@ -87,7 +106,11 @@ export function ModelsPage() {
         }
         setIsSaving(true);
         try {
-            await addOrUpdateModel(editorModel);
+            await addOrUpdateModel({
+                ...editorModel,
+                providerId: providerCred.providerId,
+                providerLabel: providerCred.label,
+            });
             await loadData();
             setIsEditorOpen(false);
             setEditorModel(null);
@@ -116,14 +139,14 @@ export function ModelsPage() {
     const openEditor = (model?: Model) => {
         const firstProvider = providers[0];
         const firstRegistryProvider = providerRegistry[0];
-        
-        const newModel: Model = model || {
+
+        const newModel: Model = model || ({
             id: crypto.randomUUID(),
             name: "",
             displayName: "",
             providerId: firstProvider?.providerId || firstRegistryProvider?.id || "",
             providerLabel: firstProvider?.label || firstRegistryProvider?.name || ""
-        } as Model;
+        } as Model);
         
         console.log('Opening editor with model:', newModel);
         console.log('Available providers:', providers);
@@ -132,6 +155,24 @@ export function ModelsPage() {
         setIsEditorOpen(true);
         setSelectedModel(null);
     };
+
+    useEffect(() => {
+        if (!isEditorOpen || !editorModel) return;
+        if (providers.length === 0) return;
+
+        const hasMatch = providers.some(
+            (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel
+        );
+
+        if (!hasMatch) {
+            const fallback = providers[0];
+            setEditorModel({
+                ...editorModel,
+                providerId: fallback.providerId,
+                providerLabel: fallback.label,
+            });
+        }
+    }, [providers, isEditorOpen, editorModel]);
 
     const closeEditor = () => {
         setIsEditorOpen(false);
@@ -269,17 +310,18 @@ export function ModelsPage() {
                                 </div>
                             ) : (
                                 <select
-                                    value={editorModel.providerId + '|' + editorModel.providerLabel || ''}
+                                    value={(editorModel.providerId + '|' + editorModel.providerLabel) || ''}
                                     onChange={(e) => {
                                         console.log('Provider changed to:', e.target.value);
                                         const [providerId, providerLabel] = e.target.value.split('|');
-                                        const selectedProvider = providers.find(p => p.providerId === providerId && p.label === providerLabel);
+                                        const selectedProvider = providers.find(p => p.providerId === providerId && p.label === providerLabel)
+                                            ?? providers.find(p => p.providerId === providerId);
                                         console.log('Selected provider:', selectedProvider);
                                         
                                         setEditorModel({
                                             ...editorModel,
                                             providerId: providerId,
-                                            providerLabel: providerLabel
+                                            providerLabel: selectedProvider?.label ?? providerLabel
                                         });
                                     }}
                                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"

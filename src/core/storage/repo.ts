@@ -14,6 +14,14 @@ import {
   createDefaultSettings,
 } from "./schemas";
 
+export const SETTINGS_UPDATED_EVENT = "lettuceai:settings-updated";
+
+function broadcastSettingsUpdated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(SETTINGS_UPDATED_EVENT));
+  }
+}
+
 function now() {
   return Date.now();
 }
@@ -67,6 +75,7 @@ export async function readSettings(): Promise<Settings> {
 export async function writeSettings(s: Settings): Promise<void> {
   SettingsSchema.parse(s);
   await storageBridge.writeSettings(s);
+  broadcastSettingsUpdated();
 }
 
 export async function addOrUpdateProviderCredential(cred: Omit<ProviderCredential, "id"> & { id?: string }): Promise<ProviderCredential> {
@@ -195,6 +204,27 @@ export async function saveSession(s: Session): Promise<void> {
   if (!ids.includes(s.id)) {
     ids.push(s.id);
     await writeSessionIndex(ids);
+  }
+}
+
+export async function archiveSession(id: string, archived = true): Promise<Session | null> {
+  const existing = await getSession(id);
+  if (!existing) return null;
+  const updated: Session = {
+    ...existing,
+    archived,
+    updatedAt: now(),
+  };
+  await saveSession(updated);
+  return updated;
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  await storageBridge.deleteSession(id);
+  const ids = await listSessionIds();
+  const filtered = ids.filter((entry) => entry !== id);
+  if (filtered.length !== ids.length) {
+    await writeSessionIndex(filtered);
   }
 }
 

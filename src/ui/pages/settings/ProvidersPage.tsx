@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Trash2, ChevronRight, Edit3 } from "lucide-react";
-import { readSettings, addOrUpdateProviderCredential, removeProviderCredential } from "../../../core/storage/repo";
+import { readSettings, addOrUpdateProviderCredential, removeProviderCredential, SETTINGS_UPDATED_EVENT } from "../../../core/storage/repo";
 import { providerRegistry } from "../../../core/providers/registry";
 import { setSecret, getSecret } from "../../../core/secrets";
 import type { ProviderCredential } from "../../../core/storage/schemas";
@@ -15,10 +15,10 @@ export function ProvidersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const loadProviders = async () => {
+  const loadProviders = useCallback(async () => {
     const settings = await readSettings();
     setProviders(settings.providerCredentials);
-  };
+  }, []);
 
   const openEditor = (provider?: ProviderCredential) => {
     const newId = crypto.randomUUID();
@@ -53,7 +53,14 @@ export function ProvidersPage() {
       if ((window as any).__openAddProvider) delete (window as any).__openAddProvider;
       window.removeEventListener("providers:add", listener);
     };
-  }, []);
+  }, [loadProviders]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => loadProviders();
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handler);
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
+  }, [loadProviders]);
 
   const handleSaveProvider = useCallback(async () => {
     if (!editorProvider) return;

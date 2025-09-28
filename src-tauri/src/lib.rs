@@ -1,7 +1,7 @@
 mod api;
 mod chat_manager;
-mod models_cache;
 mod model_verify;
+mod models_cache;
 mod secrets;
 mod storage_manager;
 mod utils;

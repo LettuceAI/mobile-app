@@ -32,6 +32,10 @@ pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<St
     let mut out: HashMap<String, String> = HashMap::new();
     out.insert("Authorization".into(), format!("Bearer {}", api_key));
     out.insert("Content-Type".into(), "application/json".into());
+    out.insert("Accept".into(), "text/event-stream".into());
+    if !out.contains_key("User-Agent") {
+        out.insert("User-Agent".into(), "LettuceAI/0.1".into());
+    }
     if let Some(extra) = &cred.headers {
         for (k, v) in extra {
             out.insert(k.clone(), v.clone());

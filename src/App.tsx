@@ -8,16 +8,56 @@ import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
 import { ModelsPage } from "./ui/pages/settings/ModelsPage";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
-import { ChatPage, ChatConversationPage, ChatSettingsPage } from "./ui/pages/chats";
+import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage } from "./ui/pages/personas";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { isOnboardingCompleted } from "./core/storage/appState";
-import { TopNav, TabBar } from "./ui/components/App";
+import { TopNav, BottomNav } from "./ui/components/App";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 function App() {
+  // Global listeners that should persist across all routes
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+    (async () => {
+      try {
+        unlisten = await listen("chat://debug", (event) => {
+          // Tauri backend emits: { state, payload } or { state, message }
+          if (
+            typeof event.payload === "object" &&
+            event.payload !== null &&
+            "state" in event.payload
+          ) {
+            const { state, payload, message } = event.payload as {
+              state: string;
+              payload?: unknown;
+              message?: string;
+            };
+            if (message !== undefined) {
+              // log_backend
+              console.log(`[backend-${state}]`, message);
+            } else if (payload !== undefined) {
+              // emit_debug
+              console.log(`[chat-${state}]`, payload);
+            } else {
+              console.log(`[chat-${state}]`, event.payload);
+            }
+          } else {
+            console.log("[chat-unknown]", event.payload);
+          }
+        });
+      } catch (err) {
+        console.warn("ChatController: failed to attach debug listener", err);
+      }
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   return (
     <ThemeProvider>
       <BrowserRouter>
@@ -49,7 +89,9 @@ function AppContent() {
     if (isOnboardingRoute) {
       setShowCreateMenu(false);
     }
-  }, [isOnboardingRoute]);
+  }, [isOnboardingRoute]); // Only run when onboarding route changes
+
+
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
@@ -62,20 +104,20 @@ function AppContent() {
         setShowDelayedTooltip(true);
       }, 2000);
 
-      return () => window.clearTimeout(timer);
+      return () => {
+        window.clearTimeout(timer);
+        setShowDelayedTooltip(false);
+      };
+    } else {
+      setShowDelayedTooltip(false);
     }
-
-    return () => setShowDelayedTooltip(false);
-  }, [location, isChatRoute]);
+  }, [location.search, location.pathname, isChatRoute]); // More specific dependencies
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <BackgroundAura />
-
       <div
-        className={`relative z-10 mx-auto flex min-h-screen w-full ${
-          isChatDetailRoute ? "max-w-full" : "max-w-md"
-        } flex-col ${showGlobalChrome ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
+        className={`relative z-10 mx-auto flex min-h-screen w-full ${isChatDetailRoute ? "max-w-full" : "max-w-md"
+          } flex-col ${showGlobalChrome ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
       >
         {showGlobalChrome && (
           <TopNav
@@ -85,13 +127,12 @@ function AppContent() {
         )}
 
         <main
-          className={`flex-1 ${
-            isOnboardingRoute
+          className={`flex-1 ${isOnboardingRoute
               ? "overflow-y-auto px-4 pt-6 pb-6"
               : isChatDetailRoute
                 ? "overflow-hidden px-0 pt-0 pb-0"
                 : "overflow-y-auto px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))]"
-          }`}
+            }`}
         >
           <motion.div
             key={location.pathname}
@@ -114,6 +155,7 @@ function AppContent() {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />
+              <Route path="/chat/:characterId/history" element={<ChatHistoryPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
             </Routes>
@@ -121,7 +163,7 @@ function AppContent() {
         </main>
 
         {showGlobalChrome && (
-          <TabBar onCreateClick={() => setShowCreateMenu(true)} />
+          <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
         )}
       </div>
 
@@ -145,15 +187,6 @@ function AppContent() {
   );
 }
 
-function BackgroundAura() {
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-      <div className="absolute left-[-20%] top-[-30%] h-[420px] w-[420px] rounded-full bg-gradient-to-br from-[#1b1b1b] via-[#101012] to-transparent opacity-80 blur-3xl" />
-      <div className="absolute right-[-25%] top-[20%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-[#111827] via-[#0b0c0f] to-transparent opacity-70 blur-[120px]" />
-      <div className="absolute inset-x-1/4 bottom-[-35%] h-[360px] rounded-[50%] bg-gradient-to-t from-[#0c0c0c] via-[#0f0f13] to-transparent opacity-90 blur-[140px]" />
-    </div>
-  );
-}
 
 function OnboardingCheck() {
   const [isChecking, setIsChecking] = useState(true);

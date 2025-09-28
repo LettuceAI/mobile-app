@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
 
 import { useChatController } from "./hooks/useChatController";
@@ -16,8 +16,10 @@ const LONG_PRESS_DELAY = 450;
 
 export function ChatConversationPage() {
   const { characterId } = useParams<{ characterId: string }>();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get("sessionId") || undefined;
 
-  const chatController = useChatController(characterId);
+  const chatController = useChatController(characterId, { sessionId });
   
   const {
     character,

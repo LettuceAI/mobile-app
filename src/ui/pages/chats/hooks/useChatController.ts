@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession } from "../../../../core/storage/repo";
+import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, SETTINGS_UPDATED_EVENT } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
@@ -30,7 +30,7 @@ export interface ChatController {
   editDraft: string;
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
-  
+
   // Setters 
   setDraft: (value: string) => void;
   setError: (value: string | null) => void;
@@ -40,7 +40,7 @@ export interface ChatController {
   setActionBusy: (value: boolean) => void;
   setEditDraft: (value: string) => void;
   setHeldMessageId: (value: string | null) => void;
-  
+
   // Actions
   handleSend: (message: string) => Promise<void>;
   handleContinue: () => Promise<void>;
@@ -56,22 +56,22 @@ export interface ChatController {
   initializeLongPressTimer: (id: number | null) => void;
 }
 
-export function useChatController(characterId?: string): ChatController {
+export function useChatController(
+  characterId?: string,
+  options: { sessionId?: string } = {}
+): ChatController {
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
+  const [settingsVersion, setSettingsVersion] = useState(0);
+  const { sessionId } = options;
 
   useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
-    (async () => {
-      try {
-        unlisten = await listen("chat://debug", (event) => {
-          console.log("[chat-debug]", event.payload);
-        });
-      } catch (err) {
-        console.warn("ChatController: failed to attach debug listener", err);
-      }
-    })();
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      setSettingsVersion((prev) => prev + 1);
+    };
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handler);
     return () => {
-      if (unlisten) unlisten();
+      window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
     };
   }, []);
 
@@ -99,26 +99,41 @@ export function useChatController(characterId?: string): ChatController {
           return null;
         });
 
-        const sessionIds = await listSessionIds().catch(() => [] as string[]);
-        let existingSession: Session | null = null;
-        let latestUpdatedAt = -Infinity;
-        for (const id of sessionIds) {
-          const maybe = await getSession(id).catch((err) => {
-            console.warn("ChatController: failed to read session", { id, err });
+        let targetSession: Session | null = null;
+
+        if (sessionId) {
+          const explicitSession = await getSession(sessionId).catch((err) => {
+            console.warn("ChatController: failed to load requested session", { sessionId, err });
             return null;
           });
-          if (maybe?.characterId === match.id) {
-            if (!existingSession || maybe.updatedAt > latestUpdatedAt) {
-              existingSession = maybe;
-              latestUpdatedAt = maybe.updatedAt;
+          if (explicitSession && explicitSession.characterId === match.id) {
+            targetSession = explicitSession;
+          }
+        }
+
+        if (!targetSession) {
+          const sessionIds = await listSessionIds().catch(() => [] as string[]);
+          let latestUpdatedAt = -Infinity;
+          for (const id of sessionIds) {
+            const maybe = await getSession(id).catch((err) => {
+              console.warn("ChatController: failed to read session", { id, err });
+              return null;
+            });
+            if (maybe?.characterId === match.id) {
+              if (!targetSession || maybe.updatedAt > latestUpdatedAt) {
+                targetSession = maybe;
+                latestUpdatedAt = maybe.updatedAt;
+              }
             }
           }
         }
-        if (!existingSession) {
-          existingSession = await createSession(match.id, match.name ?? "New chat");
+
+        if (!targetSession) {
+          targetSession = await createSession(match.id, match.name ?? "New chat");
         }
-        const orderedMessages = [...(existingSession.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-        const normalizedSession: Session = { ...existingSession, messages: orderedMessages };
+
+        const orderedMessages = [...(targetSession.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
+        const normalizedSession: Session = { ...targetSession, messages: orderedMessages };
 
         if (!cancelled) {
           dispatch({ type: "SET_CHARACTER", payload: match });
@@ -141,7 +156,7 @@ export function useChatController(characterId?: string): ChatController {
     return () => {
       cancelled = true;
     };
-  }, [characterId]);
+  }, [characterId, sessionId, settingsVersion]);
 
   const clearLongPress = useCallback(() => {
     if (state.longPressTimer !== null) {
@@ -282,6 +297,7 @@ export function useChatController(characterId?: string): ChatController {
         } as Session;
 
         dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages ?? [] });
         dispatch({ 
           type: "REPLACE_PLACEHOLDER_MESSAGES", 
           payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage } 
@@ -348,10 +364,7 @@ export function useChatController(characterId?: string): ChatController {
         } as Session;
 
         dispatch({ type: "SET_SESSION", payload: updatedSession });
-        dispatch({ 
-          type: "SET_MESSAGES", 
-          payload: [...currentMessages, result.assistantMessage]
-        });
+        dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages ?? [] });
       } catch (err) {
         console.error("ChatController: continue failed", err);
         dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });

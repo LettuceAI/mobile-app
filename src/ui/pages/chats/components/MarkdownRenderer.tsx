@@ -5,6 +5,7 @@ type MarkdownRendererProps = {
   className?: string;
 };
 
+// @ts-ignore
 type InlineChunk = {
   type: "text" | "bold" | "italic" | "code" | "link";
   value: string;

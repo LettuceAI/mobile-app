@@ -1,11 +1,10 @@
-import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check } from "lucide-react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { Character, Model } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
-import { readSettings, saveCharacter } from "../../../core/storage/repo";
-import { createSession } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 
 function isImageLike(value?: string) {
@@ -22,19 +21,19 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [currentCharacter, setCurrentCharacter] = useState<Character>(character);
   const [showModelSelector, setShowModelSelector] = useState(false);
 
+  const loadModels = useCallback(async () => {
+    const settings = await readSettings();
+    setModels(settings.models);
+    setGlobalDefaultModelId(settings.defaultModelId);
+  }, []);
+
   useEffect(() => {
     loadModels();
-  }, []);
+  }, [loadModels]);
 
   useEffect(() => {
     setCurrentCharacter(character);
   }, [character]);
-
-  const loadModels = async () => {
-    const settings = await readSettings();
-    setModels(settings.models);
-    setGlobalDefaultModelId(settings.defaultModelId);
-  };
 
   const getEffectiveModelId = () => {
     // Mirror the backend select_model logic: character.default_model_id || settings.default_model_id
@@ -46,7 +45,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     
     try {
       const session = await createSession(characterId, "New Chat");
-      navigate(`/chat/${characterId}`, { replace: true });
+      navigate(`/chat/${characterId}?sessionId=${session.id}`, { replace: true });
     } catch (error) {
       console.error("Failed to create new chat:", error);
     }
@@ -67,6 +66,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
       console.error("Failed to change character model:", error);
     }
   };
+
+  const handleViewHistory = useCallback(() => {
+    if (!characterId) return;
+    navigate(`/chat/${characterId}/history`);
+  }, [characterId, navigate]);
 
   const avatarDisplay = useMemo(() => {
     if (currentCharacter?.avatarPath && isImageLike(currentCharacter.avatarPath)) {
@@ -156,6 +160,23 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <div>
                   <div className="text-sm font-medium text-white">New Chat</div>
                   <div className="text-xs text-gray-400 mt-0.5">Start a fresh conversation</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+            </button>
+
+            {/* Chat History */}
+            <button
+              onClick={handleViewHistory}
+              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
+                  <History className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-white">Chat History</div>
+                  <div className="text-xs text-gray-400 mt-0.5">View previous sessions</div>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />

@@ -7,6 +7,7 @@ import {
   setOnboardingSkipped,
 } from "../../../core/storage/appState";
 import logoSvg from "../../../assets/logo.svg";
+import { motion } from "framer-motion";
 
 export function WelcomePage() {
   const navigate = useNavigate();
@@ -102,14 +103,49 @@ function SkipWarning({
   onConfirm: () => void | Promise<void>;
   onAddProvider: () => void;
 }) {
+  const [isExiting, setIsExiting] = useState(false);
+
+  const handleClose = () => {
+    setIsExiting(true);
+    setTimeout(onClose, 300);
+  };
+
+  const handleConfirm = () => {
+    setIsExiting(true);
+    setTimeout(() => void onConfirm(), 300);
+  };
+
+  const handleAddProvider = () => {
+    setIsExiting(true);
+    setTimeout(onAddProvider, 300);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0b0d] p-8 shadow-[0_30px_120px_rgba(0,0,0,0.7)]">
+    <motion.div 
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isExiting ? 0 : 1 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div 
+        className="w-full max-w-lg rounded-t-3xl border border-white/10 bg-[#0b0b0d] p-8 shadow-[0_30px_120px_rgba(0,0,0,0.7)]"
+        initial={{ y: "100%", opacity: 0 }}
+        animate={{ 
+          y: isExiting ? "100%" : 0, 
+          opacity: isExiting ? 0 : 1 
+        }}
+        transition={{ 
+          type: "spring",
+          damping: 25,
+          stiffness: 300,
+          duration: 0.3
+        }}
+      >
         <div className="flex items-center justify-between">
           <h3 className="text-xl font-semibold text-white">Skip setup?</h3>
           <button
-            onClick={onClose}
-            className="rounded-full border border-white/10 bg-white/5 p-2 text-gray-400 hover:text-white"
+            onClick={handleClose}
+            className="rounded-full border border-white/10 bg-white/5 p-2 text-gray-400 hover:text-white transition"
           >
             <X size={18} />
           </button>
@@ -130,21 +166,19 @@ function SkipWarning({
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
-            onClick={onAddProvider}
+            onClick={handleAddProvider}
           >
             Go to provider setup
             <ArrowRight size={16} />
           </button>
           <button
             className="flex-1 rounded-full border border-emerald-400/30 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400/60 hover:bg-emerald-400/30"
-            onClick={() => {
-              void onConfirm();
-            }}
+            onClick={handleConfirm}
           >
             Skip anyway
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

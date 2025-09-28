@@ -44,6 +44,7 @@ export function ChatMessage({
     variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
   const enableSwipe = isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
   const isPlaceholder = message.id.startsWith("placeholder");
+  const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
   
   const dragProps = enableSwipe
     ? {
@@ -93,7 +94,11 @@ export function ChatMessage({
           transform: 'translate3d(0,0,0)', 
         }}
       >
-        <MarkdownRenderer content={message.content} className="text-inherit" />
+        {showTypingIndicator ? (
+          <TypingIndicator />
+        ) : (
+          <MarkdownRenderer content={message.content} className="text-inherit" />
+        )}
 
         {isAssistant && totalVariants > 1 && (
           <motion.div 
@@ -149,6 +154,27 @@ export function ChatMessage({
           </button>
         </motion.div>
       )}
+    </div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1" aria-label="Assistant is typing" aria-live="polite">
+      {[0, 1, 2].map((index) => (
+        <motion.span
+          key={index}
+          className="h-2 w-2 rounded-full bg-gray-300"
+          animate={{ opacity: [0.2, 1, 0.2], scale: [0.9, 1.1, 0.9] }}
+          transition={{
+            duration: 1.2,
+            repeat: Infinity,
+            ease: "easeInOut",
+            repeatType: "loop",
+            delay: index * 0.2,
+          }}
+        />
+      ))}
     </div>
   );
 }

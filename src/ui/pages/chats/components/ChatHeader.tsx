@@ -39,7 +39,7 @@ export function ChatHeader({ character }: ChatHeaderProps) {
   const headerTitle = useMemo(() => character?.name ?? "Unknown", [character?.name]);
 
   return (
-    <header className="z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-3 pb-3 pt-5 backdrop-blur">
+    <header className="z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-3 pb-3 pt-10 backdrop-blur">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button

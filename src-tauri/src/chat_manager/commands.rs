@@ -6,7 +6,6 @@ use crate::api::{api_request, ApiRequest};
 use crate::secrets::secret_for_cred_get;
 use crate::utils::now_millis;
 
-use super::emit_debug;
 use super::request::{
     chat_completions_endpoint, ensure_assistant_variant, extract_error_message, extract_text,
     extract_usage, message_text_for_api, new_assistant_variant, normalize_headers,
@@ -17,8 +16,10 @@ use super::storage::{
     load_settings, recent_messages, save_session, select_model,
 };
 use super::types::{
-    ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult, RegenerateResult, StoredMessage,
+    ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
+    RegenerateResult, StoredMessage,
 };
+use crate::utils::{emit_debug, log_backend};
 
 #[tauri::command]
 pub async fn chat_completion(
@@ -34,6 +35,15 @@ pub async fn chat_completion(
         request_id,
     } = args;
 
+    log_backend(
+        &app,
+        "chat_completion",
+        format!(
+            "start session={} character={} stream={:?} request_id={:?}",
+            &session_id, &character_id, stream, request_id
+        ),
+    );
+
     let settings = load_settings(&app)?;
     let characters = load_characters(&app)?;
     let personas = load_personas(&app)?;
@@ -44,15 +54,31 @@ pub async fn chat_completion(
         json!({ "characterId": character_id.clone() }),
     );
 
-    let character = characters
-        .into_iter()
-        .find(|c| c.id == character_id)
-        .ok_or_else(|| "Character not found".to_string())?;
+    let character = match characters.into_iter().find(|c| c.id == character_id) {
+        Some(found) => found,
+        None => {
+            log_backend(
+                &app,
+                "chat_completion",
+                format!("character {} not found", &character_id),
+            );
+            return Err("Character not found".to_string());
+        }
+    };
 
     let persona = choose_persona(&personas, persona_id.as_ref());
 
-    let mut session =
-        load_session(&app, &session_id)?.ok_or_else(|| "Session not found".to_string())?;
+    let mut session = match load_session(&app, &session_id)? {
+        Some(s) => s,
+        None => {
+            log_backend(
+                &app,
+                "chat_completion",
+                format!("session {} not found", &session_id),
+            );
+            return Err("Session not found".to_string());
+        }
+    };
 
     emit_debug(
         &app,
@@ -70,6 +96,17 @@ pub async fn chat_completion(
 
     let (model, provider_cred) = select_model(&settings, &character)?;
 
+    log_backend(
+        &app,
+        "chat_completion",
+        format!(
+            "selected provider={} model={} credential={}",
+            provider_cred.provider_id.as_str(),
+            model.name.as_str(),
+            provider_cred.id.as_str()
+        ),
+    );
+
     emit_debug(
         &app,
         "model_selected",
@@ -81,7 +118,7 @@ pub async fn chat_completion(
     );
 
     let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
-        secret_for_cred_get(
+        match secret_for_cred_get(
             app.clone(),
             api_ref.provider_id.clone(),
             api_ref
@@ -89,9 +126,38 @@ pub async fn chat_completion(
                 .clone()
                 .unwrap_or_else(|| provider_cred.id.clone()),
             api_ref.key.clone(),
-        )?
-        .ok_or_else(|| "Missing API key".to_string())?
+        ) {
+            Ok(Some(value)) => value,
+            Ok(None) => {
+                log_backend(
+                    &app,
+                    "chat_completion",
+                    format!(
+                        "missing API key for provider {} credential {}",
+                        provider_cred.provider_id.as_str(),
+                        provider_cred.id.as_str()
+                    ),
+                );
+                return Err("Missing API key".into());
+            }
+            Err(err) => {
+                log_backend(
+                    &app,
+                    "chat_completion",
+                    format!("failed to read API key: {}", err),
+                );
+                return Err(err);
+            }
+        }
     } else {
+        log_backend(
+            &app,
+            "chat_completion",
+            format!(
+                "provider credential {} missing API key reference",
+                provider_cred.id.as_str()
+            ),
+        );
         return Err("Provider credential missing API key reference".into());
     };
 
@@ -156,6 +222,17 @@ pub async fn chat_completion(
         "max_tokens": 1024,
     });
 
+    log_backend(
+        &app,
+        "chat_completion",
+        format!(
+            "request prepared endpoint={} stream={} request_id={:?}",
+            endpoint.as_str(),
+            should_stream,
+            &request_id
+        ),
+    );
+
     emit_debug(
         &app,
         "sending_request",
@@ -168,20 +245,28 @@ pub async fn chat_completion(
         }),
     );
 
-    let api_response = api_request(
-        app.clone(),
-        ApiRequest {
-            url: endpoint,
-            method: Some("POST".into()),
-            headers: Some(headers),
-            query: None,
-            body: Some(body),
-            timeout_ms: Some(120_000),
-            stream: Some(should_stream),
-            request_id: request_id.clone(),
-        },
-    )
-    .await?;
+    let api_request_payload = ApiRequest {
+        url: endpoint,
+        method: Some("POST".into()),
+        headers: Some(headers),
+        query: None,
+        body: Some(body),
+        timeout_ms: Some(120_000),
+        stream: Some(should_stream),
+        request_id: request_id.clone(),
+    };
+
+    let api_response = match api_request(app.clone(), api_request_payload).await {
+        Ok(resp) => resp,
+        Err(err) => {
+            log_backend(
+                &app,
+                "chat_completion",
+                format!("api_request failed: {}", err),
+            );
+            return Err(err);
+        }
+    };
 
     emit_debug(
         &app,
@@ -203,11 +288,17 @@ pub async fn chat_completion(
                 "message": err_message,
             }),
         );
-        return if err_message == fallback {
-            Err(err_message)
+        let combined_error = if err_message == fallback {
+            err_message
         } else {
-            Err(format!("{} (status {})", err_message, api_response.status))
+            format!("{} (status {})", err_message, api_response.status)
         };
+        log_backend(
+            &app,
+            "chat_completion",
+            format!("provider error: {}", &combined_error),
+        );
+        return Err(combined_error);
     }
 
     let text = extract_text(api_response.data())
@@ -215,6 +306,11 @@ pub async fn chat_completion(
         .ok_or_else(|| {
             let preview =
                 serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+            log_backend(
+                &app,
+                "chat_completion",
+                format!("empty response from provider, preview={}", &preview),
+            );
             emit_debug(&app, "empty_response", json!({ "preview": preview }));
             "Empty response from provider".to_string()
         })?;
@@ -246,6 +342,17 @@ pub async fn chat_completion(
     session.messages.push(assistant_message.clone());
     session.updated_at = now_millis()?;
     save_session(&app, &session)?;
+
+    log_backend(
+        &app,
+        "chat_completion",
+        format!(
+            "assistant response saved message_id={} length={} total_messages={}",
+            assistant_message.id.as_str(),
+            assistant_message.content.len(),
+            session.messages.len()
+        ),
+    );
 
     emit_debug(
         &app,
@@ -283,8 +390,26 @@ pub async fn chat_regenerate(
     let characters = load_characters(&app)?;
     let personas = load_personas(&app)?;
 
-    let mut session =
-        load_session(&app, &session_id)?.ok_or_else(|| "Session not found".to_string())?;
+    log_backend(
+        &app,
+        "chat_regenerate",
+        format!(
+            "start session={} message={} stream={:?} request_id={:?}",
+            &session_id, &message_id, stream, request_id
+        ),
+    );
+
+    let mut session = match load_session(&app, &session_id)? {
+        Some(s) => s,
+        None => {
+            log_backend(
+                &app,
+                "chat_regenerate",
+                format!("session {} not found", &session_id),
+            );
+            return Err("Session not found".to_string());
+        }
+    };
 
     emit_debug(
         &app,
@@ -319,21 +444,44 @@ pub async fn chat_regenerate(
     // or normal assistant messages (that follow user messages)
     let preceding_message = &session.messages[preceding_index];
     if preceding_message.role != "user" && preceding_message.role != "assistant" {
-        return Err("Expected preceding user or assistant message before assistant response".into());
+        return Err(
+            "Expected preceding user or assistant message before assistant response".into(),
+        );
     }
 
     if session.messages[target_index].role != "assistant" {
         return Err("Selected message is not an assistant response".into());
     }
 
-    let character = characters
+    let character = match characters
         .into_iter()
         .find(|c| c.id == session.character_id)
-        .ok_or_else(|| "Character not found".to_string())?;
+    {
+        Some(found) => found,
+        None => {
+            log_backend(
+                &app,
+                "chat_regenerate",
+                format!("character {} not found", &session.character_id),
+            );
+            return Err("Character not found".to_string());
+        }
+    };
 
     let persona = choose_persona(&personas, None);
 
     let (model, provider_cred) = select_model(&settings, &character)?;
+
+    log_backend(
+        &app,
+        "chat_regenerate",
+        format!(
+            "selected provider={} model={} credential={}",
+            provider_cred.provider_id.as_str(),
+            model.name.as_str(),
+            provider_cred.id.as_str()
+        ),
+    );
 
     emit_debug(
         &app,
@@ -346,7 +494,7 @@ pub async fn chat_regenerate(
     );
 
     let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
-        secret_for_cred_get(
+        match secret_for_cred_get(
             app.clone(),
             api_ref.provider_id.clone(),
             api_ref
@@ -354,9 +502,38 @@ pub async fn chat_regenerate(
                 .clone()
                 .unwrap_or_else(|| provider_cred.id.clone()),
             api_ref.key.clone(),
-        )?
-        .ok_or_else(|| "Missing API key".to_string())?
+        ) {
+            Ok(Some(value)) => value,
+            Ok(None) => {
+                log_backend(
+                    &app,
+                    "chat_regenerate",
+                    format!(
+                        "missing API key for provider {} credential {}",
+                        provider_cred.provider_id.as_str(),
+                        provider_cred.id.as_str()
+                    ),
+                );
+                return Err("Missing API key".into());
+            }
+            Err(err) => {
+                log_backend(
+                    &app,
+                    "chat_regenerate",
+                    format!("failed to read API key: {}", err),
+                );
+                return Err(err);
+            }
+        }
     } else {
+        log_backend(
+            &app,
+            "chat_regenerate",
+            format!(
+                "provider credential {} missing API key reference",
+                provider_cred.id.as_str()
+            ),
+        );
         return Err("Provider credential missing API key reference".into());
     };
 
@@ -421,20 +598,39 @@ pub async fn chat_regenerate(
         }),
     );
 
-    let api_response = api_request(
-        app.clone(),
-        ApiRequest {
-            url: endpoint,
-            method: Some("POST".into()),
-            headers: Some(headers),
-            query: None,
-            body: Some(body),
-            timeout_ms: Some(120_000),
-            stream: Some(should_stream),
-            request_id: request_id.clone(),
-        },
-    )
-    .await?;
+    log_backend(
+        &app,
+        "chat_regenerate",
+        format!(
+            "request prepared endpoint={} stream={} request_id={:?}",
+            endpoint.as_str(),
+            should_stream,
+            &request_id
+        ),
+    );
+
+    let api_request_payload = ApiRequest {
+        url: endpoint,
+        method: Some("POST".into()),
+        headers: Some(headers),
+        query: None,
+        body: Some(body),
+        timeout_ms: Some(120_000),
+        stream: Some(should_stream),
+        request_id: request_id.clone(),
+    };
+
+    let api_response = match api_request(app.clone(), api_request_payload).await {
+        Ok(resp) => resp,
+        Err(err) => {
+            log_backend(
+                &app,
+                "chat_regenerate",
+                format!("api_request failed: {}", err),
+            );
+            return Err(err);
+        }
+    };
 
     emit_debug(
         &app,
@@ -512,6 +708,17 @@ pub async fn chat_regenerate(
         }),
     );
 
+    log_backend(
+        &app,
+        "chat_regenerate",
+        format!(
+            "completed messageId={} variants={} request_id={:?}",
+            assistant_clone.id.as_str(),
+            assistant_clone.variants.len(),
+            &request_id
+        ),
+    );
+
     Ok(RegenerateResult {
         session_id: session.id,
         request_id,
@@ -536,8 +743,26 @@ pub async fn chat_continue(
     let characters = load_characters(&app)?;
     let personas = load_personas(&app)?;
 
-    let mut session =
-        load_session(&app, &session_id)?.ok_or_else(|| "Session not found".to_string())?;
+    log_backend(
+        &app,
+        "chat_continue",
+        format!(
+            "start session={} character={} stream={:?} request_id={:?}",
+            &session_id, &character_id, stream, request_id
+        ),
+    );
+
+    let mut session = match load_session(&app, &session_id)? {
+        Some(s) => s,
+        None => {
+            log_backend(
+                &app,
+                "chat_continue",
+                format!("session {} not found", &session_id),
+            );
+            return Err("Session not found".to_string());
+        }
+    };
 
     emit_debug(
         &app,
@@ -549,14 +774,32 @@ pub async fn chat_continue(
         }),
     );
 
-    let character = characters
-        .into_iter()
-        .find(|c| c.id == character_id)
-        .ok_or_else(|| "Character not found".to_string())?;
+    let character = match characters.into_iter().find(|c| c.id == character_id) {
+        Some(found) => found,
+        None => {
+            log_backend(
+                &app,
+                "chat_continue",
+                format!("character {} not found", &character_id),
+            );
+            return Err("Character not found".to_string());
+        }
+    };
 
     let persona = choose_persona(&personas, persona_id.as_ref());
 
     let (model, provider_cred) = select_model(&settings, &character)?;
+
+    log_backend(
+        &app,
+        "chat_continue",
+        format!(
+            "selected provider={} model={} credential={}",
+            provider_cred.provider_id.as_str(),
+            model.name.as_str(),
+            provider_cred.id.as_str()
+        ),
+    );
 
     emit_debug(
         &app,
@@ -569,7 +812,7 @@ pub async fn chat_continue(
     );
 
     let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
-        secret_for_cred_get(
+        match secret_for_cred_get(
             app.clone(),
             api_ref.provider_id.clone(),
             api_ref
@@ -577,9 +820,38 @@ pub async fn chat_continue(
                 .clone()
                 .unwrap_or_else(|| provider_cred.id.clone()),
             api_ref.key.clone(),
-        )?
-        .ok_or_else(|| "Missing API key".to_string())?
+        ) {
+            Ok(Some(value)) => value,
+            Ok(None) => {
+                log_backend(
+                    &app,
+                    "chat_continue",
+                    format!(
+                        "missing API key for provider {} credential {}",
+                        provider_cred.provider_id.as_str(),
+                        provider_cred.id.as_str()
+                    ),
+                );
+                return Err("Missing API key".into());
+            }
+            Err(err) => {
+                log_backend(
+                    &app,
+                    "chat_continue",
+                    format!("failed to read API key: {}", err),
+                );
+                return Err(err);
+            }
+        }
     } else {
+        log_backend(
+            &app,
+            "chat_continue",
+            format!(
+                "provider credential {} missing API key reference",
+                provider_cred.id.as_str()
+            ),
+        );
         return Err("Provider credential missing API key reference".into());
     };
 
@@ -629,20 +901,39 @@ pub async fn chat_continue(
         }),
     );
 
-    let api_response = api_request(
-        app.clone(),
-        ApiRequest {
-            url: endpoint,
-            method: Some("POST".into()),
-            headers: Some(headers),
-            query: None,
-            body: Some(body),
-            timeout_ms: Some(120_000),
-            stream: Some(should_stream),
-            request_id: request_id.clone(),
-        },
-    )
-    .await?;
+    log_backend(
+        &app,
+        "chat_continue",
+        format!(
+            "request prepared endpoint={} stream={} request_id={:?}",
+            endpoint.as_str(),
+            should_stream,
+            &request_id
+        ),
+    );
+
+    let api_request_payload = ApiRequest {
+        url: endpoint,
+        method: Some("POST".into()),
+        headers: Some(headers),
+        query: None,
+        body: Some(body),
+        timeout_ms: Some(120_000),
+        stream: Some(should_stream),
+        request_id: request_id.clone(),
+    };
+
+    let api_response = match api_request(app.clone(), api_request_payload).await {
+        Ok(resp) => resp,
+        Err(err) => {
+            log_backend(
+                &app,
+                "chat_continue",
+                format!("api_request failed: {}", err),
+            );
+            return Err(err);
+        }
+    };
 
     emit_debug(
         &app,
@@ -656,6 +947,14 @@ pub async fn chat_continue(
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+        log_backend(
+            &app,
+            "chat_continue",
+            format!(
+                "provider returned error status={} message={}",
+                api_response.status, &err_message
+            ),
+        );
         emit_debug(
             &app,
             "continue_provider_error",
@@ -676,6 +975,11 @@ pub async fn chat_continue(
         .ok_or_else(|| {
             let preview =
                 serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+            log_backend(
+                &app,
+                "chat_continue",
+                format!("empty response from provider, preview={}", &preview),
+            );
             emit_debug(
                 &app,
                 "continue_empty_response",
@@ -720,6 +1024,17 @@ pub async fn chat_continue(
             "messageCount": session.messages.len(),
             "updatedAt": session.updated_at,
         }),
+    );
+
+    log_backend(
+        &app,
+        "chat_continue",
+        format!(
+            "assistant continuation saved message_id={} total_messages={} request_id={:?}",
+            assistant_message.id.as_str(),
+            session.messages.len(),
+            &request_id
+        ),
     );
 
     Ok(ContinueResult {
