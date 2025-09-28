@@ -6,6 +6,31 @@ import { TabItem } from "./NavItem";
 
 export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
   const { pathname } = useLocation();
+
+  const handleCreateClick = () => {
+    if (typeof window !== "undefined") {
+      const globalWindow = window as any;
+      if (pathname.startsWith("/settings/providers")) {
+        if (typeof globalWindow.__openAddProvider === "function") {
+          globalWindow.__openAddProvider();
+        } else {
+          window.dispatchEvent(new CustomEvent("providers:add"));
+        }
+        return;
+      }
+
+      if (pathname.startsWith("/settings/models")) {
+        if (typeof globalWindow.__openAddModel === "function") {
+          globalWindow.__openAddModel();
+        } else {
+          window.dispatchEvent(new CustomEvent("models:add"));
+        }
+        return;
+      }
+    }
+
+    onCreateClick();
+  };
   return (
     <motion.nav
       className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/8 bg-[#0b0b0d]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 text-white shadow-[0_-12px_32px_rgba(0,0,0,0.35)]"
@@ -23,7 +48,7 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
         />
 
         <button
-          onClick={onCreateClick}
+          onClick={handleCreateClick}
           className="flex h-10 flex-1 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-white/25 hover:bg-white/20"
           aria-label="Create"
         >

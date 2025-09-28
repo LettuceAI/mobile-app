@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 interface TopNavProps {
   currentPath: string;
@@ -60,26 +60,8 @@ export function TopNav({ currentPath }: TopNavProps) {
         <div className="flex flex-col items-center">
           <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500">LettuceAI</span>
           <span className="text-sm font-semibold text-white">{title}</span>
-          </div>
-        {(currentPath === "/settings/models" || currentPath === "/settings/providers") && (
-          <button
-            onClick={() => {
-              const g: any = window;
-              if (currentPath === "/settings/models") {
-                if (typeof g.__openAddModel === "function") g.__openAddModel();
-                else window.dispatchEvent(new CustomEvent("models:add"));
-              } else if (currentPath === "/settings/providers") {
-                if (typeof g.__openAddProvider === "function") g.__openAddProvider();
-                else window.dispatchEvent(new CustomEvent("providers:add"));
-              }
-            }}
-            aria-label={currentPath === "/settings/models" ? "Add model" : "Add provider"}
-            className="absolute right-4 top-1/2 flex -translate-y-1/2 items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-200 transition hover:border-white/30 hover:text-white"
-          >
-            <Plus size={14} />
-          </button>
-        )}
         </div>
+      </div>
     </header>
   );
 }
