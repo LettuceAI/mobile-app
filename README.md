@@ -15,7 +15,7 @@
 
 ## Overview
 
-**LettuceAI** is a sleek, privacy-first AI roleplay application built with Tauri v2, React, and TypeScript. It gives you a modern, mobile-first experience for creating characters, writing stories, and chatting with AI models — entirely on your own device. You bring your own API keys and choose which models to use.
+**LettuceAI** is a sleek, privacy-first AI roleplay application built with Tauri v2, React, and TypeScript. It gives you a modern, mobile-first experience for creating characters, writing stories, and chatting with AI models, entirely on your own device. You bring your own API keys and choose which models to use.
 
 **Our focus:** privacy, customization, and creative freedom so your stories stay yours.
 
