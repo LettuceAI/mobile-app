@@ -1,6 +1,14 @@
 import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
-import { X, LucideIcon } from "lucide-react";
+import { X, ChevronRight, LucideIcon } from "lucide-react";
 import { ReactNode, useCallback, useMemo } from "react";
+
+const ICON_ACCENT_MAP: Record<string, string> = {
+  "from-blue-500 to-blue-600": "border-blue-400/40 bg-blue-500/15 text-blue-200 group-hover:border-blue-300/50 group-hover:text-blue-100",
+  "from-purple-500 to-purple-600": "border-purple-400/35 bg-purple-500/15 text-purple-200 group-hover:border-purple-300/45 group-hover:text-purple-100",
+  "from-indigo-500 to-blue-600": "border-indigo-400/40 bg-indigo-500/15 text-indigo-200 group-hover:border-indigo-300/50 group-hover:text-indigo-100",
+  "from-emerald-500 to-emerald-600": "border-emerald-400/40 bg-emerald-500/15 text-emerald-200 group-hover:border-emerald-300/50 group-hover:text-emerald-100",
+  "from-rose-500 to-red-600": "border-rose-400/40 bg-rose-500/15 text-rose-200 group-hover:border-rose-300/50 group-hover:text-rose-100",
+};
 
 export interface MenuButtonProps {
   icon: LucideIcon;
@@ -95,7 +103,7 @@ export function BottomMenu({
           />
 
           <motion.div
-            className={`${menuClasses} z-50 mx-auto max-w-xl border border-white/10 bg-[#0b0b0d] p-1 shadow-[0_30px_120px_rgba(0,0,0,0.65)] ${className}`}
+            className={`${menuClasses} z-50 mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 shadow-[0_25px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl ${className}`}
             variants={menuVariants}
             initial="hidden"
             animate="visible"
@@ -135,16 +143,16 @@ export function BottomMenu({
                 className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none transition-opacity duration-150 hover:opacity-80 active:opacity-60"
                 aria-label="Drag to close menu"
               >
-                <span className="h-1.5 w-24 rounded-full bg-white/60 transition-all duration-150 hover:bg-white/70 active:bg-white/80" />
+                <span className="h-1 w-20 rounded-full bg-white/40 transition-all duration-150 hover:bg-white/55 active:bg-white/60" />
               </button>
               </motion.div>
             )}
 
             <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"}`}>
-              <h3 className="text-xl font-semibold text-white">{title}</h3>
+              <h3 className="text-lg font-semibold text-white">{title}</h3>
               {includeExitIcon && (
                 <motion.button
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/70 transition-all duration-150 hover:border-white/20 hover:text-white hover:bg-white/15"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-all duration-150 hover:border-white/20 hover:text-white hover:bg-white/10"
                   whileTap={{ scale: 0.9 }}
                   transition={{ type: "tween", duration: 0.1 }}
                   onClick={onClose}
@@ -175,28 +183,43 @@ export function MenuButton({
     if (!disabled) onClick();
   }, [disabled, onClick]);
 
+  const iconAccentClasses = ICON_ACCENT_MAP[color] || "border-white/10 bg-white/5 text-white/60";
+
   return (
     <motion.button
-      className={`w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-white transition-all duration-150 shadow-[0_18px_60px_rgba(0,0,0,0.35)] ${
-        disabled ? "cursor-not-allowed opacity-50" : "hover:border-white/25 hover:bg-white/10 hover:shadow-[0_20px_70px_rgba(0,0,0,0.4)]"
-      }`}
+      className={`group relative w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-white transition-all duration-150 ${
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "hover:border-white/15 hover:bg-white/[0.07]"
+      } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-black`}
       whileTap={disabled ? {} : { scale: 0.98 }}
       transition={{ type: "tween", duration: 0.1 }}
       onClick={handleClick}
       disabled={disabled}
       style={{ willChange: disabled ? 'auto' : 'transform' }}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <div
-          className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${color} text-white shadow-[0_18px_45px_rgba(0,0,0,0.35)] ${
-            disabled ? "grayscale" : ""
+          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${
+            disabled ? "opacity-60" : ""
           }`}
         >
-          <Icon size={24} />
+          <Icon size={18} />
         </div>
-        <div className="flex-1">
-          <h4 className="text-base font-semibold text-white">{title}</h4>
-          {description && <p className="mt-1 text-sm text-gray-400">{description}</p>}
+        <div className="flex flex-1 items-center gap-2">
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-white group-hover:text-white">
+              {title}
+            </h4>
+            {description && (
+              <p className="mt-0.5 text-xs text-white/55">
+                {description}
+              </p>
+            )}
+          </div>
+          {!disabled && (
+            <ChevronRight className="h-4 w-4 text-white/30 transition group-hover:text-white/60" />
+          )}
         </div>
       </div>
     </motion.button>
@@ -206,7 +229,9 @@ export function MenuButton({
 export function MenuLabel({ children, className = "" }: MenuLabelProps) {
   return (
     <div className={`py-2 px-1 ${className}`}>
-      <h4 className="text-xs font-medium uppercase tracking-[0.35em] text-gray-500">{children}</h4>
+      <h4 className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/40">
+        {children}
+      </h4>
     </div>
   );
 }
@@ -217,7 +242,7 @@ export function MenuDivider({ label, className = "" }: MenuDividerProps) {
       <div className="flex-1 border-t border-white/10" />
       {label && (
         <>
-          <span className="px-3 text-xs font-medium uppercase tracking-[0.35em] text-gray-500">{label}</span>
+          <span className="px-3 text-[11px] font-medium uppercase tracking-[0.28em] text-white/40">{label}</span>
           <div className="flex-1 border-t border-white/10" />
         </>
       )}
@@ -248,7 +273,7 @@ export function MenuSection({ label, children, className = "" }: { label?: strin
     >
       {label && (
         <motion.p 
-          className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500"
+          className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/40"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15, delay: 0.1 }}

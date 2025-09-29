@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Trash2, ChevronRight, Edit3 } from "lucide-react";
 import { readSettings, addOrUpdateProviderCredential, removeProviderCredential, SETTINGS_UPDATED_EVENT } from "../../../core/storage/repo";
 import { providerRegistry } from "../../../core/providers/registry";
 import { setSecret, getSecret } from "../../../core/secrets";
 import type { ProviderCredential } from "../../../core/storage/schemas";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
+
+type VerifyProviderApiKeyResult = {
+  providerId: string;
+  valid: boolean;
+  status?: number;
+  error?: string;
+  details?: unknown;
+};
 
 export function ProvidersPage() {
   const [providers, setProviders] = useState<ProviderCredential[]>([]);
@@ -14,6 +23,7 @@ export function ProvidersPage() {
   const [apiKey, setApiKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const loadProviders = useCallback(async () => {
     const settings = await readSettings();
@@ -32,6 +42,7 @@ export function ProvidersPage() {
     setIsEditorOpen(true);
     setSelectedProvider(null);
     setApiKey("");
+    setValidationError(null);
     if (provider?.apiKeyRef) {
       const ref = { ...provider.apiKeyRef, credId: provider.id };
       getSecret(ref).then(key => setApiKey(key || ""));
@@ -42,6 +53,7 @@ export function ProvidersPage() {
     setIsEditorOpen(false);
     setEditorProvider(null);
     setApiKey("");
+    setValidationError(null);
   };
 
   useEffect(() => {
@@ -64,14 +76,43 @@ export function ProvidersPage() {
 
   const handleSaveProvider = useCallback(async () => {
     if (!editorProvider) return;
+    setValidationError(null);
     setIsSaving(true);
     try {
+      const requiresVerification = ["openai", "anthropic", "openrouter"].includes(editorProvider.providerId);
+      const trimmedKey = apiKey.trim();
+
+      if (requiresVerification) {
+        if (!trimmedKey) {
+          setValidationError("API key required");
+          return;
+        }
+
+        let verification: VerifyProviderApiKeyResult;
+        try {
+          verification = await invoke<VerifyProviderApiKeyResult>("verify_provider_api_key", {
+            providerId: editorProvider.providerId,
+            credentialId: editorProvider.id,
+            apiKey: trimmedKey,
+            baseUrl: editorProvider.baseUrl ?? null
+          });
+        } catch (error) {
+          setValidationError(error instanceof Error ? error.message : String(error));
+          return;
+        }
+
+        if (!verification.valid) {
+          setValidationError(verification.error || "Invalid API key");
+          return;
+        }
+      }
+
       if (editorProvider.apiKeyRef) {
         editorProvider.apiKeyRef.credId = editorProvider.id;
       }
       await addOrUpdateProviderCredential(editorProvider);
-      if (editorProvider.apiKeyRef && apiKey) {
-        await setSecret(editorProvider.apiKeyRef, apiKey);
+      if (editorProvider.apiKeyRef && trimmedKey) {
+        await setSecret(editorProvider.apiKeyRef, trimmedKey);
       }
       await loadProviders();
       setIsEditorOpen(false);
@@ -80,7 +121,7 @@ export function ProvidersPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [editorProvider, apiKey]);
+  }, [editorProvider, apiKey, loadProviders]);
 
   const handleDeleteProvider = useCallback(async (id: string) => {
     setIsDeleting(true);
@@ -101,7 +142,6 @@ export function ProvidersPage() {
         )}
         {providers.map(provider => {
           const registryInfo = providerRegistry.find(p => p.id === provider.providerId);
-          console.log('registryInfo for provider', provider, registryInfo);
           return (
             <button
               key={provider.id}
@@ -171,11 +211,14 @@ export function ProvidersPage() {
               <label className="mb-1 block text-[11px] font-medium text-white/70">Provider Type</label>
               <select
                 value={editorProvider.providerId}
-                onChange={(e) => setEditorProvider({
-                  ...editorProvider,
-                  providerId: e.target.value,
-                  apiKeyRef: { ...editorProvider.apiKeyRef!, providerId: e.target.value, credId: editorProvider.id }
-                })}
+                onChange={(e) => {
+                  setEditorProvider({
+                    ...editorProvider,
+                    providerId: e.target.value,
+                    apiKeyRef: { ...editorProvider.apiKeyRef!, providerId: e.target.value, credId: editorProvider.id }
+                  });
+                  setValidationError(null);
+                }}
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
               >
                 {providerRegistry.map(p => (
@@ -198,7 +241,10 @@ export function ProvidersPage() {
               <input
                 type="password"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  if (validationError) setValidationError(null);
+                }}
                 placeholder="Enter your API key"
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
               />
@@ -208,11 +254,17 @@ export function ProvidersPage() {
               <input
                 type="url"
                 value={editorProvider.baseUrl || ''}
-                onChange={(e) => setEditorProvider({ ...editorProvider, baseUrl: e.target.value })}
+                onChange={(e) => {
+                  setEditorProvider({ ...editorProvider, baseUrl: e.target.value });
+                  if (validationError) setValidationError(null);
+                }}
                 placeholder="https://api.openai.com"
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
               />
             </div>
+            {validationError && (
+              <p className="text-xs font-medium text-rose-300">{validationError}</p>
+            )}
             <div className="flex gap-3 pt-1">
               <button
                 onClick={closeEditor}

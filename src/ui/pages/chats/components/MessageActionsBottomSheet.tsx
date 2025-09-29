@@ -93,10 +93,10 @@ export function MessageActionsBottomSheet({
                     setMessageAction({ message: messageAction.message, mode: "edit" });
                     setEditDraft(messageAction.message.content);
                   }}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-white transition hover:border-white/25 hover:bg-white/10"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left text-white transition hover:border-white/25 hover:bg-white/10"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10">
-                    <Edit3 size={18} />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/10">
+                    <Edit3 size={16} />
                   </div>
                   <div>
                     <div className="font-medium">Edit message</div>
@@ -116,10 +116,10 @@ export function MessageActionsBottomSheet({
                     setActionError(copyError instanceof Error ? copyError.message : String(copyError));
                   }
                 }}
-                className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-white transition hover:border-white/25 hover:bg-white/10"
+                className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left text-white transition hover:border-white/25 hover:bg-white/10"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10">
-                  <Copy size={18} />
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/10">
+                  <Copy size={16} />
                 </div>
                 <div>
                   <div className="font-medium">Copy content</div>
@@ -132,10 +132,10 @@ export function MessageActionsBottomSheet({
                 <button
                   onClick={() => void handleRewindToMessage(messageAction.message)}
                   disabled={actionBusy}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-left transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-left transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/15">
-                    <RotateCcw size={18} className="text-amber-200" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/15">
+                    <RotateCcw size={16} className="text-amber-200" />
                   </div>
                   <div>
                     <div className="font-medium text-amber-100">Rewind to here</div>
@@ -148,10 +148,10 @@ export function MessageActionsBottomSheet({
               <button
                 onClick={() => void handleDeleteMessage(messageAction.message)}
                 disabled={actionBusy}
-                className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-left transition hover:border-red-500/30 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-2 text-left transition hover:border-red-500/30 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/15">
-                  <Trash2 size={18} className="text-red-200" />
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/15">
+                  <Trash2 size={16} className="text-red-200" />
                 </div>
                 <div>
                   <div className="font-medium text-red-100">Delete message</div>
