@@ -1,9 +1,11 @@
+use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::storage_manager::{
     storage_read_characters, storage_read_personas, storage_read_session, storage_read_settings,
     storage_write_session, storage_write_settings,
 };
+use crate::utils::emit_debug;
 
 use super::types::{
     Character, Model, Persona, ProviderCredential, Session, Settings, StoredMessage,
@@ -113,39 +115,97 @@ pub fn choose_persona<'a>(
 }
 
 pub fn build_system_prompt(
+    app: &AppHandle,
     character: &Character,
     persona: Option<&Persona>,
     session: &Session,
 ) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
+    let mut debug_parts: Vec<Value> = Vec::new();
+
     if let Some(p) = persona {
-        parts.push(format!("Persona: {}", p.description));
+        let description = p.description.trim();
+        if !description.is_empty() {
+            parts.push(format!("Persona: {}", description));
+            debug_parts.push(json!({
+                "source": "persona",
+                "personaId": p.id,
+                "title": p.title,
+                "content": description,
+            }));
+        }
     }
+
     if let Some(desc) = &character.description {
-        if !desc.trim().is_empty() {
-            parts.push(format!("Character description: {}", desc));
+        let trimmed = desc.trim();
+        if !trimmed.is_empty() {
+            parts.push(format!("Character description: {}", trimmed));
+            debug_parts.push(json!({
+                "source": "character_description",
+                "content": trimmed,
+            }));
         }
     }
+
     if let Some(style) = &character.style {
-        if !style.trim().is_empty() {
-            parts.push(format!("Style guidance: {}", style));
+        let trimmed = style.trim();
+        if !trimmed.is_empty() {
+            parts.push(format!("Style guidance: {}", trimmed));
+            debug_parts.push(json!({
+                "source": "character_style",
+                "content": trimmed,
+            }));
         }
     }
+
     if let Some(boundaries) = &character.boundaries {
-        if !boundaries.trim().is_empty() {
-            parts.push(format!("Boundaries: {}", boundaries));
+        let trimmed = boundaries.trim();
+        if !trimmed.is_empty() {
+            parts.push(format!("Boundaries: {}", trimmed));
+            debug_parts.push(json!({
+                "source": "character_boundaries",
+                "content": trimmed,
+            }));
         }
     }
+
     if let Some(base) = &session.system_prompt {
-        if !base.trim().is_empty() {
-            parts.push(base.clone());
+        let trimmed = base.trim();
+        if !trimmed.is_empty() {
+            parts.push(trimmed.to_string());
+            debug_parts.push(json!({
+                "source": "session_system_prompt",
+                "content": trimmed,
+            }));
         }
     }
-    if parts.is_empty() {
+
+    let result = if parts.is_empty() {
         None
     } else {
         Some(parts.join("\n\n"))
-    }
+    };
+
+    emit_debug(
+        app,
+        "system_prompt_built",
+        json!({
+            "sessionId": session.id,
+            "characterId": character.id,
+            "personaId": persona.map(|p| p.id.clone()),
+            "partCount": parts.len(),
+            "parts": debug_parts,
+            "preview": result.as_ref().map(|prompt| {
+                if prompt.len() > 400 {
+                    format!("{}…", &prompt[..400])
+                } else {
+                    prompt.clone()
+                }
+            }),
+        }),
+    );
+
+    result
 }
 
 pub fn recent_messages(session: &Session) -> Vec<StoredMessage> {

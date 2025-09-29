@@ -187,7 +187,7 @@ pub async fn chat_completion(
         }),
     );
 
-    let system_prompt = build_system_prompt(&character, persona, &session);
+    let system_prompt = build_system_prompt(&app, &character, persona, &session);
 
     let recent_msgs = recent_messages(&session);
 
@@ -537,7 +537,7 @@ pub async fn chat_regenerate(
         return Err("Provider credential missing API key reference".into());
     };
 
-    let system_prompt = build_system_prompt(&character, persona, &session);
+    let system_prompt = build_system_prompt(&app, &character, persona, &session);
 
     let messages_for_api = {
         let mut out = Vec::new();
@@ -855,7 +855,7 @@ pub async fn chat_continue(
         return Err("Provider credential missing API key reference".into());
     };
 
-    let system_prompt = build_system_prompt(&character, persona, &session);
+    let system_prompt = build_system_prompt(&app, &character, persona, &session);
     let recent_msgs = recent_messages(&session);
 
     let mut messages_for_api = Vec::new();
