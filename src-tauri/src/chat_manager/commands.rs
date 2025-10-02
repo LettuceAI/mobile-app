@@ -66,8 +66,6 @@ pub async fn chat_completion(
         }
     };
 
-    let persona = choose_persona(&personas, persona_id.as_ref());
-
     let mut session = match load_session(&app, &session_id)? {
         Some(s) => s,
         None => {
@@ -79,6 +77,10 @@ pub async fn chat_completion(
             return Err("Session not found".to_string());
         }
     };
+
+    // Prefer session's persona_id, fallback to explicitly passed persona_id
+    let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
+    let persona = choose_persona(&personas, effective_persona_id);
 
     emit_debug(
         &app,
@@ -786,7 +788,9 @@ pub async fn chat_continue(
         }
     };
 
-    let persona = choose_persona(&personas, persona_id.as_ref());
+    // Prefer session's persona_id, fallback to explicitly passed persona_id
+    let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
+    let persona = choose_persona(&personas, effective_persona_id);
 
     let (model, provider_cred) = select_model(&settings, &character)?;
 

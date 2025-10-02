@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, SETTINGS_UPDATED_EVENT } from "../../../../core/storage/repo";
+import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
@@ -52,7 +52,6 @@ export interface ChatController {
   handleSaveEdit: () => Promise<void>;
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
-  setSystemPrompt: (value: string) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
 }
@@ -95,11 +94,6 @@ export function useChatController(
           return;
         }
 
-        const personaDefault = await getDefaultPersona().catch((err) => {
-          console.warn("ChatController: failed to load persona", err);
-          return null;
-        });
-
         let targetSession: Session | null = null;
 
         if (sessionId) {
@@ -136,9 +130,22 @@ export function useChatController(
         const orderedMessages = [...(targetSession.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
         const normalizedSession: Session = { ...targetSession, messages: orderedMessages };
 
+        // Load persona: prefer session's personaId, fallback to default
+        let selectedPersona: Persona | null = null;
+        if (normalizedSession.personaId) {
+          const allPersonas = await listPersonas().catch(() => [] as Persona[]);
+          selectedPersona = allPersonas.find(p => p.id === normalizedSession.personaId) ?? null;
+        }
+        if (!selectedPersona) {
+          selectedPersona = await getDefaultPersona().catch((err) => {
+            console.warn("ChatController: failed to load persona", err);
+            return null;
+          });
+        }
+
         if (!cancelled) {
           dispatch({ type: "SET_CHARACTER", payload: match });
-          dispatch({ type: "SET_PERSONA", payload: personaDefault ?? null });
+          dispatch({ type: "SET_PERSONA", payload: selectedPersona });
           dispatch({ type: "SET_SESSION", payload: normalizedSession });
           dispatch({ type: "SET_MESSAGES", payload: orderedMessages });
         }

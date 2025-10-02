@@ -126,6 +126,7 @@ export const SessionSchema = z.object({
   characterId: z.string().uuid(),
   title: z.string(),
   systemPrompt: z.string().nullish(),
+  personaId: z.string().uuid().nullable().optional(),
   messages: z.array(MessageSchema),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),

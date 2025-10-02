@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import type { Character, Model } from "../../../core/storage/schemas";
+import type { Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
-import { readSettings, saveCharacter, createSession } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 
 function isImageLike(value?: string) {
@@ -20,6 +20,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [globalDefaultModelId, setGlobalDefaultModelId] = useState<string | null>(null);
   const [currentCharacter, setCurrentCharacter] = useState<Character>(character);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [currentSession, setCurrentSession] = useState<Session | null>(null);
+  const [showPersonaSelector, setShowPersonaSelector] = useState(false);
 
   const loadModels = useCallback(async () => {
     const settings = await readSettings();
@@ -27,9 +30,26 @@ function ChatSettingsContent({ character }: { character: Character }) {
     setGlobalDefaultModelId(settings.defaultModelId);
   }, []);
 
+  const loadPersonas = useCallback(async () => {
+    const personaList = await listPersonas();
+    setPersonas(personaList);
+  }, []);
+
+  const loadSession = useCallback(async () => {
+    if (!characterId) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('sessionId');
+    if (sessionId) {
+      const session = await getSession(sessionId);
+      setCurrentSession(session);
+    }
+  }, [characterId]);
+
   useEffect(() => {
     loadModels();
-  }, [loadModels]);
+    loadPersonas();
+    loadSession();
+  }, [loadModels, loadPersonas, loadSession]);
 
   useEffect(() => {
     setCurrentCharacter(character);
@@ -64,6 +84,23 @@ function ChatSettingsContent({ character }: { character: Character }) {
       setShowModelSelector(false);
     } catch (error) {
       console.error("Failed to change character model:", error);
+    }
+  };
+
+  const handleChangePersona = async (personaId: string | null) => {
+    if (!currentSession) return;
+    
+    try {
+      const updatedSession = {
+        ...currentSession,
+        personaId: personaId || null,
+        updatedAt: Date.now(),
+      };
+      await saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+      setShowPersonaSelector(false);
+    } catch (error) {
+      console.error("Failed to change persona:", error);
     }
   };
 
@@ -182,6 +219,33 @@ function ChatSettingsContent({ character }: { character: Character }) {
               <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
             </button>
 
+            {/* Change Persona */}
+            <button
+              onClick={() => setShowPersonaSelector(true)}
+              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
+                  <User className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-white">Change Persona</div>
+                  <div className="text-xs text-gray-400 mt-0.5 truncate">
+                    {(() => {
+                      const currentPersonaId = currentSession?.personaId;
+                      if (currentPersonaId) {
+                        const persona = personas.find(p => p.id === currentPersonaId);
+                        return persona ? persona.title : "Custom persona";
+                      }
+                      const defaultPersona = personas.find(p => p.isDefault);
+                      return defaultPersona ? `${defaultPersona.title} (default)` : "No persona selected";
+                    })()}
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+            </button>
+
             {/* Change Model */}
             <button
               onClick={() => setShowModelSelector(true)}
@@ -210,6 +274,73 @@ function ChatSettingsContent({ character }: { character: Character }) {
           </section>
         </motion.div>
       </main>
+
+      {/* Persona Selection Bottom Menu */}
+      <BottomMenu
+        isOpen={showPersonaSelector}
+        onClose={() => setShowPersonaSelector(false)}
+        title="Select Persona"
+        includeExitIcon={true}
+        location="bottom"
+      >
+        <MenuSection>
+          {personas.length === 0 ? (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-6 py-4">
+              <p className="text-amber-200 text-sm">
+                No personas available. Create one in settings first.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* None option */}
+              <button
+                onClick={() => handleChangePersona(null)}
+                className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${
+                  !currentSession?.personaId
+                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+                    : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+                }`}
+              >
+                <div className="flex-1">
+                  <div className="text-base font-semibold">Default Persona</div>
+                  <div className="text-sm text-gray-400 mt-1">
+                    Use the app's default persona
+                  </div>
+                </div>
+                {!currentSession?.personaId && (
+                  <Check className="h-4 w-4 text-emerald-400" />
+                )}
+              </button>
+
+              {/* Persona options */}
+              {personas.map((persona) => (
+                <button
+                  key={persona.id}
+                  onClick={() => handleChangePersona(persona.id)}
+                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${
+                    persona.id === currentSession?.personaId
+                      ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+                      : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="flex-1">
+                    <div className="text-base font-semibold">
+                      {persona.title}
+                      {persona.isDefault && <span className="ml-2 text-xs text-blue-300">(default)</span>}
+                    </div>
+                    <div className="text-sm text-gray-400 mt-1 line-clamp-2">
+                      {persona.description}
+                    </div>
+                  </div>
+                  {persona.id === currentSession?.personaId && (
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 ml-2" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </MenuSection>
+      </BottomMenu>
 
       {/* Model Selection Bottom Menu */}
       <BottomMenu

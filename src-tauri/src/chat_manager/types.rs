@@ -78,6 +78,8 @@ pub struct Session {
     #[serde(default)]
     pub system_prompt: Option<String>,
     #[serde(default)]
+    pub persona_id: Option<String>,
+    #[serde(default)]
     pub messages: Vec<StoredMessage>,
     #[serde(default)]
     pub archived: bool,
