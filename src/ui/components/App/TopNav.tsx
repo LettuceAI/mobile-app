@@ -23,18 +23,11 @@ export function TopNav({ currentPath }: TopNavProps) {
   }, [currentPath]);
 
   const showBackButton = useMemo(() => {
-    if (currentPath === "/create/character") return true;
     if (currentPath.startsWith("/settings/") && currentPath !== "/settings") return true;
     return false;
   }, [currentPath]);
 
   const handleBack = () => {
-    if (currentPath === "/create/character") {
-      const handler = (window as any).__createCharacterBackHandler;
-      if (handler && handler()) return;
-      navigate(-1);
-      return;
-    }
     if (currentPath.startsWith("/settings/") && currentPath !== "/settings") {
       navigate("/settings");
       return;

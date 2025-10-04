@@ -79,17 +79,21 @@ function AppContent() {
       location.pathname.startsWith("/onboarding"),
     [location.pathname]
   );
-  const showGlobalChrome = !isOnboardingRoute && !isChatDetailRoute;
+  const isCreateRoute = useMemo(
+    () => location.pathname.startsWith("/create/"),
+    [location.pathname]
+  );
+  const showGlobalChrome = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute;
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } = useFirstTimeTooltip("create_button");
   const [showDelayedTooltip, setShowDelayedTooltip] = useState(false);
 
   useEffect(() => {
-    if (isOnboardingRoute) {
+    if (isOnboardingRoute || isCreateRoute) {
       setShowCreateMenu(false);
     }
-  }, [isOnboardingRoute]); // Only run when onboarding route changes
+  }, [isOnboardingRoute, isCreateRoute]); // Run when onboarding or create route changes
 
 
 
@@ -131,7 +135,9 @@ function AppContent() {
               ? "overflow-y-auto px-4 pt-6 pb-6"
               : isChatDetailRoute
                 ? "overflow-hidden px-0 pt-0 pb-0"
-                : "overflow-y-auto px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))]"
+                : isCreateRoute
+                  ? "overflow-hidden px-0 pt-0 pb-0"
+                  : "overflow-y-auto px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))]"
             }`}
         >
           <motion.div

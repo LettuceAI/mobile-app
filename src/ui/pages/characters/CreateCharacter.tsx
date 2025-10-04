@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Camera, X } from "lucide-react";
+import { Camera, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { readSettings, saveCharacter } from "../../../core/storage/repo";
@@ -48,14 +48,14 @@ export function CreateCharacterPage() {
 
   const canContinueIdentity = name.trim().length > 0 && !saving;
   const canSaveDescription = description.trim().length > 0 && selectedModelId !== null && !saving;
-    const progress = step === Step.Identity ? 0.5 : 1;
+  const progress = step === Step.Identity ? 0.5 : 1;
 
   const avatarPreview = useMemo(() => {
     if (!avatarPath) {
       const initial = name.trim().charAt(0) || "?";
       return (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/20 to-blue-500/20">
-          <span className="text-2xl font-bold text-white">{initial.toUpperCase()}</span>
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-500/20 to-blue-500/20">
+          <span className="text-3xl font-bold text-white">{initial.toUpperCase()}</span>
         </div>
       );
     }
@@ -100,48 +100,67 @@ export function CreateCharacterPage() {
     }
   };
 
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      if (step === Step.Description) {
-        event.preventDefault();
-        setStep(Step.Identity);
-        window.history.pushState(null, '', window.location.pathname);
-      }
-    };
-
-    const handleBackButton = () => {
-      if (step === Step.Description) {
-        setStep(Step.Identity);
-        return true; 
-      }
-      return false; 
-    };
-
-    (window as any).__createCharacterBackHandler = handleBackButton;
-
-    window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-      delete (window as any).__createCharacterBackHandler;
-    };
-  }, [step]);
-
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-100">
-      {/* Progress bar */}
-      <div className="px-6 mb-8 pt-4">
-        <div className="h-1 w-full rounded-full bg-white/5">
+    <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
+      {/* Custom TopNav for Create Page */}
+      <header
+        className="border-b border-white/5 bg-[#050505]"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 8px)" }}
+      >
+        <div className="relative mx-auto flex h-14 w-full items-center justify-center px-4">
+          <button
+            onClick={() => {
+              if (step === Step.Description) {
+                setStep(Step.Identity);
+              } else {
+                navigate(-1);
+              }
+            }}
+            className="absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-200 transition hover:border-white/30 hover:text-white active:scale-95"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            Back
+          </button>
+          <div className="flex flex-col items-center">
+            <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500">LettuceAI</span>
+            <span className="text-sm font-semibold text-white">Create</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Progress indicator */}
+      <div className="border-b border-white/5 bg-[#050505] px-4 pb-3 pt-4">
+        <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/5">
           <motion.div
-            className="h-1 rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
-            initial={{ width: 0 }}
+            className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400/60 to-blue-400/60"
+            initial={{ width: "0%" }}
             animate={{ width: `${progress * 100}%` }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
           />
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[10px] font-medium uppercase tracking-[0.35em] text-white/40">
+            Step {step} of 2
+          </span>
+          <span className="text-[10px] font-medium text-white/50">
+            {step === Step.Identity ? "Identity" : "Description"}
+          </span>
         </div>
       </div>
 
       {/* Content */}
-      <main className="px-6 pb-32">
+      <main className="flex-1 overflow-y-auto px-4 pb-20 pt-4">
         <AnimatePresence mode="wait">
           {step === Step.Identity ? (
             <IdentityStep
@@ -197,75 +216,77 @@ function IdentityStep({
 }) {
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-8"
+      exit={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="space-y-6"
     >
       {/* Title */}
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-white">Create your character</h2>
-        <p className="text-gray-400">Give your AI character a name and personality</p>
+      <div className="space-y-1.5">
+        <h2 className="text-xl font-semibold text-white">Create Character</h2>
+        <p className="text-sm text-white/50">Give your AI character an identity</p>
       </div>
 
       {/* Avatar Section */}
-      <div className="flex flex-col items-center space-y-4">
+      <div className="flex flex-col items-center gap-3 py-4">
         <div className="relative">
-          <div className="h-24 w-24 overflow-hidden rounded-full border-2 border-white/10">
+          <div className="h-28 w-28 overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             {avatarPreview}
           </div>
           
           {/* Upload Button */}
-          <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-[#0b0b0d] text-white/70 transition hover:border-white/40 hover:text-white">
-            <Camera size={14} />
+          <label className="group absolute -bottom-1 -right-1 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-[#0b0b0d] text-white/60 shadow-lg transition hover:border-white/25 hover:bg-white/5 hover:text-white active:scale-95">
+            <Camera size={16} />
             <input type="file" accept="image/*" onChange={onUpload} className="hidden" />
           </label>
           
           {/* Remove Button */}
           {avatarPath && (
-            <button
+            <motion.button
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
               onClick={() => onAvatarChange("")}
-              className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-red-500/30 bg-red-500/20 text-red-400 transition hover:bg-red-500/30"
+              className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border border-red-400/30 bg-red-400/20 text-red-300 shadow-lg transition hover:border-red-400/50 hover:bg-red-400/30 active:scale-95"
             >
-              <X size={12} />
-            </button>
+              <X size={14} />
+            </motion.button>
           )}
         </div>
         
-        <p className="text-center text-xs text-gray-500">
-          Tap to {avatarPath ? 'change' : 'add'} avatar
+        <p className="text-center text-[11px] font-medium text-white/40">
+          {avatarPath ? 'Tap camera to change' : 'Tap camera to add avatar'}
         </p>
       </div>
 
       {/* Name Input */}
-      <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-300">
-          Character Name
+      <div className="space-y-2">
+        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
+          Name
         </label>
         <input
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="Enter character name..."
-          className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-lg text-white placeholder-gray-500 transition focus:border-white/20 focus:bg-white/10 focus:outline-none"
+          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder-white/40 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
           autoFocus
         />
-        <p className="text-xs text-gray-500">
-          This will appear in your chat list and conversations
+        <p className="text-xs text-white/40">
+          This name will appear in chat conversations
         </p>
       </div>
 
       {/* Continue Button */}
-      <div className="pt-8">
+      <div className="pt-4">
         <motion.button
           disabled={!canContinue}
           onClick={onContinue}
-          whileTap={{ scale: 0.98 }}
-          whileHover={{ scale: 1.02 }}
-          className={`w-full rounded-2xl py-4 text-base font-semibold transition ${
+          whileTap={{ scale: canContinue ? 0.98 : 1 }}
+          className={`w-full rounded-xl py-3.5 text-sm font-semibold transition ${
             canContinue 
-              ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg hover:shadow-xl" 
-              : "cursor-not-allowed bg-gray-600/50 text-gray-400"
+              ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-[0_8px_24px_rgba(52,211,153,0.15)] hover:border-emerald-400/60 hover:bg-emerald-400/30" 
+              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
           }`}
         >
           Continue to Description
@@ -300,67 +321,67 @@ function DescriptionStep({
 }) {
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-8"
+      exit={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="space-y-6"
     >
       {/* Title */}
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-white">Describe your character</h2>
-        <p className="text-gray-400">How should your character behave and respond?</p>
+      <div className="space-y-1.5">
+        <h2 className="text-xl font-semibold text-white">Character Description</h2>
+        <p className="text-sm text-white/50">Define personality and behavior</p>
       </div>
 
       {/* Description Textarea */}
-      <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-300">
-          Character Description
+      <div className="space-y-2">
+        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
+          Description
         </label>
         <textarea
           value={description}
           onChange={(e) => onDescriptionChange(e.target.value)}
-          rows={6}
-          placeholder="Describe your character's personality, background, speaking style, and any special traits they should have..."
-          className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-base text-white placeholder-gray-500 transition focus:border-white/20 focus:bg-white/10 focus:outline-none"
+          rows={7}
+          placeholder="Describe personality, speaking style, background, knowledge areas..."
+          className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
           autoFocus
         />
-        <p className="text-xs text-gray-500">
-          Be specific about tone, knowledge areas, and conversation style
+        <p className="text-xs text-white/40">
+          Be specific about tone, traits, and conversation style
         </p>
       </div>
 
       {/* Model Selection */}
-      <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-300">
+      <div className="space-y-2">
+        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
           AI Model
         </label>
         {loadingModels ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-4">
-            <Loader2 size={20} className="animate-spin text-gray-400" />
-            <span className="text-gray-400">Loading available models...</span>
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+            <span className="text-sm text-white/60">Loading models...</span>
           </div>
         ) : models.length ? (
           <select
             value={selectedModelId ?? ""}
             onChange={(e) => onSelectModel(e.target.value || null)}
-            className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-base text-white transition focus:border-white/20 focus:bg-white/10 focus:outline-none"
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
           >
             {models.map((model) => (
-              <option key={model.id} value={model.id} className="bg-[#050505] text-white">
-                {model.displayName} ({model.providerLabel})
+              <option key={model.id} value={model.id} className="bg-[#0b0b0d] text-white">
+                {model.displayName} · {model.providerLabel}
               </option>
             ))}
           </select>
         ) : (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-6 py-4">
-            <p className="text-amber-200 text-sm">
-              No models available. Please configure a provider in settings first.
+          <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 backdrop-blur-xl">
+            <p className="text-sm text-amber-200/90">
+              No models configured. Add a provider in settings first.
             </p>
           </div>
         )}
-        <p className="text-xs text-gray-500">
-          Choose which AI model will power this character
+        <p className="text-xs text-white/40">
+          This model will power the character's responses
         </p>
       </div>
 
@@ -368,33 +389,32 @@ function DescriptionStep({
       <AnimatePresence>
         {error && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="rounded-2xl border border-red-500/20 bg-red-500/10 px-6 py-4"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 backdrop-blur-xl"
           >
-            <p className="text-red-200 text-sm">{error}</p>
+            <p className="text-sm text-red-200">{error}</p>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Create Button */}
-      <div className="pt-8">
+      <div className="pt-4">
         <motion.button
           disabled={!canSave}
           onClick={onSave}
-          whileTap={{ scale: 0.98 }}
-          whileHover={{ scale: canSave ? 1.02 : 1 }}
-          className={`w-full rounded-2xl py-4 text-base font-semibold transition ${
+          whileTap={{ scale: canSave ? 0.98 : 1 }}
+          className={`w-full rounded-xl py-3.5 text-sm font-semibold transition ${
             canSave 
-              ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg hover:shadow-xl" 
-              : "cursor-not-allowed bg-gray-600/50 text-gray-400"
+              ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-[0_8px_24px_rgba(52,211,153,0.15)] hover:border-emerald-400/60 hover:bg-emerald-400/30" 
+              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
           }`}
         >
           {saving ? (
             <div className="flex items-center justify-center gap-2">
-              <Loader2 size={18} className="animate-spin" />
-              <span>Creating...</span>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-200/30 border-t-emerald-200" />
+              <span>Creating Character...</span>
             </div>
           ) : (
             "Create Character"
