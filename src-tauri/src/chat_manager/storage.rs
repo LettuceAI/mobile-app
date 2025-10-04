@@ -13,18 +13,15 @@ use super::types::{
 
 pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
     let mut rules = vec![
-        "Stay in character at all times".to_string(),
-        "Respond naturally and conversationally".to_string(),
-        "Respect user boundaries and preferences".to_string(),
-        "Never reveal you are an AI language model".to_string(),
-        "Avoid generic or repetitive responses".to_string(),
-        "Adapt your tone and style to the conversation".to_string(),
-        "Never take over the user's persona; always allow users to participate actively in the roleplay.".to_string(),
+        "Embody the character naturally without breaking immersion".to_string(),
+        "Respond based on your personality, background, and current situation".to_string(),
+        "Show emotions and reactions authentically through your words".to_string(),
+        "Engage with the conversation organically, not like an assistant".to_string(),
     ];
     
     if pure_mode_enabled {
-        rules.push("Maintain appropriate and respectful content at all times".to_string());
-        rules.push("Avoid any adult, sexual, or NSFW content in responses".to_string());
+        rules.push("Keep all interactions appropriate and respectful".to_string());
+        rules.push("Avoid sexual, adult, or NSFW content".to_string());
     }
     
     rules
@@ -126,10 +123,15 @@ pub fn choose_persona<'a>(
     explicit: Option<&String>,
 ) -> Option<&'a Persona> {
     if let Some(id) = explicit {
+        // Empty string means explicitly "no persona"
+        if id.is_empty() {
+            return None;
+        }
         if let Some(p) = personas.iter().find(|p| &p.id == id) {
             return Some(p);
         }
     }
+    // If no explicit persona, use default
     personas.iter().find(|p| p.is_default)
 }
 
@@ -144,7 +146,7 @@ pub fn build_system_prompt(
     let mut debug_parts: Vec<Value> = Vec::new();
 
     // Start with the base template structure
-    // Custom session prompt/rules (if provided)
+    // Custom session prompt/rules (if provided), otherwise use default template
     if let Some(base) = &session.system_prompt {
         let trimmed = base.trim();
         if !trimmed.is_empty() {
@@ -155,6 +157,18 @@ pub fn build_system_prompt(
                 "content": trimmed,
             }));
         }
+    } else {
+        // Default immersive template - no meta instructions, just the character
+        template.push_str("# Character\nYou are {{ai_name}}.\n\n{{ai_description}}");
+        if persona.is_some() {
+            template.push_str("\n\n# User\n{{persona_description}}");
+        }
+        template.push_str("\n\n# Guidelines\n{{ai_rules}}");
+        template.push_str("\n\n");
+        debug_parts.push(json!({
+            "source": "default_template",
+            "content": template.clone(),
+        }));
     }
 
     // Replace placeholders with actual values
@@ -173,7 +187,8 @@ pub fn build_system_prompt(
     } else {
         character.rules.clone()
     };
-    let ai_rules = rules_to_use.join("\n");
+    let ai_rules = rules_to_use.join("\n- ");
+    let ai_rules = format!("- {}", ai_rules); // Add bullet point to first rule
     
     // Replace all placeholders
     template = template.replace("{{ai_name}}", &ai_name);

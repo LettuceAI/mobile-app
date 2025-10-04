@@ -9,7 +9,7 @@ use crate::utils::now_millis;
 use super::request::{
     chat_completions_endpoint, ensure_assistant_variant, extract_error_message, extract_text,
     extract_usage, message_text_for_api, new_assistant_variant, normalize_headers,
-    provider_base_url,
+    provider_base_url, system_role_for_provider,
 };
 use super::storage::{
     build_system_prompt, choose_persona, default_character_rules, load_characters, load_personas,
@@ -193,9 +193,10 @@ pub async fn chat_completion(
 
     let recent_msgs = recent_messages(&session);
 
+    let system_role = system_role_for_provider(provider_cred);
     let mut messages_for_api = Vec::new();
     if let Some(system) = &system_prompt {
-        messages_for_api.push(json!({ "role": "system", "content": system }));
+        messages_for_api.push(json!({ "role": system_role, "content": system }));
     }
     for msg in &recent_msgs {
         messages_for_api.push(json!({
@@ -541,10 +542,11 @@ pub async fn chat_regenerate(
 
     let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
 
+    let system_role = system_role_for_provider(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
         if let Some(system) = &system_prompt {
-            out.push(json!({ "role": "system", "content": system }));
+            out.push(json!({ "role": system_role, "content": system }));
         }
         for (idx, msg) in session.messages.iter().enumerate() {
             if idx > target_index {
@@ -862,9 +864,10 @@ pub async fn chat_continue(
     let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
     let recent_msgs = recent_messages(&session);
 
+    let system_role = system_role_for_provider(provider_cred);
     let mut messages_for_api = Vec::new();
     if let Some(system) = &system_prompt {
-        messages_for_api.push(json!({ "role": "system", "content": system }));
+        messages_for_api.push(json!({ "role": system_role, "content": system }));
     }
     for msg in &recent_msgs {
         messages_for_api.push(json!({

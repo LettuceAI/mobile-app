@@ -248,6 +248,11 @@ export async function listPersonas(): Promise<Persona[]> {
   return z.array(PersonaSchema).parse(data);
 }
 
+export async function getPersona(id: string): Promise<Persona | null> {
+  const personas = await listPersonas();
+  return personas.find(p => p.id === id) || null;
+}
+
 export async function savePersona(p: Partial<Persona> & { id?: string; title: string; description: string }): Promise<Persona> {
   const list = await listPersonas();
   const idx = p.id ? list.findIndex((x) => x.id === p.id) : -1;

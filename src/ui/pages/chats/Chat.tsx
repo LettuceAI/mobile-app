@@ -122,7 +122,7 @@ export function ChatConversationPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#050505]">
-      <ChatHeader character={character} />
+      <ChatHeader character={character} sessionId={sessionId} />
 
       <main className="relative flex-1 overflow-y-auto">
         <div 

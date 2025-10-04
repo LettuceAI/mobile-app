@@ -11,7 +11,7 @@ import { ResetPage } from "./ui/pages/settings/ResetPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage } from "./ui/pages/characters";
-import { CreatePersonaPage } from "./ui/pages/personas";
+import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { isOnboardingCompleted } from "./core/storage/appState";
@@ -158,6 +158,8 @@ function AppContent() {
               <Route path="/chat/:characterId/history" element={<ChatHistoryPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
+              <Route path="/personas" element={<PersonasPage />} />
+              <Route path="/personas/:personaId/edit" element={<EditPersonaPage />} />
             </Routes>
           </motion.div>
         </main>

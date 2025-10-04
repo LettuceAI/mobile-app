@@ -88,15 +88,22 @@ function ChatSettingsContent({ character }: { character: Character }) {
   };
 
   const handleChangePersona = async (personaId: string | null) => {
-    if (!currentSession) return;
+    if (!currentSession) {
+      console.log("No current session");
+      return;
+    }
     
     try {
+      console.log("Changing persona to:", personaId);
       const updatedSession = {
         ...currentSession,
-        personaId: personaId || null,
+        // Use empty string to explicitly disable persona
+        personaId: personaId === null ? "" : personaId,
         updatedAt: Date.now(),
       };
+      console.log("Updated session:", updatedSession);
       await saveSession(updatedSession);
+      console.log("Session saved successfully");
       setCurrentSession(updatedSession);
       setShowPersonaSelector(false);
     } catch (error) {
@@ -134,7 +141,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
   const handleBack = () => {
     if (characterId) {
-      navigate(`/chat/${characterId}`);
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('sessionId');
+      const backUrl = sessionId 
+        ? `/chat/${characterId}?sessionId=${sessionId}`
+        : `/chat/${characterId}`;
+      navigate(backUrl);
     } else {
       navigate(-1);
     }
@@ -222,7 +234,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
             {/* Change Persona */}
             <button
               onClick={() => setShowPersonaSelector(true)}
-              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
+              disabled={!currentSession}
+              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${
+                !currentSession 
+                  ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+                  : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
+              }`}
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
@@ -231,15 +248,25 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-white">Change Persona</div>
                   <div className="text-xs text-gray-400 mt-0.5 truncate">
-                    {(() => {
-                      const currentPersonaId = currentSession?.personaId;
-                      if (currentPersonaId) {
+                    {currentSession ? (
+                      (() => {
+                        const currentPersonaId = currentSession?.personaId;
+                        // Empty string means explicitly disabled
+                        if (currentPersonaId === "") {
+                          return "No persona";
+                        }
+                        // Undefined or null means use default
+                        if (!currentPersonaId) {
+                          const defaultPersona = personas.find(p => p.isDefault);
+                          return defaultPersona ? `${defaultPersona.title} (default)` : "No persona";
+                        }
+                        // Has a specific persona selected
                         const persona = personas.find(p => p.id === currentPersonaId);
                         return persona ? persona.title : "Custom persona";
-                      }
-                      const defaultPersona = personas.find(p => p.isDefault);
-                      return defaultPersona ? `${defaultPersona.title} (default)` : "No persona selected";
-                    })()}
+                      })()
+                    ) : (
+                      "Open a chat session first"
+                    )}
                   </div>
                 </div>
               </div>
@@ -292,22 +319,22 @@ function ChatSettingsContent({ character }: { character: Character }) {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* None option */}
+              {/* None option - No Persona */}
               <button
                 onClick={() => handleChangePersona(null)}
                 className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${
-                  !currentSession?.personaId
+                  currentSession?.personaId === ""
                     ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
                     : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
                 }`}
               >
                 <div className="flex-1">
-                  <div className="text-base font-semibold">Default Persona</div>
+                  <div className="text-base font-semibold">No Persona</div>
                   <div className="text-sm text-gray-400 mt-1">
-                    Use the app's default persona
+                    Disable persona for this conversation
                   </div>
                 </div>
-                {!currentSession?.personaId && (
+                {currentSession?.personaId === "" && (
                   <Check className="h-4 w-4 text-emerald-400" />
                 )}
               </button>
@@ -326,7 +353,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   <div className="flex-1">
                     <div className="text-base font-semibold">
                       {persona.title}
-                      {persona.isDefault && <span className="ml-2 text-xs text-blue-300">(default)</span>}
+                      {persona.isDefault && <span className="ml-2 text-xs text-blue-300">(app default)</span>}
                     </div>
                     <div className="text-sm text-gray-400 mt-1 line-clamp-2">
                       {persona.description}

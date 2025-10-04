@@ -93,7 +93,8 @@ export function CreateCharacterPage() {
 
       navigate("/chat");
     } catch (e: any) {
-      setError(e?.message || "Failed to save character");
+      console.log(e)
+      setError(e || "Failed to save character");
     } finally {
       setSaving(false);
     }

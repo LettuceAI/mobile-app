@@ -44,6 +44,15 @@ pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<St
     out
 }
 
+/// Determines the appropriate system role for the provider
+/// OpenAI and OpenRouter use "developer" role, others use "system"
+pub fn system_role_for_provider(cred: &ProviderCredential) -> &'static str {
+    match cred.provider_id.as_str() {
+        "openai" | "openrouter" => "developer",
+        _ => "system",
+    }
+}
+
 fn selected_variant<'a>(message: &'a StoredMessage) -> Option<&'a MessageVariant> {
     if let Some(selected_id) = &message.selected_variant_id {
         message

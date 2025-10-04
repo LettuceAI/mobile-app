@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen } from "lucide-react";
+import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User } from "lucide-react";
 import { readSettings } from "../../../core/storage/repo";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 
@@ -95,6 +95,13 @@ export function SettingsPage() {
       onClick: () => navigate('/settings/models')
     },
     {
+      key: 'personas',
+      icon: <User />,
+      title: 'Personas',
+      subtitle: 'Manage user personas',
+      onClick: () => navigate('/personas')
+    },
+    {
       key: 'security',
       icon: <Shield />,
       title: 'Security',
@@ -129,7 +136,7 @@ export function SettingsPage() {
           <div>
             <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Core</h2>
             <div className="space-y-2">
-              {items.filter(i => ['providers','models','security'].includes(i.key)).map(item => (
+              {items.filter(i => ['providers','models','personas','security'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
               ))}
             </div>
