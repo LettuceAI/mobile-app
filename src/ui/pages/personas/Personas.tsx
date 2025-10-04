@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Plus, Trash2, Edit2, Star, ChevronRight } from "lucide-react";
+import { User, Trash2, Edit2, Star, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listPersonas, deletePersona, savePersona } from "../../../core/storage/repo";
 import type { Persona } from "../../../core/storage/schemas";

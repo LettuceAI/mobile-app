@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Save, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { getPersona, savePersona } from "../../../core/storage/repo";
-import type { Persona } from "../../../core/storage/schemas";
 
 export function EditPersonaPage() {
   const navigate = useNavigate();

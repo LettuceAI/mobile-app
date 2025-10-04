@@ -45,7 +45,14 @@ export function ProviderSetupPage() {
       } else {
         setBaseUrl("");
       }
-
+      
+      // Smooth scroll to form after it appears
+      setTimeout(() => {
+        const formSection = document.querySelector('.config-form-section');
+        if (formSection) {
+          formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 200);
     }
   }, [selectedProvider]);
 
@@ -122,8 +129,8 @@ export function ProviderSetupPage() {
   const canSave = canTest && label.trim().length > 0;
 
   return (
-    <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8">
-      <div className="flex flex-col items-center">
+    <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8 pb-16 overflow-y-auto">
+      <div className="flex flex-col items-center pb-8">
         {/* Header */}
         <div className="flex w-full max-w-sm items-center justify-between mb-8">
           <button
@@ -183,7 +190,7 @@ export function ProviderSetupPage() {
         </div>
 
         {/* Configuration Form */}
-        <div className={`w-full max-w-sm transition-all duration-300 ${showForm ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? 'opacity-100 max-h-[2000px]' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
           <div className="text-center space-y-2 mb-6">
             <h2 className="text-lg font-semibold text-white">Connect {selectedProvider?.name}</h2>
             <p className="text-xs text-gray-400 leading-relaxed">

@@ -109,7 +109,7 @@ export function ModelSetupPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8">
+    <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8 pb-16 overflow-y-auto">
       <div className="flex flex-col items-center">
         {/* Header */}
         <div className="flex w-full max-w-sm items-center justify-between mb-8">

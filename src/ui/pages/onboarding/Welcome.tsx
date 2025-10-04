@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, X } from "lucide-react";
+import { motion } from "framer-motion";
 
 import {
   setOnboardingCompleted,
   setOnboardingSkipped,
 } from "../../../core/storage/appState";
 import logoSvg from "../../../assets/logo.svg";
-import { motion } from "framer-motion";
+import { typography, radius, spacing, interactive, shadows, cn } from "../../design-tokens";
 
 export function WelcomePage() {
   const navigate = useNavigate();
@@ -24,58 +25,126 @@ export function WelcomePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col text-gray-200">
-      <div className="flex flex-1 flex-col items-center justify-center space-y-8">
-        {/* Logo and branding */}
-        <div className="flex flex-col items-center space-y-4">
-          <div className="relative">
-            <div className="absolute -inset-4 rounded-full bg-gradient-to-r from-purple-500/20 to-emerald-400/20 blur-xl"></div>
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-white/10 to-white/5 shadow-2xl">
-              <img src={logoSvg} alt="LettuceAI" className="h-12 w-12" />
+    <div className="flex min-h-screen flex-col bg-[#050505] text-gray-200">
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
+        
+        {/* Logo Section - Hero */}
+        <motion.div 
+          className="flex flex-col items-center mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          <div className="relative mb-8">
+            {/* Glow effect */}
+            <div className="absolute -inset-6 rounded-full bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-emerald-500/20 blur-2xl animate-pulse" />
+            
+            {/* Logo container */}
+            <div className={cn(
+              "relative flex h-24 w-24 items-center justify-center border border-white/20 bg-gradient-to-br from-white/10 to-white/5",
+              radius.full,
+              shadows.xl
+            )}>
+              <img src={logoSvg} alt="LettuceAI" className="h-14 w-14" />
             </div>
           </div>
           
-          <div className="text-center space-y-2">
-            <h1 className="text-2xl font-bold text-white">LettuceAI</h1>
-            <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
-              Your personal AI Roleplay that keeps everything private and on-device
-            </p>
-          </div>
-        </div>
+          {/* Brand name */}
+          <h1 className={cn(
+            typography.display.size,
+            typography.display.weight,
+            "mb-3 bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-transparent"
+          )}>
+            LettuceAI
+          </h1>
+          
+          {/* Tagline */}
+          <p className={cn(
+            typography.body.size,
+            typography.body.lineHeight,
+            "max-w-[280px] text-center text-white/60"
+          )}>
+            Your personal AI companion. Private, secure, and always on-device.
+          </p>
+        </motion.div>
 
-        {/* Features */}
-        <div className="flex items-center justify-center gap-2">
+        {/* Feature Pills */}
+        <motion.div 
+          className={cn("mb-10 flex items-center justify-center", spacing.inlineSmall)}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
           {quickFacts.map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-2 backdrop-blur-sm">
-              <Icon size={14} className="text-emerald-400" />
-              <span className="text-xs font-medium text-gray-300">{label}</span>
+            <div 
+              key={label} 
+              className={cn(
+                "flex items-center gap-1.5 border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-sm",
+                radius.full
+              )}
+            >
+              <Icon size={14} className="text-emerald-400" strokeWidth={2.5} />
+              <span className={cn(typography.bodySmall.size, typography.label.weight, "text-white/70")}>
+                {label}
+              </span>
             </div>
           ))}
-        </div>
+        </motion.div>
 
-        {/* Call to action */}
-        <div className="w-full max-w-xs space-y-3">
+        {/* CTA Buttons */}
+        <motion.div 
+          className={cn("w-full max-w-xs", spacing.field)}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+        >
           <button
-            className="group w-full flex min-h-[48px] items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-semibold text-white transition-all duration-200 hover:border-white/30 hover:bg-white/15 active:scale-[0.98]"
+            className={cn(
+              "group w-full flex items-center justify-center gap-2 px-6 py-4",
+              radius.md,
+              "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+              typography.body.size,
+              typography.h3.weight,
+              shadows.glow,
+              interactive.transition.default,
+              interactive.active.scale,
+              "hover:border-emerald-400/60 hover:bg-emerald-400/30"
+            )}
             onClick={handleAddProvider}
           >
-            <Settings size={18} />
-            <span>Get started</span>
-            <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+            <span>Get Started</span>
+            <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
           </button>
 
           <button
-            className="w-full min-h-[44px] rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-gray-400 backdrop-blur-sm transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.98]"
+            className={cn(
+              "w-full px-6 py-3",
+              radius.md,
+              "border border-white/10 bg-white/5 text-white/60",
+              typography.body.size,
+              interactive.transition.default,
+              interactive.active.scale,
+              "hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80"
+            )}
             onClick={() => setShowSkipWarning(true)}
           >
             Skip for now
           </button>
-        </div>
+        </motion.div>
 
         {/* Bottom hint */}
-        <p className="text-xs text-gray-500 text-center max-w-sm">
-          Quick setup takes less than 2 minutes
-        </p>
+        <motion.p 
+          className={cn(
+            "mt-8 text-center",
+            typography.caption.size,
+            "text-white/40"
+          )}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+        >
+          Setup takes less than 2 minutes
+        </motion.p>
       </div>
 
       {showSkipWarning && (
@@ -107,28 +176,33 @@ function SkipWarning({
 
   const handleClose = () => {
     setIsExiting(true);
-    setTimeout(onClose, 300);
+    setTimeout(onClose, 200);
   };
 
   const handleConfirm = () => {
     setIsExiting(true);
-    setTimeout(() => void onConfirm(), 300);
+    setTimeout(() => void onConfirm(), 200);
   };
 
   const handleAddProvider = () => {
     setIsExiting(true);
-    setTimeout(onAddProvider, 300);
+    setTimeout(onAddProvider, 200);
   };
 
   return (
     <motion.div 
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
       initial={{ opacity: 0 }}
       animate={{ opacity: isExiting ? 0 : 1 }}
       transition={{ duration: 0.2 }}
+      onClick={handleClose}
     >
       <motion.div 
-        className="w-full max-w-lg rounded-t-3xl border border-white/10 bg-[#0b0b0d] p-8 shadow-[0_30px_120px_rgba(0,0,0,0.7)]"
+        className={cn(
+          "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6 my-auto",
+          "rounded-t-3xl sm:rounded-3xl sm:mb-8",
+          shadows.xl
+        )}
         initial={{ y: "100%", opacity: 0 }}
         animate={{ 
           y: isExiting ? "100%" : 0, 
@@ -136,43 +210,88 @@ function SkipWarning({
         }}
         transition={{ 
           type: "spring",
-          damping: 25,
-          stiffness: 300,
-          duration: 0.3
+          damping: 30,
+          stiffness: 350,
+          duration: 0.2
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-white">Skip setup?</h3>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h3 className={cn(typography.h2.size, typography.h2.weight, "text-white")}>
+            Skip setup?
+          </h3>
           <button
             onClick={handleClose}
-            className="rounded-full border border-white/10 bg-white/5 p-2 text-gray-400 hover:text-white transition"
+            className={cn(
+              "flex h-8 w-8 items-center justify-center border border-white/10 bg-white/5 text-white/60",
+              radius.full,
+              interactive.transition.fast,
+              interactive.active.scale,
+              "hover:border-white/20 hover:bg-white/10 hover:text-white"
+            )}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        <div className="mt-6 flex items-start gap-4 rounded-2xl border border-white/5 bg-black/40 p-5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-300">
-            <AlertTriangle size={26} />
+        {/* Warning content */}
+        <div className={cn(
+          "flex items-start gap-3 border border-amber-400/20 bg-amber-400/5 p-4 mb-6",
+          radius.md
+        )}>
+          <div className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center bg-amber-400/20 text-amber-300",
+            radius.md
+          )}>
+            <AlertTriangle size={20} strokeWidth={2.5} />
           </div>
-          <div className="space-y-2 text-sm text-gray-300">
-            <h4 className="text-base font-semibold text-white">Provider setup recommended</h4>
-            <p>
-              Without connecting a provider you won't be able to send messages yet. You can add one anytime from settings.
+          <div className={spacing.tight}>
+            <h4 className={cn(
+              typography.body.size,
+              typography.h3.weight,
+              "text-white"
+            )}>
+              Provider needed to chat
+            </h4>
+            <p className={cn(
+              typography.bodySmall.size,
+              typography.bodySmall.lineHeight,
+              "text-white/60"
+            )}>
+              Without a provider, you won't be able to send messages. You can add one later from settings.
             </p>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        {/* Actions */}
+        <div className={cn("flex flex-col", spacing.field)}>
           <button
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
+            className={cn(
+              "inline-flex items-center justify-center gap-2 px-6 py-3",
+              radius.md,
+              "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+              typography.body.size,
+              typography.h3.weight,
+              interactive.transition.fast,
+              interactive.active.scale,
+              "hover:border-emerald-400/60 hover:bg-emerald-400/30"
+            )}
             onClick={handleAddProvider}
           >
-            Go to provider setup
-            <ArrowRight size={16} />
+            <span>Add Provider</span>
+            <ArrowRight size={16} strokeWidth={2.5} />
           </button>
           <button
-            className="flex-1 rounded-full border border-emerald-400/30 bg-emerald-400/20 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400/60 hover:bg-emerald-400/30"
+            className={cn(
+              "px-6 py-3",
+              radius.md,
+              "border border-white/10 bg-white/5 text-white/60",
+              typography.body.size,
+              interactive.transition.fast,
+              interactive.active.scale,
+              "hover:border-white/20 hover:bg-white/10 hover:text-white"
+            )}
             onClick={handleConfirm}
           >
             Skip anyway
