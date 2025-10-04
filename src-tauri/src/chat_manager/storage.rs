@@ -11,6 +11,25 @@ use super::types::{
     Character, Model, Persona, ProviderCredential, Session, Settings, StoredMessage,
 };
 
+pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
+    let mut rules = vec![
+        "Stay in character at all times".to_string(),
+        "Respond naturally and conversationally".to_string(),
+        "Respect user boundaries and preferences".to_string(),
+        "Never reveal you are an AI language model".to_string(),
+        "Avoid generic or repetitive responses".to_string(),
+        "Adapt your tone and style to the conversation".to_string(),
+        "Never take over the user's persona; always allow users to participate actively in the roleplay.".to_string(),
+    ];
+    
+    if pure_mode_enabled {
+        rules.push("Maintain appropriate and respectful content at all times".to_string());
+        rules.push("Avoid any adult, sexual, or NSFW content in responses".to_string());
+    }
+    
+    rules
+}
+
 pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
     let json = storage_read_settings(app.clone())?;
     if let Some(data) = json {
@@ -119,60 +138,18 @@ pub fn build_system_prompt(
     character: &Character,
     persona: Option<&Persona>,
     session: &Session,
+    settings: &Settings,
 ) -> Option<String> {
-    let mut parts: Vec<String> = Vec::new();
+    let mut template = String::new();
     let mut debug_parts: Vec<Value> = Vec::new();
 
-    if let Some(p) = persona {
-        let description = p.description.trim();
-        if !description.is_empty() {
-            parts.push(format!("Persona: {}", description));
-            debug_parts.push(json!({
-                "source": "persona",
-                "personaId": p.id,
-                "title": p.title,
-                "content": description,
-            }));
-        }
-    }
-
-    if let Some(desc) = &character.description {
-        let trimmed = desc.trim();
-        if !trimmed.is_empty() {
-            parts.push(format!("Character description: {}", trimmed));
-            debug_parts.push(json!({
-                "source": "character_description",
-                "content": trimmed,
-            }));
-        }
-    }
-
-    if let Some(style) = &character.style {
-        let trimmed = style.trim();
-        if !trimmed.is_empty() {
-            parts.push(format!("Style guidance: {}", trimmed));
-            debug_parts.push(json!({
-                "source": "character_style",
-                "content": trimmed,
-            }));
-        }
-    }
-
-    if let Some(boundaries) = &character.boundaries {
-        let trimmed = boundaries.trim();
-        if !trimmed.is_empty() {
-            parts.push(format!("Boundaries: {}", trimmed));
-            debug_parts.push(json!({
-                "source": "character_boundaries",
-                "content": trimmed,
-            }));
-        }
-    }
-
+    // Start with the base template structure
+    // Custom session prompt/rules (if provided)
     if let Some(base) = &session.system_prompt {
         let trimmed = base.trim();
         if !trimmed.is_empty() {
-            parts.push(trimmed.to_string());
+            template.push_str(trimmed);
+            template.push_str("\n\n");
             debug_parts.push(json!({
                 "source": "session_system_prompt",
                 "content": trimmed,
@@ -180,10 +157,54 @@ pub fn build_system_prompt(
         }
     }
 
-    let result = if parts.is_empty() {
+    // Replace placeholders with actual values
+    let ai_name = character.name.clone();
+    let ai_description = character.description.as_ref().map(|s| s.trim()).unwrap_or("");
+    
+    // Get pure mode setting from app_state
+    let pure_mode_enabled = settings.app_state
+        .get("pureModeEnabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    
+    // Use default rules if character has no rules
+    let rules_to_use = if character.rules.is_empty() {
+        default_character_rules(pure_mode_enabled)
+    } else {
+        character.rules.clone()
+    };
+    let ai_rules = rules_to_use.join("\n");
+    
+    // Replace all placeholders
+    template = template.replace("{{ai_name}}", &ai_name);
+    template = template.replace("{{ai_description}}", ai_description);
+    template = template.replace("{{ai_rules}}", &ai_rules);
+    
+    // Only replace persona placeholders if persona exists
+    if let Some(p) = persona {
+        template = template.replace("{{persona_name}}", &p.title);
+        template = template.replace("{{persona_description}}", p.description.trim());
+    } else {
+        // Remove persona placeholders if no persona is set
+        template = template.replace("{{persona_name}}", "");
+        template = template.replace("{{persona_description}}", "");
+    }
+
+    debug_parts.push(json!({
+        "source": "placeholder_replacement",
+        "ai_name": ai_name,
+        "ai_description": ai_description,
+        "ai_rules": ai_rules,
+        "persona": persona.map(|p| json!({
+            "name": p.title,
+            "description": p.description,
+        })),
+    }));
+
+    let result = if template.trim().is_empty() {
         None
     } else {
-        Some(parts.join("\n\n"))
+        Some(template.trim().to_string())
     };
 
     emit_debug(
@@ -193,7 +214,6 @@ pub fn build_system_prompt(
             "sessionId": session.id,
             "characterId": character.id,
             "personaId": persona.map(|p| p.id.clone()),
-            "partCount": parts.len(),
             "parts": debug_parts,
             "preview": result.as_ref().map(|prompt| {
                 if prompt.len() > 400 {

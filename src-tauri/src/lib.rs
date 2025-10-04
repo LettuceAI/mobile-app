@@ -33,6 +33,7 @@ pub fn run() {
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,
             chat_manager::chat_continue,
+            chat_manager::get_default_character_rules,
             secrets::secret_get,
             secrets::secret_set,
             secrets::secret_delete,

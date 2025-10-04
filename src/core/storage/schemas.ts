@@ -76,6 +76,7 @@ export const AppStateSchema = z.object({
   onboarding: OnboardingStateSchema,
   theme: z.enum(["light", "dark"]),
   tooltips: TooltipsStateSchema,
+  pureModeEnabled: z.boolean().default(true),
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
@@ -84,6 +85,7 @@ export function createDefaultAppState(): AppState {
     onboarding: createDefaultOnboardingState(),
     theme: "light",
     tooltips: {},
+    pureModeEnabled: true,
   };
 }
 
@@ -113,8 +115,7 @@ export const CharacterSchema = z.object({
   name: z.string().min(1),
   avatarPath: z.string().optional(),
   description: z.string().optional(),
-  style: z.string().optional(),
-  boundaries: z.string().optional(),
+  rules: z.array(z.string()).default([]),
   defaultModelId: z.string().uuid().nullable().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),

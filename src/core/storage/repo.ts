@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { storageBridge } from "./files";
+import { getDefaultCharacterRules } from "./defaults";
 import {
   CharacterSchema,
   SessionSchema,
@@ -140,32 +141,28 @@ export async function listCharacters(): Promise<Character[]> {
   return z.array(CharacterSchema).parse(data);
 }
 
-export async function saveCharacter(c: Partial<Character> & { id?: string; name: string }): Promise<Character> {
+export async function saveCharacter(c: Partial<Character>): Promise<Character> {
   const list = await listCharacters();
-  const idx = c.id ? list.findIndex((x) => x.id === c.id) : -1;
-  let entity: Character;
   let updated: Character[];
+  let entity: Character;
 
-  if (idx >= 0) {
-    const existing = list[idx];
-    entity = {
-      ...existing,
-      ...c,
-      defaultModelId:
-        c.defaultModelId === undefined ? existing.defaultModelId ?? null : c.defaultModelId ?? null,
-      updatedAt: now(),
-    } as Character;
-    list[idx] = entity;
-    updated = list;
+  if (c.id) {
+    const idx = list.findIndex((x) => x.id === c.id);
+    if (idx === -1) throw new Error("Character not found");
+    entity = { ...list[idx], ...c, updatedAt: now() } as Character;
+    updated = [...list.slice(0, idx), entity, ...list.slice(idx + 1)];
   } else {
     const timestamp = now();
+    // Get pure mode setting for default rules
+    const settings = await readSettings();
+    const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
+    const defaultRules = c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
     entity = {
       id: (c.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
       name: c.name,
       avatarPath: c.avatarPath,
       description: c.description,
-      style: c.style,
-      boundaries: c.boundaries,
+      rules: defaultRules,
       defaultModelId: c.defaultModelId ?? null,
       createdAt: timestamp,
       updatedAt: timestamp,

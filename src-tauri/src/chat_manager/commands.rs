@@ -12,8 +12,8 @@ use super::request::{
     provider_base_url,
 };
 use super::storage::{
-    build_system_prompt, choose_persona, load_characters, load_personas, load_session,
-    load_settings, recent_messages, save_session, select_model,
+    build_system_prompt, choose_persona, default_character_rules, load_characters, load_personas,
+    load_session, load_settings, recent_messages, save_session, select_model,
 };
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
@@ -189,7 +189,7 @@ pub async fn chat_completion(
         }),
     );
 
-    let system_prompt = build_system_prompt(&app, &character, persona, &session);
+    let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
 
     let recent_msgs = recent_messages(&session);
 
@@ -539,7 +539,7 @@ pub async fn chat_regenerate(
         return Err("Provider credential missing API key reference".into());
     };
 
-    let system_prompt = build_system_prompt(&app, &character, persona, &session);
+    let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
 
     let messages_for_api = {
         let mut out = Vec::new();
@@ -859,7 +859,7 @@ pub async fn chat_continue(
         return Err("Provider credential missing API key reference".into());
     };
 
-    let system_prompt = build_system_prompt(&app, &character, persona, &session);
+    let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
     let recent_msgs = recent_messages(&session);
 
     let mut messages_for_api = Vec::new();
@@ -1046,4 +1046,9 @@ pub async fn chat_continue(
         request_id,
         assistant_message,
     })
+}
+
+#[tauri::command]
+pub fn get_default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
+    default_character_rules(pure_mode_enabled)
 }

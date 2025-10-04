@@ -16,33 +16,15 @@ open class BuildTask : DefaultTask() {
 
     @TaskAction
     fun assemble() {
-        // Try to find npm in common locations
-        val possibleNpmPaths = listOf(
-            "/home/megalith/.local/share/nvm/v22.17.0/bin/npm", // Current nvm path
-            System.getenv("HOME") + "/.local/share/nvm/current/bin/npm", // Generic nvm current
-            "npm" // System npm as fallback
-        )
-        
-        var lastException: Exception? = null
-        for (npmPath in possibleNpmPaths) {
-            try {
-                runTauriCli(npmPath)
-                return // Success, exit early
-            } catch (e: Exception) {
-                lastException = e
-                // Continue to next path
+        val executable = """npm""";
+        try {
+            runTauriCli(executable)
+        } catch (e: Exception) {
+            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+                runTauriCli("$executable.cmd")
+            } else {
+                throw e;
             }
-        }
-        
-        // If we get here, all paths failed
-        if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-            try {
-                runTauriCli("npm.cmd")
-            } catch (e: Exception) {
-                throw lastException ?: e
-            }
-        } else {
-            throw lastException ?: GradleException("Could not find npm executable")
         }
     }
 

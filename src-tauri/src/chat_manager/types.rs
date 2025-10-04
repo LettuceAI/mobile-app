@@ -97,9 +97,7 @@ pub struct Character {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
-    pub style: Option<String>,
-    #[serde(default)]
-    pub boundaries: Option<String>,
+    pub rules: Vec<String>,
     #[serde(default)]
     pub default_model_id: Option<String>,
     pub created_at: u64,

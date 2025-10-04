@@ -1,8 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Shield, Lock, Database } from "lucide-react";
+import { readSettings, writeSettings } from "../../../core/storage/repo";
 
 export function SecurityPage() {
     const [isPureModeEnabled, setIsPureModeEnabled] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Load settings on mount
+    useEffect(() => {
+        readSettings().then((settings) => {
+            setIsPureModeEnabled(settings.appState.pureModeEnabled ?? true);
+            setIsLoading(false);
+        }).catch((err) => {
+            console.error("Failed to load settings:", err);
+            setIsLoading(false);
+        });
+    }, []);
+
+    // Save when toggled
+    const handleToggle = async () => {
+        const newValue = !isPureModeEnabled;
+        setIsPureModeEnabled(newValue);
+        
+        try {
+            const settings = await readSettings();
+            settings.appState.pureModeEnabled = newValue;
+            await writeSettings(settings);
+        } catch (err) {
+            console.error("Failed to save pure mode setting:", err);
+            // Revert on error
+            setIsPureModeEnabled(!newValue);
+        }
+    };
+
+    if (isLoading) {
+        return null; // Or a loading spinner
+    }
 
     return (
         <div className="flex h-full flex-col pb-16">
@@ -56,7 +89,7 @@ export function SecurityPage() {
                                             id="pure-mode"
                                             type="checkbox"
                                             checked={isPureModeEnabled}
-                                            onChange={() => setIsPureModeEnabled(v => !v)}
+                                            onChange={handleToggle}
                                             className="peer sr-only"
                                         />
                                         <label
