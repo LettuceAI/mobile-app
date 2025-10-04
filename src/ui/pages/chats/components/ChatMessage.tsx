@@ -1,7 +1,8 @@
 import { motion, type PanInfo } from "framer-motion";
-import { Loader2, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage } from "../../../../core/storage/schemas";
+import { radius, typography, interactive, cn } from "../../../design-tokens";
 
 interface VariantState {
   total: number;
@@ -60,16 +61,15 @@ export function ChatMessage({
     : {};
 
   const shouldAnimate = !isPlaceholder;
-  const shouldUseLayout = false; 
 
   return (
     <div
-      className={`relative flex ${
+      className={cn(
+        "relative flex",
         message.role === "user" ? "justify-end" : "justify-start"
-      }`}
+      )}
     >
       <motion.div
-        layout={shouldUseLayout}
         initial={shouldAnimate ? { opacity: 0, y: 4 } : false}
         animate={shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
         transition={shouldAnimate ? { 
@@ -77,15 +77,20 @@ export function ChatMessage({
           duration: 0.2, 
           ease: [0.25, 0.46, 0.45, 0.94] 
         } : { duration: 0 }}
-        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed transition-colors duration-150 ${
+        className={cn(
+          "max-w-[82%] px-4 py-2.5 leading-relaxed transition-all duration-150",
+          radius.lg,
+          typography.body.size,
           message.role === "user"
-            ? `ml-auto bg-gradient-to-br from-emerald-500/60 to-emerald-400/40 text-white ${
-                heldMessageId === message.id ? "ring-2 ring-white/60" : ""
-              }`
-            : `bg-white/5 text-gray-100 ${
-                heldMessageId === message.id ? "border border-white/30" : "border border-transparent"
-              }`
-        }`}
+            ? cn(
+                "ml-auto bg-emerald-400/20 text-white border border-emerald-400/30",
+                heldMessageId === message.id && "ring-2 ring-emerald-400/50"
+              )
+            : cn(
+                "border bg-white/5 text-white/95",
+                heldMessageId === message.id ? "border-white/30" : "border-white/10"
+              )
+        )}
         {...eventHandlers}
         {...dragProps}
         whileDrag={enableSwipe ? { scale: 0.98 } : undefined}
@@ -102,7 +107,12 @@ export function ChatMessage({
 
         {isAssistant && totalVariants > 1 && (
           <motion.div 
-            className="mt-3 flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.18em] text-gray-400 pr-2"
+            className={cn(
+              "mt-2.5 flex items-center justify-between pr-2",
+              typography.caption.size,
+              typography.caption.weight,
+              "uppercase tracking-wider text-white/40"
+            )}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, delay: 0.15 }}
@@ -113,12 +123,12 @@ export function ChatMessage({
             </span>
             {regeneratingMessageId === message.id && (
               <motion.span 
-                className="flex items-center gap-1 text-emerald-200"
+                className="flex items-center gap-1.5 text-emerald-300"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.15 }}
               >
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-300/30 border-t-emerald-300" />
                 Regenerating
               </motion.span>
             )}
@@ -142,12 +152,20 @@ export function ChatMessage({
             type="button"
             onClick={() => void handleRegenerate(message)}
             disabled={regeneratingMessageId === message.id || sending}
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-all duration-150 hover:border-white/40 hover:bg-white/20 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+            className={cn(
+              "flex h-10 w-10 items-center justify-center",
+              radius.full,
+              "border border-white/15 bg-white/10 text-white",
+              interactive.transition.fast,
+              "hover:border-white/30 hover:bg-white/20 hover:scale-105",
+              interactive.active.scale,
+              "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            )}
             aria-label="Regenerate response"
             style={{ willChange: 'transform' }}
           >
             {regeneratingMessageId === message.id ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { readSettings, saveCharacter } from "../../../core/storage/repo";
 import type { Model } from "../../../core/storage/schemas";
+import { typography, radius, spacing, interactive, shadows, cn } from "../../design-tokens";
 
 enum Step {
   Identity = 1,
@@ -141,7 +142,7 @@ export function CreateCharacterPage() {
 
       {/* Progress indicator */}
       <div className="border-b border-white/5 bg-[#050505] px-4 pb-3 pt-4">
-        <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/5">
+        <div className={cn("relative h-1 w-full overflow-hidden", radius.full, "bg-white/5")}>
           <motion.div
             className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400/60 to-blue-400/60"
             initial={{ width: "0%" }}
@@ -150,10 +151,19 @@ export function CreateCharacterPage() {
           />
         </div>
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-[0.35em] text-white/40">
+          <span className={cn(
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            "uppercase text-white/40"
+          )}>
             Step {step} of 2
           </span>
-          <span className="text-[10px] font-medium text-white/50">
+          <span className={cn(
+            typography.caption.size,
+            typography.caption.weight,
+            "text-white/50"
+          )}>
             {step === Step.Identity ? "Identity" : "Description"}
           </span>
         </div>
@@ -220,23 +230,37 @@ function IdentityStep({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -16 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="space-y-6"
+      className={spacing.section}
     >
       {/* Title */}
-      <div className="space-y-1.5">
-        <h2 className="text-xl font-semibold text-white">Create Character</h2>
-        <p className="text-sm text-white/50">Give your AI character an identity</p>
+      <div className={spacing.tight}>
+        <h2 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
+          Create Character
+        </h2>
+        <p className={cn(typography.body.size, "text-white/50")}>
+          Give your AI character an identity
+        </p>
       </div>
 
       {/* Avatar Section */}
       <div className="flex flex-col items-center gap-3 py-4">
         <div className="relative">
-          <div className="h-28 w-28 overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <div className={cn(
+            "h-28 w-28 overflow-hidden border border-white/10 bg-white/5",
+            radius.full,
+            shadows.md
+          )}>
             {avatarPreview}
           </div>
           
           {/* Upload Button */}
-          <label className="group absolute -bottom-1 -right-1 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-[#0b0b0d] text-white/60 shadow-lg transition hover:border-white/25 hover:bg-white/5 hover:text-white active:scale-95">
+          <label className={cn(
+            "group absolute -bottom-1 -right-1 flex h-10 w-10 cursor-pointer items-center justify-center border border-white/10 bg-[#0b0b0d] text-white/60",
+            radius.full,
+            shadows.lg,
+            interactive.transition.default,
+            "hover:border-white/25 hover:bg-white/5 hover:text-white active:scale-95"
+          )}>
             <Camera size={16} />
             <input type="file" accept="image/*" onChange={onUpload} className="hidden" />
           </label>
@@ -248,31 +272,52 @@ function IdentityStep({
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
               onClick={() => onAvatarChange("")}
-              className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border border-red-400/30 bg-red-400/20 text-red-300 shadow-lg transition hover:border-red-400/50 hover:bg-red-400/30 active:scale-95"
+              className={cn(
+                "absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center border border-red-400/30 bg-red-400/20 text-red-300",
+                radius.full,
+                shadows.lg,
+                interactive.transition.default,
+                "hover:border-red-400/50 hover:bg-red-400/30 active:scale-95"
+              )}
             >
               <X size={14} />
             </motion.button>
           )}
         </div>
         
-        <p className="text-center text-[11px] font-medium text-white/40">
+        <p className={cn(
+          "text-center",
+          typography.caption.size,
+          typography.caption.weight,
+          "text-white/40"
+        )}>
           {avatarPath ? 'Tap camera to change' : 'Tap camera to add avatar'}
         </p>
       </div>
 
       {/* Name Input */}
-      <div className="space-y-2">
-        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
+      <div className={spacing.field}>
+        <label className={cn(
+          typography.label.size,
+          typography.label.weight,
+          typography.label.tracking,
+          "uppercase text-white/70"
+        )}>
           Name
         </label>
         <input
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="Enter character name..."
-          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder-white/40 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
+          className={cn(
+            "w-full border border-white/10 bg-black/20 px-4 py-3 text-white placeholder-white/40 backdrop-blur-xl",
+            radius.md,
+            interactive.transition.default,
+            "focus:border-white/30 focus:bg-black/30 focus:outline-none"
+          )}
           autoFocus
         />
-        <p className="text-xs text-white/40">
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
           This name will appear in chat conversations
         </p>
       </div>
@@ -283,11 +328,20 @@ function IdentityStep({
           disabled={!canContinue}
           onClick={onContinue}
           whileTap={{ scale: canContinue ? 0.98 : 1 }}
-          className={`w-full rounded-xl py-3.5 text-sm font-semibold transition ${
+          className={cn(
+            "w-full py-3.5",
+            radius.md,
+            typography.body.size,
+            typography.h3.weight,
+            interactive.transition.fast,
             canContinue 
-              ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-[0_8px_24px_rgba(52,211,153,0.15)] hover:border-emerald-400/60 hover:bg-emerald-400/30" 
+              ? cn(
+                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                  shadows.glow,
+                  "hover:border-emerald-400/60 hover:bg-emerald-400/30"
+                )
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
-          }`}
+          )}
         >
           Continue to Description
         </motion.button>

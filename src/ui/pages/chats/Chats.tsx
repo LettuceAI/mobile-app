@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { listCharacters } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
+import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -42,37 +43,80 @@ export function ChatPage() {
 
 function CharacterList({ characters, onSelect }: { characters: Character[]; onSelect: (character: Character) => void }) {
   return (
-    <div className="space-y-3">
+    <div className={spacing.item}>
       {characters.map((character) => {
-        const descriptionPreview = character.description?.trim() || "Tap to add a character description.";
+        const descriptionPreview = character.description?.trim() || "No description yet";
         const updatedLabel = formatUpdatedAt(character.updatedAt);
 
         return (
           <button
             key={character.id}
             onClick={() => onSelect(character)}
-            className="group relative flex h-20 w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-[#0b0c12]/90 px-4 py-3 text-left transition-all duration-200 hover:border-white/25 hover:bg-[#0c0d13]/95 active:scale-[0.995]"
+            className={cn(
+              "group relative flex h-[72px] w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
+              radius.md,
+              "border border-white/10 bg-white/5",
+              interactive.transition.default,
+              "hover:border-white/20 hover:bg-white/[0.08]",
+              interactive.active.scale
+            )}
           >
-            <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-emerald-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+            {/* Hover gradient effect */}
+            <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
-            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-white/8 text-sm font-semibold text-white">
-              {renderAvatar(character, true)}
+            {/* Avatar */}
+            <div className={cn(
+              "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden",
+              radius.md,
+              "border border-white/15 bg-white/5",
+              typography.body.size,
+              typography.body.weight,
+              "text-white"
+            )}>
+              {renderAvatar(character)}
             </div>
 
+            {/* Content */}
             <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-              <div className="flex items-center justify-between">
-                <h3 className="truncate text-sm font-semibold text-white">{character.name}</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className={cn(
+                  "truncate",
+                  typography.body.size,
+                  typography.h3.weight,
+                  "text-white"
+                )}>
+                  {character.name}
+                </h3>
                 {updatedLabel && (
-                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.15em] text-gray-500">
+                  <span className={cn(
+                    "shrink-0",
+                    typography.overline.size,
+                    typography.overline.weight,
+                    typography.overline.tracking,
+                    "uppercase text-white/30"
+                  )}>
                     {updatedLabel}
                   </span>
                 )}
               </div>
-              <p className="text-xs leading-relaxed text-gray-400 line-clamp-1">{descriptionPreview}</p>
+              <p className={cn(
+                typography.bodySmall.size,
+                "text-white/50 line-clamp-1"
+              )}>
+                {descriptionPreview}
+              </p>
             </div>
 
-            <span className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition group-hover:border-white/25 group-hover:text-white">
-              <ArrowRight size={16} />
+            {/* Arrow indicator */}
+            <span className={cn(
+              "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center",
+              radius.full,
+              "border border-white/10 bg-white/5 text-white/50",
+              "transition-all group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white/80"
+            )}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
             </span>
           </button>
         );
@@ -83,19 +127,23 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
 
 function CharacterSkeleton() {
   return (
-    <div className="space-y-3">
+    <div className={spacing.item}>
       {[0, 1, 2].map((index) => (
         <div
           key={index}
-          className="animate-pulse h-20 rounded-xl border border-white/5 bg-white/5 px-4 py-3"
+          className={cn(
+            "h-[72px] animate-pulse px-4 py-3",
+            radius.md,
+            "border border-white/5 bg-white/5"
+          )}
         >
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-lg bg-white/10" />
+            <div className={cn("h-12 w-12", radius.md, "bg-white/10")} />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-1/3 rounded-full bg-white/10" />
-              <div className="h-2.5 w-full rounded-full bg-white/5" />
+              <div className="h-3.5 w-1/3 rounded-full bg-white/10" />
+              <div className="h-3 w-full rounded-full bg-white/5" />
             </div>
-            <div className="h-8 w-8 rounded-full border border-white/10 bg-white/5" />
+            <div className={cn("h-8 w-8", radius.full, "border border-white/10 bg-white/5")} />
           </div>
         </div>
       ))}
@@ -105,11 +153,25 @@ function CharacterSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="rounded-2xl border border-dashed border-white/12 bg-[#0b0c12]/50 p-8 text-center backdrop-blur-sm">
-      <div className="space-y-3">
-        <h3 className="text-base font-semibold text-white">No characters yet</h3>
-        <p className="text-sm text-gray-400 leading-relaxed">
-          Create a new character from the tab bar below to start your first conversation.
+    <div className={cn(
+      "p-8 text-center",
+      radius.lg,
+      "border border-dashed border-white/10 bg-white/[0.02]"
+    )}>
+      <div className={spacing.field}>
+        <h3 className={cn(
+          typography.h3.size,
+          typography.h3.weight,
+          "text-white"
+        )}>
+          No characters yet
+        </h3>
+        <p className={cn(
+          typography.body.size,
+          typography.body.lineHeight,
+          "text-white/50"
+        )}>
+          Create your first character from the + button below to start chatting
         </p>
       </div>
     </div>
@@ -122,19 +184,19 @@ function isImageLike(s?: string) {
   return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
 
-function renderAvatar(c: Character, isLarge = false) {
+function renderAvatar(c: Character) {
   const v = c.avatarPath || "";
   if (isImageLike(v)) {
     return (
       <img
         src={v}
-        alt="avatar"
-        className={`object-cover ${isLarge ? "h-12 w-12" : "h-10 w-10"}`}
+        alt={`${c.name} avatar`}
+        className="h-12 w-12 object-cover"
       />
     );
   }
   const display = v || c.name.slice(0, 2).toUpperCase();
-  return <span className="text-white">{display}</span>;
+  return <span>{display}</span>;
 }
 
 

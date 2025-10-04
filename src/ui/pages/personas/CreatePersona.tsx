@@ -4,6 +4,7 @@ import { Bookmark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { savePersona } from "../../../core/storage/repo";
+import { typography, radius, spacing, interactive, shadows, cn } from "../../design-tokens";
 
 export function CreatePersonaPage() {
     const navigate = useNavigate();

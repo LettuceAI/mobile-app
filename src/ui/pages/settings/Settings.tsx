@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User } from "lucide-react";
 import { readSettings } from "../../../core/storage/repo";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
+import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 
 
 
@@ -18,38 +19,72 @@ interface RowProps {
 }
 
 function Row({ icon, title, subtitle, onClick, count, tone = 'default' }: RowProps) {
+  const toneStyles = {
+    danger: 'border-red-400/30 bg-red-400/10 group-hover:border-red-400/50',
+    guide: 'border-blue-400/30 bg-blue-400/10 group-hover:border-blue-400/50',
+    default: 'border-white/10 bg-white/10 group-hover:border-white/20'
+  };
+
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-white/20"
+      className={cn(
+        "group w-full px-4 py-3 text-left",
+        radius.md,
+        "border border-white/10 bg-white/5",
+        interactive.transition.default,
+        "hover:border-white/20 hover:bg-white/[0.08]",
+        interactive.active.scale,
+        interactive.focus.ring
+      )}
     >
       <div className="flex items-center gap-3">
-        <div
-          className={`
-            flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-white/70 transition
-            ${tone === 'danger' ? 'border-red-400/30 bg-red-500/10 group-hover:border-red-400/50' : ''}
-            ${tone === 'guide' ? 'border-indigo-400/30 bg-indigo-500/10 group-hover:border-indigo-400/50' : ''}
-            ${tone === 'default' ? 'border-white/10 bg-white/10 group-hover:border-white/20' : ''}
-          `}
-        >
+        <div className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center",
+          radius.md,
+          "border text-white/70",
+          interactive.transition.default,
+          toneStyles[tone]
+        )}>
           <span className="[&_svg]:h-4 [&_svg]:w-4">{icon}</span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-white">{title}</span>
+            <span className={cn(
+              "truncate",
+              typography.body.size,
+              typography.body.weight,
+              "text-white"
+            )}>
+              {title}
+            </span>
             {typeof count === 'number' && (
-              <span className="rounded-md border border-white/10 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white/70">
+              <span className={cn(
+                "px-1.5 py-0.5",
+                radius.sm,
+                "border border-white/10 bg-white/10",
+                typography.caption.size,
+                typography.caption.weight,
+                "leading-none text-white/70"
+              )}>
                 {count}
               </span>
             )}
           </div>
           {subtitle && (
-            <div className="mt-0.5 line-clamp-1 text-[11px] text-white/45">
+            <div className={cn(
+              "mt-0.5 line-clamp-1",
+              typography.caption.size,
+              "text-white/45"
+            )}>
               {subtitle}
             </div>
           )}
         </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition group-hover:text-white/60" />
+        <ChevronRight className={cn(
+          "h-4 w-4 shrink-0 text-white/30",
+          "transition-colors group-hover:text-white/60"
+        )} />
       </div>
     </button>
   );
@@ -131,40 +166,70 @@ export function SettingsPage() {
   return (
     <>
       <div className="flex h-full flex-col pb-16 text-gray-200">
-        <section className="flex-1 overflow-y-auto px-3 pt-3 space-y-6">
+        <section className={cn("flex-1 overflow-y-auto px-4 pt-4", spacing.section)}>
           {/* Section: Core */}
           <div>
-            <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Core</h2>
-            <div className="space-y-2">
+            <h2 className={cn(
+              "mb-2 px-1",
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/35"
+            )}>
+              Core
+            </h2>
+            <div className={spacing.field}>
               {items.filter(i => ['providers','models','personas','security'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
               ))}
             </div>
           </div>
+          
           {/* Section: Assistance */}
           <div>
-            <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Assistance</h2>
-            <div className="space-y-2">
+            <h2 className={cn(
+              "mb-2 px-1",
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/35"
+            )}>
+              Assistance
+            </h2>
+            <div className={spacing.field}>
               {items.filter(i => ['guide'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
               ))}
             </div>
           </div>
+          
           {/* Section: Danger */}
-            <div>
-              <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Danger Zone</h2>
-              <div className="space-y-2">
-                {items.filter(i => ['reset'].includes(i.key)).map(item => (
-                  <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
-                ))}
-              </div>
+          <div>
+            <h2 className={cn(
+              "mb-2 px-1",
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/35"
+            )}>
+              Danger Zone
+            </h2>
+            <div className={spacing.field}>
+              {items.filter(i => ['reset'].includes(i.key)).map(item => (
+                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
+              ))}
             </div>
-          {/* Loading overlay (minimal) */}
+          </div>
+          
+          {/* Loading overlay */}
           {isLoading && (
-            <div className="pointer-events-none absolute inset-x-0 top-0 px-3 pt-3">
-              <div className="space-y-2">
+            <div className="pointer-events-none absolute inset-x-0 top-0 px-4 pt-4">
+              <div className={spacing.field}>
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-12 w-full animate-pulse rounded-xl bg-white/5" />
+                  <div key={i} className={cn("h-[52px] w-full animate-pulse", radius.md, "bg-white/5")} />
                 ))}
               </div>
             </div>
