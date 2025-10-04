@@ -5,7 +5,7 @@ import { typography, interactive, cn } from "../../design-tokens";
 
 interface TopNavProps {
   currentPath: string;
-  onCreateClick: () => void; // (reserved for future primary action button if needed)
+  onCreateClick: () => void;
 }
 
 export function TopNav({ currentPath }: TopNavProps) {
@@ -41,42 +41,49 @@ export function TopNav({ currentPath }: TopNavProps) {
       className="sticky top-0 z-30 border-b border-white/5 bg-[#050505]/85 backdrop-blur-xl"
       style={{ paddingTop: "calc(env(safe-area-inset-top) + 8px)" }}
     >
-      <div className="relative mx-auto flex h-14 w-full items-center px-4">
-        {showBackButton ? (
-          <>
+      <div className="relative mx-auto flex h-14 w-full items-center justify-between px-4">
+        {/* Left side*/}
+        <div className="flex items-center min-w-0 flex-1">
+          {showBackButton && (
             <button
               onClick={handleBack}
               className={cn(
-                "flex items-center gap-1.5 -ml-2 px-2 py-1.5",
+                "flex items-center gap-1 -ml-2 px-2 py-2",
                 interactive.transition.fast,
                 interactive.active.scale,
-                "text-white/70 hover:text-white"
+                "text-white/60 hover:text-white"
               )}
               aria-label="Go back"
             >
-              <ChevronLeft size={20} strokeWidth={2.5} />
-              <span className={cn(typography.body.size, typography.h3.weight)}>
-                {title}
+              <ChevronLeft size={20} strokeWidth={2} />
+              <span className={cn(typography.body.size, "font-normal")}>
+                Back
               </span>
             </button>
-          </>
-        ) : (
-          <div className="flex flex-col items-center mx-auto">
-            <span className={cn(
-              typography.caption.size,
-              "uppercase tracking-[0.4em] text-white/40"
-            )}>
-              LettuceAI
-            </span>
-            <span className={cn(
-              typography.body.size,
-              typography.h3.weight,
-              "text-white"
-            )}>
-              {title}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Center - Title */}
+        <div className="flex flex-col items-center absolute left-1/2 -translate-x-1/2">
+          <span className={cn(
+            typography.caption.size,
+            "uppercase tracking-[0.4em] text-white/40"
+          )}>
+            LettuceAI
+          </span>
+          <span className={cn(
+            typography.body.size,
+            typography.h3.weight,
+            "text-white"
+          )}>
+            {title}
+          </span>
+        </div>
+
+        {/* Right side - Future action button space */}
+        <div className="flex items-center justify-end min-w-0 flex-1">
+          {/* Reserved for action buttons */}
+        </div>
       </div>
     </header>
   );
