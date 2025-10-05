@@ -57,6 +57,8 @@ export function ChatHeader({ character, sessionId }: ChatHeaderProps) {
               const settingsUrl = sessionId 
                 ? `/chat/${characterId}/settings?sessionId=${sessionId}`
                 : `/chat/${characterId}/settings`;
+              
+              console.log("Navigating to:", settingsUrl)
               navigate(settingsUrl);
             }}
             className="min-w-0 flex-1 text-left"

@@ -82,6 +82,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
       });
       setCurrentCharacter(updatedCharacter);
       setShowModelSelector(false);
+      
+      // Only redirect back to chat if we have a sessionId
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('sessionId');
+      if (sessionId) {
+        navigate(`/chat/${characterId}?sessionId=${sessionId}`, { replace: true });
+      }
+      // Otherwise stay in settings - model updated successfully
     } catch (error) {
       console.error("Failed to change character model:", error);
     }
@@ -106,6 +114,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
       console.log("Session saved successfully");
       setCurrentSession(updatedSession);
       setShowPersonaSelector(false);
+      
+      // Only redirect back to chat if we have both characterId and sessionId
+      if (characterId && currentSession.id) {
+        navigate(`/chat/${characterId}?sessionId=${currentSession.id}`, { replace: true });
+      }
     } catch (error) {
       console.error("Failed to change persona:", error);
     }
@@ -143,10 +156,13 @@ function ChatSettingsContent({ character }: { character: Character }) {
     if (characterId) {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('sessionId');
-      const backUrl = sessionId 
-        ? `/chat/${characterId}?sessionId=${sessionId}`
-        : `/chat/${characterId}`;
-      navigate(backUrl);
+      // Only navigate back to chat if we have a sessionId
+      if (sessionId) {
+        navigate(`/chat/${characterId}?sessionId=${sessionId}`);
+      } else {
+        // No session, go back to character list
+        navigate('/chat');
+      }
     } else {
       navigate(-1);
     }

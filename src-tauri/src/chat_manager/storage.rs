@@ -123,7 +123,6 @@ pub fn choose_persona<'a>(
     explicit: Option<&String>,
 ) -> Option<&'a Persona> {
     if let Some(id) = explicit {
-        // Empty string means explicitly "no persona"
         if id.is_empty() {
             return None;
         }
@@ -131,7 +130,6 @@ pub fn choose_persona<'a>(
             return Some(p);
         }
     }
-    // If no explicit persona, use default
     personas.iter().find(|p| p.is_default)
 }
 
@@ -145,8 +143,6 @@ pub fn build_system_prompt(
     let mut template = String::new();
     let mut debug_parts: Vec<Value> = Vec::new();
 
-    // Start with the base template structure
-    // Custom session prompt/rules (if provided), otherwise use default template
     if let Some(base) = &session.system_prompt {
         let trimmed = base.trim();
         if !trimmed.is_empty() {
@@ -158,7 +154,6 @@ pub fn build_system_prompt(
             }));
         }
     } else {
-        // Default immersive template - no meta instructions, just the character
         template.push_str("# Character\nYou are {{ai_name}}.\n\n{{ai_description}}");
         if persona.is_some() {
             template.push_str("\n\n# User\n{{persona_description}}");
@@ -171,36 +166,30 @@ pub fn build_system_prompt(
         }));
     }
 
-    // Replace placeholders with actual values
     let ai_name = character.name.clone();
     let ai_description = character.description.as_ref().map(|s| s.trim()).unwrap_or("");
     
-    // Get pure mode setting from app_state
     let pure_mode_enabled = settings.app_state
         .get("pureModeEnabled")
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
     
-    // Use default rules if character has no rules
     let rules_to_use = if character.rules.is_empty() {
         default_character_rules(pure_mode_enabled)
     } else {
         character.rules.clone()
     };
     let ai_rules = rules_to_use.join("\n- ");
-    let ai_rules = format!("- {}", ai_rules); // Add bullet point to first rule
+    let ai_rules = format!("- {}", ai_rules); 
     
-    // Replace all placeholders
     template = template.replace("{{ai_name}}", &ai_name);
     template = template.replace("{{ai_description}}", ai_description);
     template = template.replace("{{ai_rules}}", &ai_rules);
     
-    // Only replace persona placeholders if persona exists
     if let Some(p) = persona {
         template = template.replace("{{persona_name}}", &p.title);
         template = template.replace("{{persona_description}}", p.description.trim());
     } else {
-        // Remove persona placeholders if no persona is set
         template = template.replace("{{persona_name}}", "");
         template = template.replace("{{persona_description}}", "");
     }

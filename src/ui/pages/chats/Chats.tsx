@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { listCharacters } from "../../../core/storage/repo";
+import { listCharacters, createSession, listSessionIds, getSession } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 
@@ -22,8 +22,34 @@ export function ChatPage() {
     })();
   }, []);
 
-  const startChat = (character: Character) => {
-    navigate(`/chat/${character.id}`);
+  const startChat = async (character: Character) => {
+    try {
+      const allSessionIds = await listSessionIds();
+      
+      if (allSessionIds.length > 0) {
+        const sessions = await Promise.all(
+          allSessionIds.map((id) => getSession(id).catch(() => null))
+        );
+        
+        const characterSessions = sessions
+          .filter((session): session is NonNullable<typeof session> => 
+            session !== null && session.characterId === character.id
+          )
+          .sort((a, b) => b.updatedAt - a.updatedAt);
+        
+        if (characterSessions.length > 0) {
+          const latestSession = characterSessions[0];
+          navigate(`/chat/${character.id}?sessionId=${latestSession.id}`);
+          return;
+        }
+      }
+      
+      const session = await createSession(character.id, "New Chat");
+      navigate(`/chat/${character.id}?sessionId=${session.id}`);
+    } catch (error) {
+      console.error("Failed to load or create session:", error);
+      navigate(`/chat/${character.id}`);
+    }
   };
 
   return (
@@ -41,7 +67,7 @@ export function ChatPage() {
   );
 }
 
-function CharacterList({ characters, onSelect }: { characters: Character[]; onSelect: (character: Character) => void }) {
+function CharacterList({ characters, onSelect }: { characters: Character[]; onSelect: (character: Character) => void | Promise<void> }) {
   return (
     <div className={spacing.item}>
       {characters.map((character) => {
@@ -51,7 +77,7 @@ function CharacterList({ characters, onSelect }: { characters: Character[]; onSe
         return (
           <button
             key={character.id}
-            onClick={() => onSelect(character)}
+            onClick={() => void onSelect(character)}
             className={cn(
               "group relative flex h-[72px] w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
               radius.md,
