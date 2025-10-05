@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User } from "lucide-react";
-import { readSettings } from "../../../core/storage/repo";
+import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User, Sparkles } from "lucide-react";
+import { readSettings, listCharacters } from "../../../core/storage/repo";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 
@@ -94,6 +94,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const [providers, setProviders] = useState<ProviderCredential[]>([]);
   const [models, setModels] = useState<Model[]>([]);
+  const [characterCount, setCharacterCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -103,8 +104,10 @@ export function SettingsPage() {
   const loadSettings = async () => {
     try {
       const settings = await readSettings();
+      const characters = await listCharacters();
       setProviders(settings.providerCredentials);
       setModels(settings.models);
+      setCharacterCount(characters.length);
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +131,14 @@ export function SettingsPage() {
       subtitle: 'Manage AI model catalog',
       count: modelCount,
       onClick: () => navigate('/settings/models')
+    },
+    {
+      key: 'characters',
+      icon: <Sparkles />,
+      title: 'Characters',
+      subtitle: 'Manage AI characters',
+      count: characterCount,
+      onClick: () => navigate('/settings/characters')
     },
     {
       key: 'personas',
@@ -159,14 +170,11 @@ export function SettingsPage() {
       tone: 'danger' as const,
       onClick: () => navigate('/settings/reset')
     }
-  ]), [providerCount, modelCount, navigate]);
-
-
+  ]), [providerCount, modelCount, characterCount, navigate]);
 
   return (
-    <>
-      <div className="flex h-full flex-col pb-16 text-gray-200">
-        <section className={cn("flex-1 overflow-y-auto px-4 pt-4", spacing.section)}>
+    <div className="flex h-full flex-col pb-16 text-gray-200">
+      <section className={cn("flex-1 overflow-y-auto px-4 pt-4", spacing.section)}>
           {/* Section: Core */}
           <div>
             <h2 className={cn(
@@ -180,7 +188,7 @@ export function SettingsPage() {
               Core
             </h2>
             <div className={spacing.field}>
-              {items.filter(i => ['providers','models','personas','security'].includes(i.key)).map(item => (
+              {items.filter(i => ['providers','models','characters','personas','security'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
               ))}
             </div>
@@ -236,6 +244,5 @@ export function SettingsPage() {
           )}
         </section>
       </div>
-    </>
   );
 }

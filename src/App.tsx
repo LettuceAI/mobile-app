@@ -8,9 +8,10 @@ import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
 import { ModelsPage } from "./ui/pages/settings/ModelsPage";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
+import { CharactersPage } from "./ui/pages/settings/CharactersPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
-import { CreateCharacterPage } from "./ui/pages/characters";
+import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
@@ -156,6 +157,7 @@ function AppContent() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/providers" element={<ProvidersPage />} />
               <Route path="/settings/models" element={<ModelsPage />} />
+              <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/security" element={<SecurityPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />
               <Route path="/chat" element={<ChatPage />} />
@@ -163,6 +165,7 @@ function AppContent() {
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />
               <Route path="/chat/:characterId/history" element={<ChatHistoryPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
+              <Route path="/characters/:characterId/edit" element={<EditCharacterPage />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
               <Route path="/personas" element={<PersonasPage />} />
               <Route path="/personas/:personaId/edit" element={<EditPersonaPage />} />
