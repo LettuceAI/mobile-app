@@ -78,6 +78,8 @@ pub struct Session {
     #[serde(default)]
     pub system_prompt: Option<String>,
     #[serde(default)]
+    pub selected_scene: Option<String>,
+    #[serde(default)]
     pub persona_id: Option<String>,
     #[serde(default)]
     pub messages: Vec<StoredMessage>,
@@ -98,6 +100,8 @@ pub struct Character {
     pub description: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
+    #[serde(default)]
+    pub scenes: Vec<String>,
     #[serde(default)]
     pub default_model_id: Option<String>,
     pub created_at: u64,

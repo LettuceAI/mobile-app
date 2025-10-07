@@ -61,10 +61,15 @@ function ChatSettingsContent({ character }: { character: Character }) {
   };
 
   const handleNewChat = async () => {
-    if (!characterId) return;
+    if (!characterId || !currentCharacter) return;
     
     try {
-      const session = await createSession(characterId, "New Chat");
+      const session = await createSession(
+        characterId, 
+        "New Chat", 
+        undefined, 
+        currentCharacter.scenes && currentCharacter.scenes.length > 0 ? currentCharacter.scenes[0] : undefined
+      );
       navigate(`/chat/${characterId}?sessionId=${session.id}`, { replace: true });
     } catch (error) {
       console.error("Failed to create new chat:", error);

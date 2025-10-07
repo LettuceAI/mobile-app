@@ -5,6 +5,7 @@ import { useCharacterForm, Step } from "./hooks/useCharacterForm";
 import { CreateCharacterHeader } from "./components/CreateCharacterHeader";
 import { ProgressIndicator } from "./components/ProgressIndicator";
 import { IdentityStep } from "./components/IdentityStep";
+import { StartingSceneStep } from "./components/StartingSceneStep";
 import { DescriptionStep } from "./components/DescriptionStep";
 import { AvatarPreview } from "./components/AvatarPreview";
 
@@ -14,6 +15,8 @@ export function CreateCharacterPage() {
 
   const handleBack = () => {
     if (state.step === Step.Description) {
+      actions.setStep(Step.StartingScene);
+    } else if (state.step === Step.StartingScene) {
       actions.setStep(Step.Identity);
     } else {
       navigate(-1);
@@ -27,7 +30,10 @@ export function CreateCharacterPage() {
     }
   };
 
-  const stepLabel = state.step === Step.Identity ? "Identity" : "Description";
+  const stepLabel = 
+    state.step === Step.Identity ? "Identity" : 
+    state.step === Step.StartingScene ? "Starting Scene" : 
+    "Description";
 
   return (
     <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
@@ -49,11 +55,19 @@ export function CreateCharacterPage() {
               avatarPath={state.avatarPath}
               onAvatarChange={actions.setAvatarPath}
               onUpload={actions.handleAvatarUpload}
-              onContinue={() => actions.setStep(Step.Description)}
+              onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
               avatarPreview={
                 <AvatarPreview avatarPath={state.avatarPath} name={state.name} />
               }
+            />
+          ) : state.step === Step.StartingScene ? (
+            <StartingSceneStep
+              key="starting-scene"
+              startingScene={state.startingScene}
+              onStartingSceneChange={actions.setStartingScene}
+              onContinue={() => actions.setStep(Step.Description)}
+              canContinue={computed.canContinueStartingScene}
             />
           ) : (
             <DescriptionStep

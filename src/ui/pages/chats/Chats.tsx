@@ -57,7 +57,12 @@ export function ChatPage() {
         }
       }
       
-      const session = await createSession(character.id, "New Chat");
+      const session = await createSession(
+        character.id, 
+        "New Chat", 
+        undefined, 
+        character.scenes && character.scenes.length > 0 ? character.scenes[0] : undefined
+      );
       navigate(`/chat/${character.id}?sessionId=${session.id}`);
     } catch (error) {
       console.error("Failed to load or create session:", error);

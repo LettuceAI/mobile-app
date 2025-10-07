@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Plus, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
 import type { Model } from "../../../core/storage/schemas";
@@ -16,6 +16,8 @@ export function EditCharacterPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarPath, setAvatarPath] = useState("");
+  const [scenes, setScenes] = useState<string[]>([]);
+  const [newScene, setNewScene] = useState("");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -44,6 +46,7 @@ export function EditCharacterPage() {
       setName(character.name);
       setDescription(character.description || "");
       setAvatarPath(character.avatarPath || "");
+      setScenes(character.scenes || []);
       setSelectedModelId(character.defaultModelId || null);
     } catch (err) {
       console.error("Failed to load character:", err);
@@ -77,6 +80,7 @@ export function EditCharacterPage() {
         name: name.trim(),
         description: description.trim(),
         avatarPath: avatarPath || undefined,
+        scenes: scenes,
         defaultModelId: selectedModelId,
       });
 
@@ -151,6 +155,72 @@ export function EditCharacterPage() {
             />
             <p className="text-xs text-white/50">
               Be detailed to create a unique personality
+            </p>
+          </div>
+
+          {/* Starting Scenes */}
+          <div className="space-y-3">
+            <label className="text-[11px] font-medium text-white/70">
+              STARTING SCENES
+            </label>
+            
+            {/* Existing Scenes */}
+            {scenes.length > 0 && (
+              <div className="space-y-2">
+                {scenes.map((scene, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm text-white/90">{scene}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setScenes(scenes.filter((_, i) => i !== index));
+                      }}
+                      className="rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 transition hover:border-red-500/50 hover:bg-red-500/20"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {/* Add New Scene */}
+            <div className="space-y-2">
+              <textarea
+                value={newScene}
+                onChange={(e) => setNewScene(e.target.value)}
+                rows={4}
+                placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+              />
+              <button
+                onClick={() => {
+                  if (newScene.trim()) {
+                    setScenes([...scenes, newScene.trim()]);
+                    setNewScene("");
+                  }
+                }}
+                disabled={!newScene.trim()}
+                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition active:scale-[0.99] ${
+                  newScene.trim()
+                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
+                    : "border border-white/10 bg-white/5 text-white/30"
+                }`}
+              >
+                <Plus className="h-4 w-4" />
+                Add Scene
+              </button>
+            </div>
+            
+            <p className="text-xs text-white/50">
+              Create roleplay scenarios. Each scene sets the stage for different story beginnings.
             </p>
           </div>
 

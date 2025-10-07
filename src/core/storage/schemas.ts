@@ -116,6 +116,7 @@ export const CharacterSchema = z.object({
   avatarPath: z.string().optional(),
   description: z.string().optional(),
   rules: z.array(z.string()).default([]),
+  scenes: z.array(z.string()).default([]),
   defaultModelId: z.string().uuid().nullable().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
@@ -127,6 +128,7 @@ export const SessionSchema = z.object({
   characterId: z.string().uuid(),
   title: z.string(),
   systemPrompt: z.string().nullish(),
+  selectedScene: z.string().optional(), // Index of the scene from character.scenes array
   personaId: z.union([
     z.string().uuid(),
     z.literal(""),

@@ -124,7 +124,12 @@ export function useChatController(
         }
 
         if (!targetSession) {
-          targetSession = await createSession(match.id, match.name ?? "New chat");
+          targetSession = await createSession(
+            match.id, 
+            match.name ?? "New chat", 
+            undefined, 
+            match.scenes && match.scenes.length > 0 ? match.scenes[0] : undefined
+          );
         }
 
         const orderedMessages = [...(targetSession.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);

@@ -10,6 +10,7 @@ import {
   type Session,
   type Settings,
   type Persona,
+  type StoredMessage,
   type ProviderCredential,
   type Model,
   createDefaultSettings,
@@ -162,6 +163,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
       name: c.name,
       avatarPath: c.avatarPath,
       description: c.description,
+      scenes: c.scenes ?? [],
       rules: defaultRules,
       defaultModelId: c.defaultModelId ?? null,
       createdAt: timestamp,
@@ -225,17 +227,31 @@ export async function deleteSession(id: string): Promise<void> {
   }
 }
 
-export async function createSession(characterId: string, title: string, systemPrompt?: string): Promise<Session> {
+export async function createSession(characterId: string, title: string, systemPrompt?: string, selectedScene?: string): Promise<Session> {
   const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
+  const timestamp = now();
+  
+  const messages: StoredMessage[] = [];
+  
+  if (selectedScene && selectedScene.trim()) {
+    messages.push({
+      id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+      role: "assistant",
+      content: selectedScene.trim(),
+      createdAt: timestamp,
+    });
+  }
+  
   const s: Session = {
     id,
     characterId,
     title,
     systemPrompt,
-    messages: [],
+    selectedScene,
+    messages,
     archived: false,
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
   };
   await saveSession(s);
   return s;

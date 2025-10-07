@@ -143,6 +143,19 @@ pub fn build_system_prompt(
     let mut template = String::new();
     let mut debug_parts: Vec<Value> = Vec::new();
 
+    // Add starting scene if one is selected
+    if let Some(selected_scene) = &session.selected_scene {
+        if !selected_scene.trim().is_empty() {
+            template.push_str("# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n");
+            template.push_str(selected_scene.trim());
+            template.push_str("\n\n");
+            debug_parts.push(json!({
+                "source": "starting_scene",
+                "content": selected_scene,
+            }));
+        }
+    }
+
     if let Some(base) = &session.system_prompt {
         let trimmed = base.trim();
         if !trimmed.is_empty() {

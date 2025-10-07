@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User, Sparkles } from "lucide-react";
+import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User, Sparkles, Github } from "lucide-react";
 import { readSettings, listCharacters } from "../../../core/storage/repo";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
@@ -163,6 +163,23 @@ export function SettingsPage() {
       onClick: () => navigate('/welcome')
     },
     {
+      key: 'github',
+      icon: <Github />,
+      title: 'Report Issues',
+      subtitle: 'GitHub repository & feedback • v0.1.0 beta',
+      onClick: async () => {
+        try {
+          // Use Tauri's opener plugin for opening URLs in external browser
+          const { openUrl } = await import('@tauri-apps/plugin-opener');
+          await openUrl('https://github.com/LettuceAI/mobile-app');
+        } catch (error) {
+          console.error('Failed to open URL:', error);
+          // Fallback to window.open for web/development
+          window.open('https://github.com/LettuceAI/mobile-app', '_blank');
+        }
+      }
+    },
+    {
       key: 'reset',
       icon: <RotateCcw />,
       title: 'Reset',
@@ -209,6 +226,25 @@ export function SettingsPage() {
             <div className={spacing.field}>
               {items.filter(i => ['guide'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
+              ))}
+            </div>
+          </div>
+          
+          {/* Section: Info */}
+          <div>
+            <h2 className={cn(
+              "mb-2 px-1",
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/35"
+            )}>
+              Info
+            </h2>
+            <div className={spacing.field}>
+              {items.filter(i => ['github'].includes(i.key)).map(item => (
+                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} />
               ))}
             </div>
           </div>

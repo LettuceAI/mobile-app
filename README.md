@@ -125,10 +125,10 @@ npm run build       # Production build
 
 ## Roadmap
 
-* [ ] Enhanced chat controls
-* [ ] Character and persona library
+* [x] Enhanced chat controls
+* [x] Character and persona library
 * [ ] Built-in guides for character creation
-* [ ] Fully customizable defaults
+* [x] Fully customizable defaults
 * [ ] Multi-character conversations
 * [ ] Import chats and characters from SillyTavern and similar platforms
 * [ ] Export/Import data

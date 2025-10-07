@@ -70,7 +70,7 @@ export function WelcomePage() {
 
         {/* Feature Pills */}
         <motion.div 
-          className={cn("mb-10 flex items-center justify-center", spacing.inlineSmall)}
+          className={cn("mb-8 flex items-center justify-center", spacing.inlineSmall)}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
@@ -89,6 +89,28 @@ export function WelcomePage() {
               </span>
             </div>
           ))}
+        </motion.div>
+
+        {/* Beta Warning */}
+        <motion.div
+          className={cn(
+            "mb-8 w-full max-w-sm rounded-xl border border-amber-400/30 bg-amber-400/10 p-4"
+          )}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+            <div>
+              <h3 className={cn(typography.bodySmall.size, typography.body.weight, "text-amber-200")}>
+                Beta Build
+              </h3>
+              <p className={cn(typography.caption.size, "mt-1 text-amber-200/70")}>
+                This is a beta version. Please report any issues or feedback on our GitHub repository.
+              </p>
+            </div>
+          </div>
         </motion.div>
 
         {/* CTA Buttons */}
