@@ -31,6 +31,8 @@ pub struct Model {
     pub provider_label: String,
     pub display_name: String,
     pub created_at: u64,
+    #[serde(default)]
+    pub advanced_model_settings: Option<AdvancedModelSettings>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

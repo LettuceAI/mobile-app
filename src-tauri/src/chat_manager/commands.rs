@@ -17,7 +17,7 @@ use super::storage::{
 };
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
-    RegenerateResult, Session, Settings, StoredMessage,
+    Model, RegenerateResult, Session, Settings, StoredMessage,
 };
 use crate::utils::{emit_debug, log_backend};
 
@@ -25,32 +25,51 @@ const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
 const FALLBACK_MAX_OUTPUT_TOKENS: u32 = 1024;
 
-fn resolve_temperature(session: &Session, settings: &Settings) -> f64 {
+fn resolve_temperature(session: &Session, model: &Model, settings: &Settings) -> f64 {
     session
         .advanced_model_settings
         .as_ref()
         .and_then(|cfg| cfg.temperature)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.temperature)
+        })
         .or(settings.advanced_model_settings.temperature)
         .unwrap_or(FALLBACK_TEMPERATURE)
 }
 
-fn resolve_top_p(session: &Session, settings: &Settings) -> f64 {
+fn resolve_top_p(session: &Session, model: &Model, settings: &Settings) -> f64 {
     session
         .advanced_model_settings
         .as_ref()
         .and_then(|cfg| cfg.top_p)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.top_p)
+        })
         .or(settings.advanced_model_settings.top_p)
         .unwrap_or(FALLBACK_TOP_P)
 }
 
-fn resolve_max_tokens(session: &Session, settings: &Settings) -> u32 {
+fn resolve_max_tokens(session: &Session, model: &Model, settings: &Settings) -> u32 {
     session
         .advanced_model_settings
         .as_ref()
         .and_then(|cfg| cfg.max_output_tokens)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.max_output_tokens)
+        })
         .or(settings.advanced_model_settings.max_output_tokens)
         .unwrap_or(FALLBACK_MAX_OUTPUT_TOKENS)
 }
+
 
 #[tauri::command]
 pub async fn chat_completion(
@@ -247,9 +266,9 @@ pub async fn chat_completion(
     let endpoint = chat_completions_endpoint(&base_url);
     let headers = normalize_headers(provider_cred, &api_key);
 
-    let temperature = resolve_temperature(&session, &settings);
-    let top_p = resolve_top_p(&session, &settings);
-    let max_tokens = resolve_max_tokens(&session, &settings);
+    let temperature = resolve_temperature(&session, &model, &settings);
+    let top_p = resolve_top_p(&session, &model, &settings);
+    let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
     let body = json!({
         "model": model.name,
@@ -617,9 +636,9 @@ pub async fn chat_regenerate(
     let endpoint = chat_completions_endpoint(&base_url);
     let headers = normalize_headers(provider_cred, &api_key);
 
-    let temperature = resolve_temperature(&session, &settings);
-    let top_p = resolve_top_p(&session, &settings);
-    let max_tokens = resolve_max_tokens(&session, &settings);
+    let temperature = resolve_temperature(&session, &model, &settings);
+    let top_p = resolve_top_p(&session, &model, &settings);
+    let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
     let body = json!({
         "model": model.name,
@@ -926,9 +945,9 @@ pub async fn chat_continue(
     let endpoint = chat_completions_endpoint(&base_url);
     let headers = normalize_headers(provider_cred, &api_key);
 
-    let temperature = resolve_temperature(&session, &settings);
-    let top_p = resolve_top_p(&session, &settings);
-    let max_tokens = resolve_max_tokens(&session, &settings);
+    let temperature = resolve_temperature(&session, &model, &settings);
+    let top_p = resolve_top_p(&session, &model, &settings);
+    let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
     let body = json!({
         "model": model.name,
