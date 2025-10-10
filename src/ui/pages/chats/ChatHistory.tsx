@@ -417,11 +417,10 @@ function HistoryActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold uppercase tracking-wider transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:cursor-not-allowed disabled:opacity-50 ${
-        destructive
+      className={`flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold uppercase tracking-wider transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:cursor-not-allowed disabled:opacity-50 ${destructive
           ? "border-red-500/40 bg-red-500/10 text-red-200 hover:border-red-500/60 hover:bg-red-500/15"
           : "border-white/15 bg-white/5 text-white hover:border-white/30 hover:bg-white/10"
-      }`}
+        }`}
       aria-label={label}
     >
       <Icon size={14} />

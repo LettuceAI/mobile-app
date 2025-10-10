@@ -10,9 +10,11 @@ interface TopNavProps {
 
 export function TopNav({ currentPath }: TopNavProps) {
   const navigate = useNavigate();
+  console.log("Current Path:", currentPath);
   const title = useMemo(() => {
     if (currentPath === "/settings/providers") return "Providers";
-    if (currentPath === "/settings/models") return "Models";
+    if (currentPath.includes("view=advanced")) return "Response Style";
+    if (currentPath === "/settings/models" || currentPath.startsWith("/settings/models/")) return "Models";
     if (currentPath === "/settings/security") return "Security";
     if (currentPath === "/settings/reset") return "Reset";
     if (currentPath.startsWith("/settings")) return "Settings";
@@ -29,10 +31,6 @@ export function TopNav({ currentPath }: TopNavProps) {
   }, [currentPath]);
 
   const handleBack = () => {
-    if (currentPath.startsWith("/settings/") && currentPath !== "/settings") {
-      navigate("/settings");
-      return;
-    }
     navigate(-1);
   };
 

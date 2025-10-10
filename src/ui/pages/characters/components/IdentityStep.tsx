@@ -123,7 +123,6 @@ export function IdentityStep({
             interactive.transition.default,
             "focus:border-white/30 focus:bg-black/30 focus:outline-none"
           )}
-          autoFocus
         />
         <p className={cn(typography.bodySmall.size, "text-white/40")}>
           This name will appear in chat conversations
@@ -151,7 +150,7 @@ export function IdentityStep({
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
           )}
         >
-          Continue to Description
+          Continue to Starting Scene
         </motion.button>
       </div>
     </motion.div>

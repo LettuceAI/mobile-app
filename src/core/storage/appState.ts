@@ -9,6 +9,7 @@ function cloneAppState(state?: AppState): AppState {
     onboarding: { ...source.onboarding },
     theme: source.theme,
     tooltips: { ...source.tooltips },
+    pureModeEnabled: source.pureModeEnabled,
   };
 }
 

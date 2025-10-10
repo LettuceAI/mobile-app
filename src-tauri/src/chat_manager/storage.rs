@@ -8,7 +8,8 @@ use crate::storage_manager::{
 use crate::utils::emit_debug;
 
 use super::types::{
-    Character, Model, Persona, ProviderCredential, Session, Settings, StoredMessage,
+    AdvancedModelSettings, Character, Model, Persona, ProviderCredential, Session, Settings,
+    StoredMessage,
 };
 
 pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
@@ -18,12 +19,12 @@ pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
         "Show emotions and reactions authentically through your words".to_string(),
         "Engage with the conversation organically, not like an assistant".to_string(),
     ];
-    
+
     if pure_mode_enabled {
         rules.push("Keep all interactions appropriate and respectful".to_string());
         rules.push("Avoid sexual, adult, or NSFW content".to_string());
     }
-    
+
     rules
 }
 
@@ -48,6 +49,7 @@ fn default_settings() -> Settings {
         provider_credentials: Vec::new(),
         models: Vec::new(),
         app_state: serde_json::Value::Null,
+        advanced_model_settings: AdvancedModelSettings::default(),
     }
 }
 
@@ -180,25 +182,30 @@ pub fn build_system_prompt(
     }
 
     let ai_name = character.name.clone();
-    let ai_description = character.description.as_ref().map(|s| s.trim()).unwrap_or("");
-    
-    let pure_mode_enabled = settings.app_state
+    let ai_description = character
+        .description
+        .as_ref()
+        .map(|s| s.trim())
+        .unwrap_or("");
+
+    let pure_mode_enabled = settings
+        .app_state
         .get("pureModeEnabled")
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
-    
+
     let rules_to_use = if character.rules.is_empty() {
         default_character_rules(pure_mode_enabled)
     } else {
         character.rules.clone()
     };
     let ai_rules = rules_to_use.join("\n- ");
-    let ai_rules = format!("- {}", ai_rules); 
-    
+    let ai_rules = format!("- {}", ai_rules);
+
     template = template.replace("{{ai_name}}", &ai_name);
     template = template.replace("{{ai_description}}", ai_description);
     template = template.replace("{{ai_rules}}", &ai_rules);
-    
+
     if let Some(p) = persona {
         template = template.replace("{{persona_name}}", &p.title);
         template = template.replace("{{persona_description}}", p.description.trim());

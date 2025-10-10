@@ -8,6 +8,7 @@ interface ProgressIndicatorProps {
 }
 
 export function ProgressIndicator({ progress, currentStep, stepLabel }: ProgressIndicatorProps) {
+  const totalSteps = 3;
   return (
     <div className="border-b border-white/5 bg-[#050505] px-4 pb-3 pt-4">
       <div className={cn("relative h-1 w-full overflow-hidden", radius.full, "bg-white/5")}>
@@ -27,7 +28,7 @@ export function ProgressIndicator({ progress, currentStep, stepLabel }: Progress
             "uppercase text-white/40"
           )}
         >
-          Step {currentStep} of 2
+          Step {currentStep} of {totalSteps}
         </span>
         <span className={cn(typography.caption.size, typography.caption.weight, "text-white/50")}>
           {stepLabel}

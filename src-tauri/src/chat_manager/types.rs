@@ -42,6 +42,26 @@ pub struct Settings {
     pub models: Vec<Model>,
     #[serde(default)]
     pub app_state: Value,
+    #[serde(default)]
+    pub advanced_model_settings: AdvancedModelSettings,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedModelSettings {
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub max_output_tokens: Option<u32>,
+}
+
+impl Default for AdvancedModelSettings {
+    fn default() -> Self {
+        Self {
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            max_output_tokens: Some(1024),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -81,6 +101,8 @@ pub struct Session {
     pub selected_scene: Option<String>,
     #[serde(default)]
     pub persona_id: Option<String>,
+    #[serde(default)]
+    pub advanced_model_settings: Option<AdvancedModelSettings>,
     #[serde(default)]
     pub messages: Vec<StoredMessage>,
     #[serde(default)]

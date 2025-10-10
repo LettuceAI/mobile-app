@@ -6,6 +6,7 @@ import { WelcomePage, ProviderSetupPage, ModelSetupPage } from "./ui/pages/onboa
 import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
 import { ModelsPage } from "./ui/pages/settings/ModelsPage";
+import { EditModelPage } from "./ui/pages/settings/EditModelPage";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
 import { CharactersPage } from "./ui/pages/settings/CharactersPage";
@@ -126,7 +127,7 @@ function AppContent() {
       >
         {showGlobalChrome && (
           <TopNav
-            currentPath={location.pathname}
+            currentPath={location.pathname + location.search}
             onCreateClick={() => setShowCreateMenu(true)}
           />
         )}
@@ -157,6 +158,8 @@ function AppContent() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/providers" element={<ProvidersPage />} />
               <Route path="/settings/models" element={<ModelsPage />} />
+              <Route path="/settings/models/new" element={<EditModelPage />} />
+              <Route path="/settings/models/:modelId" element={<EditModelPage />} />
               <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/security" element={<SecurityPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />

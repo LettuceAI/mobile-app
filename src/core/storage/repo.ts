@@ -13,7 +13,9 @@ import {
   type StoredMessage,
   type ProviderCredential,
   type Model,
+  type AdvancedModelSettings,
   createDefaultSettings,
+  createDefaultAdvancedModelSettings,
 } from "./schemas";
 
 export const SETTINGS_UPDATED_EVENT = "lettuceai:settings-updated";
@@ -63,6 +65,10 @@ export async function readSettings(): Promise<Settings> {
           needsUpdate = true;
         }
       }
+    }
+    if (!settings.advancedModelSettings) {
+      settings.advancedModelSettings = createDefaultAdvancedModelSettings();
+      needsUpdate = true;
     }
     if (needsUpdate) {
       await writeSettings(settings);
@@ -185,6 +191,12 @@ export async function deleteCharacter(id: string): Promise<void> {
 export async function listSessionIds(): Promise<string[]> {
   const fallback: string[] = [];
   return storageBridge.readSessionsIndex<string[]>(fallback);
+}
+
+export async function saveAdvancedModelSettings(settings: AdvancedModelSettings): Promise<void> {
+  const current = await readSettings();
+  current.advancedModelSettings = settings;
+  await writeSettings(current);
 }
 
 export async function writeSessionIndex(ids: string[]): Promise<void> {

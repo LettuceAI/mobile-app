@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
 
@@ -20,6 +20,7 @@ export function ChatConversationPage() {
   const sessionId = searchParams.get("sessionId") || undefined;
 
   const chatController = useChatController(characterId, { sessionId });
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
   
   const {
     character,
@@ -102,15 +103,26 @@ export function ChatConversationPage() {
     setError(null);
     
     if (draft.trim()) {
-      // Regular send with user message
       const content = draft.trim();
       setDraft("");
       await handleSend(content);
     } else {
-      // Continue conversation without user input
       await handleContinue();
     }
   }, [sending, setError, draft, setDraft, handleSend, handleContinue]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -124,7 +136,7 @@ export function ChatConversationPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-[#050505]">
       <ChatHeader character={character} sessionId={sessionId} />
 
-      <main className="relative flex-1 overflow-y-auto">
+      <main ref={scrollContainerRef} className="relative flex-1 overflow-y-auto">
         <div 
           className="space-y-6 px-3 pb-24 pt-4"
           style={{ 

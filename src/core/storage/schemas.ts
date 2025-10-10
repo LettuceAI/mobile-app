@@ -9,6 +9,13 @@ export const UsageSummarySchema = z.object({
 });
 export type UsageSummary = z.infer<typeof UsageSummarySchema>;
 
+export const AdvancedModelSettingsSchema = z.object({
+  temperature: z.number().min(0).max(2).nullable().optional(),
+  topP: z.number().min(0).max(1).nullable().optional(),
+  maxOutputTokens: z.number().int().min(1).nullable().optional(),
+});
+export type AdvancedModelSettings = z.infer<typeof AdvancedModelSettingsSchema>;
+
 export const MessageVariantSchema = z.object({
   id: z.string().uuid(),
   content: z.string(),
@@ -49,6 +56,7 @@ export const ModelSchema = z.object({
   providerLabel: z.string().min(1),
   displayName: z.string().min(1),
   createdAt: z.number().int(),
+  advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
 });
 export type Model = z.infer<typeof ModelSchema>;
 
@@ -96,6 +104,7 @@ export const SettingsSchema = z.object({
   providerCredentials: z.array(ProviderCredentialSchema),
   models: z.array(ModelSchema),
   appState: AppStateSchema,
+  advancedModelSettings: AdvancedModelSettingsSchema.optional(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -107,6 +116,7 @@ export function createDefaultSettings(): Settings {
     providerCredentials: [],
     models: [],
     appState: createDefaultAppState(),
+    advancedModelSettings: createDefaultAdvancedModelSettings(),
   };
 }
 
@@ -135,6 +145,7 @@ export const SessionSchema = z.object({
     z.null(),
     z.undefined()
   ]).optional(),
+  advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   messages: z.array(MessageSchema),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),
@@ -151,3 +162,11 @@ export const PersonaSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type Persona = z.infer<typeof PersonaSchema>;
+
+export function createDefaultAdvancedModelSettings(): AdvancedModelSettings {
+  return {
+    temperature: 0.7,
+    topP: 1,
+    maxOutputTokens: 1024,
+  };
+}

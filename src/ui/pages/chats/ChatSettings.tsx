@@ -1,11 +1,17 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import type { Character, Model, Persona, Session } from "../../../core/storage/schemas";
+import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
+import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
 import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
+import {
+  AdvancedModelSettingsForm,
+  formatAdvancedModelSettingsSummary,
+  sanitizeAdvancedModelSettings,
+} from "../../components/AdvancedModelSettingsForm";
 
 function isImageLike(value?: string) {
   if (!value) return false;
@@ -23,11 +29,24 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [showPersonaSelector, setShowPersonaSelector] = useState(false);
+  const [globalAdvancedSettings, setGlobalAdvancedSettings] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
+  const [sessionAdvancedSettings, setSessionAdvancedSettings] = useState<AdvancedModelSettings | null>(null);
+  const [showSessionAdvancedMenu, setShowSessionAdvancedMenu] = useState(false);
+  const [sessionAdvancedDraft, setSessionAdvancedDraft] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
+  const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
 
   const loadModels = useCallback(async () => {
-    const settings = await readSettings();
-    setModels(settings.models);
-    setGlobalDefaultModelId(settings.defaultModelId);
+    try {
+      const settings = await readSettings();
+      setModels(settings.models);
+      setGlobalDefaultModelId(settings.defaultModelId);
+      const advanced = settings.advancedModelSettings ?? createDefaultAdvancedModelSettings();
+      setGlobalAdvancedSettings(advanced);
+    } catch (error) {
+      console.error("Failed to load models/settings:", error);
+      const fallback = createDefaultAdvancedModelSettings();
+      setGlobalAdvancedSettings(fallback);
+    }
   }, []);
 
   const loadPersonas = useCallback(async () => {
@@ -40,8 +59,19 @@ function ChatSettingsContent({ character }: { character: Character }) {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('sessionId');
     if (sessionId) {
-      const session = await getSession(sessionId);
-      setCurrentSession(session);
+      try {
+        const session = await getSession(sessionId);
+        setCurrentSession(session);
+        const sessionAdvanced = session?.advancedModelSettings ?? null;
+        setSessionAdvancedSettings(sessionAdvanced);
+      } catch (error) {
+        console.error("Failed to load session:", error);
+        setCurrentSession(null);
+        setSessionAdvancedSettings(null);
+      }
+    } else {
+      setCurrentSession(null);
+      setSessionAdvancedSettings(null);
     }
   }, [characterId]);
 
@@ -54,6 +84,20 @@ function ChatSettingsContent({ character }: { character: Character }) {
   useEffect(() => {
     setCurrentCharacter(character);
   }, [character]);
+
+  useEffect(() => {
+    setSessionAdvancedSettings(currentSession?.advancedModelSettings ?? null);
+  }, [currentSession]);
+
+  useEffect(() => {
+    if (sessionAdvancedSettings) {
+      setSessionAdvancedDraft(sessionAdvancedSettings);
+      setSessionOverrideEnabled(true);
+    } else {
+      setSessionAdvancedDraft(globalAdvancedSettings);
+      setSessionOverrideEnabled(false);
+    }
+  }, [sessionAdvancedSettings, globalAdvancedSettings]);
 
   const getEffectiveModelId = () => {
     // Mirror the backend select_model logic: character.default_model_id || settings.default_model_id
@@ -119,6 +163,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       console.log("Session saved successfully");
       setCurrentSession(updatedSession);
       setShowPersonaSelector(false);
+      setSessionAdvancedSettings(updatedSession.advancedModelSettings ?? null);
       
       // Only redirect back to chat if we have both characterId and sessionId
       if (characterId && currentSession.id) {
@@ -128,6 +173,29 @@ function ChatSettingsContent({ character }: { character: Character }) {
       console.error("Failed to change persona:", error);
     }
   };
+
+  const handleSaveSessionAdvancedSettings = useCallback(async (next: AdvancedModelSettings | null) => {
+    if (!currentSession) {
+      console.warn("Attempted to save session advanced settings without session");
+      return;
+    }
+
+    try {
+      const sanitized = next ? sanitizeAdvancedModelSettings(next) : null;
+      const updatedSession: Session = {
+        ...currentSession,
+        advancedModelSettings: sanitized ?? undefined,
+        updatedAt: Date.now(),
+      };
+      await saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+      setSessionAdvancedSettings(sanitized);
+      setShowSessionAdvancedMenu(false);
+
+    } catch (error) {
+      console.error("Failed to save session advanced settings:", error);
+    }
+  }, [currentSession]);
 
   const handleViewHistory = useCallback(() => {
     if (!characterId) return;
@@ -156,6 +224,28 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const characterName = useMemo(() => currentCharacter?.name ?? "Unknown Character", [currentCharacter?.name]);
   const effectiveModelId = getEffectiveModelId();
   const currentModel = models.find(m => m.id === effectiveModelId);
+  const defaultAdvancedSummary = useMemo(() => {
+    const defaults = createDefaultAdvancedModelSettings();
+    return formatAdvancedModelSettingsSummary(defaults, "Temp 0.7 • Top P 1 • Max 1024");
+  }, []);
+  
+  const globalAdvancedSummary = useMemo(() => {
+    return formatAdvancedModelSettingsSummary(
+      globalAdvancedSettings ?? createDefaultAdvancedModelSettings(), 
+      defaultAdvancedSummary
+    );
+  }, [globalAdvancedSettings, defaultAdvancedSummary]);
+  
+  const sessionAdvancedSummary = useMemo(() => {
+    if (!currentSession) {
+      return "Open a chat session first";
+    }
+    const inheritedLabel = `Inherits ${globalAdvancedSummary}`;
+    return formatAdvancedModelSettingsSummary(
+      sessionAdvancedSettings ?? null, 
+      inheritedLabel
+    );
+  }, [currentSession, sessionAdvancedSettings, globalAdvancedSummary]);
 
   const handleBack = () => {
     if (characterId) {
@@ -319,6 +409,36 @@ function ChatSettingsContent({ character }: { character: Character }) {
               </div>
               <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
             </button>
+
+            {/* Session Advanced Settings */}
+            <button
+              onClick={() => {
+                if (!currentSession) return;
+                const draft = sessionAdvancedSettings ?? globalAdvancedSettings ?? createDefaultAdvancedModelSettings();
+                setSessionAdvancedDraft(draft);
+                setSessionOverrideEnabled(Boolean(sessionAdvancedSettings));
+                setShowSessionAdvancedMenu(true);
+              }}
+              disabled={!currentSession}
+              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${
+                !currentSession
+                  ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+                  : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-white">Session Advanced Settings</div>
+                  <div className="text-xs text-gray-400 mt-0.5 truncate">
+                    {sessionAdvancedSummary}
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+            </button>
           </section>
         </motion.div>
       </main>
@@ -436,6 +556,77 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   )}
                 </button>
               ))}
+            </div>
+          )}
+        </MenuSection>
+      </BottomMenu>
+
+      {/* Session Advanced Settings Bottom Menu */}
+      <BottomMenu
+        isOpen={showSessionAdvancedMenu}
+        onClose={() => setShowSessionAdvancedMenu(false)}
+        title="Session Advanced Settings"
+        includeExitIcon={true}
+        location="bottom"
+      >
+        <MenuSection>
+          {currentSession ? (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0c0d13]/85 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Session override</p>
+                  <p className="mt-1 text-xs text-gray-400 leading-relaxed">
+                    Enable to customize temperature, top P, and token limits just for this conversation.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSessionOverrideEnabled((value) => !value)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                    sessionOverrideEnabled ? "bg-emerald-400/70" : "bg-white/15"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+                      sessionOverrideEnabled ? "translate-x-5" : "translate-x-1"
+                    }`}
+                  />
+                  <span className="sr-only">Toggle session override</span>
+                </button>
+              </div>
+
+              <AdvancedModelSettingsForm
+                settings={sessionAdvancedDraft}
+                onChange={setSessionAdvancedDraft}
+                disabled={!sessionOverrideEnabled}
+              />
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionOverrideEnabled(false);
+                    setSessionAdvancedDraft(globalAdvancedSettings ?? createDefaultAdvancedModelSettings());
+                    handleSaveSessionAdvancedSettings(null);
+                  }}
+                  className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
+                >
+                  Use app defaults
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSaveSessionAdvancedSettings(sessionOverrideEnabled ? sessionAdvancedDraft : null)
+                  }
+                  className="flex-1 rounded-xl border border-emerald-400/40 bg-emerald-400/20 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-400/30"
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-6 py-4 text-sm text-amber-200">
+              Open a chat session to configure per-session settings.
             </div>
           )}
         </MenuSection>
