@@ -110,6 +110,7 @@ export function ChatPage() {
       <BottomMenu
         isOpen={Boolean(selectedCharacter)}
         onClose={() => setSelectedCharacter(null)}
+        includeExitIcon={false}
         title={selectedCharacter?.name || ""}
       >
         {selectedCharacter && (
@@ -235,17 +236,6 @@ function CharacterList({
                   )}>
                     {character.name}
                   </h3>
-                  {updatedLabel && (
-                    <span className={cn(
-                      "shrink-0",
-                      typography.overline.size,
-                      typography.overline.weight,
-                      typography.overline.tracking,
-                      "uppercase text-white/30"
-                    )}>
-                      {updatedLabel}
-                    </span>
-                  )}
                 </div>
                 <p className={cn(
                   typography.bodySmall.size,
@@ -266,28 +256,6 @@ function CharacterList({
                   <path d="m9 18 6-6-6-6" />
                 </svg>
               </span>
-            </button>
-
-            {/* Options button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onLongPress(character);
-              }}
-              className={cn(
-                "absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center",
-                radius.full,
-                "border border-white/15 bg-[#050505]/90 backdrop-blur-sm text-white/70",
-                interactive.transition.default,
-                "hover:border-white/30 hover:bg-white/10 hover:text-white",
-                interactive.active.scale
-              )}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="1" />
-                <circle cx="12" cy="5" r="1" />
-                <circle cx="12" cy="19" r="1" />
-              </svg>
             </button>
           </div>
         );
