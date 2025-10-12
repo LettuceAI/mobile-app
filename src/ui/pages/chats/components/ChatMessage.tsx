@@ -1,4 +1,5 @@
 import { motion, type PanInfo } from "framer-motion";
+import React, { useMemo } from "react";
 import { RefreshCw } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage } from "../../../../core/storage/schemas";
@@ -24,7 +25,55 @@ interface ChatMessageProps {
   isStartingSceneMessage: boolean;
 }
 
-export function ChatMessage({
+// Memoized action buttons component
+const MessageActions = React.memo(function MessageActions({
+  disabled,
+  isRegenerating,
+  onRegenerate,
+}: {
+  disabled: boolean;
+  isRegenerating: boolean;
+  onRegenerate: () => void;
+}) {
+  return (
+    <motion.div 
+      className="absolute -bottom-4 right-0 flex items-center gap-2"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ 
+        type: "tween", 
+        duration: 0.15, 
+        ease: [0.25, 0.46, 0.45, 0.94],
+        delay: 0.1
+      }}
+    >
+      <button
+        type="button"
+        onClick={onRegenerate}
+        disabled={disabled}
+        className={cn(
+          "flex h-10 w-10 items-center justify-center",
+          radius.full,
+          "border border-white/15 bg-white/10 text-white",
+          interactive.transition.fast,
+          "hover:border-white/30 hover:bg-white/20 hover:scale-105",
+          interactive.active.scale,
+          "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+        )}
+        aria-label="Regenerate response"
+        style={{ willChange: 'transform' }}
+      >
+        {isRegenerating ? (
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        ) : (
+          <RefreshCw className="h-4 w-4" />
+        )}
+      </button>
+    </motion.div>
+  );
+});
+
+function ChatMessageInner({
   message,
   index,
   messagesLength,
@@ -37,42 +86,68 @@ export function ChatMessage({
   handleRegenerate,
   isStartingSceneMessage,
 }: ChatMessageProps) {
-  const isAssistant = message.role === "assistant";
-  const isScene = message.role === "scene";
-  const isUser = message.role === "user";
-  const actionable = (isAssistant || isUser || isScene) && !message.id.startsWith("placeholder");
-  const isLatestAssistant = isAssistant && actionable && index === messagesLength - 1;
-  const variantState = getVariantState(message);
-  const totalVariants = variantState.total || ((isAssistant || isScene) ? 1 : 0);
-  const selectedVariantIndex =
-    variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
-  
-  // For starting scene messages, enable swipe if multiple scenes exist AND it's the first message
-  // For regular messages, enable swipe only for latest assistant message with variants
-  const enableSwipe = isStartingSceneMessage 
-    ? (index === 0 && variantState.total > 1)
-    : isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
-  
-  const isPlaceholder = message.id.startsWith("placeholder");
-  const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
-  
-  // Show regenerate button only for latest assistant message that is NOT a starting scene
-  const showRegenerateButton = isLatestAssistant && !isStartingSceneMessage;
-  
-  const dragProps = enableSwipe
-    ? {
-        drag: "x" as const,
-        dragConstraints: { left: -140, right: 140 },
-        dragElastic: 0.08,
-        dragMomentum: false,
-        dragSnapToOrigin: true,
-        dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
-        onDragEnd: (_: unknown, info: PanInfo) =>
-          void handleVariantDrag(message.id, info.offset.x),
-      }
-    : {};
+  // Memoize all computed values
+  const computed = useMemo(() => {
+    const isAssistant = message.role === "assistant";
+    const isScene = message.role === "scene";
+    const isUser = message.role === "user";
+    const isPlaceholder = message.id.startsWith("placeholder");
+    const actionable = (isAssistant || isUser || isScene) && !isPlaceholder;
+    const isLatestAssistant = isAssistant && actionable && index === messagesLength - 1;
+    const variantState = getVariantState(message);
+    const totalVariants = variantState.total || ((isAssistant || isScene) ? 1 : 0);
+    const selectedVariantIndex =
+      variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
+    
+    const enableSwipe = isStartingSceneMessage 
+      ? (index === 0 && variantState.total > 1)
+      : isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
+    
+    const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
+    const showRegenerateButton = isLatestAssistant && !isStartingSceneMessage;
+    const shouldAnimate = !isPlaceholder;
 
-  const shouldAnimate = !isPlaceholder;
+    return {
+      isAssistant,
+      isScene,
+      isUser,
+      isPlaceholder,
+      isLatestAssistant,
+      totalVariants,
+      selectedVariantIndex,
+      enableSwipe,
+      showTypingIndicator,
+      showRegenerateButton,
+      shouldAnimate,
+    };
+  }, [message.role, message.id, message.content, index, messagesLength, getVariantState, isStartingSceneMessage]);
+
+  const dragProps = useMemo(
+    () =>
+      computed.enableSwipe
+        ? {
+            drag: "x" as const,
+            dragConstraints: { left: -140, right: 140 },
+            dragElastic: 0.08,
+            dragMomentum: false,
+            dragSnapToOrigin: true,
+            dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
+            onDragEnd: (_: unknown, info: PanInfo) =>
+              void handleVariantDrag(message.id, info.offset.x),
+            whileDrag: { scale: 0.98 },
+            style: { willChange: "transform", transform: "translate3d(0,0,0)" },
+          }
+        : {},
+    [computed.enableSwipe, handleVariantDrag, message.id]
+  );
+
+  const animTransition = useMemo(
+    () =>
+      computed.shouldAnimate
+        ? { type: "tween" as const, duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] as const }
+        : { duration: 0 },
+    [computed.shouldAnimate]
+  );
 
   return (
     <div
@@ -82,13 +157,9 @@ export function ChatMessage({
       )}
     >
       <motion.div
-        initial={shouldAnimate ? { opacity: 0, y: 4 } : false}
-        animate={shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
-        transition={shouldAnimate ? { 
-          type: "tween", 
-          duration: 0.2, 
-          ease: [0.25, 0.46, 0.45, 0.94] 
-        } : { duration: 0 }}
+        initial={computed.shouldAnimate ? { opacity: 0, y: 4 } : false}
+        animate={computed.shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
+        transition={animTransition}
         className={cn(
           "max-w-[82%] px-4 py-2.5 leading-relaxed",
           radius.lg,
@@ -105,19 +176,18 @@ export function ChatMessage({
         )}
         {...eventHandlers}
         {...dragProps}
-        whileDrag={enableSwipe ? { scale: 0.98 } : undefined}
-        style={{ 
-          willChange: enableSwipe ? 'transform' : 'auto',
-          transform: 'translate3d(0,0,0)', 
-        }}
       >
-        {showTypingIndicator ? (
+        {computed.showTypingIndicator ? (
           <TypingIndicator />
         ) : (
-          <MarkdownRenderer content={message.content} className="text-inherit" />
+          <MarkdownRenderer 
+            key={message.id + ":" + computed.selectedVariantIndex}
+            content={message.content} 
+            className="text-inherit" 
+          />
         )}
 
-        {(isAssistant || isScene) && totalVariants > 1 && (
+        {(computed.isAssistant || computed.isScene) && computed.totalVariants > 1 && (
           <motion.div 
             className={cn(
               "mt-2.5 flex items-center justify-between pr-2",
@@ -130,8 +200,8 @@ export function ChatMessage({
             transition={{ duration: 0.2, delay: 0.15 }}
           >
             <span>
-              {isStartingSceneMessage ? "Scene" : "Variant"} {selectedVariantIndex >= 0 ? selectedVariantIndex + 1 : 1}
-              {totalVariants > 0 ? ` / ${totalVariants}` : ""}
+              {isStartingSceneMessage ? "Scene" : "Variant"} {computed.selectedVariantIndex >= 0 ? computed.selectedVariantIndex + 1 : 1}
+              {computed.totalVariants > 0 ? ` / ${computed.totalVariants}` : ""}
             </span>
             {regeneratingMessageId === message.id && (
               <motion.span 
@@ -148,63 +218,41 @@ export function ChatMessage({
         )}
       </motion.div>
 
-      {showRegenerateButton && (
-        <motion.div 
-          className="absolute -bottom-4 right-0 flex items-center gap-2"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ 
-            type: "tween", 
-            duration: 0.15, 
-            ease: [0.25, 0.46, 0.45, 0.94],
-            delay: 0.1
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => void handleRegenerate(message)}
-            disabled={regeneratingMessageId === message.id || sending}
-            className={cn(
-              "flex h-10 w-10 items-center justify-center",
-              radius.full,
-              "border border-white/15 bg-white/10 text-white",
-              interactive.transition.fast,
-              "hover:border-white/30 hover:bg-white/20 hover:scale-105",
-              interactive.active.scale,
-              "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
-            )}
-            aria-label="Regenerate response"
-            style={{ willChange: 'transform' }}
-          >
-            {regeneratingMessageId === message.id ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </button>
-        </motion.div>
+      {computed.showRegenerateButton && (
+        <MessageActions
+          disabled={regeneratingMessageId === message.id || sending}
+          isRegenerating={regeneratingMessageId === message.id}
+          onRegenerate={() => void handleRegenerate(message)}
+        />
       )}
     </div>
   );
 }
 
+export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
+  const a = prev.message;
+  const b = next.message;
+  return (
+    a.id === b.id &&
+    a.role === b.role &&
+    a.content === b.content &&
+    a.selectedVariantId === b.selectedVariantId &&
+    (a.variants?.length ?? 0) === (b.variants?.length ?? 0) &&
+    prev.index === next.index &&
+    prev.messagesLength === next.messagesLength &&
+    prev.heldMessageId === next.heldMessageId &&
+    prev.regeneratingMessageId === next.regeneratingMessageId &&
+    prev.sending === next.sending &&
+    prev.isStartingSceneMessage === next.isStartingSceneMessage
+  );
+});
+
 function TypingIndicator() {
   return (
     <div className="flex items-center gap-1" aria-label="Assistant is typing" aria-live="polite">
-      {[0, 1, 2].map((index) => (
-        <motion.span
-          key={index}
-          className="h-2 w-2 rounded-full bg-gray-300"
-          animate={{ opacity: [0.2, 1, 0.2], scale: [0.9, 1.1, 0.9] }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            ease: "easeInOut",
-            repeatType: "loop",
-            delay: index * 0.2,
-          }}
-        />
-      ))}
+      <span className="typing-dot" />
+      <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
+      <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
     </div>
   );
 }

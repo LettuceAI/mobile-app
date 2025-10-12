@@ -28,10 +28,10 @@ export interface ChatState {
   // Interaction state
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
-  longPressTimer: number | null;
 }
 
 export type ChatAction =
+  | { type: "BATCH"; actions: ChatAction[] }
   | { type: "SET_CHARACTER"; payload: Character | null }
   | { type: "SET_PERSONA"; payload: Persona | null }
   | { type: "SET_SESSION"; payload: Session | null }
@@ -47,7 +47,6 @@ export type ChatAction =
   | { type: "SET_EDIT_DRAFT"; payload: string }
   | { type: "SET_HELD_MESSAGE_ID"; payload: string | null }
   | { type: "SET_REGENERATING_MESSAGE_ID"; payload: string | null }
-  | { type: "SET_LONG_PRESS_TIMER"; payload: number | null }
   | { type: "RESET_MESSAGE_ACTIONS" }
   | { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } }
   | { type: "REPLACE_PLACEHOLDER_MESSAGES"; payload: { userPlaceholder: StoredMessage; assistantPlaceholder: StoredMessage; userMessage: StoredMessage; assistantMessage: StoredMessage } }
@@ -69,10 +68,13 @@ export const initialChatState: ChatState = {
   editDraft: "",
   heldMessageId: null,
   regeneratingMessageId: null,
-  longPressTimer: null,
 };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
+  if (action.type === "BATCH") {
+    return action.actions.reduce(chatReducer, state);
+  }
+
   switch (action.type) {
     case "SET_CHARACTER":
       return { ...state, character: action.payload };
@@ -118,9 +120,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     
     case "SET_REGENERATING_MESSAGE_ID":
       return { ...state, regeneratingMessageId: action.payload };
-    
-    case "SET_LONG_PRESS_TIMER":
-      return { ...state, longPressTimer: action.payload };
     
     case "RESET_MESSAGE_ACTIONS":
       return {

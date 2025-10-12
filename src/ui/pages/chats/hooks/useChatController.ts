@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
@@ -65,6 +65,42 @@ function isStartingSceneMessage(message: StoredMessage): boolean {
   return message.role === "scene";
 }
 
+/**
+ * Creates a batched streaming updater that coalesces rapid stream events
+ * into a single render per animation frame for better performance.
+ */
+function createStreamBatcher(dispatch: React.Dispatch<any>) {
+  let pendingUpdate: { messageId: string; content: string } | null = null;
+  let rafId: number | null = null;
+
+  const flush = () => {
+    if (pendingUpdate) {
+      dispatch({
+        type: "UPDATE_MESSAGE_CONTENT",
+        payload: pendingUpdate,
+      });
+      pendingUpdate = null;
+    }
+    rafId = null;
+  };
+
+  return {
+    update: (messageId: string, content: string) => {
+      pendingUpdate = { messageId, content };
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flush);
+      }
+    },
+    cancel: () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      pendingUpdate = null;
+    },
+  };
+}
+
 export function useChatController(
   characterId?: string,
   options: { sessionId?: string } = {}
@@ -72,6 +108,9 @@ export function useChatController(
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
   const [settingsVersion, setSettingsVersion] = useState(0);
   const { sessionId } = options;
+  
+  // Move longPressTimer to useRef to avoid re-renders
+  const longPressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -91,8 +130,13 @@ export function useChatController(
 
     (async () => {
       try {
-        dispatch({ type: "SET_LOADING", payload: true });
-        dispatch({ type: "SET_ERROR", payload: null });
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_LOADING", payload: true },
+            { type: "SET_ERROR", payload: null }
+          ]
+        });
 
         const list = await listCharacters();
         const match = list.find((c) => c.id === characterId) ?? null;
@@ -158,10 +202,15 @@ export function useChatController(
         }
 
         if (!cancelled) {
-          dispatch({ type: "SET_CHARACTER", payload: match });
-          dispatch({ type: "SET_PERSONA", payload: selectedPersona });
-          dispatch({ type: "SET_SESSION", payload: normalizedSession });
-          dispatch({ type: "SET_MESSAGES", payload: orderedMessages });
+          dispatch({ 
+            type: "BATCH", 
+            actions: [
+              { type: "SET_CHARACTER", payload: match },
+              { type: "SET_PERSONA", payload: selectedPersona },
+              { type: "SET_SESSION", payload: normalizedSession },
+              { type: "SET_MESSAGES", payload: orderedMessages }
+            ]
+          });
         }
       } catch (err) {
         console.error("ChatController: failed to load chat", err);
@@ -181,11 +230,11 @@ export function useChatController(
   }, [characterId, sessionId, settingsVersion]);
 
   const clearLongPress = useCallback(() => {
-    if (state.longPressTimer !== null) {
-      window.clearTimeout(state.longPressTimer);
-      dispatch({ type: "SET_LONG_PRESS_TIMER", payload: null });
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
     }
-  }, [state.longPressTimer]);
+  }, []);
 
   const resetMessageActions = useCallback(() => {
     dispatch({ type: "RESET_MESSAGE_ACTIONS" });
@@ -356,19 +405,22 @@ export function useChatController(
       const userPlaceholder = createPlaceholderMessage("user", message);
       const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
-      dispatch({ type: "SET_SENDING", payload: true });
-      dispatch({ type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] });
+      dispatch({ 
+        type: "BATCH", 
+        actions: [
+          { type: "SET_SENDING", payload: true },
+          { type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] }
+        ]
+      });
 
       let unlisten: UnlistenFn | null = null;
+      const streamBatcher = createStreamBatcher(dispatch);
 
       try {
         unlisten = await listen<string>(`api://${requestId}`, (event) => {
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
-          dispatch({ 
-            type: "UPDATE_MESSAGE_CONTENT", 
-            payload: { messageId: assistantPlaceholder.id, content: delta } 
-          });
+          streamBatcher.update(assistantPlaceholder.id, delta);
         });
 
         const result = await sendChatTurn({
@@ -386,11 +438,16 @@ export function useChatController(
           updatedAt: result.assistantMessage.createdAt,
         } as Session;
 
-        dispatch({ type: "SET_SESSION", payload: updatedSession });
-        dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages ?? [] });
         dispatch({ 
-          type: "REPLACE_PLACEHOLDER_MESSAGES", 
-          payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage } 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SESSION", payload: updatedSession },
+            { type: "SET_MESSAGES", payload: updatedSession.messages ?? [] },
+            { 
+              type: "REPLACE_PLACEHOLDER_MESSAGES", 
+              payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage } 
+            }
+          ]
         });
       } catch (err) {
         console.error("ChatController: send failed", err);
@@ -398,8 +455,13 @@ export function useChatController(
         const latest = await getSession(state.session.id).catch(() => null);
         if (latest) {
           const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          dispatch({ type: "SET_SESSION", payload: { ...latest, messages: ordered } });
-          dispatch({ type: "SET_MESSAGES", payload: ordered });
+          dispatch({ 
+            type: "BATCH", 
+            actions: [
+              { type: "SET_SESSION", payload: { ...latest, messages: ordered } },
+              { type: "SET_MESSAGES", payload: ordered }
+            ]
+          });
         } else {
           dispatch({ 
             type: "SET_MESSAGES", 
@@ -407,6 +469,7 @@ export function useChatController(
           });
         }
       } finally {
+        streamBatcher.cancel();
         if (unlisten) {
           unlisten();
         }
@@ -423,19 +486,22 @@ export function useChatController(
 
       const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
-      dispatch({ type: "SET_SENDING", payload: true });
-      dispatch({ type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] });
+      dispatch({ 
+        type: "BATCH", 
+        actions: [
+          { type: "SET_SENDING", payload: true },
+          { type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] }
+        ]
+      });
 
       let unlisten: UnlistenFn | null = null;
+      const streamBatcher = createStreamBatcher(dispatch);
 
       try {
         unlisten = await listen<string>(`api://${requestId}`, (event) => {
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
-          dispatch({ 
-            type: "UPDATE_MESSAGE_CONTENT", 
-            payload: { messageId: assistantPlaceholder.id, content: delta } 
-          });
+          streamBatcher.update(assistantPlaceholder.id, delta);
         });
 
         const result = await continueConversation({
@@ -453,8 +519,13 @@ export function useChatController(
           updatedAt: result.assistantMessage.createdAt,
         } as Session;
 
-        dispatch({ type: "SET_SESSION", payload: updatedSession });
-        dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages ?? [] });
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SESSION", payload: updatedSession },
+            { type: "SET_MESSAGES", payload: updatedSession.messages ?? [] }
+          ]
+        });
       } catch (err) {
         console.error("ChatController: continue failed", err);
         dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
@@ -477,6 +548,7 @@ export function useChatController(
           }
         }
       } finally {
+        streamBatcher.cancel();
         if (unlisten) {
           unlisten();
         }
@@ -501,23 +573,26 @@ export function useChatController(
       const requestId = crypto.randomUUID();
       let unlisten: UnlistenFn | null = null;
 
-      dispatch({ type: "SET_REGENERATING_MESSAGE_ID", payload: message.id });
-      dispatch({ type: "SET_ERROR", payload: null });
-      dispatch({ type: "SET_HELD_MESSAGE_ID", payload: null });
-
       dispatch({ 
-        type: "SET_MESSAGES", 
-        payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg)) 
+        type: "BATCH", 
+        actions: [
+          { type: "SET_REGENERATING_MESSAGE_ID", payload: message.id },
+          { type: "SET_ERROR", payload: null },
+          { type: "SET_HELD_MESSAGE_ID", payload: null },
+          { 
+            type: "SET_MESSAGES", 
+            payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg)) 
+          }
+        ]
       });
+
+      const streamBatcher = createStreamBatcher(dispatch);
 
       try {
         unlisten = await listen<string>(`api://${requestId}`, (event) => {
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
-          dispatch({ 
-            type: "UPDATE_MESSAGE_CONTENT", 
-            payload: { messageId: message.id, content: delta } 
-          });
+          streamBatcher.update(message.id, delta);
         });
 
         const result = await regenerateAssistantMessage({
@@ -536,10 +611,15 @@ export function useChatController(
           updatedAt: Date.now(),
         } as Session;
 
-        dispatch({ type: "SET_SESSION", payload: updatedSession });
         dispatch({ 
-          type: "SET_MESSAGES", 
-          payload: state.messages.map((msg) => (msg.id === message.id ? result.assistantMessage : msg)) 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SESSION", payload: updatedSession },
+            { 
+              type: "SET_MESSAGES", 
+              payload: state.messages.map((msg) => (msg.id === message.id ? result.assistantMessage : msg)) 
+            }
+          ]
         });
         
         if (state.messageAction?.message.id === message.id) {
@@ -554,10 +634,16 @@ export function useChatController(
         const latest = await getSession(state.session.id).catch(() => null);
         if (latest) {
           const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          dispatch({ type: "SET_SESSION", payload: { ...latest, messages: ordered } });
-          dispatch({ type: "SET_MESSAGES", payload: ordered });
+          dispatch({ 
+            type: "BATCH", 
+            actions: [
+              { type: "SET_SESSION", payload: { ...latest, messages: ordered } },
+              { type: "SET_MESSAGES", payload: ordered }
+            ]
+          });
         }
       } finally {
+        streamBatcher.cancel();
         if (unlisten) {
           unlisten();
         }
@@ -574,9 +660,14 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_ERROR", payload: "Message cannot be empty" });
       return;
     }
-    dispatch({ type: "SET_ACTION_BUSY", payload: true });
-    dispatch({ type: "SET_ACTION_ERROR", payload: null });
-    dispatch({ type: "SET_ACTION_STATUS", payload: null });
+    dispatch({ 
+      type: "BATCH", 
+      actions: [
+        { type: "SET_ACTION_BUSY", payload: true },
+        { type: "SET_ACTION_ERROR", payload: null },
+        { type: "SET_ACTION_STATUS", payload: null }
+      ]
+    });
     try {
       const updatedMessages = (state.session.messages ?? []).map((msg) =>
         msg.id === state.messageAction!.message.id
@@ -676,11 +767,11 @@ export function useChatController(
 
   useEffect(() => {
     return () => {
-      if (state.longPressTimer !== null) {
-        window.clearTimeout(state.longPressTimer);
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
       }
     };
-  }, [state.longPressTimer]);
+  }, []);
 
   return {
     // State
@@ -726,7 +817,7 @@ export function useChatController(
       if (timer === null) {
         clearLongPress();
       } else {
-        dispatch({ type: "SET_LONG_PRESS_TIMER", payload: timer });
+        longPressTimerRef.current = timer;
       }
     },
     isStartingSceneMessage: useCallback((message: StoredMessage) => {
