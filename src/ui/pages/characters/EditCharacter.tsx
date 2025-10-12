@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X } from "lucide-react";
-import { motion } from "framer-motion";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
 import type { Model } from "../../../core/storage/schemas";
-import { AvatarPreview } from "./components/AvatarPreview";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
@@ -103,104 +102,143 @@ export function EditCharacterPage() {
     );
   }
 
+  // Get avatar preview for header
+  const getAvatarPreview = () => {
+    if (!avatarPath) {
+      const initial = name.trim().charAt(0) || "?";
+      return (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-500/20 to-blue-500/20">
+          <span className="text-lg font-bold text-white">{initial.toUpperCase()}</span>
+        </div>
+      );
+    }
+    return <img src={avatarPath} alt="Avatar" className="h-full w-full object-cover" />;
+  };
+
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
-      <main className="flex-1 overflow-y-auto px-4 pt-4">
+      <main className="flex-1 overflow-y-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="space-y-6"
+          className="space-y-5 pb-6 pt-4"
         >
 
           {/* Error Message */}
-          {error && (
-            <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3">
-              <p className="text-sm text-red-200">{error}</p>
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3"
+              >
+                <p className="text-sm text-red-200">{error}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Avatar & Name Card */}
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]">
+            <div className="flex items-center gap-4 p-4">
+              {/* Avatar */}
+              <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10">
+                {getAvatarPreview()}
+              </div>
+              
+              {/* Name Input */}
+              <div className="flex-1 space-y-1.5">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
+                  Name
+                </label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Character name..."
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-base text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                />
+              </div>
             </div>
-          )}
-
-          {/* Avatar Preview */}
-          <div className="flex justify-center">
-            <AvatarPreview avatarPath={avatarPath} name={name} />
           </div>
 
-          {/* Name Input */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-medium text-white/70">
-              CHARACTER NAME
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Luna, Professor Oak, Chef Remy..."
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-            />
-            <p className="text-xs text-white/50">
-              Give your character a memorable name
-            </p>
-          </div>
-
-          {/* Description Input */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-medium text-white/70">
-              PERSONALITY & BACKGROUND
-            </label>
+          {/* Personality Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Personality & Background</h3>
+            </div>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={8}
               placeholder="Describe who this character is, their personality, background, speaking style, and how they should interact..."
-              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
             />
             <p className="text-xs text-white/50">
               Be detailed to create a unique personality
             </p>
           </div>
 
-          {/* Starting Scenes */}
+          {/* Starting Scenes Section */}
           <div className="space-y-3">
-            <label className="text-[11px] font-medium text-white/70">
-              STARTING SCENES
-            </label>
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
+                <BookOpen className="h-4 w-4 text-blue-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Starting Scenes</h3>
+              {scenes.length > 0 && (
+                <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/70">
+                  {scenes.length}
+                </span>
+              )}
+            </div>
             
             {/* Existing Scenes */}
-            {scenes.length > 0 && (
-              <div className="space-y-2">
-                {scenes.map((scene, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm text-white/90">{scene}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setScenes(scenes.filter((_, i) => i !== index));
-                      }}
-                      className="rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 transition hover:border-red-500/50 hover:bg-red-500/20"
+            <AnimatePresence mode="popLayout">
+              {scenes.length > 0 && (
+                <motion.div layout className="space-y-2">
+                  {scenes.map((scene, index) => (
+                    <motion.div
+                      key={index}
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9, x: -20 }}
+                      transition={{ duration: 0.15 }}
+                      className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-            )}
+                      <div className="flex items-start gap-3 p-3.5 pr-12">
+                        <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                          <span className="text-xs font-medium text-white/60">{index + 1}</span>
+                        </div>
+                        <p className="flex-1 text-sm leading-relaxed text-white/90">{scene}</p>
+                      </div>
+                      <button
+                        onClick={() => setScenes(scenes.filter((_, i) => i !== index))}
+                        className="absolute right-3 top-3 rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 opacity-0 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-400 group-hover:opacity-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </motion.div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Add New Scene */}
-            <div className="space-y-2">
+            <motion.div layout className="space-y-2">
               <textarea
                 value={newScene}
                 onChange={(e) => setNewScene(e.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
-                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
               />
-              <button
+              <motion.button
                 onClick={() => {
                   if (newScene.trim()) {
                     setScenes([...scenes, newScene.trim()]);
@@ -208,29 +246,35 @@ export function EditCharacterPage() {
                   }
                 }}
                 disabled={!newScene.trim()}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition active:scale-[0.99] ${
+                whileTap={{ scale: newScene.trim() ? 0.98 : 1 }}
+                className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
                   newScene.trim()
                     ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
-                    : "border border-white/10 bg-white/5 text-white/30"
+                    : "border border-white/10 bg-white/5 text-white/40"
                 }`}
               >
                 <Plus className="h-4 w-4" />
                 Add Scene
-              </button>
-            </div>
+              </motion.button>
+            </motion.div>
             
             <p className="text-xs text-white/50">
               Create roleplay scenarios. Each scene sets the stage for different story beginnings.
             </p>
           </div>
 
-          {/* Model Selection */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-medium text-white/70">
-              DEFAULT MODEL (OPTIONAL)
-            </label>
+          {/* Model Selection Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-purple-400/30 bg-purple-400/10 p-1.5">
+                <Cpu className="h-4 w-4 text-purple-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Default Model</h3>
+              <span className="ml-auto text-xs text-white/40">(Optional)</span>
+            </div>
+            
             {loadingModels ? (
-              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
                 <Loader2 className="h-4 w-4 animate-spin text-white/50" />
                 <span className="text-sm text-white/50">Loading models...</span>
               </div>
@@ -238,7 +282,7 @@ export function EditCharacterPage() {
               <select
                 value={selectedModelId || ""}
                 onChange={(e) => setSelectedModelId(e.target.value || null)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
+                className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
               >
                 <option value="">Use global default model</option>
                 {models.map((model) => (
@@ -248,7 +292,7 @@ export function EditCharacterPage() {
                 ))}
               </select>
             ) : (
-              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+              <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
                 <p className="text-sm text-white/50">No models available</p>
               </div>
             )}
@@ -258,13 +302,14 @@ export function EditCharacterPage() {
           </div>
 
           {/* Save Button */}
-          <button
+          <motion.button
             onClick={handleSave}
             disabled={!canSave}
-            className={`w-full rounded-xl px-4 py-3 text-sm font-medium transition active:scale-[0.99] ${
+            whileTap={{ scale: canSave ? 0.98 : 1 }}
+            className={`w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition ${
               canSave
-                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
-                : "border border-white/10 bg-white/5 text-white/30"
+                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-lg shadow-emerald-400/10 hover:bg-emerald-400/30"
+                : "border border-white/10 bg-white/5 text-white/40"
             }`}
           >
             {saving ? (
@@ -278,7 +323,7 @@ export function EditCharacterPage() {
                 Save Changes
               </span>
             )}
-          </button>
+          </motion.button>
         </motion.div>
       </main>
     </div>
