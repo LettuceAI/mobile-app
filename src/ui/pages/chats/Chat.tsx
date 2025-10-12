@@ -54,6 +54,7 @@ export function ChatConversationPage() {
     handleDeleteMessage,
     resetMessageActions,
     initializeLongPressTimer,
+    isStartingSceneMessage,
   } = chatController;
 
   const openMessageActions = useCallback((message: StoredMessage) => {
@@ -173,6 +174,7 @@ export function ChatConversationPage() {
                 getVariantState={getVariantState}
                 handleVariantDrag={handleVariantDrag}
                 handleRegenerate={handleRegenerate}
+                isStartingSceneMessage={isStartingSceneMessage(message)}
               />
             );
           })}

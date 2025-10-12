@@ -146,15 +146,27 @@ pub fn build_system_prompt(
     let mut debug_parts: Vec<Value> = Vec::new();
 
     // Add starting scene if one is selected
-    if let Some(selected_scene) = &session.selected_scene {
-        if !selected_scene.trim().is_empty() {
-            template.push_str("# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n");
-            template.push_str(selected_scene.trim());
-            template.push_str("\n\n");
-            debug_parts.push(json!({
-                "source": "starting_scene",
-                "content": selected_scene,
-            }));
+    if let Some(selected_scene_id) = &session.selected_scene_id {
+        if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
+            // Get the active content (variant or original)
+            let scene_content = if let Some(variant_id) = &scene.selected_variant_id {
+                scene.variants.iter()
+                    .find(|v| &v.id == variant_id)
+                    .map(|v| v.content.as_str())
+                    .unwrap_or(&scene.content)
+            } else {
+                &scene.content
+            };
+            
+            if !scene_content.trim().is_empty() {
+                template.push_str("# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n");
+                template.push_str(scene_content.trim());
+                template.push_str("\n\n");
+                debug_parts.push(json!({
+                    "source": "starting_scene",
+                    "content": scene_content,
+                }));
+            }
         }
     }
 

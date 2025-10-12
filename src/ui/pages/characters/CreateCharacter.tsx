@@ -64,8 +64,10 @@ export function CreateCharacterPage() {
           ) : state.step === Step.StartingScene ? (
             <StartingSceneStep
               key="starting-scene"
-              startingScene={state.startingScene}
-              onStartingSceneChange={actions.setStartingScene}
+              scenes={state.scenes}
+              onScenesChange={actions.setScenes}
+              defaultSceneId={state.defaultSceneId}
+              onDefaultSceneIdChange={actions.setDefaultSceneId}
               onContinue={() => actions.setStep(Step.Description)}
               canContinue={computed.canContinueStartingScene}
             />

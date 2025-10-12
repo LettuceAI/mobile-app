@@ -26,7 +26,7 @@ export type MessageVariant = z.infer<typeof MessageVariantSchema>;
 
 export const MessageSchema = z.object({
   id: z.string().uuid(),
-  role: z.enum(["system", "user", "assistant"]),
+  role: z.enum(["system", "user", "assistant", "scene"]),
   content: z.string(),
   createdAt: z.number().int(),
   usage: UsageSummarySchema.optional().nullable(),
@@ -34,6 +34,22 @@ export const MessageSchema = z.object({
   selectedVariantId: z.string().uuid().nullish(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
+
+export const SceneVariantSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  createdAt: z.number().int(),
+});
+export type SceneVariant = z.infer<typeof SceneVariantSchema>;
+
+export const SceneSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  createdAt: z.number().int(),
+  variants: z.array(SceneVariantSchema).optional(),
+  selectedVariantId: z.string().uuid().nullish(),
+});
+export type Scene = z.infer<typeof SceneSchema>;
 
 export const SecretRefSchema = z.object({ providerId: z.string(), key: z.string(), credId: z.string().uuid().optional() });
 export type SecretRef = z.infer<typeof SecretRefSchema>;
@@ -126,7 +142,8 @@ export const CharacterSchema = z.object({
   avatarPath: z.string().optional(),
   description: z.string().optional(),
   rules: z.array(z.string()).default([]),
-  scenes: z.array(z.string()).default([]),
+  scenes: z.array(SceneSchema).default([]),
+  defaultSceneId: z.string().uuid().nullish(),
   defaultModelId: z.string().uuid().nullable().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
@@ -138,7 +155,7 @@ export const SessionSchema = z.object({
   characterId: z.string().uuid(),
   title: z.string(),
   systemPrompt: z.string().nullish(),
-  selectedScene: z.string().optional(), // Index of the scene from character.scenes array
+  selectedSceneId: z.string().uuid().nullish(), // ID of the scene from character.scenes array
   personaId: z.union([
     z.string().uuid(),
     z.literal(""),

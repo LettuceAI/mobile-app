@@ -21,6 +21,7 @@ interface ChatMessageProps {
   getVariantState: (message: StoredMessage) => VariantState;
   handleVariantDrag: (messageId: string, offsetX: number) => void;
   handleRegenerate: (message: StoredMessage) => Promise<void>;
+  isStartingSceneMessage: boolean;
 }
 
 export function ChatMessage({
@@ -34,18 +35,29 @@ export function ChatMessage({
   getVariantState,
   handleVariantDrag,
   handleRegenerate,
+  isStartingSceneMessage,
 }: ChatMessageProps) {
   const isAssistant = message.role === "assistant";
+  const isScene = message.role === "scene";
   const isUser = message.role === "user";
-  const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");
+  const actionable = (isAssistant || isUser || isScene) && !message.id.startsWith("placeholder");
   const isLatestAssistant = isAssistant && actionable && index === messagesLength - 1;
   const variantState = getVariantState(message);
-  const totalVariants = variantState.total || (isAssistant ? 1 : 0);
+  const totalVariants = variantState.total || ((isAssistant || isScene) ? 1 : 0);
   const selectedVariantIndex =
     variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
-  const enableSwipe = isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
+  
+  // For starting scene messages, enable swipe if multiple scenes exist AND it's the first message
+  // For regular messages, enable swipe only for latest assistant message with variants
+  const enableSwipe = isStartingSceneMessage 
+    ? (index === 0 && variantState.total > 1)
+    : isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
+  
   const isPlaceholder = message.id.startsWith("placeholder");
   const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
+  
+  // Show regenerate button only for latest assistant message that is NOT a starting scene
+  const showRegenerateButton = isLatestAssistant && !isStartingSceneMessage;
   
   const dragProps = enableSwipe
     ? {
@@ -78,7 +90,7 @@ export function ChatMessage({
           ease: [0.25, 0.46, 0.45, 0.94] 
         } : { duration: 0 }}
         className={cn(
-          "max-w-[82%] px-4 py-2.5 leading-relaxed transition-all duration-150",
+          "max-w-[82%] px-4 py-2.5 leading-relaxed",
           radius.lg,
           typography.body.size,
           message.role === "user"
@@ -105,7 +117,7 @@ export function ChatMessage({
           <MarkdownRenderer content={message.content} className="text-inherit" />
         )}
 
-        {isAssistant && totalVariants > 1 && (
+        {(isAssistant || isScene) && totalVariants > 1 && (
           <motion.div 
             className={cn(
               "mt-2.5 flex items-center justify-between pr-2",
@@ -118,7 +130,7 @@ export function ChatMessage({
             transition={{ duration: 0.2, delay: 0.15 }}
           >
             <span>
-              Variant {selectedVariantIndex >= 0 ? selectedVariantIndex + 1 : 1}
+              {isStartingSceneMessage ? "Scene" : "Variant"} {selectedVariantIndex >= 0 ? selectedVariantIndex + 1 : 1}
               {totalVariants > 0 ? ` / ${totalVariants}` : ""}
             </span>
             {regeneratingMessageId === message.id && (
@@ -136,7 +148,7 @@ export function ChatMessage({
         )}
       </motion.div>
 
-      {isLatestAssistant && (
+      {showRegenerateButton && (
         <motion.div 
           className="absolute -bottom-4 right-0 flex items-center gap-2"
           initial={{ opacity: 0, scale: 0.9 }}

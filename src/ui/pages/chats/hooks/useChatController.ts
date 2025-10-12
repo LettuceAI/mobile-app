@@ -54,6 +54,15 @@ export interface ChatController {
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
+  isStartingSceneMessage: (message: StoredMessage) => boolean;
+}
+
+/**
+ * Helper function to determine if a message is the starting scene message.
+ * A starting scene message has the "scene" role.
+ */
+function isStartingSceneMessage(message: StoredMessage): boolean {
+  return message.role === "scene";
 }
 
 export function useChatController(
@@ -128,7 +137,7 @@ export function useChatController(
             match.id, 
             match.name ?? "New chat", 
             undefined, 
-            match.scenes && match.scenes.length > 0 ? match.scenes[0] : undefined
+            match.scenes && match.scenes.length > 0 ? match.scenes[0].id : undefined
           );
         }
 
@@ -183,6 +192,22 @@ export function useChatController(
   }, []);
 
   const getVariantState = useCallback((message: StoredMessage): VariantState => {
+    // For starting scene messages, return scene count instead of message variants
+    if (isStartingSceneMessage(message)) {
+      if (!state.character || !state.session?.selectedSceneId) {
+        return { variants: [], selectedIndex: -1, total: 0 };
+      }
+      
+      const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
+      
+      return {
+        variants: state.character.scenes as any, // Using scenes as variants for display purposes
+        selectedIndex: currentSceneIndex,
+        total: state.character.scenes.length,
+      };
+    }
+    
+    // Regular message variant logic
     const variants = message.variants ?? [];
     if (variants.length === 0) {
       return {
@@ -200,7 +225,7 @@ export function useChatController(
       selectedIndex,
       total: variants.length,
     };
-  }, []);
+  }, [state.character, state.messages, state.session]);
 
   const applyVariantSelection = useCallback(
     async (messageId: string, variantId: string) => {
@@ -244,9 +269,61 @@ export function useChatController(
   const handleVariantSwipe = useCallback(
     async (messageId: string, direction: "prev" | "next") => {
       if (!state.session || state.regeneratingMessageId) return;
-      if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== messageId) return;
+      
       const currentMessage = state.messages.find((msg) => msg.id === messageId);
-      if (!currentMessage || currentMessage.role !== "assistant") return;
+      if (!currentMessage) return;
+
+      // Check if this is a starting scene message
+      if (isStartingSceneMessage(currentMessage)) {
+        // Handle scene switching
+        if (!state.character || !state.session?.selectedSceneId) return;
+        
+        const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
+        if (currentSceneIndex === -1) return;
+        
+        const nextSceneIndex = direction === "next" ? currentSceneIndex + 1 : currentSceneIndex - 1;
+        if (nextSceneIndex < 0 || nextSceneIndex >= state.character.scenes.length) return;
+        
+        const nextScene = state.character.scenes[nextSceneIndex];
+        
+        // Get the scene content (variant or original)
+        const sceneContent = nextScene.selectedVariantId
+          ? nextScene.variants?.find(v => v.id === nextScene.selectedVariantId)?.content ?? nextScene.content
+          : nextScene.content;
+        
+        // Update the first message with new scene content
+        const updatedMessage: StoredMessage = {
+          ...currentMessage,
+          content: sceneContent,
+        };
+        
+        const updatedMessages = state.messages.map((msg) => 
+          msg.id === messageId ? updatedMessage : msg
+        );
+        
+        // Update session with new selectedSceneId
+        const updatedSession: Session = {
+          ...state.session,
+          selectedSceneId: nextScene.id,
+          messages: updatedMessages,
+          updatedAt: Date.now(),
+        } as Session;
+        
+        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
+        
+        try {
+          await saveSession(updatedSession);
+        } catch (err) {
+          console.error("ChatController: failed to persist scene switch", err);
+        }
+        
+        return;
+      }
+      
+      // Regular message variant swipe logic (only for assistant messages)
+      if (currentMessage.role !== "assistant") return;
+      if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== messageId) return;
       const variants = currentMessage.variants ?? [];
       if (variants.length <= 1) return;
 
@@ -257,7 +334,7 @@ export function useChatController(
       const nextVariant = variants[nextIndex];
       await applyVariantSelection(messageId, nextVariant.id);
     },
-    [applyVariantSelection, getVariantState, state.messages, state.regeneratingMessageId, state.session],
+    [applyVariantSelection, getVariantState, state.character, state.messages, state.regeneratingMessageId, state.session],
   );
 
   const handleVariantDrag = useCallback(
@@ -415,6 +492,11 @@ export function useChatController(
       if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== message.id) return;
       if (message.role !== "assistant") return;
       if (state.regeneratingMessageId) return;
+
+      // Prevent regeneration of starting scene messages
+      if (isStartingSceneMessage(message)) {
+        return;
+      }
 
       const requestId = crypto.randomUUID();
       let unlisten: UnlistenFn | null = null;
@@ -647,6 +729,9 @@ export function useChatController(
         dispatch({ type: "SET_LONG_PRESS_TIMER", payload: timer });
       }
     },
+    isStartingSceneMessage: useCallback((message: StoredMessage) => {
+      return isStartingSceneMessage(message);
+    }, []),
   };
 }
 

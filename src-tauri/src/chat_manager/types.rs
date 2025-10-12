@@ -93,6 +93,26 @@ pub struct MessageVariant {
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct SceneVariant {
+    pub id: String,
+    pub content: String,
+    pub created_at: u64,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Scene {
+    pub id: String,
+    pub content: String,
+    pub created_at: u64,
+    #[serde(default)]
+    pub variants: Vec<SceneVariant>,
+    #[serde(default)]
+    pub selected_variant_id: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
     pub character_id: String,
@@ -100,7 +120,7 @@ pub struct Session {
     #[serde(default)]
     pub system_prompt: Option<String>,
     #[serde(default)]
-    pub selected_scene: Option<String>,
+    pub selected_scene_id: Option<String>,
     #[serde(default)]
     pub persona_id: Option<String>,
     #[serde(default)]
@@ -125,7 +145,7 @@ pub struct Character {
     #[serde(default)]
     pub rules: Vec<String>,
     #[serde(default)]
-    pub scenes: Vec<String>,
+    pub scenes: Vec<Scene>,
     #[serde(default)]
     pub default_model_id: Option<String>,
     pub created_at: u64,

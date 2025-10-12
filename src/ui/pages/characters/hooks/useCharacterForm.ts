@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useCallback } from "react";
 import { readSettings, saveCharacter } from "../../../../core/storage/repo";
-import type { Model } from "../../../../core/storage/schemas";
+import type { Model, Scene } from "../../../../core/storage/schemas";
 
 export enum Step {
   Identity = 1,
@@ -13,7 +13,8 @@ interface CharacterFormState {
   step: Step;
   name: string;
   avatarPath: string;
-  startingScene: string;
+  scenes: Scene[];
+  defaultSceneId: string | null;
   description: string;
   selectedModelId: string | null;
   
@@ -30,7 +31,8 @@ type CharacterFormAction =
   | { type: 'SET_STEP'; payload: Step }
   | { type: 'SET_NAME'; payload: string }
   | { type: 'SET_AVATAR_PATH'; payload: string }
-  | { type: 'SET_STARTING_SCENE'; payload: string }
+  | { type: 'SET_SCENES'; payload: Scene[] }
+  | { type: 'SET_DEFAULT_SCENE_ID'; payload: string | null }
   | { type: 'SET_DESCRIPTION'; payload: string }
   | { type: 'SET_SELECTED_MODEL_ID'; payload: string | null }
   | { type: 'SET_MODELS'; payload: Model[] }
@@ -43,7 +45,8 @@ const initialState: CharacterFormState = {
   step: Step.Identity,
   name: '',
   avatarPath: '',
-  startingScene: '',
+  scenes: [],
+  defaultSceneId: null,
   description: '',
   selectedModelId: null,
   models: [],
@@ -63,8 +66,10 @@ function characterFormReducer(
       return { ...state, name: action.payload };
     case 'SET_AVATAR_PATH':
       return { ...state, avatarPath: action.payload };
-    case 'SET_STARTING_SCENE':
-      return { ...state, startingScene: action.payload };
+    case 'SET_SCENES':
+      return { ...state, scenes: action.payload };
+    case 'SET_DEFAULT_SCENE_ID':
+      return { ...state, defaultSceneId: action.payload };
     case 'SET_DESCRIPTION':
       return { ...state, description: action.payload };
     case 'SET_SELECTED_MODEL_ID':
@@ -126,8 +131,12 @@ export function useCharacterForm() {
     dispatch({ type: 'SET_AVATAR_PATH', payload: path });
   }, []);
 
-  const setStartingScene = useCallback((startingScene: string) => {
-    dispatch({ type: 'SET_STARTING_SCENE', payload: startingScene });
+  const setScenes = useCallback((scenes: Scene[]) => {
+    dispatch({ type: 'SET_SCENES', payload: scenes });
+  }, []);
+
+  const setDefaultSceneId = useCallback((id: string | null) => {
+    dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: id });
   }, []);
 
   const setDescription = useCallback((description: string) => {
@@ -150,7 +159,7 @@ export function useCharacterForm() {
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (state.description.trim().length === 0 || state.selectedModelId === null || state.saving || state.startingScene.trim().length === 0) {
+    if (state.description.trim().length === 0 || state.selectedModelId === null || state.saving || state.scenes.length === 0) {
       return;
     }
 
@@ -162,7 +171,9 @@ export function useCharacterForm() {
         name: state.name.trim(),
         avatarPath: state.avatarPath || undefined,
         description: state.description.trim(),
-        scenes: [state.startingScene.trim()],
+        scenes: state.scenes,
+        defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
+        defaultModelId: state.selectedModelId,
       });
 
       return true; // Success
@@ -173,11 +184,11 @@ export function useCharacterForm() {
     } finally {
       dispatch({ type: 'SET_SAVING', payload: false });
     }
-  }, [state.name, state.avatarPath, state.startingScene, state.description, state.selectedModelId, state.saving]);
+  }, [state.name, state.avatarPath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.saving]);
 
   // Computed values
   const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
-  const canContinueStartingScene = state.startingScene.trim().length > 0 && !state.saving;
+  const canContinueStartingScene = state.scenes.length > 0 && !state.saving;
   const canSaveDescription = state.description.trim().length > 0 && state.selectedModelId !== null && !state.saving;
   const progress = state.step === Step.Identity ? 0.33 : state.step === Step.StartingScene ? 0.66 : 1;
 
@@ -187,7 +198,8 @@ export function useCharacterForm() {
       setStep,
       setName,
       setAvatarPath,
-      setStartingScene,
+      setScenes,
+      setDefaultSceneId,
       setDescription,
       setSelectedModelId,
       handleAvatarUpload,

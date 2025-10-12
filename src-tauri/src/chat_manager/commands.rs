@@ -249,6 +249,10 @@ pub async fn chat_completion(
         messages_for_api.push(json!({ "role": system_role, "content": system }));
     }
     for msg in &recent_msgs {
+        // Skip "scene" role messages - scene content is already in system prompt
+        if msg.role == "scene" {
+            continue;
+        }
         messages_for_api.push(json!({
             "role": msg.role,
             "content": message_text_for_api(msg)
@@ -500,14 +504,14 @@ pub async fn chat_regenerate(
     // Allow regeneration of continue messages (assistant messages that follow other assistant messages)
     // or normal assistant messages (that follow user messages)
     let preceding_message = &session.messages[preceding_index];
-    if preceding_message.role != "user" && preceding_message.role != "assistant" {
+    if preceding_message.role != "user" && preceding_message.role != "assistant" && preceding_message.role != "scene" {
         return Err(
-            "Expected preceding user or assistant message before assistant response".into(),
+            "Expected preceding user, assistant, or scene message before assistant response".into(),
         );
     }
 
-    if session.messages[target_index].role != "assistant" {
-        return Err("Selected message is not an assistant response".into());
+    if session.messages[target_index].role != "assistant" && session.messages[target_index].role != "scene" {
+        return Err("Selected message is not an assistant or scene response".into());
     }
 
     let character = match characters
@@ -607,6 +611,10 @@ pub async fn chat_regenerate(
                 break;
             }
             if idx == target_index {
+                continue;
+            }
+            // Skip "scene" role messages - scene content is already in system prompt
+            if msg.role == "scene" {
                 continue;
             }
             out.push(json!({
@@ -928,6 +936,10 @@ pub async fn chat_continue(
         messages_for_api.push(json!({ "role": system_role, "content": system }));
     }
     for msg in &recent_msgs {
+        // Skip "scene" role messages - scene content is already in system prompt
+        if msg.role == "scene" {
+            continue;
+        }
         messages_for_api.push(json!({
             "role": msg.role,
             "content": message_text_for_api(msg)

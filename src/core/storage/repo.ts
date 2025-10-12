@@ -145,7 +145,37 @@ export async function setDefaultModel(id: string): Promise<void> {
 export async function listCharacters(): Promise<Character[]> {
   const fallback: Character[] = [];
   const data = await storageBridge.readCharacters<Character[]>(fallback);
-  return z.array(CharacterSchema).parse(data);
+  
+  // Migrate old string-based scenes to new Scene structure BEFORE parsing
+  const migrated = data.map((char: any) => {
+    if (char.scenes && char.scenes.length > 0 && typeof char.scenes[0] === 'string') {
+      // Old format detected - migrate
+      const timestamp = now();
+      return {
+        ...char,
+        scenes: char.scenes.map((sceneContent: string, idx: number) => ({
+          id: globalThis.crypto?.randomUUID?.() ?? `${timestamp}-${idx}`,
+          content: sceneContent,
+          createdAt: timestamp,
+        })),
+        defaultSceneId: null, // Will use first scene as fallback
+      };
+    }
+    return char;
+  });
+  
+  // Now parse with the schema
+  const parsed = z.array(CharacterSchema).parse(migrated);
+  
+  // Save migrated data if changes were made
+  const needsMigration = data.some((char: any) => 
+    char.scenes && char.scenes.length > 0 && typeof char.scenes[0] === 'string'
+  );
+  if (needsMigration) {
+    await storageBridge.writeCharacters(parsed);
+  }
+  
+  return parsed;
 }
 
 export async function saveCharacter(c: Partial<Character>): Promise<Character> {
@@ -239,19 +269,37 @@ export async function deleteSession(id: string): Promise<void> {
   }
 }
 
-export async function createSession(characterId: string, title: string, systemPrompt?: string, selectedScene?: string): Promise<Session> {
+export async function createSession(characterId: string, title: string, systemPrompt?: string, selectedSceneId?: string): Promise<Session> {
   const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
   const timestamp = now();
   
   const messages: StoredMessage[] = [];
   
-  if (selectedScene && selectedScene.trim()) {
-    messages.push({
-      id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
-      role: "assistant",
-      content: selectedScene.trim(),
-      createdAt: timestamp,
-    });
+  // Get character to determine which scene to use
+  const characters = await listCharacters();
+  const character = characters.find(c => c.id === characterId);
+  
+  if (character) {
+    // Use provided sceneId, or fallback to character's default scene, or first scene
+    const sceneId = selectedSceneId || character.defaultSceneId || character.scenes[0]?.id;
+    
+    if (sceneId) {
+      const scene = character.scenes.find(s => s.id === sceneId);
+      if (scene) {
+        const sceneContent = scene.selectedVariantId 
+          ? scene.variants?.find(v => v.id === scene.selectedVariantId)?.content ?? scene.content
+          : scene.content;
+        
+        if (sceneContent.trim()) {
+          messages.push({
+            id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+            role: "scene", // Use "scene" role instead of "assistant"
+            content: sceneContent.trim(),
+            createdAt: timestamp,
+          });
+        }
+      }
+    }
   }
   
   const s: Session = {
@@ -259,7 +307,7 @@ export async function createSession(characterId: string, title: string, systemPr
     characterId,
     title,
     systemPrompt,
-    selectedScene,
+    selectedSceneId: selectedSceneId || character?.defaultSceneId || character?.scenes[0]?.id,
     messages,
     archived: false,
     createdAt: timestamp,

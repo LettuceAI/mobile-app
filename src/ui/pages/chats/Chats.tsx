@@ -61,7 +61,7 @@ export function ChatPage() {
         character.id, 
         "New Chat", 
         undefined, 
-        character.scenes && character.scenes.length > 0 ? character.scenes[0] : undefined
+        character.scenes && character.scenes.length > 0 ? character.scenes[0].id : undefined
       );
       navigate(`/chat/${character.id}?sessionId=${session.id}`);
     } catch (error) {
@@ -194,7 +194,6 @@ function CharacterList({
     <div className={spacing.item}>
       {characters.map((character) => {
         const descriptionPreview = character.description?.trim() || "No description yet";
-        const updatedLabel = formatUpdatedAt(character.updatedAt);
 
         return (
           <div key={character.id} className="relative">
@@ -340,30 +339,3 @@ function renderAvatar(c: Character) {
 
 
 
-function formatUpdatedAt(timestamp: number) {
-  if (!timestamp) return "";
-  const now = Date.now();
-  const diffSeconds = Math.round((now - timestamp) / 1000);
-  if (!Number.isFinite(diffSeconds) || diffSeconds < 0) return "";
-
-  if (diffSeconds < 45) return "Updated just now";
-
-  const units: Array<{ label: string; seconds: number }> = [
-    { label: "minute", seconds: 60 },
-    { label: "hour", seconds: 3600 },
-    { label: "day", seconds: 86400 },
-    { label: "week", seconds: 604800 },
-    { label: "month", seconds: 2592000 },
-    { label: "year", seconds: 31536000 },
-  ];
-
-  for (let i = units.length - 1; i >= 0; i -= 1) {
-    const unit = units[i];
-    if (diffSeconds >= unit.seconds) {
-      const value = Math.floor(diffSeconds / unit.seconds);
-      return `Updated ${value} ${unit.label}${value > 1 ? "s" : ""} ago`;
-    }
-  }
-
-  return "Updated moments ago";
-}
