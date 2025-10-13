@@ -142,7 +142,7 @@ export function ChatConversationPage() {
           className="space-y-6 px-3 pb-24 pt-4"
           style={{ 
             willChange: 'scroll-position',
-            transform: 'translateZ(0)', // Force GPU acceleration for scroll
+            transform: 'translateZ(0)',
           }}
         >
           {messages.map((message, index) => {

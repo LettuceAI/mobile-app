@@ -76,13 +76,13 @@ export function ChatFooter({
           title={hasDraft ? "Send message" : "Continue conversation"}
           aria-label={hasDraft ? "Send message" : "Continue conversation"}
         >
-          {sending ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : hasDraft ? (
-            <Send className="h-4 w-4" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
+            {sending ? (
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : hasDraft ? (
+            <Send size={16} />
+            ) : (
+            <Sparkles size={16} />
+            )}
         </button>
       </div>
     </footer>

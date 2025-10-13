@@ -1,6 +1,8 @@
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, BookOpen } from "lucide-react";
+import { Plus, X, BookOpen, Check, Sparkles } from "lucide-react";
 import type { Scene } from "../../../../core/storage/schemas";
+import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 
 interface StartingSceneStepProps {
   scenes: Scene[];
@@ -20,34 +22,36 @@ export function StartingSceneStep({
   canContinue,
 }: StartingSceneStepProps) {
   const [newSceneContent, setNewSceneContent] = React.useState("");
+  const [isAdding, setIsAdding] = React.useState(false);
 
   const addScene = () => {
     if (!newSceneContent.trim()) return;
-    
+
     const sceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const timestamp = Date.now();
-    
+
     const newScene: Scene = {
       id: sceneId,
       content: newSceneContent.trim(),
       createdAt: timestamp,
     };
-    
+
     const updatedScenes = [...scenes, newScene];
     onScenesChange(updatedScenes);
-    
+
     // Set as default if it's the first scene
     if (scenes.length === 0) {
       onDefaultSceneIdChange(sceneId);
     }
-    
+
     setNewSceneContent("");
+    setIsAdding(false);
   };
 
   const deleteScene = (sceneId: string) => {
-    const updatedScenes = scenes.filter(s => s.id !== sceneId);
+    const updatedScenes = scenes.filter((s) => s.id !== sceneId);
     onScenesChange(updatedScenes);
-    
+
     // Clear default if we're deleting the default scene
     if (defaultSceneId === sceneId) {
       onDefaultSceneIdChange(updatedScenes[0]?.id || null);
@@ -55,8 +59,12 @@ export function StartingSceneStep({
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
+    if (e.key === "Enter" && e.ctrlKey) {
       addScene();
+    }
+    if (e.key === "Escape") {
+      setIsAdding(false);
+      setNewSceneContent("");
     }
   };
 
@@ -67,135 +75,316 @@ export function StartingSceneStep({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -16 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="space-y-6"
+      className={spacing.section}
     >
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-white">Starting Scenes</h2>
-        <p className="text-sm text-gray-400">
-          Add one or more opening scenarios for conversations with this character. You can choose which scene to use when starting a chat.
+      {/* Title */}
+      <div className={spacing.tight}>
+        <h2 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
+          Starting Scenes
+        </h2>
+        <p className={cn(typography.body.size, "text-white/50")}>
+          Create opening scenarios for your conversations
         </p>
       </div>
 
-      {/* Existing Scenes */}
+      {/* Scene List */}
       <AnimatePresence mode="popLayout">
         {scenes.length > 0 && (
-          <motion.div layout className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
-                <BookOpen className="h-4 w-4 text-blue-400" />
+          <motion.div layout className={spacing.item}>
+            {/* List Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center",
+                    radius.md,
+                    "border border-blue-400/30 bg-blue-400/10"
+                  )}
+                >
+                  <BookOpen className="h-3.5 w-3.5 text-blue-300" />
+                </div>
+                <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white")}>
+                  Your Scenes
+                </h3>
               </div>
-              <h3 className="text-sm font-semibold text-white">Your Scenes</h3>
-              <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/70">
+              <span
+                className={cn(
+                  "px-2 py-0.5",
+                  radius.full,
+                  "border border-white/10 bg-white/5",
+                  typography.caption.size,
+                  typography.caption.weight,
+                  "text-white/60"
+                )}
+              >
                 {scenes.length}
               </span>
             </div>
-            
-            {scenes.map((scene, index) => (
-              <motion.div
-                key={scene.id}
-                layout
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9, x: -20 }}
-                transition={{ duration: 0.15 }}
-                className="overflow-hidden rounded-xl border border-white/10 bg-white/5"
-              >
-                {/* Scene Header */}
-                <div className="flex items-center gap-3 border-b border-white/10 bg-white/5 px-3.5 py-2.5">
-                  <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                    <span className="text-xs font-medium text-white/60">{index + 1}</span>
+
+            {/* Scenes */}
+            <div className={spacing.item}>
+              {scenes.map((scene, index) => (
+                <motion.div
+                  key={scene.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9, x: -20 }}
+                  transition={{ duration: 0.2, delay: index * 0.05 }}
+                  className={cn(
+                    "group relative overflow-hidden border border-white/10 bg-white/5",
+                    radius.md,
+                    shadows.sm
+                  )}
+                >
+                  {/* Gradient accent for default scene */}
+                  {defaultSceneId === scene.id && (
+                    <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-emerald-400 to-emerald-600" />
+                  )}
+
+                  {/* Scene Header */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 border-b border-white/10 bg-white/5 px-3.5 py-2.5",
+                      defaultSceneId === scene.id && "pl-4"
+                    )}
+                  >
+                    {/* Scene Number */}
+                    <div
+                      className={cn(
+                        "flex h-6 w-6 flex-shrink-0 items-center justify-center border",
+                        radius.md,
+                        defaultSceneId === scene.id
+                          ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-300"
+                          : "border-white/10 bg-white/5 text-white/50",
+                        typography.caption.size,
+                        typography.h3.weight
+                      )}
+                    >
+                      {index + 1}
+                    </div>
+
+                    {/* Default Scene Toggle */}
+                    <button
+                      onClick={() =>
+                        onDefaultSceneIdChange(defaultSceneId === scene.id ? null : scene.id)
+                      }
+                      className={cn(
+                        "flex items-center gap-1.5 px-2 py-1",
+                        radius.full,
+                        "border",
+                        typography.caption.size,
+                        typography.caption.weight,
+                        interactive.transition.default,
+                        defaultSceneId === scene.id
+                          ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
+                          : "border-white/10 bg-white/5 text-white/50 hover:border-white/25 hover:bg-white/10 hover:text-white/70"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "flex h-3 w-3 items-center justify-center",
+                          radius.full,
+                          "border",
+                          defaultSceneId === scene.id
+                            ? "border-emerald-400 bg-emerald-400"
+                            : "border-white/30"
+                        )}
+                      >
+                        {defaultSceneId === scene.id && (
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ duration: 0.15, ease: "easeOut" }}
+                          >
+                            <Check className="h-2 w-2 text-white" strokeWidth={3} />
+                          </motion.div>
+                        )}
+                      </div>
+                      <span>{defaultSceneId === scene.id ? "Default" : "Set Default"}</span>
+                    </button>
+
+                    {/* Delete Button */}
+                    <button
+                      onClick={() => deleteScene(scene.id)}
+                      className={cn(
+                        "ml-auto flex h-7 w-7 items-center justify-center",
+                        radius.md,
+                        "border border-white/10 bg-white/5 text-white/50",
+                        interactive.transition.default,
+                        "hover:border-red-400/40 hover:bg-red-400/15 hover:text-red-300",
+                        interactive.active.scale
+                      )}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  
-                  {/* Default Scene Radio */}
-                  <button
-                    onClick={() => onDefaultSceneIdChange(defaultSceneId === scene.id ? null : scene.id)}
-                    className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition ${
-                      defaultSceneId === scene.id
-                        ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
-                        : "border-white/10 bg-white/5 text-white/50 hover:border-white/20 hover:text-white/70"
-                    }`}
-                    title={defaultSceneId === scene.id ? "This is the default starting scene" : "Set as default starting scene"}
-                  >
-                    <div className={`h-2.5 w-2.5 rounded-full border ${
-                      defaultSceneId === scene.id
-                        ? "border-emerald-400 bg-emerald-400"
-                        : "border-white/30"
-                    }`} />
-                    <span>{defaultSceneId === scene.id ? "Default" : "Set Default"}</span>
-                  </button>
-                  
-                  <button
-                    onClick={() => deleteScene(scene.id)}
-                    className="ml-auto rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-400"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                
-                {/* Scene Content */}
-                <div className="p-3.5">
-                  <p className="text-sm leading-relaxed text-white/90">{scene.content}</p>
-                </div>
-              </motion.div>
-            ))}
+
+                  {/* Scene Content */}
+                  <div className={cn("px-4 py-3", defaultSceneId === scene.id && "pl-5")}>
+                    <p className={cn(typography.body.size, "leading-relaxed text-white/90")}>
+                      {scene.content}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Add New Scene */}
-      <div className="space-y-3">
-        <label className="text-[11px] font-medium text-white/70">
-          {scenes.length === 0 ? "ADD YOUR FIRST SCENE *" : "ADD ANOTHER SCENE (OPTIONAL)"}
-        </label>
-        <textarea
-          value={newSceneContent}
-          onChange={(e) => setNewSceneContent(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder="Describe the setting, scenario, and context for this scene. For example: 'You are both students at a magical academy...' or 'It's a quiet evening in a cozy café...'"
-          className="min-h-[120px] w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-          rows={6}
-        />
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-white/60">
-            {scenes.length === 0 ? "At least one scene is required" : "Press Ctrl+Enter to add"}
-          </p>
-          <button
-            onClick={addScene}
-            disabled={!newSceneContent.trim()}
-            className={`
-              flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-150
-              ${
-                newSceneContent.trim()
-                  ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 hover:border-blue-400/60 hover:bg-blue-400/30"
-                  : "border border-white/10 bg-white/5 text-white/40"
-              }
-            `}
+      {/* Add Scene Section */}
+      <div className={spacing.item}>
+        {!isAdding && (
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => setIsAdding(true)}
+            className={cn(
+              "group flex w-full items-center gap-3 px-4 py-3",
+              radius.md,
+              "border border-dashed",
+              scenes.length === 0
+                ? "border-emerald-400/30 bg-emerald-400/10"
+                : "border-white/20 bg-white/5",
+              interactive.transition.default,
+              scenes.length === 0
+                ? "hover:border-emerald-400/50 hover:bg-emerald-400/15"
+                : "hover:border-white/30 hover:bg-white/10",
+              interactive.active.scale
+            )}
           >
-            <Plus className="h-4 w-4" />
-            Add Scene
-          </button>
-        </div>
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center",
+                radius.md,
+                scenes.length === 0
+                  ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
+                  : "border border-white/10 bg-white/10 text-white/60 group-hover:border-white/25 group-hover:text-white/80",
+                interactive.transition.default
+              )}
+            >
+              {scenes.length === 0 ? <Sparkles className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            </div>
+            <div className="flex-1 text-left">
+              <p
+                className={cn(
+                  typography.h3.size,
+                  typography.h3.weight,
+                  scenes.length === 0 ? "text-emerald-100" : "text-white"
+                )}
+              >
+                {scenes.length === 0 ? "Add Your First Scene" : "Add Another Scene"}
+              </p>
+              <p className={cn(typography.bodySmall.size, "text-white/50")}>
+                {scenes.length === 0 ? "Required to continue" : "Optional"}
+              </p>
+            </div>
+          </motion.button>
+        )}
+
+        {isAdding && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className={spacing.field}
+          >
+            <label
+              className={cn(
+                typography.label.size,
+                typography.label.weight,
+                typography.label.tracking,
+                "uppercase text-white/70"
+              )}
+            >
+              Scene Description *
+            </label>
+            <textarea
+              value={newSceneContent}
+              onChange={(e) => setNewSceneContent(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Describe the setting, scenario, and context for this scene. For example: 'You are both students at a magical academy...' or 'It's a quiet evening in a cozy café...'"
+              className={cn(
+                "min-h-[140px] w-full resize-none border border-white/10 bg-black/20 px-4 py-3 text-base leading-relaxed text-white placeholder-white/40 backdrop-blur-xl",
+                radius.md,
+                interactive.transition.default,
+                "focus:border-white/30 focus:bg-black/30 focus:outline-none"
+              )}
+              rows={6}
+              autoFocus
+            />
+            <div className="flex items-center justify-between gap-3">
+              <p className={cn(typography.bodySmall.size, "text-white/50")}>
+                Press Ctrl+Enter to add • Esc to cancel
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setIsAdding(false);
+                    setNewSceneContent("");
+                  }}
+                  className={cn(
+                    "flex-1 px-4 py-2.5",
+                    radius.md,
+                    "border border-white/10 bg-white/5",
+                    typography.bodySmall.size,
+                    typography.h3.weight,
+                    "text-white/70",
+                    interactive.transition.default,
+                    "active:scale-[0.97] active:bg-white/10"
+                  )}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addScene}
+                  disabled={!newSceneContent.trim()}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-2 px-4 py-2.5",
+                    radius.md,
+                    typography.bodySmall.size,
+                    typography.h3.weight,
+                    interactive.transition.default,
+                    newSceneContent.trim()
+                      ? cn(
+                          "border border-blue-400/40 bg-blue-400/20 text-blue-100",
+                          "active:scale-[0.97] active:bg-blue-400/30"
+                        )
+                      : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
+                  )}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Scene
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      <div className="flex justify-end pt-4">
-        <button
-          onClick={onContinue}
+      {/* Continue Button */}
+      <div className="pt-2">
+        <motion.button
           disabled={!canContinue}
-          className={`
-            rounded-full px-6 py-2 text-sm font-medium transition-all duration-150
-            ${
-              canContinue
-                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:border-emerald-400/60 hover:bg-emerald-400/30"
-                : "border border-white/10 bg-white/5 text-white/40"
-            }
-          `}
+          onClick={onContinue}
+          whileTap={{ scale: canContinue ? 0.97 : 1 }}
+          className={cn(
+            "w-full py-4 text-base font-semibold",
+            radius.md,
+            interactive.transition.fast,
+            canContinue
+              ? cn(
+                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                  shadows.glow,
+                  "active:border-emerald-400/60 active:bg-emerald-400/30"
+                )
+              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
+          )}
         >
-          Continue
-        </button>
+          Continue to Details
+        </motion.button>
       </div>
     </motion.div>
   );
 }
-
-// Add React import for useState
-import React from "react";

@@ -64,9 +64,9 @@ const MessageActions = React.memo(function MessageActions({
         style={{ willChange: 'transform' }}
       >
         {isRegenerating ? (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          <RefreshCw className="h-8 w-8 animate-spin rounded-full" />
         ) : (
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-8 w-8" />
         )}
       </button>
     </motion.div>

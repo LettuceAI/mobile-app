@@ -150,14 +150,16 @@ pub fn build_system_prompt(
         if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
             // Get the active content (variant or original)
             let scene_content = if let Some(variant_id) = &scene.selected_variant_id {
-                scene.variants.iter()
+                scene
+                    .variants
+                    .iter()
                     .find(|v| &v.id == variant_id)
                     .map(|v| v.content.as_str())
                     .unwrap_or(&scene.content)
             } else {
                 &scene.content
             };
-            
+
             if !scene_content.trim().is_empty() {
                 template.push_str("# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n");
                 template.push_str(scene_content.trim());

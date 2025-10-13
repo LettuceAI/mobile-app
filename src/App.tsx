@@ -171,7 +171,8 @@ function AppContent() {
               <Route path="/characters/:characterId/edit" element={<EditCharacterPage />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
               <Route path="/personas" element={<PersonasPage />} />
-              <Route path="/personas/:personaId/edit" element={<EditPersonaPage />} />
+              <Route path="/settings/personas" element={<PersonasPage />} />
+              <Route path="/settings/personas/:personaId/edit" element={<EditPersonaPage />} />
             </Routes>
           </motion.div>
         </main>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Trash2, ChevronRight, Edit3 } from "lucide-react";
+import { Trash2, ChevronRight, Edit3, EthernetPort } from "lucide-react";
 import { readSettings, addOrUpdateProviderCredential, removeProviderCredential, SETTINGS_UPDATED_EVENT } from "../../../core/storage/repo";
 import { providerRegistry } from "../../../core/providers/registry";
 import { setSecret, getSecret } from "../../../core/secrets";
@@ -134,11 +134,28 @@ export function ProvidersPage() {
     }
   }, []);
 
+      const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
+        <div className="flex h-64 flex-col items-center justify-center">
+            <EthernetPort className="mb-3 h-12 w-12 text-white/20" />
+            <h3 className="mb-1 text-lg font-medium text-white">No Providers yet</h3>
+            <p className="mb-4 text-center text-sm text-white/50">
+                Add and manage API providers for AI models
+            </p>
+            <button
+                onClick={onCreate}
+                className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 active:scale-[0.99]"
+            >
+                Add Provider
+            </button>
+        </div>
+    );
+
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
         {providers.length === 0 && (
-          <div className="mt-8 text-center text-sm text-white/50">No providers yet. Add one.</div>
+          <EmptyState onCreate={() => openEditor()} />
         )}
         {providers.map(provider => {
           const registryInfo = providerRegistry.find(p => p.id === provider.providerId);

@@ -38,12 +38,11 @@ export function CreateCharacterPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
       <CreateCharacterHeader onBack={handleBack} />
-      
-      <ProgressIndicator 
-        progress={computed.progress} 
-        currentStep={state.step} 
-        stepLabel={stepLabel} 
-      />
+
+      {/*<ProgressIndicator
+        currentStep={state.step}
+        stepLabel={stepLabel}
+      />*/}
 
       <main className="flex-1 overflow-y-auto px-4 pb-20 pt-4">
         <AnimatePresence mode="wait">

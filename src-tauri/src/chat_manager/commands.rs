@@ -70,7 +70,6 @@ fn resolve_max_tokens(session: &Session, model: &Model, settings: &Settings) -> 
         .unwrap_or(FALLBACK_MAX_OUTPUT_TOKENS)
 }
 
-
 #[tauri::command]
 pub async fn chat_completion(
     app: AppHandle,
@@ -504,13 +503,18 @@ pub async fn chat_regenerate(
     // Allow regeneration of continue messages (assistant messages that follow other assistant messages)
     // or normal assistant messages (that follow user messages)
     let preceding_message = &session.messages[preceding_index];
-    if preceding_message.role != "user" && preceding_message.role != "assistant" && preceding_message.role != "scene" {
+    if preceding_message.role != "user"
+        && preceding_message.role != "assistant"
+        && preceding_message.role != "scene"
+    {
         return Err(
             "Expected preceding user, assistant, or scene message before assistant response".into(),
         );
     }
 
-    if session.messages[target_index].role != "assistant" && session.messages[target_index].role != "scene" {
+    if session.messages[target_index].role != "assistant"
+        && session.messages[target_index].role != "scene"
+    {
         return Err("Selected message is not an assistant or scene response".into());
     }
 

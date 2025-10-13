@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Cpu, Key, Shield, RotateCcw, BookOpen, User, Sparkles, Github } from "lucide-react";
-import { readSettings, listCharacters } from "../../../core/storage/repo";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github } from "lucide-react";
+import { readSettings, listCharacters, listPersonas } from "../../../core/storage/repo";
 import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 
@@ -95,19 +95,25 @@ export function SettingsPage() {
   const [providers, setProviders] = useState<ProviderCredential[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [characterCount, setCharacterCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-
+  const [isLoading, setIsLoading] = useState(false);
+  const [personaCount, setPersonaCount] = useState(0);
+  
   useEffect(() => {
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
+    setIsLoading(true);
     try {
       const settings = await readSettings();
       const characters = await listCharacters();
+      const personas = await listPersonas();
       setProviders(settings.providerCredentials);
       setModels(settings.models);
       setCharacterCount(characters.length);
+      setPersonaCount(personas.length);
+    } catch (error) {
+      console.error('Failed to load settings:', error);
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +124,7 @@ export function SettingsPage() {
   const items = useMemo(() => ([
     {
       key: 'providers',
-      icon: <Key />,
+      icon: <EthernetPort />,
       title: 'Providers',
       subtitle: 'API credentials & endpoints',
       count: providerCount,
@@ -145,7 +151,8 @@ export function SettingsPage() {
       icon: <User />,
       title: 'Personas',
       subtitle: 'Manage user personas',
-      onClick: () => navigate('/personas')
+      count: personaCount,
+      onClick: () => navigate('/settings/personas')
     },
     {
       key: 'security',
@@ -169,12 +176,10 @@ export function SettingsPage() {
       subtitle: 'GitHub repository & feedback • v0.1.0 beta',
       onClick: async () => {
         try {
-          // Use Tauri's opener plugin for opening URLs in external browser
           const { openUrl } = await import('@tauri-apps/plugin-opener');
           await openUrl('https://github.com/LettuceAI/mobile-app');
         } catch (error) {
           console.error('Failed to open URL:', error);
-          // Fallback to window.open for web/development
           window.open('https://github.com/LettuceAI/mobile-app', '_blank');
         }
       }

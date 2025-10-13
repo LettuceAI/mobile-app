@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, ChevronRight, SlidersHorizontal, Target, Scale, Sparkles, Settings2, Lightbulb } from "lucide-react";
+import { Check, ChevronRight, SlidersHorizontal, Target, Scale, Sparkles, Settings2, Lightbulb, Cpu } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -37,6 +37,22 @@ export function ModelsPage() {
         setAdvancedSettings(nextAdvanced);
         setAdvancedDraft(nextAdvanced);
     }, []);
+
+    const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
+        <div className="flex h-64 flex-col items-center justify-center">
+            <Cpu className="mb-3 h-12 w-12 text-white/20" />
+            <h3 className="mb-1 text-lg font-medium text-white">No Models yet</h3>
+            <p className="mb-4 text-center text-sm text-white/50">
+                Add and manage AI models from different providers
+            </p>
+            <button
+                onClick={onCreate}
+                className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 active:scale-[0.99]"
+            >
+                Add Model
+            </button>
+        </div>
+    );
 
     useEffect(() => {
         loadData();
@@ -110,10 +126,10 @@ export function ModelsPage() {
         const detectPreset = () => {
             // If user explicitly clicked Custom, stay in custom mode
             if (forceCustomMode) return 'custom';
-            
+
             const temp = advancedDraft.temperature ?? 0.7;
             const topP = advancedDraft.topP ?? 1;
-            
+
             if (temp === 0.3 && topP === 0.9) return 'precise';
             if (temp === 0.7 && topP === 1) return 'balanced';
             if (temp === 1.2 && topP === 1) return 'creative';
@@ -162,7 +178,7 @@ export function ModelsPage() {
                             const isSelected = currentPreset === preset.id;
                             const PresetIcon = preset.icon;
                             const isCustom = preset.id === 'custom';
-                            
+
                             return (
                                 <button
                                     key={preset.id}
@@ -175,11 +191,10 @@ export function ModelsPage() {
                                             setAdvancedDraft(preset.settings);
                                         }
                                     }}
-                                    className={`w-full rounded-2xl border p-4 text-left transition ${
-                                        isSelected
+                                    className={`w-full rounded-2xl border p-4 text-left transition ${isSelected
                                             ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-400/20 to-emerald-500/10'
                                             : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.99]'
-                                    } ${isCustom && !isSelected ? 'cursor-pointer' : ''}`}
+                                        } ${isCustom && !isSelected ? 'cursor-pointer' : ''}`}
                                 >
                                     <div className="flex items-start gap-3">
                                         <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80">
@@ -323,7 +338,7 @@ export function ModelsPage() {
                             <div className="min-w-0 flex-1">
                                 <h3 className="text-sm font-semibold text-blue-200">What are these settings?</h3>
                                 <p className="mt-1 text-xs leading-relaxed text-blue-200/70">
-                                    These parameters control how your AI generates responses. Higher temperature = more creative but less predictable. 
+                                    These parameters control how your AI generates responses. Higher temperature = more creative but less predictable.
                                     Lower values = more focused and consistent. Most users prefer "Balanced" for everyday use.
                                 </p>
                             </div>
@@ -376,12 +391,14 @@ export function ModelsPage() {
                 </button>
 
                 {models.length === 0 && (
-                    <div className="mt-8 text-center text-sm text-white/50">No models yet. Add one.</div>
+                    <EmptyState
+                        onCreate={() => navigate('/settings/models/new')}
+                    />
                 )}
                 {models.map(model => {
                     const isDefault = model.id === defaultModelId;
                     const providerInfo = providers.find(p => p.providerId === model.providerId);
-                    console.log({model, providerInfo});
+                    console.log({ model, providerInfo });
                     return (
                         <button
                             key={model.id}
