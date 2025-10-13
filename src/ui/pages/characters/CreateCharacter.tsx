@@ -3,7 +3,7 @@ import { AnimatePresence } from "framer-motion";
 
 import { useCharacterForm, Step } from "./hooks/useCharacterForm";
 import { CreateCharacterHeader } from "./components/CreateCharacterHeader";
-import { ProgressIndicator } from "./components/ProgressIndicator";
+//import { ProgressIndicator } from "./components/ProgressIndicator";
 import { IdentityStep } from "./components/IdentityStep";
 import { StartingSceneStep } from "./components/StartingSceneStep";
 import { DescriptionStep } from "./components/DescriptionStep";
@@ -30,10 +30,10 @@ export function CreateCharacterPage() {
     }
   };
 
-  const stepLabel = 
-    state.step === Step.Identity ? "Identity" : 
-    state.step === Step.StartingScene ? "Starting Scene" : 
-    "Description";
+  //const stepLabel = 
+  //  state.step === Step.Identity ? "Identity" : 
+  //  state.step === Step.StartingScene ? "Starting Scene" : 
+  //  "Description";
 
   return (
     <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
