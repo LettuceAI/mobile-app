@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import {
   AlertCircle,
   ArrowLeft,
@@ -36,10 +37,13 @@ export function ProviderSetupPage() {
     if (selectedProvider) {
       setLabel(`My ${selectedProvider.name}`);
       setShowForm(true);
+      setTestResult(null); // Clear any previous test results
+      
+      // Set default base URLs for known providers
       if (selectedProvider.id === "openrouter") {
-        setBaseUrl("https://openrouter.ai/api/v1");
+        setBaseUrl("https://openrouter.ai/api");
       } else if (selectedProvider.id === "openai") {
-        setBaseUrl("https://api.openai.com/v1");
+        setBaseUrl("https://api.openai.com");
       } else if (selectedProvider.id === "anthropic") {
         setBaseUrl("https://api.anthropic.com");
       } else {
@@ -63,13 +67,31 @@ export function ProviderSetupPage() {
     setTestResult(null);
 
     try {
-      if (apiKey.length < 10) {
+      const trimmedKey = apiKey.trim();
+
+      if (trimmedKey.length < 10) {
         throw new Error("API key seems too short");
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Use Rust backend to verify API key
+      const verification = await invoke<{ providerId: string; valid: boolean; status?: number; error?: string }>(
+        "verify_provider_api_key",
+        {
+          providerId: selectedProviderId,
+          credentialId: crypto.randomUUID(), // Temporary ID for testing
+          apiKey: trimmedKey,
+          baseUrl: baseUrl || null,
+        }
+      );
 
-      setTestResult({ success: true, message: "Connection successful!" });
+      if (!verification.valid) {
+        setTestResult({
+          success: false,
+          message: verification.error || "Invalid API key",
+        });
+      } else {
+        setTestResult({ success: true, message: "Connection successful!" });
+      }
     } catch (error: any) {
       setTestResult({
         success: false,
@@ -84,8 +106,42 @@ export function ProviderSetupPage() {
     if (!selectedProvider || !apiKey.trim() || !label.trim()) return;
 
     setIsSubmitting(true);
+    setTestResult(null);
+    
     try {
       const credentialId = crypto.randomUUID();
+      const trimmedKey = apiKey.trim();
+
+      // Verify API key for supported providers
+      const requiresVerification = ["openai", "anthropic", "openrouter"].includes(selectedProviderId);
+      
+      if (requiresVerification) {
+        try {
+          const verification = await invoke<{ providerId: string; valid: boolean; status?: number; error?: string }>(
+            "verify_provider_api_key",
+            {
+              providerId: selectedProviderId,
+              credentialId: credentialId,
+              apiKey: trimmedKey,
+              baseUrl: baseUrl || null,
+            }
+          );
+
+          if (!verification.valid) {
+            setTestResult({
+              success: false,
+              message: verification.error || "Invalid API key",
+            });
+            return;
+          }
+        } catch (error: any) {
+          setTestResult({
+            success: false,
+            message: error.message || "Verification failed",
+          });
+          return;
+        }
+      }
 
       const credential: Omit<ProviderCredential, "id"> & { id: string } = {
         id: credentialId,
@@ -108,8 +164,8 @@ export function ProviderSetupPage() {
         throw new Error("Failed to save provider credential");
       }
 
-      if (credential.apiKeyRef && apiKey) {
-        await setSecret(credential.apiKeyRef, apiKey);
+      if (credential.apiKeyRef && trimmedKey) {
+        await setSecret(credential.apiKeyRef, trimmedKey);
       }
 
       await setProviderSetupCompleted(true);
@@ -205,6 +261,11 @@ export function ProviderSetupPage() {
                   type="text"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
+                  onPaste={(e) => {
+                    e.stopPropagation();
+                    const pastedText = e.clipboardData.getData('text');
+                    setLabel(pastedText);
+                  }}
                   placeholder={`My ${selectedProvider?.name}`}
                   className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
@@ -222,7 +283,7 @@ export function ProviderSetupPage() {
                   </button>
                 </div>
                 <input
-                  type="password"
+                  type="text"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="sk-..."
@@ -237,6 +298,11 @@ export function ProviderSetupPage() {
                   type="text"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
+                  onPaste={(e) => {
+                    e.stopPropagation();
+                    const pastedText = e.clipboardData.getData('text');
+                    setBaseUrl(pastedText);
+                  }}
                   placeholder="https://api.provider.com"
                   className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
@@ -245,7 +311,7 @@ export function ProviderSetupPage() {
             </div>
 
             {testResult && (
-              <div className={`rounded-2xl border px-4 py-3 text-sm ${
+              <div className={`rounded-2xl border my-2 px-4 py-3 text-sm ${
                 testResult.success
                   ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
                   : "border-amber-400/40 bg-amber-400/10 text-amber-200"
@@ -278,7 +344,14 @@ export function ProviderSetupPage() {
                 disabled={!canSave || isSubmitting}
                 className="w-full min-h-[48px] rounded-2xl border border-emerald-400/40 bg-emerald-400/20 px-6 py-4 font-semibold text-emerald-100 transition-all duration-200 hover:border-emerald-300/80 hover:bg-emerald-400/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-emerald-400/10 disabled:bg-emerald-400/5 disabled:text-emerald-400"
               >
-                {isSubmitting ? "Saving..." : "Continue"}
+                {isSubmitting ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader size={16} className="animate-spin" />
+                    Verifying...
+                  </div>
+                ) : (
+                  "Continue"
+                )}
               </button>
             </div>
           </div>

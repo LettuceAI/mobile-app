@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, Check, Loader, Settings } from "lucide-react";
 
 import { readSettings, addOrUpdateModel } from "../../../core/storage/repo";
@@ -17,6 +18,7 @@ export function ModelSetupPage() {
   const [displayName, setDisplayName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
 
   useEffect(() => {
     loadProviders();
@@ -46,7 +48,32 @@ export function ModelSetupPage() {
     if (!selectedProvider || !modelName.trim() || !displayName.trim()) return;
 
     setIsSaving(true);
+    setVerificationError(null);
+    
     try {
+      const shouldVerify = ["openai", "anthropic"].includes(selectedProvider.providerId);
+      
+      if (shouldVerify) {
+        try {
+          const verification = await invoke<{ exists: boolean; error?: string }>(
+            "verify_model_exists",
+            {
+              providerId: selectedProvider.providerId,
+              credentialId: selectedProvider.id,
+              model: modelName.trim(),
+            }
+          );
+
+          if (!verification.exists) {
+            setVerificationError(verification.error || "Model not found on provider");
+            return;
+          }
+        } catch (error: any) {
+          setVerificationError(error.message || "Model verification failed");
+          return;
+        }
+      }
+
       const model: Omit<Model, "id"> = {
         name: modelName.trim(),
         providerId: selectedProvider.providerId,
@@ -63,6 +90,7 @@ export function ModelSetupPage() {
       navigate("/chat?firstTime=true");
     } catch (error: any) {
       console.error("Failed to save model:", error);
+      setVerificationError(error.message || "Failed to save model");
     } finally {
       setIsSaving(false);
     }
@@ -189,7 +217,10 @@ export function ModelSetupPage() {
                 <input
                   type="text"
                   value={modelName}
-                  onChange={(e) => setModelName(e.target.value)}
+                  onChange={(e) => {
+                    setModelName(e.target.value);
+                    if (verificationError) setVerificationError(null);
+                  }}
                   placeholder="gpt-4o, claude-3-sonnet"
                   className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
@@ -209,13 +240,26 @@ export function ModelSetupPage() {
               </div>
             </div>
 
+            {verificationError && (
+              <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3">
+                <p className="text-sm text-red-200">{verificationError}</p>
+              </div>
+            )}
+
             <div className="space-y-3">
               <button
                 onClick={handleSaveModel}
                 disabled={!canSave || isSaving}
                 className="w-full min-h-[48px] rounded-2xl border border-emerald-400/40 bg-emerald-400/20 px-6 py-4 font-semibold text-emerald-100 transition-all duration-200 hover:border-emerald-300/80 hover:bg-emerald-400/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-emerald-400/10 disabled:bg-emerald-400/5 disabled:text-emerald-400"
               >
-                {isSaving ? "Saving..." : "Finish Setup"}
+                {isSaving ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader size={16} className="animate-spin" />
+                    Verifying...
+                  </div>
+                ) : (
+                  "Finish Setup"
+                )}
               </button>
               
               <button
