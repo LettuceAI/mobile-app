@@ -31,6 +31,7 @@ rand = "0.8"
 blake3 = "1"
 whoami = "1"
 uuid = { version = "1", features = ["v4"] }
+tauri-plugin-app-events = "0.2.0"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 machine-uid = "0.3"

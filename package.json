@@ -18,6 +18,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2",
+    "tauri-plugin-app-events-api": "^0.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
