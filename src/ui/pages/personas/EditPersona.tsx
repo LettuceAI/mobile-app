@@ -1,72 +1,17 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Save, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { getPersona, savePersona } from "../../../core/storage/repo";
+import { usePersonaFormController } from "./hooks/usePersonaFormController";
 
 export function EditPersonaPage() {
-  const navigate = useNavigate();
   const { personaId } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [isDefault, setIsDefault] = useState(false);
-
-  useEffect(() => {
-    if (!personaId) {
-      navigate("/personas");
-      return;
-    }
-
-    loadPersona();
-  }, [personaId]);
-
-  const loadPersona = async () => {
-    if (!personaId) return;
-
-    try {
-      const persona = await getPersona(personaId);
-      if (!persona) {
-        navigate("/personas");
-        return;
-      }
-
-      setTitle(persona.title);
-      setDescription(persona.description);
-      setIsDefault(persona.isDefault || false);
-    } catch (err) {
-      console.error("Failed to load persona:", err);
-      setError("Failed to load persona");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!personaId || !title.trim() || !description.trim()) return;
-
-    try {
-      setSaving(true);
-      setError(null);
-
-      await savePersona({
-        id: personaId,
-        title: title.trim(),
-        description: description.trim(),
-        isDefault,
-      });
-
-      navigate("/personas");
-    } catch (err: any) {
-      console.error("Failed to save persona:", err);
-      setError(err?.message || "Failed to save persona");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const {
+    state: { loading, saving, error, title, description, isDefault },
+    setTitle,
+    setDescription,
+    setIsDefault,
+    handleSave,
+  } = usePersonaFormController(personaId);
 
   const canSave = title.trim().length > 0 && description.trim().length > 0 && !saving;
 

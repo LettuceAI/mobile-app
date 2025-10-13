@@ -1,213 +1,44 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 import { Save, Loader2, Trash2, Check, SlidersHorizontal } from "lucide-react";
 import { motion } from "framer-motion";
 
-import {
-  readSettings,
-  addOrUpdateModel,
-  removeModel,
-  setDefaultModel,
-} from "../../../core/storage/repo";
-import type { Model, ProviderCredential } from "../../../core/storage/schemas";
-import { providerRegistry } from "../../../core/providers/registry";
-import { invoke } from "@tauri-apps/api/core";
 import { formatAdvancedModelSettingsSummary, sanitizeAdvancedModelSettings } from "../../components/AdvancedModelSettingsForm";
-import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
   ADVANCED_MAX_TOKENS_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
+import { useModelEditorController } from "./hooks/useModelEditorController";
 
 export function EditModelPage() {
-  const navigate = useNavigate();
-  const { modelId } = useParams<{ modelId: string }>();
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [providers, setProviders] = useState<ProviderCredential[]>([]);
-  const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
-  const [editorModel, setEditorModel] = useState<Model | null>(null);
-  const [globalAdvanced, setGlobalAdvanced] = useState(createDefaultAdvancedModelSettings());
-  const [modelAdvancedDraft, setModelAdvancedDraft] = useState(createDefaultAdvancedModelSettings());
-  const [overrideEnabled, setOverrideEnabled] = useState(false);
-
-  const isNew = !modelId || modelId === "new";
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const settings = await readSettings();
-        setProviders(settings.providerCredentials);
-        setDefaultModelId(settings.defaultModelId);
-        setGlobalAdvanced(settings.advancedModelSettings ?? createDefaultAdvancedModelSettings());
-
-        if (isNew) {
-          const firstProvider = settings.providerCredentials[0];
-          const firstRegistry = providerRegistry[0];
-          const newModel: Model = {
-            id: crypto.randomUUID(),
-            name: "",
-            displayName: "",
-            providerId: firstProvider?.providerId || firstRegistry?.id || "",
-            providerLabel: firstProvider?.label || firstRegistry?.name || "",
-            createdAt: Date.now(),
-          } as Model;
-          setEditorModel(newModel);
-          setOverrideEnabled(false);
-          setModelAdvancedDraft(sanitizeAdvancedModelSettings(settings.advancedModelSettings ?? createDefaultAdvancedModelSettings()));
-        } else {
-          const existing = settings.models.find((m) => m.id === modelId);
-          if (!existing) {
-            navigate("/settings/models");
-            return;
-          }
-          setEditorModel(existing);
-          const adv = existing.advancedModelSettings ?? null;
-          if (adv) {
-            setOverrideEnabled(true);
-            setModelAdvancedDraft(sanitizeAdvancedModelSettings(adv));
-          } else {
-            setOverrideEnabled(false);
-            setModelAdvancedDraft(sanitizeAdvancedModelSettings(settings.advancedModelSettings ?? createDefaultAdvancedModelSettings()));
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load model settings", e);
-        setError("Failed to load model settings");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [modelId, isNew]);
-
-  // Ensure selected provider exists; if not, pick first available
-  useEffect(() => {
-    if (!editorModel || providers.length === 0) return;
-    const hasMatch = providers.some(
-      (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel
-    );
-    if (!hasMatch) {
-      const fallback = providers[0];
-      setEditorModel({
-        ...editorModel,
-        providerId: fallback.providerId,
-        providerLabel: fallback.label,
-      });
-    }
-  }, [providers, editorModel?.providerId, editorModel?.providerLabel]);
-
-  const providerDisplay = useMemo(() => {
-    return (prov: ProviderCredential) => {
-      const reg = providerRegistry.find((p) => p.id === prov.providerId);
-      return `${prov.label} (${reg?.name || prov.providerId})`;
-    };
-  }, []);
-
-  const canSave = useMemo(() => {
-    if (!editorModel) return false;
-    const hasProvider = providers.find(
-      (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel
-    ) || providers.find((p) => p.providerId === editorModel.providerId);
-    return !!editorModel.displayName?.trim() && !!editorModel.name?.trim() && !!hasProvider && !saving && !verifying;
-  }, [editorModel, providers, saving, verifying]);
-
-  const handleSave = async () => {
-    if (!editorModel) return;
-    setError(null);
-
-    const providerCred =
-      providers.find(
-        (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel
-      ) || providers.find((p) => p.providerId === editorModel.providerId);
-
-    if (!providerCred) {
-      setError("Select a provider with valid credentials");
-      return;
-    }
-
-    const shouldVerify = ["openai", "anthropic"].includes(providerCred.providerId);
-    if (shouldVerify) {
-      try {
-        setVerifying(true);
-        const name = editorModel.name.trim();
-        if (!name) {
-          setError("Model name required");
-          return;
-        }
-        let resp: { exists: boolean; error?: string } | undefined;
-        try {
-          resp = await invoke<{ exists: boolean; error?: string }>("verify_model_exists", {
-            providerId: providerCred.providerId,
-            credentialId: providerCred.id,
-            model: name,
-          });
-        } catch (err) {
-          console.warn("Invoke verify_model_exists failed, treating as undefined:", err);
-        }
-        if (!resp) {
-          setError("Model verification unavailable (backend)");
-          return;
-        }
-        if (!resp.exists) {
-          setError(resp.error || "Model not found on provider");
-          return;
-        }
-      } catch (e: any) {
-        setError(e?.message || "Verification failed");
-        return;
-      } finally {
-        setVerifying(false);
-      }
-    }
-
-    setSaving(true);
-    try {
-      await addOrUpdateModel({
-        ...editorModel,
-        providerId: providerCred.providerId,
-        providerLabel: providerCred.label,
-        advancedModelSettings: overrideEnabled ? sanitizeAdvancedModelSettings(modelAdvancedDraft) : undefined,
-      });
-      navigate("/settings/models");
-    } catch (e: any) {
-      console.error("Failed to save model", e);
-      setError(e?.message || "Failed to save model");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!editorModel || isNew) return;
-    try {
-      setDeleting(true);
-      await removeModel(editorModel.id);
-      navigate("/settings/models");
-    } catch (e: any) {
-      console.error("Failed to delete model", e);
-      setError(e?.message || "Failed to delete model");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleSetDefault = async () => {
-    if (!editorModel) return;
-    try {
-      await setDefaultModel(editorModel.id);
-      setDefaultModelId(editorModel.id);
-    } catch (e) {
-      console.error("Failed to set default model", e);
-    }
-  };
+  const {
+    state: {
+      loading,
+      saving,
+      deleting,
+      verifying,
+      error,
+      providers,
+      defaultModelId,
+      editorModel,
+      globalAdvanced,
+      modelAdvancedDraft,
+      overrideEnabled,
+    },
+    isNew,
+    canSave,
+    providerDisplay,
+    handleDisplayNameChange,
+    handleModelNameChange,
+    handleProviderSelection,
+    setModelAdvancedDraft,
+    toggleOverride,
+    handleTemperatureChange,
+    handleTopPChange,
+    handleMaxTokensChange,
+    handleSave,
+    handleDelete,
+    handleSetDefault,
+  } = useModelEditorController();
 
   if (loading || !editorModel) {
     return (
@@ -237,7 +68,7 @@ export function EditModelPage() {
             <input
               type="text"
               value={editorModel.displayName}
-              onChange={(e) => setEditorModel({ ...editorModel, displayName: e.target.value })}
+              onChange={(e) => handleDisplayNameChange(e.target.value)}
               placeholder="GPT-4 Turbo"
               className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
             />
@@ -249,7 +80,7 @@ export function EditModelPage() {
             <input
               type="text"
               value={editorModel.name}
-              onChange={(e) => setEditorModel({ ...editorModel, name: e.target.value })}
+              onChange={(e) => handleModelNameChange(e.target.value)}
               placeholder="gpt-4o-mini, claude-3-5-sonnet, ..."
               className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
             />
@@ -270,11 +101,7 @@ export function EditModelPage() {
                   const selectedProvider =
                     providers.find((p) => p.providerId === providerId && p.label === providerLabel) ||
                     providers.find((p) => p.providerId === providerId);
-                  setEditorModel({
-                    ...editorModel,
-                    providerId,
-                    providerLabel: selectedProvider?.label ?? providerLabel,
-                  });
+                  handleProviderSelection(providerId, selectedProvider?.label ?? providerLabel);
                 }}
                 className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
               >
@@ -328,7 +155,7 @@ export function EditModelPage() {
 
                 <button
                   type="button"
-                  onClick={() => setOverrideEnabled(!overrideEnabled)}
+                  onClick={toggleOverride}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition ${
                     overrideEnabled ? "bg-emerald-400/70" : "bg-white/15"
                   }`}
@@ -365,10 +192,7 @@ export function EditModelPage() {
                     max={ADVANCED_TEMPERATURE_RANGE.max}
                     step={0.01}
                     value={modelAdvancedDraft.temperature ?? 0.7}
-                    onChange={(e) => {
-                      const next = Number(e.target.value);
-                      setModelAdvancedDraft({ ...modelAdvancedDraft, temperature: Number(next.toFixed(2)) });
-                    }}
+                    onChange={(e) => handleTemperatureChange(Number(e.target.value))}
                     className="slider-custom h-2 w-full appearance-none rounded-full bg-white/5 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-2 focus:ring-offset-[#050505]
                       [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
                       [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
@@ -393,10 +217,7 @@ export function EditModelPage() {
                     max={ADVANCED_TOP_P_RANGE.max}
                     step={0.01}
                     value={modelAdvancedDraft.topP ?? 1}
-                    onChange={(e) => {
-                      const next = Number(e.target.value);
-                      setModelAdvancedDraft({ ...modelAdvancedDraft, topP: Number(next.toFixed(2)) });
-                    }}
+                    onChange={(e) => handleTopPChange(Number(e.target.value))}
                     className="slider-custom h-2 w-full appearance-none rounded-full bg-white/5 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-2 focus:ring-offset-[#050505]
                       [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
                       [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
@@ -413,7 +234,7 @@ export function EditModelPage() {
                     <label className="text-xs font-medium text-white/70">MAX TOKENS</label>
                     <button
                       type="button"
-                      onClick={() => setModelAdvancedDraft({ ...modelAdvancedDraft, maxOutputTokens: null })}
+                      onClick={() => handleMaxTokensChange(null)}
                       className="text-xs text-emerald-400 transition hover:text-emerald-300"
                     >
                       Clear
@@ -428,7 +249,7 @@ export function EditModelPage() {
                     onChange={(e) => {
                       const raw = e.target.value;
                       const next = raw === "" ? null : Math.round(Number(raw));
-                      setModelAdvancedDraft({ ...modelAdvancedDraft, maxOutputTokens: next });
+                      handleMaxTokensChange(next);
                     }}
                     placeholder="1024"
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-emerald-400/50 focus:outline-none"

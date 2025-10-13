@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2, Edit2, ChevronRight, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { listCharacters, deleteCharacter } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
 import { typography, radius, interactive, cn } from "../../design-tokens";
+import { useCharactersController } from "../characters/hooks/useCharactersController";
 
 const CharacterSkeleton = () => (
   <div className="space-y-3">
@@ -66,42 +65,12 @@ function renderAvatar(character: Character) {
 
 export function CharactersPage() {
   const navigate = useNavigate();
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    loadCharacters();
-  }, []);
-
-  const loadCharacters = async () => {
-    try {
-      const list = await listCharacters();
-      setCharacters(list);
-    } catch (err) {
-      console.error("Failed to load characters:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedCharacter) return;
-
-    try {
-      setDeleting(true);
-      await deleteCharacter(selectedCharacter.id);
-      await loadCharacters();
-      setShowDeleteConfirm(false);
-      setSelectedCharacter(null);
-    } catch (err) {
-      console.error("Failed to delete character:", err);
-    } finally {
-      setDeleting(false);
-    }
-  };
+  const {
+    state: { characters, loading, selectedCharacter, showDeleteConfirm, deleting },
+    setSelectedCharacter,
+    setShowDeleteConfirm,
+    handleDelete,
+  } = useCharactersController();
 
   const handleEditCharacter = (character: Character) => {
     navigate(`/characters/${character.id}/edit`);
@@ -240,7 +209,7 @@ export function CharactersPage() {
               Cancel
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => void handleDelete()}
               disabled={deleting}
               className="flex-1 rounded-xl border border-red-500/30 bg-red-500/20 py-3 text-sm font-medium text-red-300 transition hover:bg-red-500/30 disabled:opacity-50"
             >

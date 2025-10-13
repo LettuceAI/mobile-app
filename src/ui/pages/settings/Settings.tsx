@@ -1,9 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github } from "lucide-react";
-import { readSettings, listCharacters, listPersonas } from "../../../core/storage/repo";
-import type { ProviderCredential, Model } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
+import { useSettingsSummary } from "./hooks/useSettingsSummary";
 
 
 
@@ -92,32 +91,9 @@ function Row({ icon, title, subtitle, onClick, count, tone = 'default' }: RowPro
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [providers, setProviders] = useState<ProviderCredential[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
-  const [characterCount, setCharacterCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [personaCount, setPersonaCount] = useState(0);
-  
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
-    setIsLoading(true);
-    try {
-      const settings = await readSettings();
-      const characters = await listCharacters();
-      const personas = await listPersonas();
-      setProviders(settings.providerCredentials);
-      setModels(settings.models);
-      setCharacterCount(characters.length);
-      setPersonaCount(personas.length);
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    state: { providers, models, characterCount, personaCount, isLoading },
+  } = useSettingsSummary();
 
   const providerCount = providers.length;
   const modelCount = models.length;

@@ -1,63 +1,32 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useEffect } from "react";
 import { Trash2, ChevronRight, Edit3, EthernetPort } from "lucide-react";
-import { readSettings, addOrUpdateProviderCredential, removeProviderCredential, SETTINGS_UPDATED_EVENT } from "../../../core/storage/repo";
 import { providerRegistry } from "../../../core/providers/registry";
-import { setSecret, getSecret } from "../../../core/secrets";
-import type { ProviderCredential } from "../../../core/storage/schemas";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
-
-type VerifyProviderApiKeyResult = {
-  providerId: string;
-  valid: boolean;
-  status?: number;
-  error?: string;
-  details?: unknown;
-};
+import { useProvidersPageController } from "./hooks/useProvidersPageController";
 
 export function ProvidersPage() {
-  const [providers, setProviders] = useState<ProviderCredential[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<ProviderCredential | null>(null);
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [editorProvider, setEditorProvider] = useState<ProviderCredential | null>(null);
-  const [apiKey, setApiKey] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-
-  const loadProviders = useCallback(async () => {
-    const settings = await readSettings();
-    setProviders(settings.providerCredentials);
-  }, []);
-
-  const openEditor = (provider?: ProviderCredential) => {
-    const newId = crypto.randomUUID();
-    const newProvider: ProviderCredential = provider || {
-      id: newId,
-      providerId: providerRegistry[0].id,
-      label: "",
-      apiKeyRef: { providerId: providerRegistry[0].id, key: "apiKey", credId: newId }
-    } as ProviderCredential;
-    setEditorProvider(newProvider);
-    setIsEditorOpen(true);
-    setSelectedProvider(null);
-    setApiKey("");
-    setValidationError(null);
-    if (provider?.apiKeyRef) {
-      const ref = { ...provider.apiKeyRef, credId: provider.id };
-      getSecret(ref).then(key => setApiKey(key || ""));
-    }
-  };
-
-  const closeEditor = () => {
-    setIsEditorOpen(false);
-    setEditorProvider(null);
-    setApiKey("");
-    setValidationError(null);
-  };
+  const {
+    state: {
+      providers,
+      selectedProvider,
+      isEditorOpen,
+      editorProvider,
+      apiKey,
+      isSaving,
+      isDeleting,
+      validationError,
+    },
+    openEditor,
+    closeEditor,
+    setSelectedProvider,
+    setApiKey,
+    setValidationError,
+    updateEditorProvider,
+    handleSaveProvider,
+    handleDeleteProvider,
+  } = useProvidersPageController();
 
   useEffect(() => {
-    loadProviders();
     (window as any).__openAddProvider = () => openEditor();
     const listener = () => openEditor();
     window.addEventListener("providers:add", listener);
@@ -65,74 +34,7 @@ export function ProvidersPage() {
       if ((window as any).__openAddProvider) delete (window as any).__openAddProvider;
       window.removeEventListener("providers:add", listener);
     };
-  }, [loadProviders]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handler = () => loadProviders();
-    window.addEventListener(SETTINGS_UPDATED_EVENT, handler);
-    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
-  }, [loadProviders]);
-
-  const handleSaveProvider = useCallback(async () => {
-    if (!editorProvider) return;
-    setValidationError(null);
-    setIsSaving(true);
-    try {
-      const requiresVerification = ["openai", "anthropic", "openrouter"].includes(editorProvider.providerId);
-      const trimmedKey = apiKey.trim();
-
-      if (requiresVerification) {
-        if (!trimmedKey) {
-          setValidationError("API key required");
-          return;
-        }
-
-        let verification: VerifyProviderApiKeyResult;
-        try {
-          verification = await invoke<VerifyProviderApiKeyResult>("verify_provider_api_key", {
-            providerId: editorProvider.providerId,
-            credentialId: editorProvider.id,
-            apiKey: trimmedKey,
-            baseUrl: editorProvider.baseUrl ?? null
-          });
-        } catch (error) {
-          setValidationError(error instanceof Error ? error.message : String(error));
-          return;
-        }
-
-        if (!verification.valid) {
-          setValidationError(verification.error || "Invalid API key");
-          return;
-        }
-      }
-
-      if (editorProvider.apiKeyRef) {
-        editorProvider.apiKeyRef.credId = editorProvider.id;
-      }
-      await addOrUpdateProviderCredential(editorProvider);
-      if (editorProvider.apiKeyRef && trimmedKey) {
-        await setSecret(editorProvider.apiKeyRef, trimmedKey);
-      }
-      await loadProviders();
-      setIsEditorOpen(false);
-      setEditorProvider(null);
-      setApiKey("");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [editorProvider, apiKey, loadProviders]);
-
-  const handleDeleteProvider = useCallback(async (id: string) => {
-    setIsDeleting(true);
-    try {
-      await removeProviderCredential(id);
-      await loadProviders();
-      setSelectedProvider(null);
-    } finally {
-      setIsDeleting(false);
-    }
-  }, []);
+  }, [openEditor]);
 
       const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
         <div className="flex h-64 flex-col items-center justify-center">
@@ -209,7 +111,7 @@ export function ProvidersPage() {
               icon={Trash2}
               title={isDeleting ? 'Deleting...' : 'Delete'}
               description="Remove this provider"
-              onClick={() => handleDeleteProvider(selectedProvider.id)}
+              onClick={() => void handleDeleteProvider(selectedProvider.id)}
               disabled={isDeleting}
               color="from-rose-500 to-red-600"
             />
@@ -229,10 +131,13 @@ export function ProvidersPage() {
               <select
                 value={editorProvider.providerId}
                 onChange={(e) => {
-                  setEditorProvider({
-                    ...editorProvider,
-                    providerId: e.target.value,
-                    apiKeyRef: { ...editorProvider.apiKeyRef!, providerId: e.target.value, credId: editorProvider.id }
+                  const providerId = e.target.value;
+                  const apiKeyRef = editorProvider.apiKeyRef
+                    ? { ...editorProvider.apiKeyRef, providerId, credId: editorProvider.id }
+                    : { providerId, key: "apiKey", credId: editorProvider.id };
+                  updateEditorProvider({
+                    providerId,
+                    apiKeyRef,
                   });
                   setValidationError(null);
                 }}
@@ -248,7 +153,7 @@ export function ProvidersPage() {
               <input
                 type="text"
                 value={editorProvider.label}
-                onChange={(e) => setEditorProvider({ ...editorProvider, label: e.target.value })}
+                onChange={(e) => updateEditorProvider({ label: e.target.value })}
                 placeholder="My OpenAI Account"
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
               />
@@ -272,7 +177,7 @@ export function ProvidersPage() {
                 type="url"
                 value={editorProvider.baseUrl || ''}
                 onChange={(e) => {
-                  setEditorProvider({ ...editorProvider, baseUrl: e.target.value });
+                  updateEditorProvider({ baseUrl: e.target.value || undefined });
                   if (validationError) setValidationError(null);
                 }}
                 placeholder="https://api.openai.com"
@@ -290,7 +195,7 @@ export function ProvidersPage() {
                 Cancel
               </button>
               <button
-                onClick={handleSaveProvider}
+                onClick={() => void handleSaveProvider()}
                 disabled={isSaving || !editorProvider.label}
                 className="flex-1 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >

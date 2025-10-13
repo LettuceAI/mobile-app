@@ -1,107 +1,26 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, Check, Loader, Settings } from "lucide-react";
 
-import { readSettings, addOrUpdateModel } from "../../../core/storage/repo";
-import {
-  setModelSetupCompleted,
-  setOnboardingCompleted,
-} from "../../../core/storage/appState";
-import type { ProviderCredential, Model } from "../../../core/storage/schemas";
+import { useModelController } from "./hooks/useModelController";
 
 export function ModelSetupPage() {
-  const navigate = useNavigate();
-  const [providers, setProviders] = useState<ProviderCredential[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<ProviderCredential | null>(null);
-  const [modelName, setModelName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadProviders();
-  }, []);
-
-  const loadProviders = async () => {
-    try {
-      const settings = await readSettings();
-      setProviders(settings.providerCredentials);
-
-      if (settings.providerCredentials.length > 0) {
-        const firstProvider = settings.providerCredentials[0];
-        setSelectedProvider(firstProvider);
-
-        const defaultModel = getDefaultModelName(firstProvider.providerId);
-        setModelName(defaultModel);
-        setDisplayName(defaultModel);
-      }
-    } catch (error) {
-      console.error("Failed to load providers:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSaveModel = async () => {
-    if (!selectedProvider || !modelName.trim() || !displayName.trim()) return;
-
-    setIsSaving(true);
-    setVerificationError(null);
-    
-    try {
-      const shouldVerify = ["openai", "anthropic"].includes(selectedProvider.providerId);
-      
-      if (shouldVerify) {
-        try {
-          const verification = await invoke<{ exists: boolean; error?: string }>(
-            "verify_model_exists",
-            {
-              providerId: selectedProvider.providerId,
-              credentialId: selectedProvider.id,
-              model: modelName.trim(),
-            }
-          );
-
-          if (!verification.exists) {
-            setVerificationError(verification.error || "Model not found on provider");
-            return;
-          }
-        } catch (error: any) {
-          setVerificationError(error.message || "Model verification failed");
-          return;
-        }
-      }
-
-      const model: Omit<Model, "id"> = {
-        name: modelName.trim(),
-        providerId: selectedProvider.providerId,
-        providerLabel: selectedProvider.label,
-        displayName: displayName.trim(),
-        createdAt: Date.now(),
-      };
-
-      await addOrUpdateModel(model);
-
-      await setOnboardingCompleted(true);
-      await setModelSetupCompleted(true);
-
-      navigate("/chat?firstTime=true");
-    } catch (error: any) {
-      console.error("Failed to save model:", error);
-      setVerificationError(error.message || "Failed to save model");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSkip = async () => {
-    await setOnboardingCompleted(true);
-    navigate("/chat");
-  };
-
-  const canSave = selectedProvider && modelName.trim().length > 0 && displayName.trim().length > 0;
+  const {
+    state: {
+      providers,
+      selectedProvider,
+      modelName,
+      displayName,
+      isLoading,
+      isSaving,
+      verificationError,
+    },
+    canSave,
+    handleProviderSelect,
+    handleModelNameChange,
+    handleDisplayNameChange,
+    handleSaveModel,
+    handleSkip,
+    goToProviderSetup,
+  } = useModelController();
 
   if (isLoading) {
     return (
@@ -127,7 +46,7 @@ export function ModelSetupPage() {
           </p>
         </div>
         <button
-          onClick={() => navigate("/onboarding/provider")}
+          onClick={goToProviderSetup}
           className="rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
         >
           Go to provider setup
@@ -142,7 +61,7 @@ export function ModelSetupPage() {
         {/* Header */}
         <div className="flex w-full max-w-sm items-center justify-between mb-8">
           <button
-            onClick={() => navigate("/onboarding/provider")}
+            onClick={goToProviderSetup}
             className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/8 text-white transition-all duration-200 hover:border-white/30 hover:bg-white/15 active:scale-[0.98]"
           >
             <ArrowLeft size={16} />
@@ -174,12 +93,7 @@ export function ModelSetupPage() {
                     ? "border-white/25 bg-white/15 shadow-lg"
                     : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
                 }`}
-                onClick={() => {
-                  setSelectedProvider(provider);
-                  const defaultModel = getDefaultModelName(provider.providerId);
-                  setModelName(defaultModel);
-                  setDisplayName(defaultModel);
-                }}
+                onClick={() => handleProviderSelect(provider)}
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/8">
@@ -217,10 +131,7 @@ export function ModelSetupPage() {
                 <input
                   type="text"
                   value={modelName}
-                  onChange={(e) => {
-                    setModelName(e.target.value);
-                    if (verificationError) setVerificationError(null);
-                  }}
+                  onChange={(e) => handleModelNameChange(e.target.value)}
                   placeholder="gpt-4o, claude-3-sonnet"
                   className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
@@ -232,7 +143,7 @@ export function ModelSetupPage() {
                 <input
                   type="text"
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(e) => handleDisplayNameChange(e.target.value)}
                   placeholder="Creative mentor"
                   className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
@@ -297,18 +208,3 @@ function getProviderDisplayName(providerId: string): string {
       return providerId;
   }
 }
-
-function getDefaultModelName(providerId: string): string {
-  switch (providerId) {
-    case "openai":
-      return "gpt-4o";
-    case "anthropic":
-      return "claude-3-sonnet";
-    case "openrouter":
-      return "meta-llama/llama-3-70b-instruct";
-    default:
-      return "custom-model";
-  }
-}
-
-

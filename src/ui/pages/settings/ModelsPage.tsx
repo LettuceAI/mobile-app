@@ -1,42 +1,36 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect } from "react";
 import { Check, ChevronRight, SlidersHorizontal, Target, Scale, Sparkles, Settings2, Lightbulb, Cpu } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { readSettings, SETTINGS_UPDATED_EVENT, saveAdvancedModelSettings } from "../../../core/storage/repo";
-import type { AdvancedModelSettings, ProviderCredential, Model } from "../../../core/storage/schemas";
-import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import {
     ADVANCED_TEMPERATURE_RANGE,
     ADVANCED_TOP_P_RANGE,
     ADVANCED_MAX_TOKENS_RANGE,
-    formatAdvancedModelSettingsSummary,
-    sanitizeAdvancedModelSettings,
 } from "../../components/AdvancedModelSettingsForm";
+import { useModelsController } from "./hooks/useModelsController";
 
 export function ModelsPage() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const isAdvancedView = searchParams.get("view") === "advanced";
-    const [providers, setProviders] = useState<ProviderCredential[]>([]);
-    const [models, setModels] = useState<Model[]>([]);
-    const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
-    // legacy bottom sheet selection state removed
-    const [advancedSettings, setAdvancedSettings] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
-    const [advancedDraft, setAdvancedDraft] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
-    const [advancedSaving, setAdvancedSaving] = useState(false);
-    const [advancedError, setAdvancedError] = useState<string | null>(null);
-    const [forceCustomMode, setForceCustomMode] = useState(false);
-
-    const loadData = useCallback(async () => {
-        const settings = await readSettings();
-        setProviders(settings.providerCredentials);
-        setModels(settings.models);
-        setDefaultModelId(settings.defaultModelId);
-        const nextAdvanced = settings.advancedModelSettings ?? createDefaultAdvancedModelSettings();
-        setAdvancedSettings(nextAdvanced);
-        setAdvancedDraft(nextAdvanced);
-    }, []);
+    const {
+        state: {
+            providers,
+            models,
+            defaultModelId,
+            advancedDraft,
+            advancedSaving,
+            advancedError,
+            forceCustomMode,
+        },
+        setAdvancedDraft,
+        updateAdvancedDraft,
+        setForceCustomMode,
+        handleSaveAdvancedDefaults,
+        advancedDirty,
+        advancedSummary,
+    } = useModelsController();
 
     const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
         <div className="flex h-64 flex-col items-center justify-center">
@@ -55,7 +49,6 @@ export function ModelsPage() {
     );
 
     useEffect(() => {
-        loadData();
         (window as any).__openAddModel = () => navigate('/settings/models/new');
         const listener = () => navigate('/settings/models/new');
         window.addEventListener("models:add", listener);
@@ -65,61 +58,13 @@ export function ModelsPage() {
             }
             window.removeEventListener("models:add", listener);
         };
-    }, [loadData]);
-
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        const handler = () => {
-            loadData();
-        };
-        window.addEventListener(SETTINGS_UPDATED_EVENT, handler);
-        return () => {
-            window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
-        };
-    }, [loadData]);
+    }, [navigate]);
 
     const openAdvancedView = () => {
         const next = new URLSearchParams(searchParams);
         next.set("view", "advanced");
         setSearchParams(next, { replace: true });
     };
-
-    const normalizedDraft = useMemo(
-        () => sanitizeAdvancedModelSettings(advancedDraft),
-        [advancedDraft],
-    );
-    const normalizedCurrent = useMemo(
-        () => sanitizeAdvancedModelSettings(advancedSettings),
-        [advancedSettings],
-    );
-    const advancedDirty = useMemo(() => {
-        return JSON.stringify(normalizedDraft) !== JSON.stringify(normalizedCurrent);
-    }, [normalizedDraft, normalizedCurrent]);
-
-    const advancedSummary = useMemo(() => {
-        return formatAdvancedModelSettingsSummary(
-            normalizedCurrent,
-            "Temp 0.7 • Top P 1 • Max 1024",
-        );
-    }, [normalizedCurrent]);
-
-    const handleSaveAdvancedDefaults = useCallback(async () => {
-        setAdvancedSaving(true);
-        setAdvancedError(null);
-        try {
-            const sanitized = sanitizeAdvancedModelSettings(advancedDraft);
-            await saveAdvancedModelSettings(sanitized);
-            setAdvancedSettings(sanitized);
-            setAdvancedDraft(sanitized);
-        } catch (error) {
-            console.error("Failed to save advanced settings:", error);
-            setAdvancedError(
-                error instanceof Error ? error.message : "Failed to save advanced settings",
-            );
-        } finally {
-            setAdvancedSaving(false);
-        }
-    }, [advancedDraft]);
 
     if (isAdvancedView) {
         // Detect current preset
@@ -265,7 +210,7 @@ export function ModelsPage() {
                                             value={advancedDraft.temperature ?? 0.7}
                                             onChange={(e) => {
                                                 const next = Number(e.target.value);
-                                                setAdvancedDraft({ ...advancedDraft, temperature: Number(next.toFixed(2)) });
+                                                updateAdvancedDraft({ temperature: Number(next.toFixed(2)) });
                                                 setForceCustomMode(true);
                                             }}
                                             className="h-2 w-full appearance-none rounded-full bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50
@@ -294,7 +239,7 @@ export function ModelsPage() {
                                             value={advancedDraft.topP ?? 1}
                                             onChange={(e) => {
                                                 const next = Number(e.target.value);
-                                                setAdvancedDraft({ ...advancedDraft, topP: Number(next.toFixed(2)) });
+                                                updateAdvancedDraft({ topP: Number(next.toFixed(2)) });
                                                 setForceCustomMode(true);
                                             }}
                                             className="h-2 w-full appearance-none rounded-full bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50
@@ -317,7 +262,7 @@ export function ModelsPage() {
                                             value={advancedDraft.maxOutputTokens ?? ''}
                                             onChange={(e) => {
                                                 const val = e.target.value === '' ? null : Number(e.target.value);
-                                                setAdvancedDraft({ ...advancedDraft, maxOutputTokens: val });
+                                                updateAdvancedDraft({ maxOutputTokens: val });
                                                 setForceCustomMode(true);
                                             }}
                                             placeholder="Auto"
@@ -398,7 +343,6 @@ export function ModelsPage() {
                 {models.map(model => {
                     const isDefault = model.id === defaultModelId;
                     const providerInfo = providers.find(p => p.providerId === model.providerId);
-                    console.log({ model, providerInfo });
                     return (
                         <button
                             key={model.id}

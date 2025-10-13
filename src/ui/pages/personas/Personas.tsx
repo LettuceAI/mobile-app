@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Trash2, Edit2, Star, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { listPersonas, deletePersona, savePersona } from "../../../core/storage/repo";
 import type { Persona } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
+import { usePersonasController } from "./hooks/usePersonasController";
 
 const PersonaSkeleton = () => (
   <div className="space-y-3">
@@ -40,59 +39,13 @@ const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
 
 export function PersonasPage() {
   const navigate = useNavigate();
-  const [personas, setPersonas] = useState<Persona[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    loadPersonas();
-  }, []);
-
-  const loadPersonas = async () => {
-    try {
-      const list = await listPersonas();
-      setPersonas(list);
-    } catch (err) {
-      console.error("Failed to load personas:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedPersona) return;
-
-    try {
-      setDeleting(true);
-      await deletePersona(selectedPersona.id);
-      await loadPersonas();
-      setShowDeleteConfirm(false);
-      setSelectedPersona(null);
-    } catch (err) {
-      console.error("Failed to delete persona:", err);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleSetDefault = async (persona: Persona) => {
-    try {
-      // Unset all other defaults
-      await Promise.all(
-        personas
-          .filter((p) => p.isDefault && p.id !== persona.id)
-          .map((p) => savePersona({ ...p, isDefault: false }))
-      );
-
-      // Set this one as default
-      await savePersona({ ...persona, isDefault: !persona.isDefault });
-      await loadPersonas();
-    } catch (err) {
-      console.error("Failed to set default persona:", err);
-    }
-  };
+  const {
+    state: { personas, loading, selectedPersona, showDeleteConfirm, deleting },
+    setSelectedPersona,
+    setShowDeleteConfirm,
+    handleDelete,
+    handleSetDefault,
+  } = usePersonasController();
 
   const handleEditPersona = (persona: Persona) => {
     navigate(`/personas/${persona.id}/edit`);
@@ -203,7 +156,7 @@ export function PersonasPage() {
             </button>
 
             <button
-              onClick={() => handleSetDefault(selectedPersona)}
+              onClick={() => void handleSetDefault(selectedPersona)}
               className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/10">
@@ -259,7 +212,7 @@ export function PersonasPage() {
               Cancel
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => void handleDelete()}
               disabled={deleting}
               className="flex-1 rounded-xl border border-red-500/30 bg-red-500/20 py-3 text-sm font-medium text-red-300 transition hover:bg-red-500/30 disabled:opacity-50"
             >
