@@ -213,7 +213,7 @@ function SkipWarning({
 
   return (
     <motion.div 
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: isExiting ? 0 : 1 }}
       transition={{ duration: 0.2 }}
@@ -221,7 +221,7 @@ function SkipWarning({
     >
       <motion.div 
         className={cn(
-          "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6 my-auto",
+          "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6",
           "rounded-t-3xl sm:rounded-3xl sm:mb-8",
           shadows.xl
         )}
