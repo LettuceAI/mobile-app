@@ -3,11 +3,11 @@ import { ArrowLeft, Trash2, MessageCircle, AlertCircle } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import type { Character } from "../../../core/storage/schemas";
-import { 
-  listCharacters, 
-  listSessionIds, 
-  getSession, 
-  deleteSession 
+import {
+  listCharacters,
+  listSessionIds,
+  getSession,
+  deleteSession
 } from "../../../core/storage";
 import { typography, radius, cn } from "../../design-tokens";
 
@@ -32,7 +32,7 @@ export function ChatHistoryPage() {
   useEffect(() => {
     const loadData = async () => {
       if (!characterId) return;
-      
+
       try {
         setIsLoading(true);
         setError(null);
@@ -45,7 +45,7 @@ export function ChatHistoryPage() {
         // Load sessions
         const sessionIds = await listSessionIds();
         const sessionData: SessionPreview[] = [];
-        
+
         for (const id of sessionIds) {
           try {
             const session = await getSession(id);
@@ -115,25 +115,35 @@ export function ChatHistoryPage() {
 
   return (
     <div className="min-h-screen bg-[#050505]">
-      {/* Simple Header */}
-      <div className="border-b border-white/10 px-4 py-4">
+      {/* Header */}
+      <div
+        className="border-b border-white/10 px-4 py-4"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 16px)" }}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
             className={cn(
-              "flex h-9 w-9 items-center justify-center border border-white/15 bg-white/5 text-white/70",
+              "flex flex-shrink-0 items-center justify-center border border-white/15 bg-white/5 text-white/70",
               radius.full,
               "active:scale-95 transition-transform"
             )}
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft height={16} width={16} />
           </button>
-          <div className="flex-1 min-w-0">
-            <h1 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
+          <div className="min-w-0 text-left overflow-hidden">
+            <h1 className={cn(
+              typography.h1.size,
+              typography.h1.weight,
+              "text-white text-left truncate whitespace-nowrap"
+            )}>
               Chat History
             </h1>
             {character && (
-              <p className={cn(typography.bodySmall.size, "text-white/50 mt-1")}>
+              <p className={cn(
+                typography.bodySmall.size,
+                "text-white/50 mt-1 text-left truncate whitespace-nowrap"
+              )}>
                 {character.name}
               </p>
             )}
@@ -181,7 +191,7 @@ export function ChatHistoryPage() {
               <SessionCard
                 key={session.id}
                 session={session}
-                onSelect={() => navigate(`/chats/${session.id}`)}
+                onSelect={() => navigate(`/chat/${characterId}?sessionId=${session.id}`)}
                 onDelete={() => handleDelete(session.id)}
                 isBusy={busyIds.has(session.id)}
               />
@@ -219,11 +229,11 @@ function SessionCard({
         <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white mb-2")}>
           {session.title}
         </h3>
-        
+
         <p className={cn(typography.bodySmall.size, "text-white/50 mb-3")}>
           {formatTimeAgo(session.updatedAt)}
         </p>
-        
+
         {session.lastMessage && (
           <p className={cn(typography.bodySmall.size, "text-white/70 line-clamp-2 leading-relaxed")}>
             {session.lastMessage}
@@ -254,16 +264,16 @@ function SessionCard({
 function formatTimeAgo(timestamp: number): string {
   const diffMs = Date.now() - timestamp;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  
+
   if (diffMinutes < 1) return "Just now";
   if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  
+
   const diffHours = Math.floor(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
-  
+
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d ago`;
-  
+
   return new Date(timestamp).toLocaleDateString();
 }
 
