@@ -70,23 +70,48 @@ function isStartingSceneMessage(message: StoredMessage): boolean {
  * into a single render per animation frame for better performance.
  */
 function createStreamBatcher(dispatch: React.Dispatch<any>) {
-  let pendingUpdate: { messageId: string; content: string } | null = null;
+  const pendingContentByMessage = new Map<string, string>();
+  const messageOrder: string[] = [];
   let rafId: number | null = null;
 
   const flush = () => {
-    if (pendingUpdate) {
-      dispatch({
-        type: "UPDATE_MESSAGE_CONTENT",
-        payload: pendingUpdate,
-      });
-      pendingUpdate = null;
+    if (messageOrder.length > 0) {
+      const actions = messageOrder
+        .map((messageId) => {
+          const content = pendingContentByMessage.get(messageId) ?? "";
+          return content
+            ? {
+                type: "UPDATE_MESSAGE_CONTENT" as const,
+                payload: { messageId, content },
+              }
+            : null;
+        })
+        .filter((action): action is { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } } => action !== null);
+
+      if (actions.length === 1) {
+        dispatch(actions[0]);
+      } else if (actions.length > 1) {
+        dispatch({ type: "BATCH", actions });
+      }
+
+      pendingContentByMessage.clear();
+      messageOrder.length = 0;
     }
     rafId = null;
   };
 
   return {
     update: (messageId: string, content: string) => {
-      pendingUpdate = { messageId, content };
+      if (!content) return;
+      if (!pendingContentByMessage.has(messageId)) {
+        pendingContentByMessage.set(messageId, content);
+        messageOrder.push(messageId);
+      } else {
+        pendingContentByMessage.set(
+          messageId,
+          pendingContentByMessage.get(messageId)! + content
+        );
+      }
       if (rafId === null) {
         rafId = requestAnimationFrame(flush);
       }
@@ -96,7 +121,8 @@ function createStreamBatcher(dispatch: React.Dispatch<any>) {
         cancelAnimationFrame(rafId);
         rafId = null;
       }
-      pendingUpdate = null;
+      pendingContentByMessage.clear();
+      messageOrder.length = 0;
     },
   };
 }
