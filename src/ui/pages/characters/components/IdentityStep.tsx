@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, Sparkles } from "lucide-react";
+import { Camera, X, Sparkles, Image } from "lucide-react";
 import type { ReactNode } from "react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 
@@ -8,7 +8,10 @@ interface IdentityStepProps {
   onNameChange: (value: string) => void;
   avatarPath: string;
   onAvatarChange: (value: string) => void;
+  backgroundImagePath: string;
+  onBackgroundImageChange: (value: string) => void;
   onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onBackgroundImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onContinue: () => void;
   canContinue: boolean;
   avatarPreview: ReactNode;
@@ -19,7 +22,10 @@ export function IdentityStep({
   onNameChange,
   avatarPath,
   onAvatarChange,
+  backgroundImagePath,
+  onBackgroundImageChange,
   onUpload,
+  onBackgroundImageUpload,
   onContinue,
   canContinue,
   avatarPreview,
@@ -177,6 +183,77 @@ export function IdentityStep({
         </div>
         <p className={cn(typography.bodySmall.size, "text-white/40")}>
           This name will appear in chat conversations
+        </p>
+      </div>
+
+      {/* Background Image (Optional) */}
+      <div className={spacing.field}>
+        <label
+          className={cn(
+            typography.label.size,
+            typography.label.weight,
+            typography.label.tracking,
+            "uppercase text-white/70"
+          )}
+        >
+          Chat Background <span className="text-white/40">(Optional)</span>
+        </label>
+        <div className={cn(
+          "overflow-hidden border",
+          radius.md,
+          backgroundImagePath ? "border-purple-400/30 bg-purple-400/5" : "border-white/10 bg-black/20"
+        )}>
+          {backgroundImagePath ? (
+            <div className="relative">
+              <img 
+                src={backgroundImagePath} 
+                alt="Background preview" 
+                className="h-24 w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                <span className={cn(typography.caption.size, "text-white/80 bg-black/50 px-2 py-1", radius.sm)}>
+                  Background Preview
+                </span>
+              </div>
+              <button
+                onClick={() => onBackgroundImageChange("")}
+                className={cn(
+                  "absolute top-2 right-2 flex h-6 w-6 items-center justify-center border border-white/20 bg-black/50 text-white/70",
+                  radius.full,
+                  interactive.transition.fast,
+                  "active:scale-95 active:bg-black/70"
+                )}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <label className={cn(
+              "flex h-24 cursor-pointer flex-col items-center justify-center gap-2",
+              interactive.transition.default,
+              "active:bg-white/5"
+            )}>
+              <div className={cn(
+                "flex h-8 w-8 items-center justify-center border border-white/10 bg-white/5",
+                radius.md
+              )}>
+                <Image size={16} className="text-white/40" />
+              </div>
+              <div className="text-center">
+                <p className={cn(typography.bodySmall.size, "text-white/70")}>Add Background</p>
+                <p className={cn(typography.caption.size, "text-white/40")}>Tap to select image</p>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={onBackgroundImageUpload}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
+          Optional background image for chat conversations
         </p>
       </div>
 

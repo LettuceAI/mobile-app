@@ -134,7 +134,18 @@ export function ChatConversationPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#050505]">
+    <div 
+      className="flex h-screen flex-col overflow-hidden bg-[#050505]"
+      style={{
+        backgroundImage: character.backgroundImagePath 
+          ? `linear-gradient(rgba(5, 5, 5, 0.15), rgba(5, 5, 5, 0.15)), url(${character.backgroundImagePath})`
+          : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
+    >
       <ChatHeader character={character} sessionId={sessionId} />
 
       <main ref={scrollContainerRef} className="relative flex-1 overflow-y-auto">
@@ -143,6 +154,7 @@ export function ChatConversationPage() {
           style={{ 
             willChange: 'scroll-position',
             transform: 'translateZ(0)',
+            backgroundColor: character.backgroundImagePath ? 'rgba(5, 5, 5, 0.3)' : 'transparent',
           }}
         >
           {messages.map((message, index) => {

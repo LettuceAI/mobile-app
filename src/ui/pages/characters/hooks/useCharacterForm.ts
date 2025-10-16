@@ -13,6 +13,7 @@ interface CharacterFormState {
   step: Step;
   name: string;
   avatarPath: string;
+  backgroundImagePath: string;
   scenes: Scene[];
   defaultSceneId: string | null;
   description: string;
@@ -31,6 +32,7 @@ type CharacterFormAction =
   | { type: 'SET_STEP'; payload: Step }
   | { type: 'SET_NAME'; payload: string }
   | { type: 'SET_AVATAR_PATH'; payload: string }
+  | { type: 'SET_BACKGROUND_IMAGE_PATH'; payload: string }
   | { type: 'SET_SCENES'; payload: Scene[] }
   | { type: 'SET_DEFAULT_SCENE_ID'; payload: string | null }
   | { type: 'SET_DESCRIPTION'; payload: string }
@@ -45,6 +47,7 @@ const initialState: CharacterFormState = {
   step: Step.Identity,
   name: '',
   avatarPath: '',
+  backgroundImagePath: '',
   scenes: [],
   defaultSceneId: null,
   description: '',
@@ -66,6 +69,8 @@ function characterFormReducer(
       return { ...state, name: action.payload };
     case 'SET_AVATAR_PATH':
       return { ...state, avatarPath: action.payload };
+    case 'SET_BACKGROUND_IMAGE_PATH':
+      return { ...state, backgroundImagePath: action.payload };
     case 'SET_SCENES':
       return { ...state, scenes: action.payload };
     case 'SET_DEFAULT_SCENE_ID':
@@ -131,6 +136,10 @@ export function useCharacterForm() {
     dispatch({ type: 'SET_AVATAR_PATH', payload: path });
   }, []);
 
+  const setBackgroundImagePath = useCallback((path: string) => {
+    dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: path });
+  }, []);
+
   const setScenes = useCallback((scenes: Scene[]) => {
     dispatch({ type: 'SET_SCENES', payload: scenes });
   }, []);
@@ -158,6 +167,17 @@ export function useCharacterForm() {
     reader.readAsDataURL(file);
   }, []);
 
+  const handleBackgroundImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (state.description.trim().length === 0 || state.selectedModelId === null || state.saving || state.scenes.length === 0) {
       return;
@@ -170,6 +190,7 @@ export function useCharacterForm() {
       await saveCharacter({
         name: state.name.trim(),
         avatarPath: state.avatarPath || undefined,
+        backgroundImagePath: state.backgroundImagePath || undefined,
         description: state.description.trim(),
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
@@ -184,7 +205,7 @@ export function useCharacterForm() {
     } finally {
       dispatch({ type: 'SET_SAVING', payload: false });
     }
-  }, [state.name, state.avatarPath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.saving]);
+  }, [state.name, state.avatarPath, state.backgroundImagePath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.saving]);
 
   // Computed values
   const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
@@ -198,11 +219,13 @@ export function useCharacterForm() {
       setStep,
       setName,
       setAvatarPath,
+      setBackgroundImagePath,
       setScenes,
       setDefaultSceneId,
       setDescription,
       setSelectedModelId,
       handleAvatarUpload,
+      handleBackgroundImageUpload,
       handleSave,
     },
     computed: {

@@ -141,11 +141,15 @@ pub struct Character {
     #[serde(default)]
     pub avatar_path: Option<String>,
     #[serde(default)]
+    pub background_image_path: Option<String>,
+    #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
     #[serde(default)]
     pub scenes: Vec<Scene>,
+    #[serde(default)]
+    pub default_scene_id: Option<String>,
     #[serde(default)]
     pub default_model_id: Option<String>,
     pub created_at: u64,

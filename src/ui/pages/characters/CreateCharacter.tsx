@@ -53,7 +53,10 @@ export function CreateCharacterPage() {
               onNameChange={actions.setName}
               avatarPath={state.avatarPath}
               onAvatarChange={actions.setAvatarPath}
+              backgroundImagePath={state.backgroundImagePath}
+              onBackgroundImageChange={actions.setBackgroundImagePath}
               onUpload={actions.handleAvatarUpload}
+              onBackgroundImageUpload={actions.handleBackgroundImageUpload}
               onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
               avatarPreview={

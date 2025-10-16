@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2 } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
 import type { Model, Scene } from "../../../core/storage/schemas";
@@ -15,6 +15,7 @@ export function EditCharacterPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarPath, setAvatarPath] = useState("");
+  const [backgroundImagePath, setBackgroundImagePath] = useState("");
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [defaultSceneId, setDefaultSceneId] = useState<string | null>(null);
   const [newSceneContent, setNewSceneContent] = useState("");
@@ -48,6 +49,7 @@ export function EditCharacterPage() {
       setName(character.name);
       setDescription(character.description || "");
       setAvatarPath(character.avatarPath || "");
+      setBackgroundImagePath(character.backgroundImagePath || "");
       setScenes(character.scenes || []);
       setDefaultSceneId(character.defaultSceneId || null);
       setSelectedModelId(character.defaultModelId || null);
@@ -83,6 +85,7 @@ export function EditCharacterPage() {
         name: name.trim(),
         description: description.trim(),
         avatarPath: avatarPath || undefined,
+        backgroundImagePath: backgroundImagePath || undefined,
         scenes: scenes,
         defaultSceneId: defaultSceneId,
         defaultModelId: selectedModelId,
@@ -165,6 +168,18 @@ export function EditCharacterPage() {
     return <img src={avatarPath} alt="Avatar" className="h-full w-full object-cover" />;
   };
 
+  // Handle background image upload
+  const handleBackgroundImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBackgroundImagePath(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
       <main className="flex-1 overflow-y-auto px-4">
@@ -211,6 +226,59 @@ export function EditCharacterPage() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Background Image Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-purple-400/30 bg-purple-400/10 p-1.5">
+                <Image className="h-4 w-4 text-purple-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Chat Background</h3>
+              <span className="text-xs text-white/40">(Optional)</span>
+            </div>
+            
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+              {backgroundImagePath ? (
+                <div className="relative">
+                  <img 
+                    src={backgroundImagePath} 
+                    alt="Background preview" 
+                    className="h-32 w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                    <span className="text-xs text-white/80 bg-black/50 px-2 py-1 rounded">
+                      Background Preview
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setBackgroundImagePath("")}
+                    className="absolute top-2 right-2 rounded-full border border-white/20 bg-black/50 p-1 text-white/70 transition hover:bg-black/70 active:scale-95"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex h-32 cursor-pointer flex-col items-center justify-center gap-2 transition hover:bg-white/5">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                    <Image size={20} className="text-white/40" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-white/70">Add Background Image</p>
+                    <p className="text-xs text-white/40">Tap to select an image</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+            <p className="text-xs text-white/50">
+              Optional background image for chat conversations with this character
+            </p>
           </div>
 
           {/* Personality Section */}
