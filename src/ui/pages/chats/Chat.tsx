@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef } from "react";
+import { CSSProperties, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
+import { useImageData } from "../../hooks/useImageData";
+import { preloadImages } from "../../../core/storage/images";
 
 import { useChatController } from "./hooks/useChatController";
-import { 
-  ChatHeader, 
-  ChatFooter, 
-  ChatMessage, 
+import {
+  ChatHeader,
+  ChatFooter,
+  ChatMessage,
   MessageActionsBottomSheet,
   LoadingSpinner,
   EmptyState
@@ -21,7 +23,7 @@ export function ChatConversationPage() {
 
   const chatController = useChatController(characterId, { sessionId });
   const scrollContainerRef = useRef<HTMLElement | null>(null);
-  
+
   const {
     character,
     session,
@@ -56,6 +58,28 @@ export function ChatConversationPage() {
     initializeLongPressTimer,
     isStartingSceneMessage,
   } = chatController;
+
+  // Preload character background image when entering Chat
+  useEffect(() => {
+    if (character?.backgroundImagePath) {
+      void preloadImages([character.backgroundImagePath]);
+    }
+  }, [character?.backgroundImagePath]);
+
+  const backgroundImageData = useImageData(character?.backgroundImagePath);
+
+  const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!backgroundImageData) {
+      return undefined;
+    }
+
+    return {
+      backgroundImage: `linear-gradient(rgba(5, 5, 5, 0.15), rgba(5, 5, 5, 0.15)), url(${backgroundImageData})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    };
+  }, [backgroundImageData]);
 
   const openMessageActions = useCallback((message: StoredMessage) => {
     setMessageAction({ message, mode: "view" });
@@ -102,7 +126,7 @@ export function ChatConversationPage() {
   const handleSendMessage = useCallback(async () => {
     if (sending) return;
     setError(null);
-    
+
     if (draft.trim()) {
       const content = draft.trim();
       setDraft("");
@@ -134,27 +158,21 @@ export function ChatConversationPage() {
   }
 
   return (
-    <div 
-      className="flex h-screen flex-col overflow-hidden bg-[#050505]"
-      style={{
-        backgroundImage: character.backgroundImagePath 
-          ? `linear-gradient(rgba(5, 5, 5, 0.15), rgba(5, 5, 5, 0.15)), url(${character.backgroundImagePath})`
-          : undefined,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-      }}
-    >
+    <div className="flex h-screen flex-col overflow-hidden bg-[#050505]">
+      {backgroundImageData && (
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={chatBackgroundStyle}
+        />
+      )}
+
       <ChatHeader character={character} sessionId={sessionId} />
 
-      <main ref={scrollContainerRef} className="relative flex-1 overflow-y-auto">
-        <div 
+      <main ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto">
+        <div
           className="space-y-6 px-3 pb-24 pt-4"
-          style={{ 
-            willChange: 'scroll-position',
-            transform: 'translateZ(0)',
-            backgroundColor: character.backgroundImagePath ? 'rgba(5, 5, 5, 0.3)' : 'transparent',
+          style={{
+            backgroundColor: backgroundImageData ? 'rgba(5, 5, 5, 0.3)' : 'transparent',
           }}
         >
           {messages.map((message, index) => {
@@ -163,14 +181,14 @@ export function ChatConversationPage() {
             const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");
             const eventHandlers = actionable
               ? {
-                  onMouseDown: handlePressStart(message),
-                  onMouseUp: handlePressEnd,
-                  onMouseLeave: handlePressEnd,
-                  onTouchStart: handlePressStart(message),
-                  onTouchEnd: handlePressEnd,
-                  onTouchCancel: handlePressEnd,
-                  onContextMenu: handleContextMenu(message),
-                }
+                onMouseDown: handlePressStart(message),
+                onMouseUp: handlePressEnd,
+                onMouseLeave: handlePressEnd,
+                onTouchStart: handlePressStart(message),
+                onTouchEnd: handlePressEnd,
+                onTouchCancel: handlePressEnd,
+                onContextMenu: handleContextMenu(message),
+              }
               : {};
 
             return (

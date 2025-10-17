@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { SetStateAction, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
 import type { Model, Scene } from "../../../core/storage/schemas";
+import { processBackgroundImage } from "../../../core/utils/image";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
@@ -173,11 +174,17 @@ export function EditCharacterPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setBackgroundImagePath(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    const input = event.target;
+    void processBackgroundImage(file)
+      .then((dataUrl: SetStateAction<string>) => {
+        setBackgroundImagePath(dataUrl);
+      })
+      .catch((error: any) => {
+        console.warn("EditCharacter: failed to process background image", error);
+      })
+      .finally(() => {
+        input.value = "";
+      });
   };
 
   return (

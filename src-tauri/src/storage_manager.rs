@@ -7,6 +7,7 @@ use rand::RngCore;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use base64::{Engine as _, engine::general_purpose};
 
 use crate::utils::{ensure_lettuce_dir, now_millis};
 
@@ -283,8 +284,81 @@ pub fn storage_usage_summary(app: tauri::AppHandle) -> Result<StorageUsageSummar
     })
 }
 
-// Internal accessor for raw settings JSON (unenforced schema) for other backend modules.
 pub(crate) fn internal_read_settings(app: &tauri::AppHandle) -> Result<Option<String>, String> {
     let path = settings_path(app)?;
     read_encrypted_file(&path)
+}
+
+// Image storage - returns file path, NOT base64
+#[tauri::command]
+pub fn storage_write_image(
+    app: tauri::AppHandle,
+    image_id: String,
+    base64_data: String,
+) -> Result<String, String> {
+    // Remove data URL prefix if present
+    let data = if let Some(comma_idx) = base64_data.find(',') {
+        &base64_data[comma_idx + 1..]
+    } else {
+        &base64_data
+    };
+
+    // Decode base64
+    let bytes = general_purpose::STANDARD
+        .decode(data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Create images directory
+    let images_dir = storage_root(&app)?.join("images");
+    fs::create_dir_all(&images_dir).map_err(|e| e.to_string())?;
+
+    // Detect file extension from magic bytes
+    let extension = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "jpg"
+    } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        "png"
+    } else if bytes.starts_with(&[0x47, 0x49, 0x46]) {
+        "gif"
+    } else if bytes.starts_with(&[0x52, 0x49, 0x46, 0x46]) && bytes.len() > 8 && &bytes[8..12] == b"WEBP" {
+        "webp"
+    } else {
+        "png" // default
+    };
+
+    // Write image file with proper extension
+    let image_path = images_dir.join(format!("{}.{}", image_id, extension));
+    fs::write(&image_path, bytes).map_err(|e| e.to_string())?;
+
+    // Return the absolute file path
+    Ok(image_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn storage_get_image_path(app: tauri::AppHandle, image_id: String) -> Result<String, String> {
+    let images_dir = storage_root(&app)?.join("images");
+    
+    // Check for file with any image extension
+    for ext in &["jpg", "jpeg", "png", "gif", "webp"] {
+        let image_path = images_dir.join(format!("{}.{}", image_id, ext));
+        if image_path.exists() {
+            return Ok(image_path.to_string_lossy().to_string());
+        }
+    }
+    
+    Err(format!("Image not found: {}", image_id))
+}
+
+#[tauri::command]
+pub fn storage_delete_image(app: tauri::AppHandle, image_id: String) -> Result<(), String> {
+    let images_dir = storage_root(&app)?.join("images");
+    
+    // Delete file with any extension
+    for ext in &["jpg", "jpeg", "png", "gif", "webp", "img"] {
+        let image_path = images_dir.join(format!("{}.{}", image_id, ext));
+        if image_path.exists() {
+            delete_file_if_exists(&image_path)?;
+        }
+    }
+    
+    Ok(())
 }

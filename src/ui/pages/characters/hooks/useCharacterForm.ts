@@ -1,7 +1,8 @@
 import { useReducer, useEffect, useCallback } from "react";
-import { readSettings, saveCharacter } from "../../../../core/storage/repo";
+import { readSettings, saveCharacter, convertToImageRef } from "../../../../core/storage";
 import type { Model, Scene } from "../../../../core/storage/schemas";
 
+import { processBackgroundImage } from "../../../../core/utils/image";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
@@ -171,11 +172,17 @@ export function useCharacterForm() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+    const input = event.target;
+    void processBackgroundImage(file)
+      .then((dataUrl: any) => {
+        dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: dataUrl });
+      })
+      .catch((error: any) => {
+        console.warn("CharacterForm: failed to process background image", error);
+      })
+      .finally(() => {
+        input.value = "";
+      });
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -187,10 +194,14 @@ export function useCharacterForm() {
       dispatch({ type: 'SET_SAVING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       
+      // Convert base64 images to image IDs before saving
+      const avatarImageId = state.avatarPath ? await convertToImageRef(state.avatarPath) : undefined;
+      const backgroundImageId = state.backgroundImagePath ? await convertToImageRef(state.backgroundImagePath) : undefined;
+      
       await saveCharacter({
         name: state.name.trim(),
-        avatarPath: state.avatarPath || undefined,
-        backgroundImagePath: state.backgroundImagePath || undefined,
+        avatarPath: avatarImageId,
+        backgroundImagePath: backgroundImageId,
         description: state.description.trim(),
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
