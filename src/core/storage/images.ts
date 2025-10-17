@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// Cache for preloaded image URLs to avoid repeated conversions
 const imageUrlCache = new Map<string, Promise<string | undefined>>();
 
 /**
@@ -11,29 +10,52 @@ const imageUrlCache = new Map<string, Promise<string | undefined>>();
  * and accessed via the asset:// protocol. Images are automatically converted
  * to WebP format for optimal storage efficiency.
  */
-export async function convertToImageRef(dataUrl: string): Promise<string | undefined> {
-  if (!dataUrl) {
-    return undefined;
+/**
+ * Generates a UUID v4 for use as an image ID
+ */
+function generateImageId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+  return (
+    hex.slice(0, 4).join("") +
+    "-" +
+    hex.slice(4, 6).join("") +
+    "-" +
+    hex.slice(6, 8).join("") +
+    "-" +
+    hex.slice(8, 10).join("") +
+    "-" +
+    hex.slice(10, 16).join("")
+  );
+}
+
+/**
+ * Converts a base64 data URL or file to an image reference ID
+ * Stores the image on disk via Rust backend and returns the unique ID
+ */
+export async function convertToImageRef(imageData: string): Promise<string> {
+  if (!imageData) {
+    return "";
   }
 
   try {
-    // Generate a unique ID for this image
-    const imageId = globalThis.crypto?.randomUUID?.() ?? generateUUID();
+    const imageId = generateImageId();
     
-    // Store the image data using Tauri command
-    // The Rust backend will:
-    // 1. Decode base64
-    // 2. Convert to WebP for optimal compression
-    // 3. Save to disk
     await invoke<string>("storage_write_image", {
-      imageId,
-      base64Data: dataUrl,
+      image_id: imageId,
+      base64_data: imageData,
     });
     
     return imageId;
   } catch (error) {
-    console.error("Failed to convert image to reference:", error);
-    return undefined;
+    console.error("[convertToImageRef] failed to save image:", error);
+    return "";
   }
 }
 
@@ -50,24 +72,20 @@ export async function convertToImageUrl(imageIdOrUrl: string): Promise<string | 
   }
 
   try {
-    // If it's already a URL, return it directly
     if (imageIdOrUrl.startsWith("data:") || imageIdOrUrl.startsWith("http")) {
       return imageIdOrUrl;
     }
 
-    // Check cache first to avoid repeated lookups
     if (imageUrlCache.has(imageIdOrUrl)) {
       return imageUrlCache.get(imageIdOrUrl)!;
     }
 
-    // Create a promise for this conversion and cache it
     const conversionPromise = (async () => {
       try {
         const filePath = await invoke<string>("storage_get_image_path", {
           imageId: imageIdOrUrl,
         });
         
-        // Convert file path to Tauri asset URL
         return `asset://${filePath}`;
       } catch (error) {
         console.warn(`Could not load image ${imageIdOrUrl}:`, error);
@@ -98,7 +116,6 @@ export async function preloadImages(imageIds: (string | undefined | null)[]): Pr
   }
 
   try {
-    // Preload all images in parallel
     await Promise.all(
       validIds.map(id => convertToImageUrl(id))
     );
@@ -136,26 +153,4 @@ export async function deleteImageRef(imageId: string): Promise<void> {
   } catch (error) {
     console.error("Failed to delete image reference:", error);
   }
-}
-
-/**
- * Fallback UUID generator for environments without crypto.randomUUID
- */
-function generateUUID(): string {
-  const bytes = new Uint8Array(16);
-  (globalThis.crypto || ({} as any)).getRandomValues?.(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
-  return (
-    hex.slice(0, 4).join("") +
-    "-" +
-    hex.slice(4, 6).join("") +
-    "-" +
-    hex.slice(6, 8).join("") +
-    "-" +
-    hex.slice(8, 10).join("") +
-    "-" +
-    hex.slice(10, 16).join("")
-  );
 }

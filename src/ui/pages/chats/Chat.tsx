@@ -2,7 +2,6 @@ import { CSSProperties, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
-import { preloadImages } from "../../../core/storage/images";
 
 import { useChatController } from "./hooks/useChatController";
 import {
@@ -59,13 +58,8 @@ export function ChatConversationPage() {
     isStartingSceneMessage,
   } = chatController;
 
-  // Preload character background image when entering Chat
-  useEffect(() => {
-    if (character?.backgroundImagePath) {
-      void preloadImages([character.backgroundImagePath]);
-    }
-  }, [character?.backgroundImagePath]);
-
+  // Load character background image lazily in the background
+  // No preloading to avoid blocking page navigation
   const backgroundImageData = useImageData(character?.backgroundImagePath);
 
   const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {

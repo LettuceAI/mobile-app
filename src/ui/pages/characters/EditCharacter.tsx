@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
 import type { Model, Scene } from "../../../core/storage/schemas";
 import { processBackgroundImage } from "../../../core/utils/image";
+import { convertToImageRef } from "../../../core/storage/images";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
@@ -50,7 +51,19 @@ export function EditCharacterPage() {
       setName(character.name);
       setDescription(character.description || "");
       setAvatarPath(character.avatarPath || "");
-      setBackgroundImagePath(character.backgroundImagePath || "");
+      
+      let backgroundImage = character.backgroundImagePath || "";
+      if (backgroundImage && !backgroundImage.startsWith("data:") && backgroundImage.length === 36) {
+        try {
+          const { convertToImageUrl } = await import("../../../core/storage/images");
+          const assetUrl = await convertToImageUrl(backgroundImage);
+          backgroundImage = assetUrl || backgroundImage;
+        } catch (err) {
+          console.warn("Failed to convert background image ID to URL:", err);
+        }
+      }
+      
+      setBackgroundImagePath(backgroundImage);
       setScenes(character.scenes || []);
       setDefaultSceneId(character.defaultSceneId || null);
       setSelectedModelId(character.defaultModelId || null);
@@ -81,12 +94,21 @@ export function EditCharacterPage() {
       setSaving(true);
       setError(null);
 
+      // Convert base64 images to image IDs before saving
+      // (only if they're data URLs, not already stored IDs)
+      const avatarImageId = avatarPath 
+        ? (avatarPath.startsWith("data:") ? await convertToImageRef(avatarPath) : avatarPath)
+        : undefined;
+      const backgroundImageId = backgroundImagePath 
+        ? (backgroundImagePath.startsWith("data:") ? await convertToImageRef(backgroundImagePath) : backgroundImagePath)
+        : undefined;
+
       await saveCharacter({
         id: characterId,
         name: name.trim(),
         description: description.trim(),
-        avatarPath: avatarPath || undefined,
-        backgroundImagePath: backgroundImagePath || undefined,
+        avatarPath: avatarImageId,
+        backgroundImagePath: backgroundImageId,
         scenes: scenes,
         defaultSceneId: defaultSceneId,
         defaultModelId: selectedModelId,

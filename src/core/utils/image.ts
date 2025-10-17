@@ -51,7 +51,6 @@ export async function processBackgroundImage(
 
     const largestDimension = Math.max(image.width, image.height);
     
-    // Always process through canvas to ensure consistent WebP format
     const scale = largestDimension > maxDimension ? maxDimension / largestDimension : 1;
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(image.width * scale);
@@ -64,7 +63,6 @@ export async function processBackgroundImage(
 
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-    // Convert to WebP format
     const mimeType = `image/${format}`;
     try {
         return canvas.toDataURL(mimeType, quality);

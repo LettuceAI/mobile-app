@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { convertToImageUrl } from "../../core/storage";
 
 interface UseImageDataOptions {
-  /** If true, only load image when explicitly requested (default: true for lazy loading) */
   lazy?: boolean;
 }
 
@@ -10,10 +9,8 @@ interface UseImageDataOptions {
  * Hook to automatically load image URL from an image ID
  * Returns the Tauri asset protocol URL for display, or undefined if loading/not set
  * 
- * Implements lazy loading by default - images only load when needed.
- * Set lazy=false to load immediately.
- * 
- * Caches results to prevent reloading the same image ID across re-renders and mounts.
+ * Loads images immediately and asynchronously to avoid blocking the UI thread.
+ * Results are cached to prevent reloading the same image across re-renders.
  */
 export function useImageData(
   imageIdOrData: string | undefined | null,
@@ -22,9 +19,8 @@ export function useImageData(
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const lastProcessedIdRef = useRef<string | null | undefined>(undefined);
   
-  // Memoize options to prevent recreating on every render
   const memoizedOptions = useMemo<UseImageDataOptions>(() => ({
-    lazy: options?.lazy ?? true,
+    lazy: options?.lazy ?? false, 
   }), [options?.lazy]);
 
   const [shouldLoad, setShouldLoad] = useState(!memoizedOptions.lazy);
@@ -36,24 +32,20 @@ export function useImageData(
       return;
     }
 
-    // Skip if this is the same image ID we already processed
     if (lastProcessedIdRef.current === imageIdOrData && imageUrl !== undefined) {
       return;
     }
 
-    // If it's already a data URL or http URL, use it directly
     if (imageIdOrData.startsWith("data:") || imageIdOrData.startsWith("http")) {
       setImageUrl(imageIdOrData);
       lastProcessedIdRef.current = imageIdOrData;
       return;
     }
 
-    // If lazy loading is enabled and we haven't explicitly triggered load, wait
     if (!shouldLoad) {
       return;
     }
 
-    // Otherwise, convert image ID to Tauri asset URL
     let cancelled = false;
 
     void convertToImageUrl(imageIdOrData)
@@ -64,7 +56,7 @@ export function useImageData(
         }
       })
       .catch((err: any) => {
-        console.error("Failed to load image:", err);
+        console.error('[useImageData] Failed to load image:', err);
         if (!cancelled) {
           setImageUrl(undefined);
         }
