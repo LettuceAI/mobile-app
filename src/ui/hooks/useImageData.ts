@@ -46,11 +46,13 @@ export function useImageData(
       return;
     }
 
+    console.log("[useImageData] Loading image for ID:", imageIdOrData);
     let cancelled = false;
 
     void convertToImageUrl(imageIdOrData)
       .then((url: string | undefined) => {
         if (!cancelled) {
+          console.log("[useImageData] Successfully loaded image:", url ? "present" : "failed");
           setImageUrl(url);
           lastProcessedIdRef.current = imageIdOrData;
         }
@@ -65,9 +67,8 @@ export function useImageData(
     return () => {
       cancelled = true;
     };
-  }, [imageIdOrData, shouldLoad]);
+  }, [imageIdOrData, shouldLoad, imageUrl]);
 
-  // For immediate loading (non-lazy mode)
   useEffect(() => {
     if (!memoizedOptions.lazy) {
       setShouldLoad(true);

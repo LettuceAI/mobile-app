@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
+import type { ThemeColors } from "../../../../core/utils/imageAnalysis";
 
 interface VariantState {
   total: number;
@@ -23,6 +24,7 @@ interface ChatMessageProps {
   handleVariantDrag: (messageId: string, offsetX: number) => void;
   handleRegenerate: (message: StoredMessage) => Promise<void>;
   isStartingSceneMessage: boolean;
+  theme: ThemeColors;
 }
 
 // Memoized action buttons component
@@ -52,21 +54,21 @@ const MessageActions = React.memo(function MessageActions({
         onClick={onRegenerate}
         disabled={disabled}
         className={cn(
-          "flex h-10 w-10 items-center justify-center",
+          "flex items-center justify-center",
           radius.full,
           "border border-white/15 bg-white/10 text-white",
           interactive.transition.fast,
           "hover:border-white/30 hover:bg-white/20 hover:scale-105",
           interactive.active.scale,
-          "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          "disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:scale-100"
         )}
         aria-label="Regenerate response"
         style={{ willChange: 'transform' }}
       >
         {isRegenerating ? (
-          <RefreshCw className="h-8 w-8 animate-spin rounded-full" />
+          <RefreshCw size={14} className="animate-spin rounded-full" />
         ) : (
-          <RefreshCw className="h-8 w-8" />
+          <RefreshCw size={14} />
         )}
       </button>
     </motion.div>
@@ -85,6 +87,7 @@ function ChatMessageInner({
   handleVariantDrag,
   handleRegenerate,
   isStartingSceneMessage,
+  theme,
 }: ChatMessageProps) {
   // Memoize all computed values
   const computed = useMemo(() => {
@@ -166,12 +169,12 @@ function ChatMessageInner({
           typography.body.size,
           message.role === "user"
             ? cn(
-                "ml-auto bg-emerald-400/20 text-white border border-emerald-400/30",
+                `ml-auto ${theme.userBg} ${theme.userText} border ${theme.userBorder}`,
                 heldMessageId === message.id && "ring-2 ring-emerald-400/50"
               )
             : cn(
-                "border bg-white/5 text-white/95",
-                heldMessageId === message.id ? "border-white/30" : "border-white/10"
+                `border ${theme.assistantBg} ${theme.assistantText}`,
+                heldMessageId === message.id ? "border-white/30" : theme.assistantBorder
               )
         )}
         {...eventHandlers}
@@ -199,7 +202,7 @@ function ChatMessageInner({
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, delay: 0.15 }}
           >
-            <span>
+            <span className="text-white">
               {isStartingSceneMessage ? "Scene" : "Variant"} {computed.selectedVariantIndex >= 0 ? computed.selectedVariantIndex + 1 : 1}
               {computed.totalVariants > 0 ? ` / ${computed.totalVariants}` : ""}
             </span>
@@ -243,7 +246,8 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     prev.heldMessageId === next.heldMessageId &&
     prev.regeneratingMessageId === next.regeneratingMessageId &&
     prev.sending === next.sending &&
-    prev.isStartingSceneMessage === next.isStartingSceneMessage
+    prev.isStartingSceneMessage === next.isStartingSceneMessage &&
+    prev.theme === next.theme
   );
 });
 

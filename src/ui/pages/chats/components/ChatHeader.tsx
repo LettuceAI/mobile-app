@@ -6,6 +6,7 @@ import type { Character } from "../../../../core/storage/schemas";
 interface ChatHeaderProps {
   character: Character;
   sessionId?: string;
+  hasBackgroundImage?: boolean;
 }
 
 function isImageLike(value?: string) {
@@ -14,7 +15,7 @@ function isImageLike(value?: string) {
   return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
 
-export function ChatHeader({ character, sessionId }: ChatHeaderProps) {
+export function ChatHeader({ character, sessionId, hasBackgroundImage }: ChatHeaderProps) {
   const navigate = useNavigate();
   const { characterId } = useParams<{ characterId: string }>();
 
@@ -40,7 +41,7 @@ export function ChatHeader({ character, sessionId }: ChatHeaderProps) {
   const headerTitle = useMemo(() => character?.name ?? "Unknown", [character?.name]);
 
   return (
-    <header className="z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-3 pb-3 pt-10 backdrop-blur">
+    <header className={`z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
@@ -78,10 +79,10 @@ export function ChatHeader({ character, sessionId }: ChatHeaderProps) {
               : `/chat/${characterId}/settings`;
             navigate(settingsUrl);
           }}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+          className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
           aria-label="Conversation settings"
         >
-          <Settings size={18} />
+          <Settings size={14} />
         </button>
       </div>
     </header>

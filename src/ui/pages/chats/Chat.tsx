@@ -1,7 +1,8 @@
-import { CSSProperties, useCallback, useEffect, useMemo, useRef } from "react";
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
+import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
 
 import { useChatController } from "./hooks/useChatController";
 import {
@@ -58,9 +59,36 @@ export function ChatConversationPage() {
     isStartingSceneMessage,
   } = chatController;
 
-  // Load character background image lazily in the background
-  // No preloading to avoid blocking page navigation
   const backgroundImageData = useImageData(character?.backgroundImagePath);
+  const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
+
+  // Debug log for background image path
+  useEffect(() => {
+    if (character) {
+      console.log("[Chat] Character backgroundImagePath:", character.backgroundImagePath || "none");
+      console.log("[Chat] Background image data loaded:", backgroundImageData ? "present" : "loading/failed");
+    }
+  }, [character, backgroundImageData]);
+
+  // Analyze background image brightness when it changes
+  useEffect(() => {
+    if (!backgroundImageData) {
+      setTheme(getThemeForBackground(false));
+      return;
+    }
+
+    let mounted = true;
+
+    isImageLight(backgroundImageData).then((isLight) => {
+      if (mounted) {
+        setTheme(getThemeForBackground(isLight));
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [backgroundImageData]);
 
   const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {
     if (!backgroundImageData) {
@@ -152,21 +180,29 @@ export function ChatConversationPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#050505]">
+    <div className="flex h-screen flex-col overflow-hidden" style={{ backgroundColor: backgroundImageData ? undefined : '#050505' }}>
+      {/* Full-screen background image (behind all content) */}
       {backgroundImageData && (
         <div
-          className="pointer-events-none absolute inset-0 z-0"
+          className="pointer-events-none fixed inset-0 z-0"
           style={chatBackgroundStyle}
         />
       )}
 
-      <ChatHeader character={character} sessionId={sessionId} />
+      {/* Header with blurred overlay when background present */}
+      <div className="relative z-20">
+        {backgroundImageData && (
+          <div className={`pointer-events-none absolute inset-0 -z-10 ${theme.headerOverlay}`} />
+        )}
+        <ChatHeader character={character} sessionId={sessionId} hasBackgroundImage={!!backgroundImageData} />
+      </div>
 
+      {/* Main content area */}
       <main ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto">
         <div
           className="space-y-6 px-3 pb-24 pt-4"
           style={{
-            backgroundColor: backgroundImageData ? 'rgba(5, 5, 5, 0.3)' : 'transparent',
+            backgroundColor: backgroundImageData ? theme.contentOverlay : 'transparent',
           }}
         >
           {messages.map((message, index) => {
@@ -199,20 +235,28 @@ export function ChatConversationPage() {
                 handleVariantDrag={handleVariantDrag}
                 handleRegenerate={handleRegenerate}
                 isStartingSceneMessage={isStartingSceneMessage(message)}
+                theme={theme}
               />
             );
           })}
         </div>
       </main>
 
-      <ChatFooter
-        draft={draft}
-        setDraft={setDraft}
-        error={error}
-        sending={sending}
-        character={character}
-        onSendMessage={handleSendMessage}
-      />
+      {/* Footer with blurred overlay when background present */}
+      <div className="relative z-20">
+        {backgroundImageData && (
+          <div className={`pointer-events-none absolute inset-0 -z-10 ${theme.footerOverlay}`} />
+        )}
+        <ChatFooter
+          draft={draft}
+          setDraft={setDraft}
+          error={error}
+          sending={sending}
+          character={character}
+          onSendMessage={handleSendMessage}
+          hasBackgroundImage={!!backgroundImageData}
+        />
+      </div>
 
       <MessageActionsBottomSheet
         messageAction={messageAction}

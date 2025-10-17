@@ -59,7 +59,7 @@ function parseInline(text: string, keyPrefix: string): JSX.Element[] {
     } else if ((token.startsWith("*") && token.endsWith("*")) || (token.startsWith("_") && token.endsWith("_"))) {
       const inner = token.slice(1, -1);
       nodes.push(
-        <em key={`${keyPrefix}-italic-${index++}`} className="text-gray-400">
+        <em key={`${keyPrefix}-italic-${index++}`} className="opacity-80">
           {parseInline(inner, `${keyPrefix}-italic-${index}`)}
         </em>,
       );

@@ -362,3 +362,31 @@ pub fn storage_delete_image(app: tauri::AppHandle, image_id: String) -> Result<(
     
     Ok(())
 }
+
+#[tauri::command]
+pub fn storage_read_image(app: tauri::AppHandle, image_id: String) -> Result<String, String> {
+    let images_dir = storage_root(&app)?.join("images");
+    
+    // Find the image file with any extension
+    for ext in &["jpg", "jpeg", "png", "gif", "webp"] {
+        let image_path = images_dir.join(format!("{}.{}", image_id, ext));
+        if image_path.exists() {
+            let bytes = fs::read(&image_path).map_err(|e| e.to_string())?;
+            
+            // Determine MIME type from extension
+            let mime_type = match *ext {
+                "jpg" | "jpeg" => "image/jpeg",
+                "png" => "image/png",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                _ => "image/png",
+            };
+            
+            // Encode to base64 and return as data URL
+            let base64_data = general_purpose::STANDARD.encode(&bytes);
+            return Ok(format!("data:{};base64,{}", mime_type, base64_data));
+        }
+    }
+    
+    Err(format!("Image not found: {}", image_id))
+}

@@ -9,6 +9,7 @@ interface ChatFooterProps {
   sending: boolean;
   character: Character;
   onSendMessage: () => Promise<void>;
+  hasBackgroundImage?: boolean;
 }
 
 export function ChatFooter({ 
@@ -17,12 +18,13 @@ export function ChatFooter({
   error, 
   sending, 
   character, 
-  onSendMessage 
+  onSendMessage,
+  hasBackgroundImage
 }: ChatFooterProps) {
   const hasDraft = draft.trim().length > 0;
   
   return (
-    <footer className="z-20 flex-shrink-0 border-t border-white/10 bg-[#050505]/95 px-4 pb-6 pt-3 backdrop-blur-xl">
+    <footer className={`z-20 flex-shrink-0 border-t border-white/10 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
       {error && (
         <div className={cn(
           "mb-3 px-4 py-2.5",
@@ -62,7 +64,7 @@ export function ChatFooter({
           onClick={onSendMessage}
           disabled={sending}
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center",
+            "flex shrink-0 items-center justify-center",
             radius.full,
             hasDraft
               ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
@@ -77,7 +79,7 @@ export function ChatFooter({
           aria-label={hasDraft ? "Send message" : "Continue conversation"}
         >
             {sending ? (
-            <span className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : hasDraft ? (
             <Send size={16} />
             ) : (

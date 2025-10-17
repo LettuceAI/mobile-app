@@ -146,10 +146,8 @@ export async function listCharacters(): Promise<Character[]> {
   const fallback: Character[] = [];
   const data = await storageBridge.readCharacters<Character[]>(fallback);
   
-  // Migrate old string-based scenes to new Scene structure BEFORE parsing
   const migrated = data.map((char: any) => {
     if (char.scenes && char.scenes.length > 0 && typeof char.scenes[0] === 'string') {
-      // Old format detected - migrate
       const timestamp = now();
       return {
         ...char,
@@ -158,16 +156,14 @@ export async function listCharacters(): Promise<Character[]> {
           content: sceneContent,
           createdAt: timestamp,
         })),
-        defaultSceneId: null, // Will use first scene as fallback
+        defaultSceneId: null,
       };
     }
     return char;
   });
   
-  // Now parse with the schema
   const parsed = z.array(CharacterSchema).parse(migrated);
   
-  // Save migrated data if changes were made
   const needsMigration = data.some((char: any) => 
     char.scenes && char.scenes.length > 0 && typeof char.scenes[0] === 'string'
   );
@@ -190,7 +186,6 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     updated = [...list.slice(0, idx), entity, ...list.slice(idx + 1)];
   } else {
     const timestamp = now();
-    // Get pure mode setting for default rules
     const settings = await readSettings();
     const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
     const defaultRules = c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
@@ -198,6 +193,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
       id: (c.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
       name: c.name,
       avatarPath: c.avatarPath,
+      backgroundImagePath: c.backgroundImagePath,
       description: c.description,
       scenes: c.scenes ?? [],
       rules: defaultRules,
@@ -275,12 +271,10 @@ export async function createSession(characterId: string, title: string, systemPr
   
   const messages: StoredMessage[] = [];
   
-  // Get character to determine which scene to use
   const characters = await listCharacters();
   const character = characters.find(c => c.id === characterId);
   
   if (character) {
-    // Use provided sceneId, or fallback to character's default scene, or first scene
     const sceneId = selectedSceneId || character.defaultSceneId || character.scenes[0]?.id;
     
     if (sceneId) {
@@ -345,7 +339,6 @@ export async function savePersona(p: Partial<Persona> & { id?: string; title: st
         updatedAt: timestamp,
       };
 
-  // If this persona is being set as default, unset other defaults
   if (entity.isDefault) {
     list.forEach(persona => {
       if (persona.id !== entity.id) {

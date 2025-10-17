@@ -194,19 +194,42 @@ export function useCharacterForm() {
       dispatch({ type: 'SET_SAVING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       
-      // Convert base64 images to image IDs before saving
-      const avatarImageId = state.avatarPath ? await convertToImageRef(state.avatarPath) : undefined;
-      const backgroundImageId = state.backgroundImagePath ? await convertToImageRef(state.backgroundImagePath) : undefined;
+      console.log("[CreateCharacter] Saving with avatarPath:", state.avatarPath ? "present" : "empty");
+      console.log("[CreateCharacter] Saving with backgroundImagePath:", state.backgroundImagePath ? "present" : "empty");
       
-      await saveCharacter({
+      // Convert base64 images to image IDs before saving
+      let avatarImageId: string | undefined = undefined;
+      if (state.avatarPath) {
+        avatarImageId = await convertToImageRef(state.avatarPath);
+        if (!avatarImageId) {
+          console.error("[CreateCharacter] Failed to save avatar image");
+        }
+      }
+      
+      let backgroundImageId: string | undefined = undefined;
+      if (state.backgroundImagePath) {
+        backgroundImageId = await convertToImageRef(state.backgroundImagePath);
+        if (!backgroundImageId) {
+          console.error("[CreateCharacter] Failed to save background image");
+        }
+      }
+      
+      console.log("[CreateCharacter] Avatar image ID:", avatarImageId || "none");
+      console.log("[CreateCharacter] Background image ID:", backgroundImageId || "none");
+      
+      const characterData = {
         name: state.name.trim(),
-        avatarPath: avatarImageId,
-        backgroundImagePath: backgroundImageId,
+        avatarPath: avatarImageId || undefined,
+        backgroundImagePath: backgroundImageId || undefined,
         description: state.description.trim(),
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
-      });
+      };
+      
+      console.log("[CreateCharacter] Saving character data:", JSON.stringify(characterData, null, 2));
+      
+      await saveCharacter(characterData);
 
       return true; // Success
     } catch (e: any) {

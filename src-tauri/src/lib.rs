@@ -32,6 +32,7 @@ pub fn run() {
             storage_manager::storage_usage_summary,
             storage_manager::storage_write_image,
             storage_manager::storage_get_image_path,
+            storage_manager::storage_read_image,
             storage_manager::storage_delete_image,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,

@@ -1,14 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
-const imageUrlCache = new Map<string, Promise<string | undefined>>();
-
 /**
  * Stores a base64-encoded image and returns a reference ID
  * This reduces performance issues from large image data URLs in state
  * 
  * In Tauri v2, images are stored as files on disk via the Rust backend
- * and accessed via the asset:// protocol. Images are automatically converted
- * to WebP format for optimal storage efficiency.
+ * Images are automatically converted to WebP format for optimal storage efficiency.
+ * For display, images are read from disk and returned as data URLs.
  */
 /**
  * Generates a UUID v4 for use as an image ID
@@ -41,17 +39,21 @@ function generateImageId(): string {
  */
 export async function convertToImageRef(imageData: string): Promise<string> {
   if (!imageData) {
+    console.log("[convertToImageRef] No image data provided");
     return "";
   }
 
   try {
     const imageId = generateImageId();
+    console.log("[convertToImageRef] Generated image ID:", imageId);
     
-    await invoke<string>("storage_write_image", {
-      image_id: imageId,
-      base64_data: imageData,
+    const result = await invoke<string>("storage_write_image", {
+      imageId: imageId,
+      base64Data: imageData,
     });
     
+    console.log("[convertToImageRef] Rust returned:", result);
+    console.log("[convertToImageRef] Successfully saved image with ID:", imageId);
     return imageId;
   } catch (error) {
     console.error("[convertToImageRef] failed to save image:", error);
@@ -60,43 +62,29 @@ export async function convertToImageRef(imageData: string): Promise<string> {
 }
 
 /**
- * Converts an image ID to a displayable URL using Tauri v2 asset protocol
- * Lazy loads and caches URLs for performance
+ * Converts an image ID to a displayable URL using Tauri v2 storage
+ * Reads the image from disk and returns it as a data URL
  * 
- * Tauri v2 uses the asset:// protocol to serve files from the app's data directory.
- * The image ID is converted to a file path, which the Rust backend can resolve.
+ * For mobile platforms, we read the image file from disk and return it as a base64
+ * data URL since the asset:// protocol doesn't work reliably on Android.
  */
-export async function convertToImageUrl(imageIdOrUrl: string): Promise<string | undefined> {
-  if (!imageIdOrUrl) {
-    return undefined;
+export async function convertToImageUrl(
+  imageIdOrDataUrl: string
+): Promise<string | undefined> {
+  if (imageIdOrDataUrl.startsWith("data:")) {
+    return imageIdOrDataUrl;
   }
 
   try {
-    if (imageIdOrUrl.startsWith("data:") || imageIdOrUrl.startsWith("http")) {
-      return imageIdOrUrl;
-    }
+    // Read image from disk as base64 data URL
+    const dataUrl = await invoke<string>("storage_read_image", {
+      imageId: imageIdOrDataUrl,
+    });
 
-    if (imageUrlCache.has(imageIdOrUrl)) {
-      return imageUrlCache.get(imageIdOrUrl)!;
-    }
-
-    const conversionPromise = (async () => {
-      try {
-        const filePath = await invoke<string>("storage_get_image_path", {
-          imageId: imageIdOrUrl,
-        });
-        
-        return `asset://${filePath}`;
-      } catch (error) {
-        console.warn(`Could not load image ${imageIdOrUrl}:`, error);
-        return undefined;
-      }
-    })();
-
-    imageUrlCache.set(imageIdOrUrl, conversionPromise);
-    return conversionPromise;
+    console.log("[convertToImageUrl] Loaded image for ID:", imageIdOrDataUrl);
+    return dataUrl;
   } catch (error) {
-    console.error("Failed to convert image ID to URL:", error);
+    console.error("Failed to read image:", error);
     return undefined;
   }
 }
