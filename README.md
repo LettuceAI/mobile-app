@@ -3,7 +3,6 @@
 <img src="https://github.com/LettuceAI/.github/blob/main/profile/LettuceAI-banner.png" alt="LettuceAI Banner" />
 
 **A Private, Cross-Platform AI Roleplay App**
-https://img.shields.io/badge/license-AGPL--v3-blue
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--v3-blue)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-blue.svg)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-18.3-blue.svg)](https://reactjs.org/)
