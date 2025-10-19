@@ -1,10 +1,9 @@
 use crate::api::{api_request, ApiRequest};
-use crate::usage_tracking::{RequestCost, ModelPricing};
 use crate::pricing_cache;
+use crate::usage::{ModelPricing, RequestCost};
+use crate::utils::log_backend;
 use std::collections::HashMap;
 use tauri::AppHandle;
-
-use crate::utils::log_backend;
 
 pub fn calculate_request_cost(
     prompt_tokens: u64,
@@ -13,11 +12,11 @@ pub fn calculate_request_cost(
 ) -> Option<RequestCost> {
     let prompt_price_per_1k = pricing.prompt.parse::<f64>().ok()?;
     let completion_price_per_1k = pricing.completion.parse::<f64>().ok()?;
-    
+
     let prompt_cost = (prompt_tokens as f64 / 1000.0) * prompt_price_per_1k;
     let completion_cost = (completion_tokens as f64 / 1000.0) * completion_price_per_1k;
     let total_cost = prompt_cost + completion_cost;
-    
+
     Some(RequestCost {
         prompt_tokens,
         completion_tokens,
@@ -32,26 +31,25 @@ pub fn calculate_request_cost(
 /// Prioritizes: lowest cost > highest uptime > first available
 fn get_cheapest_endpoint_pricing(endpoints: &[serde_json::Value]) -> Option<ModelPricing> {
     let mut best_endpoint: Option<(f64, f64, &serde_json::Value)> = None;
-    
+
     for endpoint in endpoints {
         if let Some(pricing_obj) = endpoint.get("pricing") {
             let prompt_str = extract_pricing_value(pricing_obj.get("prompt"));
             let completion_str = extract_pricing_value(pricing_obj.get("completion"));
-            
+
             if let (Some(prompt_str), Some(completion_str)) = (prompt_str, completion_str) {
-                if let (Ok(prompt_price), Ok(completion_price)) = (
-                    prompt_str.parse::<f64>(),
-                    completion_str.parse::<f64>(),
-                ) {
+                if let (Ok(prompt_price), Ok(completion_price)) =
+                    (prompt_str.parse::<f64>(), completion_str.parse::<f64>())
+                {
                     let total_price = prompt_price + completion_price;
-                    
+
                     let is_better = match &best_endpoint {
                         None => true,
                         Some((best_total, _, _)) => {
                             total_price < *best_total * 0.99 // 1% threshold to avoid floating point issues
                         }
                     };
-                    
+
                     if is_better {
                         best_endpoint = Some((total_price, prompt_price, endpoint));
                     }
@@ -59,13 +57,13 @@ fn get_cheapest_endpoint_pricing(endpoints: &[serde_json::Value]) -> Option<Mode
             }
         }
     }
-    
+
     // Extract pricing from best endpoint
     best_endpoint.and_then(|(_, _, endpoint)| {
         if let Some(pricing_obj) = endpoint.get("pricing") {
             let prompt = extract_pricing_value(pricing_obj.get("prompt"))?;
             let completion = extract_pricing_value(pricing_obj.get("completion"))?;
-            
+
             Some(ModelPricing {
                 prompt,
                 completion,
@@ -106,21 +104,29 @@ pub async fn fetch_openrouter_model_pricing(
     model_id: &str,
 ) -> Result<Option<ModelPricing>, String> {
     if model_id.contains(":free") {
-        log_backend(&app, "cost_calculator", format!("Skipping free model: {}", model_id));
+        log_backend(
+            &app,
+            "cost_calculator",
+            format!("Skipping free model: {}", model_id),
+        );
         return Ok(None);
     }
-    
+
     if let Ok(Some(cached)) = pricing_cache::get_cached_pricing(&app, model_id) {
-        log_backend(&app, "cost_calculator", format!("Using cached pricing for {}", model_id));
+        log_backend(
+            &app,
+            "cost_calculator",
+            format!("Using cached pricing for {}", model_id),
+        );
         return Ok(Some(cached));
     }
-    
+
     log_backend(
         &app,
         "cost_calculator",
         format!("Fetching pricing for OpenRouter model: {}", model_id),
     );
-    
+
     let request = ApiRequest {
         url: format!("https://openrouter.ai/api/v1/models/{}/endpoints", model_id),
         method: Some("GET".to_string()),
@@ -135,7 +141,7 @@ pub async fn fetch_openrouter_model_pricing(
         stream: None,
         request_id: None,
     };
-    
+
     match api_request(app.clone(), request).await {
         Ok(response) => {
             if !response.ok {
@@ -149,16 +155,20 @@ pub async fn fetch_openrouter_model_pricing(
                 );
                 return Err(format!("OpenRouter API error: {}", response.status));
             }
-            
+
             if let Ok(data) = serde_json::from_value::<serde_json::Value>(response.data.clone()) {
-                if let Some(endpoints_array) = data.get("data").and_then(|d| d.get("endpoints")).and_then(|e| e.as_array()) {
+                if let Some(endpoints_array) = data
+                    .get("data")
+                    .and_then(|d| d.get("endpoints"))
+                    .and_then(|e| e.as_array())
+                {
                     if let Some(pricing) = get_cheapest_endpoint_pricing(endpoints_array) {
                         let _ = pricing_cache::cache_model_pricing(
                             &app,
                             model_id,
                             Some(pricing.clone()),
                         );
-                        
+
                         log_backend(
                             &app,
                             "cost_calculator",
@@ -167,18 +177,21 @@ pub async fn fetch_openrouter_model_pricing(
                                 model_id, pricing.prompt, pricing.completion
                             ),
                         );
-                        
+
                         return Ok(Some(pricing));
                     }
                 }
             }
-            
+
             log_backend(
                 &app,
                 "cost_calculator",
-                format!("No pricing found for model {} in OpenRouter API response", model_id),
+                format!(
+                    "No pricing found for model {} in OpenRouter API response",
+                    model_id
+                ),
             );
-            
+
             Ok(None)
         }
         Err(err) => {
@@ -227,7 +240,7 @@ pub async fn get_model_pricing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_calculate_request_cost() {
         let pricing = ModelPricing {
@@ -238,19 +251,19 @@ mod tests {
             web_search: "0".to_string(),
             internal_reasoning: "0".to_string(),
         };
-        
+
         let cost = calculate_request_cost(1000, 500, &pricing).unwrap();
-        
+
         assert_eq!(cost.prompt_tokens, 1000);
         assert_eq!(cost.completion_tokens, 500);
         assert_eq!(cost.total_tokens, 1500);
-        
+
         // 1000 tokens * 0.000005 = 0.005
         assert!((cost.prompt_cost - 0.005).abs() < 0.0001);
-        
+
         // 500 tokens * 0.000015 = 0.0075
         assert!((cost.completion_cost - 0.0075).abs() < 0.0001);
-        
+
         // Total should be 0.0125
         assert!((cost.total_cost - 0.0125).abs() < 0.0001);
     }

@@ -1,8 +1,7 @@
+use crate::{secrets, storage_manager};
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
-
-use crate::{secrets, storage_manager};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

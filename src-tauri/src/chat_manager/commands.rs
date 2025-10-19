@@ -3,21 +3,18 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
-use crate::cost_calculator::get_model_pricing;
-use crate::secrets::secret_for_cred_get;
-use crate::usage_storage::add_usage_record;
-use crate::usage_tracking::RequestUsage;
 use crate::utils::now_millis;
 
 use super::request::{
     chat_completions_endpoint, ensure_assistant_variant, extract_error_message, extract_text,
-    extract_usage, message_text_for_api, new_assistant_variant, normalize_headers,
-    provider_base_url, system_role_for_provider,
+    extract_usage, new_assistant_variant, normalize_headers, provider_base_url,
+    system_role_for_provider,
 };
-use super::storage::{
-    build_system_prompt, choose_persona, default_character_rules, load_characters, load_personas,
-    load_session, load_settings, recent_messages, save_session, select_model,
+use super::service::{
+    append_system_message, push_message_for_api, record_usage_if_available, resolve_api_key,
+    ChatContext,
 };
+use super::storage::{default_character_rules, recent_messages, save_session};
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
     Model, RegenerateResult, Session, Settings, StoredMessage,
@@ -96,9 +93,8 @@ pub async fn chat_completion(
         ),
     );
 
-    let settings = load_settings(&app)?;
-    let characters = load_characters(&app)?;
-    let personas = load_personas(&app)?;
+    let context = ChatContext::initialize(app.clone())?;
+    let settings = &context.settings;
 
     emit_debug(
         &app,
@@ -106,19 +102,19 @@ pub async fn chat_completion(
         json!({ "characterId": character_id.clone() }),
     );
 
-    let character = match characters.into_iter().find(|c| c.id == character_id) {
-        Some(found) => found,
-        None => {
+    let character = match context.find_character(&character_id) {
+        Ok(found) => found,
+        Err(err) => {
             log_backend(
                 &app,
                 "chat_completion",
                 format!("character {} not found", &character_id),
             );
-            return Err("Character not found".to_string());
+            return Err(err);
         }
     };
 
-    let mut session = match load_session(&app, &session_id)? {
+    let mut session = match context.load_session(&session_id)? {
         Some(s) => s,
         None => {
             log_backend(
@@ -132,7 +128,7 @@ pub async fn chat_completion(
 
     // Prefer session's persona_id, fallback to explicitly passed persona_id
     let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
-    let persona = choose_persona(&personas, effective_persona_id);
+    let persona = context.choose_persona(effective_persona_id.map(|id| id.as_str()));
 
     emit_debug(
         &app,
@@ -148,7 +144,7 @@ pub async fn chat_completion(
         session.character_id = character.id.clone();
     }
 
-    let (model, provider_cred) = select_model(&settings, &character)?;
+    let (model, provider_cred) = context.select_model(&character)?;
 
     log_backend(
         &app,
@@ -171,49 +167,7 @@ pub async fn chat_completion(
         }),
     );
 
-    let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
-        match secret_for_cred_get(
-            app.clone(),
-            api_ref.provider_id.clone(),
-            api_ref
-                .cred_id
-                .clone()
-                .unwrap_or_else(|| provider_cred.id.clone()),
-            api_ref.key.clone(),
-        ) {
-            Ok(Some(value)) => value,
-            Ok(None) => {
-                log_backend(
-                    &app,
-                    "chat_completion",
-                    format!(
-                        "missing API key for provider {} credential {}",
-                        provider_cred.provider_id.as_str(),
-                        provider_cred.id.as_str()
-                    ),
-                );
-                return Err("Missing API key".into());
-            }
-            Err(err) => {
-                log_backend(
-                    &app,
-                    "chat_completion",
-                    format!("failed to read API key: {}", err),
-                );
-                return Err(err);
-            }
-        }
-    } else {
-        log_backend(
-            &app,
-            "chat_completion",
-            format!(
-                "provider credential {} missing API key reference",
-                provider_cred.id.as_str()
-            ),
-        );
-        return Err("Provider credential missing API key reference".into());
-    };
+    let api_key = resolve_api_key(&app, provider_cred, "chat_completion")?;
 
     let now = now_millis()?;
 
@@ -241,24 +195,14 @@ pub async fn chat_completion(
         }),
     );
 
-    let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
-
+    let system_prompt = context.build_system_prompt(&character, persona, &session);
     let recent_msgs = recent_messages(&session);
 
     let system_role = system_role_for_provider(provider_cred);
     let mut messages_for_api = Vec::new();
-    if let Some(system) = &system_prompt {
-        messages_for_api.push(json!({ "role": system_role, "content": system }));
-    }
+    append_system_message(&mut messages_for_api, system_role, system_prompt);
     for msg in &recent_msgs {
-        // Skip "scene" role messages - scene content is already in system prompt
-        if msg.role == "scene" {
-            continue;
-        }
-        messages_for_api.push(json!({
-            "role": msg.role,
-            "content": message_text_for_api(msg)
-        }));
+        push_message_for_api(&mut messages_for_api, msg);
     }
 
     let should_stream = stream.unwrap_or(true);
@@ -428,81 +372,18 @@ pub async fn chat_completion(
         }),
     );
 
-    // Record usage for analytics
-    if let Some(usage_info) = &usage {
-        let mut request_usage = RequestUsage {
-            id: Uuid::new_v4().to_string(),
-            timestamp: now_millis().unwrap_or(assistant_created_at),
-            session_id: session.id.clone(),
-            character_id: character.id.clone(),
-            character_name: character.name.clone(),
-            model_id: model.id.clone(),
-            model_name: model.name.clone(),
-            provider_id: provider_cred.provider_id.clone(),
-            provider_label: provider_cred.provider_id.clone(),
-            prompt_tokens: usage_info.prompt_tokens,
-            completion_tokens: usage_info.completion_tokens,
-            total_tokens: usage_info.total_tokens,
-            cost: None,
-            success: true,
-            error_message: None,
-            metadata: Default::default(),
-        };
-
-        if provider_cred.provider_id.to_lowercase() == "openrouter" {
-            match get_model_pricing(app.clone(), &provider_cred.provider_id, &model.name, Some(&api_key)).await {
-                Ok(Some(pricing)) => {
-                    match crate::cost_calculator::calculate_request_cost(
-                        usage_info.prompt_tokens.unwrap_or(0),
-                        usage_info.completion_tokens.unwrap_or(0),
-                        &pricing,
-                    ) {
-                        Some(cost) => {
-                            request_usage.cost = Some(cost.clone());
-                            log_backend(
-                                &app,
-                                "chat_completion",
-                                format!(
-                                    "calculated cost for request: ${:.6}",
-                                    cost.total_cost
-                                ),
-                            );
-                        }
-                        None => {
-                            log_backend(
-                                &app,
-                                "chat_completion",
-                                "failed to calculate request cost".to_string(),
-                            );
-                        }
-                    }
-                }
-                Ok(None) => {
-                    log_backend(
-                        &app,
-                        "chat_completion",
-                        "no pricing found for model (might be free)".to_string(),
-                    );
-                }
-                Err(err) => {
-                    log_backend(
-                        &app,
-                        "chat_completion",
-                        format!("failed to fetch pricing: {}", err),
-                    );
-                }
-            }
-        }
-
-        // Save the usage record
-        if let Err(err) = add_usage_record(&app, request_usage) {
-            log_backend(
-                &app,
-                "chat_completion",
-                format!("failed to save usage record: {}", err),
-            );
-        }
-    }
+    record_usage_if_available(
+        &context,
+        &usage,
+        &session,
+        &character,
+        model,
+        provider_cred,
+        &api_key,
+        assistant_created_at,
+        "chat_completion",
+    )
+    .await;
 
     Ok(ChatTurnResult {
         session_id: session.id,
@@ -525,9 +406,8 @@ pub async fn chat_regenerate(
         request_id,
     } = args;
 
-    let settings = load_settings(&app)?;
-    let characters = load_characters(&app)?;
-    let personas = load_personas(&app)?;
+    let context = ChatContext::initialize(app.clone())?;
+    let settings = &context.settings;
 
     log_backend(
         &app,
@@ -538,7 +418,7 @@ pub async fn chat_regenerate(
         ),
     );
 
-    let mut session = match load_session(&app, &session_id)? {
+    let mut session = match context.load_session(&session_id)? {
         Some(s) => s,
         None => {
             log_backend(
@@ -597,24 +477,21 @@ pub async fn chat_regenerate(
         return Err("Selected message is not an assistant or scene response".into());
     }
 
-    let character = match characters
-        .into_iter()
-        .find(|c| c.id == session.character_id)
-    {
-        Some(found) => found,
-        None => {
+    let character = match context.find_character(&session.character_id) {
+        Ok(found) => found,
+        Err(err) => {
             log_backend(
                 &app,
                 "chat_regenerate",
                 format!("character {} not found", &session.character_id),
             );
-            return Err("Character not found".to_string());
+            return Err(err);
         }
     };
 
-    let persona = choose_persona(&personas, None);
+    let persona = context.choose_persona(None);
 
-    let (model, provider_cred) = select_model(&settings, &character)?;
+    let (model, provider_cred) = context.select_model(&character)?;
 
     log_backend(
         &app,
@@ -637,58 +514,14 @@ pub async fn chat_regenerate(
         }),
     );
 
-    let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
-        match secret_for_cred_get(
-            app.clone(),
-            api_ref.provider_id.clone(),
-            api_ref
-                .cred_id
-                .clone()
-                .unwrap_or_else(|| provider_cred.id.clone()),
-            api_ref.key.clone(),
-        ) {
-            Ok(Some(value)) => value,
-            Ok(None) => {
-                log_backend(
-                    &app,
-                    "chat_regenerate",
-                    format!(
-                        "missing API key for provider {} credential {}",
-                        provider_cred.provider_id.as_str(),
-                        provider_cred.id.as_str()
-                    ),
-                );
-                return Err("Missing API key".into());
-            }
-            Err(err) => {
-                log_backend(
-                    &app,
-                    "chat_regenerate",
-                    format!("failed to read API key: {}", err),
-                );
-                return Err(err);
-            }
-        }
-    } else {
-        log_backend(
-            &app,
-            "chat_regenerate",
-            format!(
-                "provider credential {} missing API key reference",
-                provider_cred.id.as_str()
-            ),
-        );
-        return Err("Provider credential missing API key reference".into());
-    };
+    let api_key = resolve_api_key(&app, provider_cred, "chat_regenerate")?;
 
-    let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
+    let system_prompt = context.build_system_prompt(&character, persona, &session);
 
     let system_role = system_role_for_provider(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
-        if let Some(system) = &system_prompt {
-            out.push(json!({ "role": system_role, "content": system }));
-        }
+        append_system_message(&mut out, system_role, system_prompt);
         for (idx, msg) in session.messages.iter().enumerate() {
             if idx > target_index {
                 break;
@@ -696,14 +529,7 @@ pub async fn chat_regenerate(
             if idx == target_index {
                 continue;
             }
-            // Skip "scene" role messages - scene content is already in system prompt
-            if msg.role == "scene" {
-                continue;
-            }
-            out.push(json!({
-                "role": msg.role,
-                "content": message_text_for_api(msg),
-            }));
+            push_message_for_api(&mut out, msg);
         }
         out
     };
@@ -872,81 +698,18 @@ pub async fn chat_regenerate(
         ),
     );
 
-    // Record usage for analytics
-    if let Some(usage_info) = &usage {
-        let mut request_usage = RequestUsage {
-            id: Uuid::new_v4().to_string(),
-            timestamp: now_millis().unwrap_or(created_at),
-            session_id: session.id.clone(),
-            character_id: session.character_id.clone(),
-            character_name: character.name.clone(),
-            model_id: model.id.clone(),
-            model_name: model.name.clone(),
-            provider_id: provider_cred.provider_id.clone(),
-            provider_label: provider_cred.provider_id.clone(),
-            prompt_tokens: usage_info.prompt_tokens,
-            completion_tokens: usage_info.completion_tokens,
-            total_tokens: usage_info.total_tokens,
-            cost: None,
-            success: true,
-            error_message: None,
-            metadata: Default::default(),
-        };
-
-        if provider_cred.provider_id.to_lowercase() == "openrouter" {
-            match get_model_pricing(app.clone(), &provider_cred.provider_id, &model.name, Some(&api_key)).await {
-                Ok(Some(pricing)) => {
-                    match crate::cost_calculator::calculate_request_cost(
-                        usage_info.prompt_tokens.unwrap_or(0),
-                        usage_info.completion_tokens.unwrap_or(0),
-                        &pricing,
-                    ) {
-                        Some(cost) => {
-                            request_usage.cost = Some(cost.clone());
-                            log_backend(
-                                &app,
-                                "chat_regenerate",
-                                format!(
-                                    "calculated cost for request: ${:.6}",
-                                    cost.total_cost
-                                ),
-                            );
-                        }
-                        None => {
-                            log_backend(
-                                &app,
-                                "chat_regenerate",
-                                "failed to calculate request cost".to_string(),
-                            );
-                        }
-                    }
-                }
-                Ok(None) => {
-                    log_backend(
-                        &app,
-                        "chat_regenerate",
-                        "no pricing found for model (might be free)".to_string(),
-                    );
-                }
-                Err(err) => {
-                    log_backend(
-                        &app,
-                        "chat_regenerate",
-                        format!("failed to fetch pricing: {}", err),
-                    );
-                }
-            }
-        }
-
-        // Save the usage record
-        if let Err(err) = add_usage_record(&app, request_usage) {
-            log_backend(
-                &app,
-                "chat_regenerate",
-                format!("failed to save usage record: {}", err),
-            );
-        }
-    }
+    record_usage_if_available(
+        &context,
+        &usage,
+        &session,
+        &character,
+        model,
+        provider_cred,
+        &api_key,
+        created_at,
+        "chat_regenerate",
+    )
+    .await;
 
     Ok(RegenerateResult {
         session_id: session.id,
@@ -968,9 +731,8 @@ pub async fn chat_continue(
         request_id,
     } = args;
 
-    let settings = load_settings(&app)?;
-    let characters = load_characters(&app)?;
-    let personas = load_personas(&app)?;
+    let context = ChatContext::initialize(app.clone())?;
+    let settings = &context.settings;
 
     log_backend(
         &app,
@@ -981,7 +743,7 @@ pub async fn chat_continue(
         ),
     );
 
-    let mut session = match load_session(&app, &session_id)? {
+    let mut session = match context.load_session(&session_id)? {
         Some(s) => s,
         None => {
             log_backend(
@@ -1003,23 +765,23 @@ pub async fn chat_continue(
         }),
     );
 
-    let character = match characters.into_iter().find(|c| c.id == character_id) {
-        Some(found) => found,
-        None => {
+    let character = match context.find_character(&character_id) {
+        Ok(found) => found,
+        Err(err) => {
             log_backend(
                 &app,
                 "chat_continue",
                 format!("character {} not found", &character_id),
             );
-            return Err("Character not found".to_string());
+            return Err(err);
         }
     };
 
     // Prefer session's persona_id, fallback to explicitly passed persona_id
     let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
-    let persona = choose_persona(&personas, effective_persona_id);
+    let persona = context.choose_persona(effective_persona_id.map(|id| id.as_str()));
 
-    let (model, provider_cred) = select_model(&settings, &character)?;
+    let (model, provider_cred) = context.select_model(&character)?;
 
     log_backend(
         &app,
@@ -1042,67 +804,16 @@ pub async fn chat_continue(
         }),
     );
 
-    let api_key = if let Some(ref api_ref) = provider_cred.api_key_ref {
-        match secret_for_cred_get(
-            app.clone(),
-            api_ref.provider_id.clone(),
-            api_ref
-                .cred_id
-                .clone()
-                .unwrap_or_else(|| provider_cred.id.clone()),
-            api_ref.key.clone(),
-        ) {
-            Ok(Some(value)) => value,
-            Ok(None) => {
-                log_backend(
-                    &app,
-                    "chat_continue",
-                    format!(
-                        "missing API key for provider {} credential {}",
-                        provider_cred.provider_id.as_str(),
-                        provider_cred.id.as_str()
-                    ),
-                );
-                return Err("Missing API key".into());
-            }
-            Err(err) => {
-                log_backend(
-                    &app,
-                    "chat_continue",
-                    format!("failed to read API key: {}", err),
-                );
-                return Err(err);
-            }
-        }
-    } else {
-        log_backend(
-            &app,
-            "chat_continue",
-            format!(
-                "provider credential {} missing API key reference",
-                provider_cred.id.as_str()
-            ),
-        );
-        return Err("Provider credential missing API key reference".into());
-    };
+    let api_key = resolve_api_key(&app, provider_cred, "chat_continue")?;
 
-    let system_prompt = build_system_prompt(&app, &character, persona, &session, &settings);
+    let system_prompt = context.build_system_prompt(&character, persona, &session);
     let recent_msgs = recent_messages(&session);
 
     let system_role = system_role_for_provider(provider_cred);
     let mut messages_for_api = Vec::new();
-    if let Some(system) = &system_prompt {
-        messages_for_api.push(json!({ "role": system_role, "content": system }));
-    }
+    append_system_message(&mut messages_for_api, system_role, system_prompt);
     for msg in &recent_msgs {
-        // Skip "scene" role messages - scene content is already in system prompt
-        if msg.role == "scene" {
-            continue;
-        }
-        messages_for_api.push(json!({
-            "role": msg.role,
-            "content": message_text_for_api(msg)
-        }));
+        push_message_for_api(&mut messages_for_api, msg);
     }
 
     let should_stream = stream.unwrap_or(true);
@@ -1277,80 +988,18 @@ pub async fn chat_continue(
         ),
     );
 
-    if let Some(usage_info) = &usage {
-        let mut request_usage = RequestUsage {
-            id: Uuid::new_v4().to_string(),
-            timestamp: now_millis().unwrap_or(assistant_created_at),
-            session_id: session.id.clone(),
-            character_id: session.character_id.clone(),
-            character_name: character.name.clone(),
-            model_id: model.id.clone(),
-            model_name: model.name.clone(),
-            provider_id: provider_cred.provider_id.clone(),
-            provider_label: provider_cred.provider_id.clone(),
-            prompt_tokens: usage_info.prompt_tokens,
-            completion_tokens: usage_info.completion_tokens,
-            total_tokens: usage_info.total_tokens,
-            cost: None,
-            success: true,
-            error_message: None,
-            metadata: Default::default(),
-        };
-
-        if provider_cred.provider_id.to_lowercase() == "openrouter" {
-            match get_model_pricing(app.clone(), &provider_cred.provider_id, &model.name, Some(&api_key)).await {
-                Ok(Some(pricing)) => {
-                    match crate::cost_calculator::calculate_request_cost(
-                        usage_info.prompt_tokens.unwrap_or(0),
-                        usage_info.completion_tokens.unwrap_or(0),
-                        &pricing,
-                    ) {
-                        Some(cost) => {
-                            request_usage.cost = Some(cost.clone());
-                            log_backend(
-                                &app,
-                                "chat_continue",
-                                format!(
-                                    "calculated cost for request: ${:.6}",
-                                    cost.total_cost
-                                ),
-                            );
-                        }
-                        None => {
-                            log_backend(
-                                &app,
-                                "chat_continue",
-                                "failed to calculate request cost".to_string(),
-                            );
-                        }
-                    }
-                }
-                Ok(None) => {
-                    log_backend(
-                        &app,
-                        "chat_continue",
-                        "no pricing found for model (might be free)".to_string(),
-                    );
-                }
-                Err(err) => {
-                    log_backend(
-                        &app,
-                        "chat_continue",
-                        format!("failed to fetch pricing: {}", err),
-                    );
-                }
-            }
-        }
-
-        // Save the usage record
-        if let Err(err) = add_usage_record(&app, request_usage) {
-            log_backend(
-                &app,
-                "chat_continue",
-                format!("failed to save usage record: {}", err),
-            );
-        }
-    }
+    record_usage_if_available(
+        &context,
+        &usage,
+        &session,
+        &character,
+        model,
+        provider_cred,
+        &api_key,
+        assistant_created_at,
+        "chat_continue",
+    )
+    .await;
 
     Ok(ContinueResult {
         session_id: session.id,

@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 #[cfg(not(target_os = "android"))]
@@ -7,7 +8,6 @@ use rand::RngCore;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
-use base64::{Engine as _, engine::general_purpose};
 
 use crate::utils::{ensure_lettuce_dir, now_millis};
 
@@ -319,7 +319,10 @@ pub fn storage_write_image(
         "png"
     } else if bytes.starts_with(&[0x47, 0x49, 0x46]) {
         "gif"
-    } else if bytes.starts_with(&[0x52, 0x49, 0x46, 0x46]) && bytes.len() > 8 && &bytes[8..12] == b"WEBP" {
+    } else if bytes.starts_with(&[0x52, 0x49, 0x46, 0x46])
+        && bytes.len() > 8
+        && &bytes[8..12] == b"WEBP"
+    {
         "webp"
     } else {
         "png" // default
@@ -336,7 +339,7 @@ pub fn storage_write_image(
 #[tauri::command]
 pub fn storage_get_image_path(app: tauri::AppHandle, image_id: String) -> Result<String, String> {
     let images_dir = storage_root(&app)?.join("images");
-    
+
     // Check for file with any image extension
     for ext in &["jpg", "jpeg", "png", "gif", "webp"] {
         let image_path = images_dir.join(format!("{}.{}", image_id, ext));
@@ -344,14 +347,14 @@ pub fn storage_get_image_path(app: tauri::AppHandle, image_id: String) -> Result
             return Ok(image_path.to_string_lossy().to_string());
         }
     }
-    
+
     Err(format!("Image not found: {}", image_id))
 }
 
 #[tauri::command]
 pub fn storage_delete_image(app: tauri::AppHandle, image_id: String) -> Result<(), String> {
     let images_dir = storage_root(&app)?.join("images");
-    
+
     // Delete file with any extension
     for ext in &["jpg", "jpeg", "png", "gif", "webp", "img"] {
         let image_path = images_dir.join(format!("{}.{}", image_id, ext));
@@ -359,20 +362,20 @@ pub fn storage_delete_image(app: tauri::AppHandle, image_id: String) -> Result<(
             delete_file_if_exists(&image_path)?;
         }
     }
-    
+
     Ok(())
 }
 
 #[tauri::command]
 pub fn storage_read_image(app: tauri::AppHandle, image_id: String) -> Result<String, String> {
     let images_dir = storage_root(&app)?.join("images");
-    
+
     // Find the image file with any extension
     for ext in &["jpg", "jpeg", "png", "gif", "webp"] {
         let image_path = images_dir.join(format!("{}.{}", image_id, ext));
         if image_path.exists() {
             let bytes = fs::read(&image_path).map_err(|e| e.to_string())?;
-            
+
             // Determine MIME type from extension
             let mime_type = match *ext {
                 "jpg" | "jpeg" => "image/jpeg",
@@ -381,12 +384,12 @@ pub fn storage_read_image(app: tauri::AppHandle, image_id: String) -> Result<Str
                 "webp" => "image/webp",
                 _ => "image/png",
             };
-            
+
             // Encode to base64 and return as data URL
             let base64_data = general_purpose::STANDARD.encode(&bytes);
             return Ok(format!("data:{};base64,{}", mime_type, base64_data));
         }
     }
-    
+
     Err(format!("Image not found: {}", image_id))
 }

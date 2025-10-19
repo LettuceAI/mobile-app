@@ -1,10 +1,9 @@
+use crate::{secrets, storage_manager, utils::log_backend};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
-
-use crate::{secrets, storage_manager, utils::log_backend};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -206,105 +205,49 @@ pub async fn verify_provider_api_key(
         }
     };
 
-    let headers = match build_headers(&provider_id, &resolved_key) {
-        Ok(h) => h,
-        Err(err) => {
-            return Ok(VerifyProviderApiKeyResult {
-                provider_id,
-                valid: false,
-                status: None,
-                error: Some(err),
-                details: None,
-            });
-        }
-    };
-
     let client = Client::builder()
-        .timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;
 
+    let headers = build_headers(&provider_id, &resolved_key)?;
     let url = build_url(&provider_id, &base);
 
     let response = match client.get(&url).headers(headers).send().await {
         Ok(resp) => resp,
         Err(err) => {
-            log_backend(
-                &app,
-                "verify_provider_api_key",
-                format!("request error provider={} err={}", provider_id, err),
-            );
             return Ok(VerifyProviderApiKeyResult {
                 provider_id,
                 valid: false,
                 status: None,
-                error: Some(format!("request error: {}", err)),
+                error: Some(err.to_string()),
                 details: None,
             });
         }
     };
 
-    let status = response.status();
-    let status_code = status.as_u16();
-    let body_text = match response.text().await {
-        Ok(text) => text,
-        Err(err) => {
-            return Ok(VerifyProviderApiKeyResult {
-                provider_id,
-                valid: false,
-                status: Some(status_code),
-                error: Some(format!("failed to read response: {}", err)),
-                details: None,
-            });
-        }
+    let status = response.status().as_u16();
+    let json = response.json::<Value>().await.unwrap_or(Value::Null);
+
+    let valid = match status {
+        200 => true,
+        401 | 403 => false,
+        _ => json
+            .get("data")
+            .and_then(|d| d.as_array())
+            .map(|arr| !arr.is_empty())
+            .unwrap_or(status == 200),
     };
-
-    let parsed_json = if body_text.trim().is_empty() {
-        None
-    } else {
-        serde_json::from_str::<Value>(&body_text).ok()
-    };
-
-    if status.is_success() {
-        log_backend(
-            &app,
-            "verify_provider_api_key",
-            format!("success provider={} status={}", provider_id, status_code),
-        );
-        return Ok(VerifyProviderApiKeyResult {
-            provider_id,
-            valid: true,
-            status: Some(status_code),
-            error: None,
-            details: None,
-        });
-    }
-
-    let error_message = parsed_json
-        .as_ref()
-        .and_then(|payload| extract_error_message(payload))
-        .or_else(|| {
-            if body_text.is_empty() {
-                None
-            } else {
-                Some(body_text.clone())
-            }
-        });
-
-    log_backend(
-        &app,
-        "verify_provider_api_key",
-        format!(
-            "failure provider={} status={} error={:?}",
-            provider_id, status_code, error_message
-        ),
-    );
 
     Ok(VerifyProviderApiKeyResult {
         provider_id,
-        valid: false,
-        status: Some(status_code),
-        error: error_message,
-        details: parsed_json,
+        valid,
+        status: Some(status),
+        error: if valid {
+            None
+        } else {
+            extract_error_message(&json)
+        },
+        details: if valid { None } else { Some(json) },
     })
 }

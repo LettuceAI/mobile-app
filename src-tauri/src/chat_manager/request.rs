@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::types::{MessageVariant, ProviderCredential, StoredMessage, UsageSummary};
-use crate::provider_config;
+use crate::providers;
 
 pub fn provider_base_url(cred: &ProviderCredential) -> String {
-    provider_config::resolve_base_url(&cred.provider_id, cred.base_url.as_deref())
+    providers::resolve_base_url(&cred.provider_id, cred.base_url.as_deref())
 }
 
 pub fn chat_completions_endpoint(base_url: &str) -> String {
@@ -37,7 +37,7 @@ pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<St
 /// Determines the appropriate system role for the provider
 /// Uses centralized config
 pub fn system_role_for_provider(cred: &ProviderCredential) -> &'static str {
-    provider_config::get_system_role(&cred.provider_id)
+    providers::get_system_role(&cred.provider_id)
 }
 
 fn selected_variant<'a>(message: &'a StoredMessage) -> Option<&'a MessageVariant> {

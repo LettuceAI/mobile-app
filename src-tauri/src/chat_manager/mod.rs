@@ -1,5 +1,6 @@
 mod commands;
 mod request;
+mod service;
 mod storage;
 pub mod types;
 

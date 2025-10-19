@@ -7,7 +7,7 @@ pub struct ProviderConfig {
     pub name: String,
     pub default_base_url: String,
     pub api_endpoint_path: String,
-    pub system_role: String,     
+    pub system_role: String,
     pub default_headers: HashMap<String, String>,
 }
 
