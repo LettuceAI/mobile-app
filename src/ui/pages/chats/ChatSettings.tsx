@@ -106,12 +106,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
   const handleNewChat = async () => {
     if (!characterId || !currentCharacter) return;
-    
+
     try {
       const session = await createSession(
-        characterId, 
-        "New Chat", 
-        undefined, 
+        characterId,
+        "New Chat",
+        undefined,
         currentCharacter.scenes && currentCharacter.scenes.length > 0 ? currentCharacter.scenes[0].id : undefined
       );
       navigate(`/chat/${characterId}?sessionId=${session.id}`, { replace: true });
@@ -122,7 +122,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
   const handleChangeModel = async (modelId: string) => {
     if (!characterId) return;
-    
+
     try {
       // Update the character's default model
       const updatedCharacter = await saveCharacter({
@@ -131,7 +131,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       });
       setCurrentCharacter(updatedCharacter);
       setShowModelSelector(false);
-      
+
       // Only redirect back to chat if we have a sessionId
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('sessionId');
@@ -149,7 +149,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       console.log("No current session");
       return;
     }
-    
+
     try {
       console.log("Changing persona to:", personaId);
       const updatedSession = {
@@ -164,7 +164,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       setCurrentSession(updatedSession);
       setShowPersonaSelector(false);
       setSessionAdvancedSettings(updatedSession.advancedModelSettings ?? null);
-      
+
       // Only redirect back to chat if we have both characterId and sessionId
       if (characterId && currentSession.id) {
         navigate(`/chat/${characterId}?sessionId=${currentSession.id}`, { replace: true });
@@ -228,21 +228,21 @@ function ChatSettingsContent({ character }: { character: Character }) {
     const defaults = createDefaultAdvancedModelSettings();
     return formatAdvancedModelSettingsSummary(defaults, "Temp 0.7 • Top P 1 • Max 1024");
   }, []);
-  
+
   const globalAdvancedSummary = useMemo(() => {
     return formatAdvancedModelSettingsSummary(
-      globalAdvancedSettings ?? createDefaultAdvancedModelSettings(), 
+      globalAdvancedSettings ?? createDefaultAdvancedModelSettings(),
       defaultAdvancedSummary
     );
   }, [globalAdvancedSettings, defaultAdvancedSummary]);
-  
+
   const sessionAdvancedSummary = useMemo(() => {
     if (!currentSession) {
       return "Open a chat session first";
     }
     const inheritedLabel = `Inherits ${globalAdvancedSummary}`;
     return formatAdvancedModelSettingsSummary(
-      sessionAdvancedSettings ?? null, 
+      sessionAdvancedSettings ?? null,
       inheritedLabel
     );
   }, [currentSession, sessionAdvancedSettings, globalAdvancedSummary]);
@@ -267,7 +267,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     <div className="min-h-screen bg-[#050505] text-gray-100">
       {/* Header */}
       <header className="relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6 backdrop-blur">
-        <div 
+        <div
           className="flex items-center gap-4"
           style={{ paddingTop: "calc(env(safe-area-inset-top) + 8px)" }}
         >
@@ -346,11 +346,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
             <button
               onClick={() => setShowPersonaSelector(true)}
               disabled={!currentSession}
-              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${
-                !currentSession 
-                  ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-                  : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
-              }`}
+              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${!currentSession
+                ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+                : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
+                }`}
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
@@ -420,11 +419,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 setShowSessionAdvancedMenu(true);
               }}
               disabled={!currentSession}
-              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${
-                !currentSession
-                  ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-                  : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
-              }`}
+              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${!currentSession
+                ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+                : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
+                }`}
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
@@ -463,11 +461,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
               {/* None option - No Persona */}
               <button
                 onClick={() => handleChangePersona(null)}
-                className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${
-                  currentSession?.personaId === ""
-                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                    : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
-                }`}
+                className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${currentSession?.personaId === ""
+                  ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+                  : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+                  }`}
               >
                 <div className="flex-1">
                   <div className="text-base font-semibold">No Persona</div>
@@ -485,11 +482,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <button
                   key={persona.id}
                   onClick={() => handleChangePersona(persona.id)}
-                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${
-                    persona.id === currentSession?.personaId
-                      ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                      : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
-                  }`}
+                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${persona.id === currentSession?.personaId
+                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+                    : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+                    }`}
                 >
                   <div className="flex-1">
                     <div className="text-base font-semibold">
@@ -531,11 +527,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <button
                   key={model.id}
                   onClick={() => handleChangeModel(model.id)}
-                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${
-                    model.id === effectiveModelId
-                      ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                      : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
-                  }`}
+                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${model.id === effectiveModelId
+                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+                    : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+                    }`}
                 >
                   <div className="flex-1">
                     <div className="text-base font-semibold">{model.displayName}</div>
@@ -579,20 +574,29 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     Enable to customize temperature, top P, and token limits just for this conversation.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSessionOverrideEnabled((value) => !value)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                    sessionOverrideEnabled ? "bg-emerald-400/70" : "bg-white/15"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
-                      sessionOverrideEnabled ? "translate-x-5" : "translate-x-1"
-                    }`}
+
+                <div className="flex items-center">
+                  <input
+                    id="use-as-default"
+                    type="checkbox"
+                    checked={sessionOverrideEnabled}
+                    onChange={() => setSessionOverrideEnabled((value) => !value)}
+                    className="peer sr-only"
                   />
-                  <span className="sr-only">Toggle session override</span>
-                </button>
+                  <label
+                    htmlFor="use-as-default"
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${sessionOverrideEnabled
+                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                      : 'bg-white/20'
+                      }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${sessionOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                    />
+                  </label>
+                </div>
+
               </div>
 
               <AdvancedModelSettingsForm
@@ -638,7 +642,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
 export function ChatSettingsPage() {
   const { characterId } = useParams<{ characterId: string }>();
   const chatController = useChatController(characterId);
-  
+
   const { character, loading, error } = chatController;
 
   if (loading) {
