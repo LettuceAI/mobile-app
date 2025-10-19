@@ -45,6 +45,14 @@ export function useProvidersPageController(): ControllerReturn {
 
   const reload = useCallback(async () => {
     const settings = await readSettings();
+    console.log("[ProvidersPage] Loaded providers from storage:", 
+      settings.providerCredentials.map(p => ({
+        id: p.id,
+        label: p.label,
+        baseUrl: p.baseUrl,
+        providerId: p.providerId,
+      }))
+    );
     dispatch({ type: "set_providers", payload: settings.providerCredentials });
   }, []);
 
@@ -80,6 +88,13 @@ export function useProvidersPageController(): ControllerReturn {
               credId: newId,
             },
           } as ProviderCredential);
+
+      console.log("[ProvidersPage] Opening editor with provider:", {
+        id: baseProvider.id,
+        label: baseProvider.label,
+        baseUrl: baseProvider.baseUrl,
+        providerId: baseProvider.providerId,
+      });
 
       dispatch({ type: "set_selected_provider", payload: null });
       dispatch({

@@ -9,6 +9,7 @@ import { ModelsPage } from "./ui/pages/settings/ModelsPage";
 import { EditModelPage } from "./ui/pages/settings/EditModelPage";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
+import { UsagePage } from "./ui/pages/settings/UsagePage";
 import { CharactersPage } from "./ui/pages/settings/CharactersPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
@@ -21,13 +22,11 @@ import { TopNav, BottomNav } from "./ui/components/App";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 function App() {
-  // Global listeners that should persist across all routes
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
     (async () => {
       try {
         unlisten = await listen("chat://debug", (event) => {
-          // Tauri backend emits: { state, payload } or { state, message }
           if (
             typeof event.payload === "object" &&
             event.payload !== null &&
@@ -95,7 +94,7 @@ function AppContent() {
     if (isOnboardingRoute || isCreateRoute) {
       setShowCreateMenu(false);
     }
-  }, [isOnboardingRoute, isCreateRoute]); // Run when onboarding or create route changes
+  }, [isOnboardingRoute, isCreateRoute]); 
 
 
 
@@ -117,7 +116,7 @@ function AppContent() {
     } else {
       setShowDelayedTooltip(false);
     }
-  }, [location.search, location.pathname, isChatRoute]); // More specific dependencies
+  }, [location.search, location.pathname, isChatRoute]);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -162,6 +161,7 @@ function AppContent() {
               <Route path="/settings/models/:modelId" element={<EditModelPage />} />
               <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/security" element={<SecurityPage />} />
+              <Route path="/settings/usage" element={<UsagePage />} />
               <Route path="/settings/reset" element={<ResetPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />

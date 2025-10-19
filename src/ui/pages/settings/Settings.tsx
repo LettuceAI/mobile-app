@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3 } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 
@@ -138,6 +138,13 @@ export function SettingsPage() {
       onClick: () => navigate('/settings/security')
     },
     {
+      key: 'usage',
+      icon: <BarChart3 />,
+      title: 'Usage Analytics',
+      subtitle: 'Track costs and token usage',
+      onClick: () => navigate('/settings/usage')
+    },
+    {
       key: 'guide',
       icon: <BookOpen />,
       title: 'Setup Guide',
@@ -186,7 +193,7 @@ export function SettingsPage() {
               Core
             </h2>
             <div className={spacing.field}>
-              {items.filter(i => ['providers','models','characters','personas','security'].includes(i.key)).map(item => (
+              {items.filter(i => ['providers','models','characters','personas','security','usage'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
               ))}
             </div>

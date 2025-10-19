@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Filter } from "lucide-react";
 import { typography, interactive, cn } from "../../design-tokens";
 
 interface TopNavProps {
@@ -17,6 +17,7 @@ export function TopNav({ currentPath }: TopNavProps) {
     if (currentPath === "/settings/models" || currentPath.startsWith("/settings/models/")) return "Models";
     if (currentPath === "/settings/security") return "Security";
     if (currentPath === "/settings/reset") return "Reset";
+    if (currentPath === "/settings/usage") return "Usage Analytics";
     if (currentPath.startsWith("/settings")) return "Settings";
     if (currentPath.startsWith("/create")) return "Create";
     if (currentPath.startsWith("/onboarding")) return "Setup";
@@ -30,8 +31,23 @@ export function TopNav({ currentPath }: TopNavProps) {
     return false;
   }, [currentPath]);
 
+  const showFilterButton = useMemo(() => {
+    return currentPath === "/settings/usage";
+  }, [currentPath]);
+
   const handleBack = () => {
     navigate(-1);
+  };
+
+  const handleFilterClick = () => {
+    if (typeof window !== "undefined") {
+      const globalWindow = window as any;
+      if (typeof globalWindow.__openUsageFilters === "function") {
+        globalWindow.__openUsageFilters();
+      } else {
+        window.dispatchEvent(new CustomEvent("usage:filters"));
+      }
+    }
   };
 
   return (
@@ -40,7 +56,7 @@ export function TopNav({ currentPath }: TopNavProps) {
       style={{ paddingTop: "calc(env(safe-area-inset-top) + 8px)" }}
     >
       <div className="relative mx-auto flex h-14 w-full items-center justify-between px-4">
-        {/* Left side*/}
+        {/* Left side */}
         <div className="flex items-center min-w-0 flex-1">
           {showBackButton && (
             <button
@@ -78,9 +94,22 @@ export function TopNav({ currentPath }: TopNavProps) {
           </span>
         </div>
 
-        {/* Right side - Future action button space */}
+        {/* Right side */}
         <div className="flex items-center justify-end min-w-0 flex-1">
-          {/* Reserved for action buttons */}
+          {showFilterButton && (
+            <button
+              onClick={handleFilterClick}
+              className={cn(
+                "rounded-full border border-white/15 bg-white/5 p-2",
+                "hover:border-white/25 hover:bg-white/10",
+                interactive.transition.fast,
+                interactive.active.scale
+              )}
+              aria-label="Open filters"
+            >
+              <Filter size={16} className="text-white" />
+            </button>
+          )}
         </div>
       </div>
     </header>

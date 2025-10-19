@@ -3,7 +3,10 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
+use crate::cost_calculator::get_model_pricing;
 use crate::secrets::secret_for_cred_get;
+use crate::usage_storage::add_usage_record;
+use crate::usage_tracking::RequestUsage;
 use crate::utils::now_millis;
 
 use super::request::{
@@ -425,6 +428,82 @@ pub async fn chat_completion(
         }),
     );
 
+    // Record usage for analytics
+    if let Some(usage_info) = &usage {
+        let mut request_usage = RequestUsage {
+            id: Uuid::new_v4().to_string(),
+            timestamp: now_millis().unwrap_or(assistant_created_at),
+            session_id: session.id.clone(),
+            character_id: character.id.clone(),
+            character_name: character.name.clone(),
+            model_id: model.id.clone(),
+            model_name: model.name.clone(),
+            provider_id: provider_cred.provider_id.clone(),
+            provider_label: provider_cred.provider_id.clone(),
+            prompt_tokens: usage_info.prompt_tokens,
+            completion_tokens: usage_info.completion_tokens,
+            total_tokens: usage_info.total_tokens,
+            cost: None,
+            success: true,
+            error_message: None,
+            metadata: Default::default(),
+        };
+
+        if provider_cred.provider_id.to_lowercase() == "openrouter" {
+            match get_model_pricing(app.clone(), &provider_cred.provider_id, &model.name, Some(&api_key)).await {
+                Ok(Some(pricing)) => {
+                    match crate::cost_calculator::calculate_request_cost(
+                        usage_info.prompt_tokens.unwrap_or(0),
+                        usage_info.completion_tokens.unwrap_or(0),
+                        &pricing,
+                    ) {
+                        Some(cost) => {
+                            request_usage.cost = Some(cost.clone());
+                            log_backend(
+                                &app,
+                                "chat_completion",
+                                format!(
+                                    "calculated cost for request: ${:.6}",
+                                    cost.total_cost
+                                ),
+                            );
+                        }
+                        None => {
+                            log_backend(
+                                &app,
+                                "chat_completion",
+                                "failed to calculate request cost".to_string(),
+                            );
+                        }
+                    }
+                }
+                Ok(None) => {
+                    log_backend(
+                        &app,
+                        "chat_completion",
+                        "no pricing found for model (might be free)".to_string(),
+                    );
+                }
+                Err(err) => {
+                    log_backend(
+                        &app,
+                        "chat_completion",
+                        format!("failed to fetch pricing: {}", err),
+                    );
+                }
+            }
+        }
+
+        // Save the usage record
+        if let Err(err) = add_usage_record(&app, request_usage) {
+            log_backend(
+                &app,
+                "chat_completion",
+                format!("failed to save usage record: {}", err),
+            );
+        }
+    }
+
     Ok(ChatTurnResult {
         session_id: session.id,
         request_id,
@@ -793,6 +872,82 @@ pub async fn chat_regenerate(
         ),
     );
 
+    // Record usage for analytics
+    if let Some(usage_info) = &usage {
+        let mut request_usage = RequestUsage {
+            id: Uuid::new_v4().to_string(),
+            timestamp: now_millis().unwrap_or(created_at),
+            session_id: session.id.clone(),
+            character_id: session.character_id.clone(),
+            character_name: character.name.clone(),
+            model_id: model.id.clone(),
+            model_name: model.name.clone(),
+            provider_id: provider_cred.provider_id.clone(),
+            provider_label: provider_cred.provider_id.clone(),
+            prompt_tokens: usage_info.prompt_tokens,
+            completion_tokens: usage_info.completion_tokens,
+            total_tokens: usage_info.total_tokens,
+            cost: None,
+            success: true,
+            error_message: None,
+            metadata: Default::default(),
+        };
+
+        if provider_cred.provider_id.to_lowercase() == "openrouter" {
+            match get_model_pricing(app.clone(), &provider_cred.provider_id, &model.name, Some(&api_key)).await {
+                Ok(Some(pricing)) => {
+                    match crate::cost_calculator::calculate_request_cost(
+                        usage_info.prompt_tokens.unwrap_or(0),
+                        usage_info.completion_tokens.unwrap_or(0),
+                        &pricing,
+                    ) {
+                        Some(cost) => {
+                            request_usage.cost = Some(cost.clone());
+                            log_backend(
+                                &app,
+                                "chat_regenerate",
+                                format!(
+                                    "calculated cost for request: ${:.6}",
+                                    cost.total_cost
+                                ),
+                            );
+                        }
+                        None => {
+                            log_backend(
+                                &app,
+                                "chat_regenerate",
+                                "failed to calculate request cost".to_string(),
+                            );
+                        }
+                    }
+                }
+                Ok(None) => {
+                    log_backend(
+                        &app,
+                        "chat_regenerate",
+                        "no pricing found for model (might be free)".to_string(),
+                    );
+                }
+                Err(err) => {
+                    log_backend(
+                        &app,
+                        "chat_regenerate",
+                        format!("failed to fetch pricing: {}", err),
+                    );
+                }
+            }
+        }
+
+        // Save the usage record
+        if let Err(err) = add_usage_record(&app, request_usage) {
+            log_backend(
+                &app,
+                "chat_regenerate",
+                format!("failed to save usage record: {}", err),
+            );
+        }
+    }
+
     Ok(RegenerateResult {
         session_id: session.id,
         request_id,
@@ -1121,6 +1276,81 @@ pub async fn chat_continue(
             &request_id
         ),
     );
+
+    if let Some(usage_info) = &usage {
+        let mut request_usage = RequestUsage {
+            id: Uuid::new_v4().to_string(),
+            timestamp: now_millis().unwrap_or(assistant_created_at),
+            session_id: session.id.clone(),
+            character_id: session.character_id.clone(),
+            character_name: character.name.clone(),
+            model_id: model.id.clone(),
+            model_name: model.name.clone(),
+            provider_id: provider_cred.provider_id.clone(),
+            provider_label: provider_cred.provider_id.clone(),
+            prompt_tokens: usage_info.prompt_tokens,
+            completion_tokens: usage_info.completion_tokens,
+            total_tokens: usage_info.total_tokens,
+            cost: None,
+            success: true,
+            error_message: None,
+            metadata: Default::default(),
+        };
+
+        if provider_cred.provider_id.to_lowercase() == "openrouter" {
+            match get_model_pricing(app.clone(), &provider_cred.provider_id, &model.name, Some(&api_key)).await {
+                Ok(Some(pricing)) => {
+                    match crate::cost_calculator::calculate_request_cost(
+                        usage_info.prompt_tokens.unwrap_or(0),
+                        usage_info.completion_tokens.unwrap_or(0),
+                        &pricing,
+                    ) {
+                        Some(cost) => {
+                            request_usage.cost = Some(cost.clone());
+                            log_backend(
+                                &app,
+                                "chat_continue",
+                                format!(
+                                    "calculated cost for request: ${:.6}",
+                                    cost.total_cost
+                                ),
+                            );
+                        }
+                        None => {
+                            log_backend(
+                                &app,
+                                "chat_continue",
+                                "failed to calculate request cost".to_string(),
+                            );
+                        }
+                    }
+                }
+                Ok(None) => {
+                    log_backend(
+                        &app,
+                        "chat_continue",
+                        "no pricing found for model (might be free)".to_string(),
+                    );
+                }
+                Err(err) => {
+                    log_backend(
+                        &app,
+                        "chat_continue",
+                        format!("failed to fetch pricing: {}", err),
+                    );
+                }
+            }
+        }
+
+        // Save the usage record
+        if let Err(err) = add_usage_record(&app, request_usage) {
+            log_backend(
+                &app,
+                "chat_continue",
+                format!("failed to save usage record: {}", err),
+            );
+        }
+    }
 
     Ok(ContinueResult {
         session_id: session.id,

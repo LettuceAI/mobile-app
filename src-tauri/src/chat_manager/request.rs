@@ -3,20 +3,10 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::types::{MessageVariant, ProviderCredential, StoredMessage, UsageSummary};
+use crate::provider_config;
 
 pub fn provider_base_url(cred: &ProviderCredential) -> String {
-    if let Some(base) = &cred.base_url {
-        if !base.is_empty() {
-            return base.trim_end_matches('/').to_string();
-        }
-    }
-    match cred.provider_id.as_str() {
-        "openai" => "https://api.openai.com".to_string(),
-        "anthropic" => "https://api.anthropic.com".to_string(),
-        "openrouter" => "https://openrouter.ai/api".to_string(),
-        "google" => "https://generativelanguage.googleapis.com".to_string(),
-        _ => "https://api.openai.com".to_string(),
-    }
+    provider_config::resolve_base_url(&cred.provider_id, cred.base_url.as_deref())
 }
 
 pub fn chat_completions_endpoint(base_url: &str) -> String {
@@ -45,12 +35,9 @@ pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<St
 }
 
 /// Determines the appropriate system role for the provider
-/// OpenAI and OpenRouter use "developer" role, others use "system"
+/// Uses centralized config
 pub fn system_role_for_provider(cred: &ProviderCredential) -> &'static str {
-    match cred.provider_id.as_str() {
-        "openai" | "openrouter" => "developer",
-        _ => "system",
-    }
+    provider_config::get_system_role(&cred.provider_id)
 }
 
 fn selected_variant<'a>(message: &'a StoredMessage) -> Option<&'a MessageVariant> {

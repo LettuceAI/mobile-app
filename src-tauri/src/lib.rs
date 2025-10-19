@@ -1,10 +1,16 @@
 mod api;
 mod chat_manager;
+mod cost_calculator;
 mod model_verify;
 mod models_cache;
+mod pricing_cache;
+mod provider_config;
 mod provider_verify;
 mod secrets;
 mod storage_manager;
+mod usage_commands;
+mod usage_storage;
+mod usage_tracking;
 mod utils;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -17,6 +23,7 @@ pub fn run() {
             models_cache::models_cache_update,
             model_verify::verify_model_exists,
             provider_verify::verify_provider_api_key,
+            provider_config::get_provider_configs,
             storage_manager::storage_read_settings,
             storage_manager::storage_write_settings,
             storage_manager::storage_read_characters,
@@ -43,7 +50,13 @@ pub fn run() {
             secrets::secret_delete,
             secrets::secret_for_cred_get,
             secrets::secret_for_cred_set,
-            secrets::secret_for_cred_delete
+            secrets::secret_for_cred_delete,
+            usage_commands::usage_add_record,
+            usage_commands::usage_query_records,
+            usage_commands::usage_get_stats,
+            usage_commands::usage_clear_before,
+            usage_commands::usage_export_csv,
+            usage_commands::usage_save_csv
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
