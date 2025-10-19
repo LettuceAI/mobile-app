@@ -101,8 +101,8 @@ export function getThemeForBackground(isLight: boolean): ThemeColors {
         };
     } else {
         return {
-            assistantBg: "bg-white/20",
-            assistantBorder: "border-white/25",
+            assistantBg: "bg-gray-600/30",
+            assistantBorder: "border-gray-400/40",
             assistantText: "text-white/95",
             userBg: "bg-emerald-400/35",
             userBorder: "border-emerald-400/50",

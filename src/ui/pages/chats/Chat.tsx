@@ -15,6 +15,7 @@ import {
 } from "./components";
 
 const LONG_PRESS_DELAY = 450;
+const SCROLL_THRESHOLD = 10; // pixels of movement to cancel long press
 
 export function ChatConversationPage() {
   const { characterId } = useParams<{ characterId: string }>();
@@ -23,6 +24,7 @@ export function ChatConversationPage() {
 
   const chatController = useChatController(characterId, { sessionId });
   const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
 
   const {
     character,
@@ -62,7 +64,6 @@ export function ChatConversationPage() {
   const backgroundImageData = useImageData(character?.backgroundImagePath);
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
 
-  // Debug log for background image path
   useEffect(() => {
     if (character) {
       console.log("[Chat] Character backgroundImagePath:", character.backgroundImagePath || "none");
@@ -70,7 +71,6 @@ export function ChatConversationPage() {
     }
   }, [character, backgroundImageData]);
 
-  // Analyze background image brightness when it changes
   useEffect(() => {
     if (!backgroundImageData) {
       setTheme(getThemeForBackground(false));
@@ -119,15 +119,37 @@ export function ChatConversationPage() {
     initializeLongPressTimer(timer);
   }, [initializeLongPressTimer, openMessageActions]);
 
-  const handlePressStart = useCallback((message: StoredMessage) => () => {
+  const handlePressStart = useCallback((message: StoredMessage) => (event: React.MouseEvent | React.TouchEvent) => {
     if (message.id.startsWith("placeholder")) return;
+    
+    const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+    const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+    pressStartPosition.current = { x: clientX, y: clientY };
+    
     setHeldMessageId(message.id);
     scheduleLongPress(message);
   }, [scheduleLongPress, setHeldMessageId]);
 
+  const handlePressMove = useCallback((event: React.MouseEvent | React.TouchEvent) => {
+    if (!pressStartPosition.current) return;
+    
+    const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+    const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+    
+    const deltaX = Math.abs(clientX - pressStartPosition.current.x);
+    const deltaY = Math.abs(clientY - pressStartPosition.current.y);
+    
+    if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
+      initializeLongPressTimer(null);
+      setHeldMessageId(null);
+      pressStartPosition.current = null;
+    }
+  }, [initializeLongPressTimer, setHeldMessageId]);
+
   const handlePressEnd = useCallback(() => {
     initializeLongPressTimer(null);
     setHeldMessageId(null);
+    pressStartPosition.current = null;
   }, [initializeLongPressTimer, setHeldMessageId]);
 
   const handleContextMenu = useCallback((message: StoredMessage) => (event: React.MouseEvent<HTMLDivElement>) => {
@@ -212,9 +234,11 @@ export function ChatConversationPage() {
             const eventHandlers = actionable
               ? {
                 onMouseDown: handlePressStart(message),
+                onMouseMove: handlePressMove,
                 onMouseUp: handlePressEnd,
                 onMouseLeave: handlePressEnd,
                 onTouchStart: handlePressStart(message),
+                onTouchMove: handlePressMove,
                 onTouchEnd: handlePressEnd,
                 onTouchCancel: handlePressEnd,
                 onContextMenu: handleContextMenu(message),
