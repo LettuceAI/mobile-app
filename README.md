@@ -3,8 +3,8 @@
 <img src="https://github.com/LettuceAI/.github/blob/main/profile/LettuceAI-banner.png" alt="LettuceAI Banner" />
 
 **A Private, Cross-Platform AI Roleplay App**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+https://img.shields.io/badge/license-AGPL--v3-blue
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--v3-blue)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-blue.svg)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-18.3-blue.svg)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
@@ -152,7 +152,7 @@ We welcome contributions!
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ---
 
