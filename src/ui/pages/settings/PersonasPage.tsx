@@ -3,7 +3,7 @@ import { User, Trash2, Edit2, Star, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Persona } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
-import { usePersonasController } from "./hooks/usePersonasController";
+import { usePersonasController } from "../personas/hooks/usePersonasController";
 
 const PersonaSkeleton = () => (
   <div className="space-y-3">
@@ -48,7 +48,7 @@ export function PersonasPage() {
   } = usePersonasController();
 
   const handleEditPersona = (persona: Persona) => {
-    navigate(`/personas/${persona.id}/edit`);
+    navigate(`/settings/personas/${persona.id}/edit`);
   };
 
   const defaultPersona = personas.find((p) => p.isDefault);
