@@ -197,9 +197,11 @@ export function ModelsPage() {
                                     {/* Temperature Slider */}
                                     <div>
                                         <div className="mb-2 flex items-center justify-between">
-                                            <label className="text-xs font-medium text-white/70">Temperature</label>
-                                            <span className="rounded-md border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-white/90">
-                                                {(advancedDraft.temperature ?? 0.7).toFixed(2)}
+                                            <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+                                                Temperature
+                                            </label>
+                                            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                                                {advancedDraft.temperature?.toFixed(2) ?? "0.70"}
                                             </span>
                                         </div>
                                         <input
@@ -209,26 +211,30 @@ export function ModelsPage() {
                                             step={0.01}
                                             value={advancedDraft.temperature ?? 0.7}
                                             onChange={(e) => {
-                                                const next = Number(e.target.value);
-                                                updateAdvancedDraft({ temperature: Number(next.toFixed(2)) });
+                                                updateAdvancedDraft({ temperature: Number(e.target.value) });
                                                 setForceCustomMode(true);
                                             }}
-                                            className="h-2 w-full appearance-none rounded-full bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50
-                                                [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110
-                                                [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:scale-110"
+                                            className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
+                                                focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
+                                                [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
+                                                [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
+                                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
+                                                [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
                                         />
-                                        <div className="mt-1 flex justify-between text-[10px] text-white/40">
-                                            <span>Focused</span>
-                                            <span>Creative</span>
+                                        <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
+                                            <span>{ADVANCED_TEMPERATURE_RANGE.min}</span>
+                                            <span>{ADVANCED_TEMPERATURE_RANGE.max}</span>
                                         </div>
                                     </div>
 
-                                    {/* Top P Slider */}
+                                    {/* Top P */}
                                     <div>
                                         <div className="mb-2 flex items-center justify-between">
-                                            <label className="text-xs font-medium text-white/70">Top-P (Nucleus Sampling)</label>
-                                            <span className="rounded-md border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-white/90">
-                                                {(advancedDraft.topP ?? 1).toFixed(2)}
+                                            <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+                                                Top P
+                                            </label>
+                                            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                                                {advancedDraft.topP?.toFixed(2) ?? "1.00"}
                                             </span>
                                         </div>
                                         <input
@@ -238,19 +244,23 @@ export function ModelsPage() {
                                             step={0.01}
                                             value={advancedDraft.topP ?? 1}
                                             onChange={(e) => {
-                                                const next = Number(e.target.value);
-                                                updateAdvancedDraft({ topP: Number(next.toFixed(2)) });
+                                                updateAdvancedDraft({ topP: Number(e.target.value) });
                                                 setForceCustomMode(true);
                                             }}
-                                            className="h-2 w-full appearance-none rounded-full bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50
-                                                [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110
-                                                [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:scale-110"
+                                            className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
+                                                focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
+                                                [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
+                                                [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
+                                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
+                                                [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
                                         />
-                                        <div className="mt-1 flex justify-between text-[10px] text-white/40">
-                                            <span>Narrow</span>
-                                            <span>Diverse</span>
+                                        <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
+                                            <span>{ADVANCED_TOP_P_RANGE.min}</span>
+                                            <span>{ADVANCED_TOP_P_RANGE.max}</span>
                                         </div>
                                     </div>
+
+                                    
 
                                     {/* Max Tokens */}
                                     <div>
