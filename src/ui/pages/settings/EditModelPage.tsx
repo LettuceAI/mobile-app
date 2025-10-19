@@ -1,4 +1,4 @@
-import { Save, Loader2, Trash2, Check, SlidersHorizontal } from "lucide-react";
+import { Save, Loader2, Trash2, SlidersHorizontal } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { formatAdvancedModelSettingsSummary, sanitizeAdvancedModelSettings } from "../../components/AdvancedModelSettingsForm";
@@ -254,6 +254,27 @@ export function EditModelPage() {
                     <span>{ADVANCED_TOP_P_RANGE.max}</span>
                   </div>
                 </div>
+
+                {/* Max Tokens */}
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+                    Max Tokens
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    min={ADVANCED_MAX_TOKENS_RANGE.min}
+                    max={ADVANCED_MAX_TOKENS_RANGE.max}
+                    value={modelAdvancedDraft.maxOutputTokens ?? ''}
+                    onChange={(e) => handleMaxTokensChange(Number(e.target.value))}
+                    placeholder="1024"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-white/50">
+                    Suggested range: {ADVANCED_MAX_TOKENS_RANGE.min} - {ADVANCED_MAX_TOKENS_RANGE.max}
+                  </p>
+                </div>
+
                 {/* Presets */}
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
