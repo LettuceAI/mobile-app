@@ -156,7 +156,7 @@ export function SettingsPage() {
       key: 'github',
       icon: <Github />,
       title: 'Report Issues',
-      subtitle: 'GitHub repository & feedback • v0.1.0 beta',
+      subtitle: 'GitHub repository & feedback • v0.2.1 beta',
       onClick: async () => {
         try {
           const { openUrl } = await import('@tauri-apps/plugin-opener');
