@@ -119,19 +119,30 @@ export function EditModelPage() {
             <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-4">
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-white">Default Model</label>
-                <p className="mt-1 text-xs text-gray-400">Use this model by default</p>
+                <p className="mt-1 text-xs text-gray-400">{defaultModelId === editorModel.id ? "This model is set as default." : "Use this model by default."}</p>
               </div>
-              <button
-                onClick={handleSetDefault}
-                disabled={defaultModelId === editorModel.id}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${defaultModelId === editorModel.id
-                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                    : "border border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/10"
-                  }`}
-              >
-                <Check className="h-4 w-4" />
-                {defaultModelId === editorModel.id ? "Default" : "Set as Default"}
-              </button>
+              <div className="flex items-center">
+                <input
+                  id="use-as-default"
+                  type="checkbox"
+                  checked={defaultModelId === editorModel.id}
+                  onChange={handleSetDefault}
+                  disabled={defaultModelId === editorModel.id}
+                  className="peer sr-only"
+                />
+                <label
+                  htmlFor="use-as-default"
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${defaultModelId === editorModel.id
+                    ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                    : 'bg-white/20'
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${defaultModelId === editorModel.id ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                  />
+                </label>
+              </div>
             </div>
           )}
 
@@ -153,20 +164,26 @@ export function EditModelPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={toggleOverride}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition ${
-                    overrideEnabled ? "bg-emerald-400/70" : "bg-white/15"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
-                      overrideEnabled ? "translate-x-5" : "translate-x-1"
-                    }`}
+                <div className="flex items-center">
+                  <input
+                    id="overwrite-advanced-settings"
+                    type="checkbox"
+                    onChange={toggleOverride}
+                    className="peer sr-only"
                   />
-                  <span className="sr-only">Toggle override</span>
-                </button>
+                  <label
+                    htmlFor="overwrite-advanced-settings"
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${overrideEnabled
+                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                      : 'bg-white/20'
+                      }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${overrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -181,9 +198,11 @@ export function EditModelPage() {
                 {/* Temperature */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">Temperature</label>
+                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+                      Temperature
+                    </label>
                     <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
-                      {modelAdvancedDraft.temperature?.toFixed(2) ?? '0.70'}
+                      {modelAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
                     </span>
                   </div>
                   <input
@@ -193,9 +212,12 @@ export function EditModelPage() {
                     step={0.01}
                     value={modelAdvancedDraft.temperature ?? 0.7}
                     onChange={(e) => handleTemperatureChange(Number(e.target.value))}
-                    className="slider-custom h-2 w-full appearance-none rounded-full bg-white/5 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-2 focus:ring-offset-[#050505]
-                      [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
-                      [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
+                    className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
+          focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
+          [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
+          [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
+          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
+          [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
                   />
                   <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
                     <span>{ADVANCED_TEMPERATURE_RANGE.min}</span>
@@ -206,9 +228,11 @@ export function EditModelPage() {
                 {/* Top P */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">Top P</label>
+                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+                      Top P
+                    </label>
                     <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
-                      {modelAdvancedDraft.topP?.toFixed(2) ?? '1.00'}
+                      {modelAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
                     </span>
                   </div>
                   <input
@@ -218,44 +242,18 @@ export function EditModelPage() {
                     step={0.01}
                     value={modelAdvancedDraft.topP ?? 1}
                     onChange={(e) => handleTopPChange(Number(e.target.value))}
-                    className="slider-custom h-2 w-full appearance-none rounded-full bg-white/5 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-2 focus:ring-offset-[#050505]
-                      [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
-                      [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
+                    className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
+          focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
+          [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
+          [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
+          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
+          [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
                   />
                   <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
                     <span>{ADVANCED_TOP_P_RANGE.min}</span>
                     <span>{ADVANCED_TOP_P_RANGE.max}</span>
                   </div>
                 </div>
-
-                {/* Max Tokens */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <label className="text-xs font-medium text-white/70">MAX TOKENS</label>
-                    <button
-                      type="button"
-                      onClick={() => handleMaxTokensChange(null)}
-                      className="text-xs text-emerald-400 transition hover:text-emerald-300"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    step={128}
-                    min={ADVANCED_MAX_TOKENS_RANGE.min}
-                    max={ADVANCED_MAX_TOKENS_RANGE.max}
-                    value={modelAdvancedDraft.maxOutputTokens ?? ""}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const next = raw === "" ? null : Math.round(Number(raw));
-                      handleMaxTokensChange(next);
-                    }}
-                    placeholder="1024"
-                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-emerald-400/50 focus:outline-none"
-                  />
-                </div>
-
                 {/* Presets */}
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
@@ -288,8 +286,8 @@ export function EditModelPage() {
             onClick={handleSave}
             disabled={!canSave}
             className={`w-full rounded-xl px-4 py-3 text-sm font-medium transition active:scale-[0.99] ${canSave
-                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
-                : "border border-white/10 bg-white/5 text-white/30"
+              ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
+              : "border border-white/10 bg-white/5 text-white/30"
               }`}
           >
             {saving || verifying ? (
