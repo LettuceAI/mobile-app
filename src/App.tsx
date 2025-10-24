@@ -20,6 +20,7 @@ import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { isOnboardingCompleted } from "./core/storage/appState";
 import { TopNav, BottomNav } from "./ui/components/App";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { useAndroidBackHandler } from "./ui/hooks/useAndroidBackHandler";
 
 function App() {
   useEffect(() => {
@@ -89,6 +90,8 @@ function AppContent() {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } = useFirstTimeTooltip("create_button");
   const [showDelayedTooltip, setShowDelayedTooltip] = useState(false);
+
+  useAndroidBackHandler();
 
   useEffect(() => {
     if (isOnboardingRoute || isCreateRoute) {

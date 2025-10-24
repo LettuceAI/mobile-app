@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "app-events:default"
+    "app-events:default",
+    "process:default"
   ]
 }
