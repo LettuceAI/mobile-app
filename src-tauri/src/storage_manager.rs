@@ -80,10 +80,10 @@ fn encrypt(content: &[u8]) -> Result<Vec<u8>, String> {
     let cipher = XChaCha20Poly1305::new(&key.into());
     let mut nonce_bytes = [0u8; 24];
     OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = XNonce::from_slice(&nonce_bytes);
+    let nonce = XNonce::from(nonce_bytes);
     let mut out = Vec::with_capacity(24 + content.len() + 16);
     let ciphertext = cipher
-        .encrypt(nonce, content)
+        .encrypt(&nonce, content)
         .map_err(|e| format!("encrypt: {e}"))?;
     out.extend_from_slice(&nonce_bytes);
     out.extend_from_slice(&ciphertext);
@@ -97,9 +97,9 @@ fn decrypt(data: &[u8]) -> Result<Vec<u8>, String> {
     let (nonce_bytes, ciphertext) = data.split_at(24);
     let key = derive_key()?;
     let cipher = XChaCha20Poly1305::new(&key.into());
-    let nonce = XNonce::from_slice(nonce_bytes);
+    let nonce = XNonce::from(*<&[u8; 24]>::try_from(nonce_bytes).map_err(|_| "invalid nonce")?);
     cipher
-        .decrypt(nonce, ciphertext)
+        .decrypt(&nonce, ciphertext)
         .map_err(|e| format!("decrypt: {e}"))
 }
 
