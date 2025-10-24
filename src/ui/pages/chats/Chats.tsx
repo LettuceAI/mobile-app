@@ -119,7 +119,7 @@ export function ChatPage() {
               onClick={() => handleEditCharacter(selectedCharacter)}
               className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/10">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
                 <Edit2 className="h-4 w-4 text-white/70" />
               </div>
               <span className="text-sm font-medium text-white">Edit Character</span>
@@ -131,7 +131,7 @@ export function ChatPage() {
               }}
               className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/20">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-red-500/20">
                 <Trash2 className="h-4 w-4 text-red-400" />
               </div>
               <span className="text-sm font-medium text-red-300">Delete Character</span>

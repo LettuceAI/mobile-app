@@ -40,7 +40,7 @@ function Row({ icon, title, subtitle, onClick, count, tone = 'default' }: RowPro
       <div className="flex items-center gap-3">
         <div className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center",
-          radius.md,
+          radius.full,
           "border text-white/70",
           interactive.transition.default,
           toneStyles[tone]

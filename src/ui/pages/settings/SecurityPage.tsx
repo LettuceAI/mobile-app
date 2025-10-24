@@ -59,8 +59,8 @@ export function SecurityPage() {
                         )}
                         
                         <div className="relative flex items-start gap-3">
-                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all duration-300 ${
-                                isPureModeEnabled 
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
+                              isPureModeEnabled
                                     ? 'border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/25' 
                                     : 'border-white/10 bg-white/10'
                             }`}>

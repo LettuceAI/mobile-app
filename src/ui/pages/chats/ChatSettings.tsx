@@ -47,7 +47,7 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
       <div className="flex items-center gap-3">
         <div className={cn(
           "flex h-10 w-10 items-center justify-center",
-          radius.sm,
+          radius.full,
           "border border-white/15 bg-white/10 text-white/80"
         )}>
           {icon}
@@ -341,14 +341,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
         <img
           src={currentCharacter.avatarPath}
           alt={currentCharacter?.name ?? "avatar"}
-          className="h-12 w-12 rounded-xl object-cover"
+          className="h-12 w-12 rounded-full object-cover"
         />
       );
     }
 
     const initials = currentCharacter?.name ? currentCharacter.name.slice(0, 2).toUpperCase() : "?";
     return (
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold text-white">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 text-sm font-semibold text-white">
         {initials}
       </div>
     );
