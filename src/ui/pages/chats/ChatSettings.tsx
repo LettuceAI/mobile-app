@@ -12,12 +12,145 @@ import {
   formatAdvancedModelSettingsSummary,
   sanitizeAdvancedModelSettings,
 } from "../../components/AdvancedModelSettingsForm";
+import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 
 function isImageLike(value?: string) {
   if (!value) return false;
   const lower = value.toLowerCase();
   return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
+
+interface SettingsButtonProps {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: SettingsButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "group flex w-full min-h-[56px] items-center justify-between",
+        radius.md,
+        "border p-4 text-left",
+        interactive.transition.default,
+        interactive.active.scale,
+        disabled
+          ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+          : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className={cn(
+          "flex h-10 w-10 items-center justify-center",
+          radius.sm,
+          "border border-white/15 bg-white/10 text-white/80"
+        )}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className={cn(typography.bodySmall.size, typography.body.weight, "text-white")}>
+            {title}
+          </div>
+          <div className={cn(typography.caption.size, "text-gray-400 mt-0.5 truncate")}>
+            {subtitle}
+          </div>
+        </div>
+      </div>
+      <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+    </button>
+  );
+}
+
+interface PersonaOptionProps {
+  title: string;
+  description: string;
+  isDefault?: boolean;
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+function PersonaOption({ title, description, isDefault, isSelected, onClick }: PersonaOptionProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center justify-between",
+        radius.lg,
+        "p-4 text-left",
+        interactive.transition.default,
+        isSelected
+          ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+      )}
+    >
+      <div className="flex-1">
+        <div className={cn(typography.body.size, typography.h3.weight)}>
+          {title}
+          {isDefault && (
+            <span className={cn(typography.caption.size, "ml-2 text-blue-300")}>(app default)</span>
+          )}
+        </div>
+        <div className={cn(typography.bodySmall.size, "text-gray-400 mt-1 line-clamp-2")}>
+          {description}
+        </div>
+      </div>
+      {isSelected && (
+        <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 ml-2" />
+      )}
+    </button>
+  );
+}
+
+interface ModelOptionProps {
+  model: Model;
+  isSelected: boolean;
+  isGlobalDefault: boolean;
+  isCharacterDefault: boolean;
+  onClick: () => void;
+}
+
+function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, onClick }: ModelOptionProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center justify-between",
+        radius.lg,
+        "p-4 text-left",
+        interactive.transition.default,
+        isSelected
+          ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+      )}
+    >
+      <div className="flex-1">
+        <div className={cn(typography.body.size, typography.h3.weight)}>
+          {model.displayName}
+        </div>
+        <div className={cn(typography.bodySmall.size, "text-gray-400 mt-1")}>
+          {model.name}
+          {isGlobalDefault && !isCharacterDefault && (
+            <span className="ml-1 text-blue-300">(app default)</span>
+          )}
+        </div>
+      </div>
+      {isSelected && (
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4 text-emerald-400" />
+          <span className={cn(typography.bodySmall.size, typography.h3.weight, "text-emerald-200")}>
+            {isCharacterDefault ? "Character" : "Default"}
+          </span>
+        </div>
+      )}
+    </button>
+  );
+}
+
 
 function ChatSettingsContent({ character }: { character: Character }) {
   const navigate = useNavigate();
@@ -251,11 +384,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
     if (characterId) {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('sessionId');
-      // Only navigate back to chat if we have a sessionId
       if (sessionId) {
         navigate(`/chat/${characterId}?sessionId=${sessionId}`);
       } else {
-        // No session, go back to character list
         navigate('/chat');
       }
     } else {
@@ -263,24 +394,52 @@ function ChatSettingsContent({ character }: { character: Character }) {
     }
   };
 
+  const getCurrentPersonaDisplay = () => {
+    if (!currentSession) return "Open a chat session first";
+    
+    const currentPersonaId = currentSession?.personaId;
+    if (currentPersonaId === "") return "No persona";
+    if (!currentPersonaId) {
+      const defaultPersona = personas.find(p => p.isDefault);
+      return defaultPersona ? `${defaultPersona.title} (default)` : "No persona";
+    }
+    const persona = personas.find(p => p.id === currentPersonaId);
+    return persona ? persona.title : "Custom persona";
+  };
+
+  const getModelDisplay = () => {
+    if (!currentModel) return "No model available";
+    return currentModel.displayName + (!currentCharacter?.defaultModelId ? " (app default)" : "");
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-gray-100">
       {/* Header */}
-      <header className="relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6 backdrop-blur">
-        <div
-          className="flex items-center gap-4"
-          style={{ paddingTop: "calc(env(safe-area-inset-top) + 8px)" }}
-        >
+      <header className={cn(
+        "relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6 backdrop-blur",
+        "pt-[calc(env(safe-area-inset-top)+32px)]"
+      )}>
+        <div className="flex items-center gap-4">
           <button
             onClick={handleBack}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25 hover:bg-white/10"
+            className={cn(
+              "flex h-10 w-10 items-center justify-center",
+              radius.full,
+              "border border-white/15 bg-white/5 text-white",
+              interactive.transition.default,
+              "hover:border-white/25 hover:bg-white/10"
+            )}
             aria-label="Back to chat"
           >
             <ArrowLeft size={18} />
           </button>
           <div className="flex flex-col items-start min-w-0 flex-1">
-            <h1 className="text-base font-semibold text-white">Chat Settings</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Manage conversation preferences</p>
+            <h1 className={cn(typography.body.size, typography.h3.weight, "text-white")}>
+              Chat Settings
+            </h1>
+            <p className={cn(typography.caption.size, "text-gray-400 mt-0.5")}>
+              Manage conversation preferences
+            </p>
           </div>
         </div>
       </header>
@@ -291,126 +450,63 @@ function ChatSettingsContent({ character }: { character: Character }) {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="space-y-6"
+          className={spacing.section}
         >
-          {/* Character Info Section - Smaller */}
-          <section className="rounded-2xl border border-white/10 bg-[#0c0d13]/85 p-4 backdrop-blur-sm">
+          {/* Character Info */}
+          <section className={cn(
+            radius.lg,
+            "border border-white/10 bg-[#0c0d13]/85 p-4 backdrop-blur-sm"
+          )}>
             <div className="flex items-center gap-3">
               {avatarDisplay}
               <div className="min-w-0 flex-1">
-                <h3 className="text-base font-semibold text-white">{characterName}</h3>
+                <h3 className={cn(typography.body.size, typography.h3.weight, "text-white")}>
+                  {characterName}
+                </h3>
                 {currentCharacter?.description && (
-                  <p className="mt-1 text-xs text-gray-400 leading-relaxed line-clamp-2">{currentCharacter.description}</p>
+                  <p className={cn(typography.caption.size, "text-gray-400 leading-relaxed line-clamp-2 mt-1")}>
+                    {currentCharacter.description}
+                  </p>
                 )}
               </div>
             </div>
           </section>
 
-          {/* Action Buttons */}
-          <section className="space-y-3">
-            {/* New Chat */}
-            <button
+          {/* Actions */}
+          <section className={spacing.field}>
+            <SettingsButton
+              icon={<MessageSquarePlus className="h-4 w-4" />}
+              title="New Chat"
+              subtitle="Start a fresh conversation"
               onClick={handleNewChat}
-              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
-                  <MessageSquarePlus className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-white">New Chat</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Start a fresh conversation</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-            </button>
+            />
 
-            {/* Chat History */}
-            <button
+            <SettingsButton
+              icon={<History className="h-4 w-4" />}
+              title="Chat History"
+              subtitle="View previous sessions"
               onClick={handleViewHistory}
-              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
-                  <History className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-white">Chat History</div>
-                  <div className="text-xs text-gray-400 mt-0.5">View previous sessions</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-            </button>
+            />
 
-            {/* Change Persona */}
-            <button
+            <SettingsButton
+              icon={<User className="h-4 w-4" />}
+              title="Change Persona"
+              subtitle={getCurrentPersonaDisplay()}
               onClick={() => setShowPersonaSelector(true)}
               disabled={!currentSession}
-              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${!currentSession
-                ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-                : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
-                  <User className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-white">Change Persona</div>
-                  <div className="text-xs text-gray-400 mt-0.5 truncate">
-                    {currentSession ? (
-                      (() => {
-                        const currentPersonaId = currentSession?.personaId;
-                        // Empty string means explicitly disabled
-                        if (currentPersonaId === "") {
-                          return "No persona";
-                        }
-                        // Undefined or null means use default
-                        if (!currentPersonaId) {
-                          const defaultPersona = personas.find(p => p.isDefault);
-                          return defaultPersona ? `${defaultPersona.title} (default)` : "No persona";
-                        }
-                        // Has a specific persona selected
-                        const persona = personas.find(p => p.id === currentPersonaId);
-                        return persona ? persona.title : "Custom persona";
-                      })()
-                    ) : (
-                      "Open a chat session first"
-                    )}
-                  </div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-            </button>
+            />
 
-            {/* Change Model */}
-            <button
+            <SettingsButton
+              icon={<Cpu className="h-4 w-4" />}
+              title="Change Model"
+              subtitle={getModelDisplay()}
               onClick={() => setShowModelSelector(true)}
-              className="group flex w-full min-h-[56px] items-center justify-between rounded-xl border border-white/10 bg-[#0c0d13]/85 p-4 text-left text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
-                  <Cpu className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-white">Change Model</div>
-                  <div className="text-xs text-gray-400 mt-0.5 truncate">
-                    {currentModel ? (
-                      <>
-                        {currentModel.displayName}
-                        {!currentCharacter?.defaultModelId && " (app default)"}
-                      </>
-                    ) : (
-                      "No model available"
-                    )}
-                  </div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-            </button>
+            />
 
-            {/* Session Advanced Settings */}
-            <button
+            <SettingsButton
+              icon={<SlidersHorizontal className="h-4 w-4" />}
+              title="Session Advanced Settings"
+              subtitle={sessionAdvancedSummary}
               onClick={() => {
                 if (!currentSession) return;
                 const draft = sessionAdvancedSettings ?? globalAdvancedSettings ?? createDefaultAdvancedModelSettings();
@@ -419,29 +515,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 setShowSessionAdvancedMenu(true);
               }}
               disabled={!currentSession}
-              className={`group flex w-full min-h-[56px] items-center justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${!currentSession
-                ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-                : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-white">Session Advanced Settings</div>
-                  <div className="text-xs text-gray-400 mt-0.5 truncate">
-                    {sessionAdvancedSummary}
-                  </div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-            </button>
+            />
           </section>
         </motion.div>
       </main>
 
-      {/* Persona Selection Bottom Menu */}
+      {/* Persona Selection */}
       <BottomMenu
         isOpen={showPersonaSelector}
         onClose={() => setShowPersonaSelector(false)}
@@ -451,62 +530,38 @@ function ChatSettingsContent({ character }: { character: Character }) {
       >
         <MenuSection>
           {personas.length === 0 ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-6 py-4">
-              <p className="text-amber-200 text-sm">
+            <div className={cn(
+              radius.lg,
+              "border border-amber-500/20 bg-amber-500/10 px-6 py-4"
+            )}>
+              <p className={cn(typography.bodySmall.size, "text-amber-200")}>
                 No personas available. Create one in settings first.
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* None option - No Persona */}
-              <button
+            <div className={spacing.field}>
+              <PersonaOption
+                title="No Persona"
+                description="Disable persona for this conversation"
+                isSelected={currentSession?.personaId === ""}
                 onClick={() => handleChangePersona(null)}
-                className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${currentSession?.personaId === ""
-                  ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                  : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
-                  }`}
-              >
-                <div className="flex-1">
-                  <div className="text-base font-semibold">No Persona</div>
-                  <div className="text-sm text-gray-400 mt-1">
-                    Disable persona for this conversation
-                  </div>
-                </div>
-                {currentSession?.personaId === "" && (
-                  <Check className="h-4 w-4 text-emerald-400" />
-                )}
-              </button>
-
-              {/* Persona options */}
+              />
               {personas.map((persona) => (
-                <button
+                <PersonaOption
                   key={persona.id}
+                  title={persona.title}
+                  description={persona.description}
+                  isDefault={persona.isDefault}
+                  isSelected={persona.id === currentSession?.personaId}
                   onClick={() => handleChangePersona(persona.id)}
-                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${persona.id === currentSession?.personaId
-                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                    : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
-                    }`}
-                >
-                  <div className="flex-1">
-                    <div className="text-base font-semibold">
-                      {persona.title}
-                      {persona.isDefault && <span className="ml-2 text-xs text-blue-300">(app default)</span>}
-                    </div>
-                    <div className="text-sm text-gray-400 mt-1 line-clamp-2">
-                      {persona.description}
-                    </div>
-                  </div>
-                  {persona.id === currentSession?.personaId && (
-                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 ml-2" />
-                  )}
-                </button>
+                />
               ))}
             </div>
           )}
         </MenuSection>
       </BottomMenu>
 
-      {/* Model Selection Bottom Menu */}
+      {/* Model Selection */}
       <BottomMenu
         isOpen={showModelSelector}
         onClose={() => setShowModelSelector(false)}
@@ -516,40 +571,25 @@ function ChatSettingsContent({ character }: { character: Character }) {
       >
         <MenuSection>
           {models.length === 0 ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-6 py-4">
-              <p className="text-amber-200 text-sm">
+            <div className={cn(
+              radius.lg,
+              "border border-amber-500/20 bg-amber-500/10 px-6 py-4"
+            )}>
+              <p className={cn(typography.bodySmall.size, "text-amber-200")}>
                 No models available. Please configure a provider in settings first.
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className={spacing.field}>
               {models.map((model) => (
-                <button
+                <ModelOption
                   key={model.id}
+                  model={model}
+                  isSelected={model.id === effectiveModelId}
+                  isGlobalDefault={model.id === globalDefaultModelId}
+                  isCharacterDefault={model.id === currentCharacter?.defaultModelId}
                   onClick={() => handleChangeModel(model.id)}
-                  className={`flex w-full items-center justify-between rounded-2xl p-4 text-left transition ${model.id === effectiveModelId
-                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                    : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
-                    }`}
-                >
-                  <div className="flex-1">
-                    <div className="text-base font-semibold">{model.displayName}</div>
-                    <div className="text-sm text-gray-400 mt-1">
-                      {model.name}
-                      {model.id === globalDefaultModelId && model.id !== currentCharacter?.defaultModelId && (
-                        <span className="ml-1 text-blue-300">(app default)</span>
-                      )}
-                    </div>
-                  </div>
-                  {model.id === effectiveModelId && (
-                    <div className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-400" />
-                      <span className="text-sm font-semibold text-emerald-200">
-                        {model.id === currentCharacter?.defaultModelId ? "Character" : "Default"}
-                      </span>
-                    </div>
-                  )}
-                </button>
+                />
               ))}
             </div>
           )}
