@@ -816,6 +816,11 @@ pub async fn chat_continue(
         push_message_for_api(&mut messages_for_api, msg);
     }
 
+    messages_for_api.push(json!({
+        "role": "user",
+        "content": "[Continue the scene/roleplay. Do not regenerate or rewrite your previous message. Instead, continue naturally from where you left off, advancing the story, action, or dialogue forward.]"
+    }));
+
     let should_stream = stream.unwrap_or(true);
     let request_id = if should_stream {
         request_id.or_else(|| Some(Uuid::new_v4().to_string()))

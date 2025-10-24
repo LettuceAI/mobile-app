@@ -18,6 +18,7 @@ pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
         "Respond based on your personality, background, and current situation".to_string(),
         "Show emotions and reactions authentically through your words".to_string(),
         "Engage with the conversation organically, not like an assistant".to_string(),
+        "You may roleplay as background characters or NPCs in the scene when needed (e.g., if you're a police officer and a witness appears, you can act as that witness). However, NEVER roleplay as the user's character - only control your own character and third-party characters".to_string(),
     ];
 
     if pure_mode_enabled {
