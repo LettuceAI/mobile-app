@@ -9,26 +9,7 @@ pub fn provider_base_url(cred: &ProviderCredential) -> String {
     providers::resolve_base_url(&cred.provider_id, cred.base_url.as_deref())
 }
 
-pub fn chat_completions_endpoint(base_url: &str, provider_id: &str) -> String {
-    let trimmed = base_url.trim_end_matches('/');
-    
-    match provider_id {
-        "mistral" => {
-            if trimmed.ends_with("/v1") {
-                format!("{}/conversations", trimmed)
-            } else {
-                format!("{}/v1/conversations", trimmed)
-            }
-        }
-        _ => {
-            if trimmed.ends_with("/v1") {
-                format!("{}/chat/completions", trimmed)
-            } else {
-                format!("{}/v1/chat/completions", trimmed)
-            }
-        }
-    }
-}
+// chat_completions_endpoint removed; endpoint selection is centralized in request_builder/provider_adapter.
 
 pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<String, String> {
     let mut out: HashMap<String, String> = HashMap::new();
@@ -82,25 +63,10 @@ pub fn message_text_for_api(message: &StoredMessage) -> String {
 pub fn extract_text(data: &Value) -> Option<String> {
     match data {
         Value::String(s) => {
+            // Prefer SSE-aware parser first
             if s.contains("data:") {
-                let mut collected = String::new();
-                for raw in s.lines() {
-                    let line = raw.trim();
-                    if !line.starts_with("data:") {
-                        continue;
-                    }
-                    let payload = line[5..].trim();
-                    if payload.is_empty() || payload == "[DONE]" {
-                        continue;
-                    }
-                    if let Ok(json) = serde_json::from_str::<Value>(payload) {
-                        if let Some(piece) = extract_text(&json) {
-                            collected.push_str(&piece);
-                        }
-                    }
-                }
-                if !collected.is_empty() {
-                    return Some(collected);
+                if let Some(accum) = super::sse::accumulate_text_from_sse(s) {
+                    return Some(accum);
                 }
             }
             Some(s.clone())
@@ -242,6 +208,9 @@ pub fn extract_usage(data: &Value) -> Option<UsageSummary> {
                 if let Some(summary) = extract_usage(&parsed) {
                     return Some(summary);
                 }
+            }
+            if let Some(summary) = super::sse::usage_from_sse(raw) {
+                return Some(summary);
             }
             let mut found: Option<UsageSummary> = None;
             for line in raw.lines() {

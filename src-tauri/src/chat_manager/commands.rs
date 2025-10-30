@@ -6,9 +6,8 @@ use crate::api::{api_request, ApiRequest};
 use crate::utils::now_millis;
 
 use super::request::{
-    chat_completions_endpoint, ensure_assistant_variant, extract_error_message, extract_text,
-    extract_usage, new_assistant_variant, normalize_headers, provider_base_url,
-    system_role_for_provider,
+    ensure_assistant_variant, extract_error_message, extract_text, extract_usage,
+    new_assistant_variant, system_role_for_provider,
 };
 use super::prompts;
 use super::service::{
