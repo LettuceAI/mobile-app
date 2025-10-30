@@ -1,12 +1,15 @@
 use futures_util::StreamExt;
 use reqwest::{header::HeaderMap, header::HeaderName, header::HeaderValue, Method};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::time::Duration;
 use tauri::Emitter;
 
 use crate::utils::log_backend;
+use crate::{
+    chat_manager::sse,
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -366,6 +369,42 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                             url_for_log
                         ),
                     );
+                    // Also emit normalized events for consumers that want provider-agnostic stream
+                    if let Some(req_id) = &request_id {
+                        let normalized_event = format!("api-normalized://{}", req_id);
+                        if let Some(delta) = sse::accumulate_text_from_sse(&text) {
+                            if !delta.is_empty() {
+                                let _ = app.emit(
+                                    &normalized_event,
+                                    json!({
+                                        "requestId": req_id,
+                                        "type": "delta",
+                                        "data": { "text": delta },
+                                    }),
+                                );
+                            }
+                        }
+                        if let Some(usage) = sse::usage_from_sse(&text) {
+                            let _ = app.emit(
+                                &normalized_event,
+                                json!({
+                                    "requestId": req_id,
+                                    "type": "usage",
+                                    "data": usage,
+                                }),
+                            );
+                        }
+                        if text.contains("[DONE]") {
+                            let _ = app.emit(
+                                &normalized_event,
+                                json!({
+                                    "requestId": req_id,
+                                    "type": "done",
+                                    "data": null,
+                                }),
+                            );
+                        }
+                    }
                     collected.extend_from_slice(&chunk);
                 }
                 Err(e) => {

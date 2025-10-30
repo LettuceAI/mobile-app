@@ -60,6 +60,7 @@ pub struct Model {
     pub prompt_template_id: Option<String>,
     /// DEPRECATED: Old system prompt field (migrated to templates)
     #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     pub system_prompt: Option<String>,
 }
 
@@ -79,6 +80,7 @@ pub struct Settings {
     pub prompt_template_id: Option<String>,
     /// DEPRECATED: Old system prompt field (migrated to templates)
     #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     pub system_prompt: Option<String>,
     /// Migration version for data structure changes
     #[serde(default)]
@@ -194,6 +196,7 @@ pub struct Character {
     pub prompt_template_id: Option<String>,
     /// DEPRECATED: Old system prompt field (migrated to templates)
     #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     pub system_prompt: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,

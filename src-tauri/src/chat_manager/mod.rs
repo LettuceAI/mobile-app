@@ -1,7 +1,7 @@
 mod commands;
 pub mod prompts;
 mod request;
-mod sse;
+pub mod sse;
 mod provider_adapter;
 mod request_builder;
 mod service;

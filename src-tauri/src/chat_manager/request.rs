@@ -1,5 +1,4 @@
 use serde_json::{Map, Value};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::types::{MessageVariant, ProviderCredential, StoredMessage, UsageSummary};
@@ -11,37 +10,9 @@ pub fn provider_base_url(cred: &ProviderCredential) -> String {
 
 // chat_completions_endpoint removed; endpoint selection is centralized in request_builder/provider_adapter.
 
-pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<String, String> {
-    let mut out: HashMap<String, String> = HashMap::new();
-    
-    // Different providers use different auth headers
-    match cred.provider_id.as_str() {
-        "mistral" => {
-            out.insert("X-API-KEY".into(), api_key.to_string());
-        }
-        _ => {
-            out.insert("Authorization".into(), format!("Bearer {}", api_key));
-        }
-    }
-    
-    out.insert("Content-Type".into(), "application/json".into());
-    out.insert("Accept".into(), "text/event-stream".into());
-    if !out.contains_key("User-Agent") {
-        out.insert("User-Agent".into(), "LettuceAI/0.1".into());
-    }
-    if let Some(extra) = &cred.headers {
-        for (k, v) in extra {
-            out.insert(k.clone(), v.clone());
-        }
-    }
-    out
-}
+// headers are constructed by provider adapters now
 
-/// Determines the appropriate system role for the provider
-/// Uses centralized config
-pub fn system_role_for_provider(cred: &ProviderCredential) -> &'static str {
-    providers::get_system_role(&cred.provider_id)
-}
+// system role resolution moved to provider adapters via request_builder::system_role_for
 
 fn selected_variant<'a>(message: &'a StoredMessage) -> Option<&'a MessageVariant> {
     if let Some(selected_id) = &message.selected_variant_id {

@@ -100,6 +100,7 @@ pub fn build_endpoint_url(provider_id: &str, custom_base_url: Option<&str>) -> S
     }
 }
 
+#[allow(dead_code)]
 pub fn get_system_role(provider_id: &str) -> &'static str {
     match provider_id {
         "openai" | "openrouter" => "developer",

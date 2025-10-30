@@ -7,7 +7,7 @@ use crate::utils::now_millis;
 
 use super::request::{
     ensure_assistant_variant, extract_error_message, extract_text, extract_usage,
-    new_assistant_variant, system_role_for_provider,
+    new_assistant_variant,
 };
 use super::prompts;
 use super::service::{
@@ -198,7 +198,7 @@ pub async fn chat_completion(
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
     let recent_msgs = recent_messages(&session);
 
-    let system_role = system_role_for_provider(provider_cred);
+    let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
     append_system_message(&mut messages_for_api, system_role, system_prompt);
     for msg in &recent_msgs {
@@ -519,7 +519,7 @@ pub async fn chat_regenerate(
 
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
-    let system_role = system_role_for_provider(provider_cred);
+    let system_role = super::request_builder::system_role_for(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
         append_system_message(&mut out, system_role, system_prompt);
@@ -810,7 +810,7 @@ pub async fn chat_continue(
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
     let recent_msgs = recent_messages(&session);
 
-    let system_role = system_role_for_provider(provider_cred);
+    let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
     append_system_message(&mut messages_for_api, system_role, system_prompt);
     for msg in &recent_msgs {

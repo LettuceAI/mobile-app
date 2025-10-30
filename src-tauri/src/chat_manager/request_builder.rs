@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use super::provider_adapter::adapter_for;
-use super::request::{normalize_headers, provider_base_url};
+use super::request::provider_base_url;
 use super::types::ProviderCredential;
 
 pub struct BuiltRequest {
@@ -30,10 +30,10 @@ pub fn build_chat_request(
     request_id: Option<String>,
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
-    let headers = normalize_headers(provider_cred, api_key);
 
     let adapter = adapter_for(provider_cred.provider_id.as_str());
     let endpoint = adapter.endpoint(&base_url);
+    let headers = adapter.headers(api_key, provider_cred.headers.as_ref());
 
     let body = adapter.body(
         model_name,
@@ -52,4 +52,10 @@ pub fn build_chat_request(
         stream: should_stream,
         request_id,
     }
+}
+
+/// Returns the preferred system role keyword for the given provider.
+pub fn system_role_for(provider_cred: &ProviderCredential) -> &'static str {
+    let adapter = adapter_for(provider_cred.provider_id.as_str());
+    adapter.system_role()
 }

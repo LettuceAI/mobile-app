@@ -1,7 +1,18 @@
+use std::collections::HashMap;
+
 use serde_json::{json, Value};
 
 pub trait ProviderAdapter {
     fn endpoint(&self, base_url: &str) -> String;
+    /// Preferred system role keyword for this provider when sending a system message.
+    fn system_role(&self) -> &'static str;
+    /// Build default headers for this provider using the given API key.
+    /// `extra` headers from credentials are merged on top (overriding defaults when keys match).
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String>;
     fn body(
         &self,
         model_name: &str,
@@ -17,6 +28,7 @@ pub trait ProviderAdapter {
 pub struct OpenAIAdapter;
 pub struct GroqAdapter;
 pub struct MistralAdapter;
+pub struct AnthropicAdapter;
 
 impl ProviderAdapter for OpenAIAdapter {
     fn endpoint(&self, base_url: &str) -> String {
@@ -26,6 +38,26 @@ impl ProviderAdapter for OpenAIAdapter {
         } else {
             format!("{}/v1/chat/completions", trimmed)
         }
+    }
+
+    fn system_role(&self) -> &'static str { "developer" }
+
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String> {
+        let mut out: HashMap<String, String> = HashMap::new();
+        out.insert("Authorization".into(), format!("Bearer {}", api_key));
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
+        if let Some(extra) = extra {
+            for (k, v) in extra.iter() {
+                out.insert(k.clone(), v.clone());
+            }
+        }
+        out
     }
 
     fn body(
@@ -59,6 +91,17 @@ impl ProviderAdapter for GroqAdapter {
         }
     }
 
+    fn system_role(&self) -> &'static str { "system" }
+
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String> {
+        // Groq uses OpenAI-compatible auth
+        OpenAIAdapter.headers(api_key, extra)
+    }
+
     fn body(
         &self,
         model_name: &str,
@@ -90,6 +133,26 @@ impl ProviderAdapter for MistralAdapter {
         } else {
             format!("{}/v1/conversations", trimmed)
         }
+    }
+
+    fn system_role(&self) -> &'static str { "system" }
+
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String> {
+        let mut out: HashMap<String, String> = HashMap::new();
+        out.insert("X-API-KEY".into(), api_key.to_string());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
+        if let Some(extra) = extra {
+            for (k, v) in extra.iter() {
+                out.insert(k.clone(), v.clone());
+            }
+        }
+        out
     }
 
     fn body(
@@ -144,8 +207,96 @@ impl ProviderAdapter for MistralAdapter {
     }
 }
 
+impl ProviderAdapter for AnthropicAdapter {
+    fn endpoint(&self, base_url: &str) -> String {
+        let trimmed = base_url.trim_end_matches('/');
+        if trimmed.ends_with("/v1") {
+            format!("{}/messages", trimmed)
+        } else {
+            format!("{}/v1/messages", trimmed)
+        }
+    }
+
+    fn system_role(&self) -> &'static str { "system" }
+
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String> {
+        let mut out: HashMap<String, String> = HashMap::new();
+        out.insert("x-api-key".into(), api_key.to_string());
+        // Align with verify.rs configuration
+        out.insert("anthropic-version".into(), "2023-06-01".into());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
+        if let Some(extra) = extra {
+            for (k, v) in extra.iter() {
+                out.insert(k.clone(), v.clone());
+            }
+        }
+        out
+    }
+
+    fn body(
+        &self,
+        model_name: &str,
+        messages_for_api: &Vec<Value>,
+        system_prompt: Option<String>,
+        temperature: f64,
+        top_p: f64,
+        max_tokens: u32,
+        should_stream: bool,
+    ) -> Value {
+        // Convert OpenAI-style messages into Anthropic Messages API format
+        // Each content is wrapped into a text block
+        let mut msgs: Vec<Value> = Vec::new();
+        for msg in messages_for_api {
+            let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
+            if role == "system" || role == "developer" {
+                // system prompt passed separately below
+                continue;
+            }
+            let content_text = msg
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if content_text.is_empty() {
+                continue;
+            }
+            let mapped_role = match role {
+                "assistant" => "assistant",
+                _ => "user",
+            };
+            msgs.push(json!({
+                "role": mapped_role,
+                "content": [{"type": "text", "text": content_text}],
+            }));
+        }
+
+        let mut body = json!({
+            "model": model_name,
+            "messages": msgs,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
+            "stream": should_stream,
+        });
+
+        if let Some(sys) = system_prompt {
+            if !sys.is_empty() {
+                body["system"] = json!(sys);
+            }
+        }
+        body
+    }
+}
+
 pub fn adapter_for(provider_id: &str) -> Box<dyn ProviderAdapter + Send + Sync> {
     match provider_id {
+        "anthropic" => Box::new(AnthropicAdapter),
         "mistral" => Box::new(MistralAdapter),
         "groq" => Box::new(GroqAdapter),
         _ => Box::new(OpenAIAdapter),

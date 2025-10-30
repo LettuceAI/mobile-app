@@ -1,6 +1,5 @@
 use serde_json::Value;
 use tauri::AppHandle;
-use std::collections::HashMap;
 
 use crate::chat_manager::prompts;
 use crate::chat_manager::types::PromptScope;

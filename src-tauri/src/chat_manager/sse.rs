@@ -53,6 +53,16 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
     {
         return Some(s.to_string());
     }
+    // Anthropic Messages API streaming: content_block_delta -> delta -> text
+    if v.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
+        if let Some(s) = v
+            .get("delta")
+            .and_then(|d| d.get("text"))
+            .and_then(|t| t.as_str())
+        {
+            return Some(s.to_string());
+        }
+    }
     if let Some(s) = v.get("content").and_then(|t| t.as_str()) {
         return Some(s.to_string());
     }
