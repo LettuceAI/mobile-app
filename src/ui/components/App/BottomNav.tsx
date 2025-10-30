@@ -27,6 +27,15 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
         }
         return;
       }
+
+      if (pathname.startsWith("/settings/prompts")) {
+        if (typeof globalWindow.__openAddPromptTemplate === "function") {
+          globalWindow.__openAddPromptTemplate();
+        } else {
+          window.dispatchEvent(new CustomEvent("prompts:add"));
+        }
+        return;
+      }
     }
 
     onCreateClick();

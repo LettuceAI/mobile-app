@@ -2,6 +2,28 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum PromptScope {
+    AppWide,
+    ModelSpecific,
+    CharacterSpecific,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemPromptTemplate {
+    pub id: String,
+    pub name: String,
+    pub scope: PromptScope,
+    /// Model or Character IDs this template applies to (empty for AppWide)
+    #[serde(default)]
+    pub target_ids: Vec<String>,
+    pub content: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretRef {
@@ -33,6 +55,12 @@ pub struct Model {
     pub created_at: u64,
     #[serde(default)]
     pub advanced_model_settings: Option<AdvancedModelSettings>,
+    /// Reference to a system prompt template (if any)
+    #[serde(default)]
+    pub prompt_template_id: Option<String>,
+    /// DEPRECATED: Old system prompt field (migrated to templates)
+    #[serde(default, skip_serializing)]
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -46,6 +74,15 @@ pub struct Settings {
     pub app_state: Value,
     #[serde(default)]
     pub advanced_model_settings: AdvancedModelSettings,
+    /// Reference to app-wide system prompt template (if any)
+    #[serde(default)]
+    pub prompt_template_id: Option<String>,
+    /// DEPRECATED: Old system prompt field (migrated to templates)
+    #[serde(default, skip_serializing)]
+    pub system_prompt: Option<String>,
+    /// Migration version for data structure changes
+    #[serde(default)]
+    pub migration_version: u32,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -152,6 +189,12 @@ pub struct Character {
     pub default_scene_id: Option<String>,
     #[serde(default)]
     pub default_model_id: Option<String>,
+    /// Reference to a system prompt template (if any)
+    #[serde(default)]
+    pub prompt_template_id: Option<String>,
+    /// DEPRECATED: Old system prompt field (migrated to templates)
+    #[serde(default, skip_serializing)]
+    pub system_prompt: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
 }

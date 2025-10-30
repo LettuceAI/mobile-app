@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3 } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 
@@ -131,6 +131,13 @@ export function SettingsPage() {
       onClick: () => navigate('/settings/personas')
     },
     {
+      key: 'prompts',
+      icon: <FileText />,
+      title: 'System Prompts',
+      subtitle: 'Customize AI behavior',
+      onClick: () => navigate('/settings/prompts')
+    },
+    {
       key: 'security',
       icon: <Shield />,
       title: 'Security',
@@ -193,7 +200,7 @@ export function SettingsPage() {
               Core
             </h2>
             <div className={spacing.field}>
-              {items.filter(i => ['providers','models','characters','personas','security','usage'].includes(i.key)).map(item => (
+              {items.filter(i => ['providers','models','characters','personas','prompts','security','usage'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
               ))}
             </div>

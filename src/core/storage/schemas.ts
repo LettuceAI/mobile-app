@@ -2,6 +2,20 @@ import { z } from "zod";
 
 const TokenCount = z.number().int().nonnegative();
 
+export const PromptScopeSchema = z.enum(["appWide", "modelSpecific", "characterSpecific"]);
+export type PromptScope = z.infer<typeof PromptScopeSchema>;
+
+export const SystemPromptTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  scope: PromptScopeSchema,
+  targetIds: z.array(z.string()).default([]),
+  content: z.string(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type SystemPromptTemplate = z.infer<typeof SystemPromptTemplateSchema>;
+
 export const UsageSummarySchema = z.object({
   promptTokens: TokenCount.optional(),
   completionTokens: TokenCount.optional(),
@@ -73,6 +87,8 @@ export const ModelSchema = z.object({
   displayName: z.string().min(1),
   createdAt: z.number().int(),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
+  promptTemplateId: z.string().nullish().optional(),
+  systemPrompt: z.string().nullish().optional(), // Deprecated
 });
 export type Model = z.infer<typeof ModelSchema>;
 
@@ -121,6 +137,9 @@ export const SettingsSchema = z.object({
   models: z.array(ModelSchema),
   appState: AppStateSchema,
   advancedModelSettings: AdvancedModelSettingsSchema.optional(),
+  promptTemplateId: z.string().nullish().optional(),
+  systemPrompt: z.string().nullish().optional(), // Deprecated
+  migrationVersion: z.number().int().default(0),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -133,6 +152,9 @@ export function createDefaultSettings(): Settings {
     models: [],
     appState: createDefaultAppState(),
     advancedModelSettings: createDefaultAdvancedModelSettings(),
+    promptTemplateId: null,
+    systemPrompt: null,
+    migrationVersion: 0,
   };
 }
 
@@ -146,6 +168,8 @@ export const CharacterSchema = z.object({
   scenes: z.array(SceneSchema).default([]),
   defaultSceneId: z.string().uuid().nullish(),
   defaultModelId: z.string().uuid().nullable().optional(),
+  promptTemplateId: z.string().nullish().optional(),
+  systemPrompt: z.string().nullish().optional(), // Deprecated
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

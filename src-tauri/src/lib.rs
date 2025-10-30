@@ -1,5 +1,6 @@
 mod api;
 mod chat_manager;
+mod migrations;
 mod models;
 mod pricing_cache;
 mod providers;
@@ -13,6 +14,20 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            // Run migrations on app startup
+            if let Err(e) = migrations::run_migrations(app.handle()) {
+                eprintln!("Migration error: {}", e);
+                // Log but don't fail - allow app to continue
+            }
+            
+            // Ensure App Default template exists
+            if let Err(e) = chat_manager::prompts::ensure_app_default_template(app.handle()) {
+                eprintln!("Failed to ensure app default template: {}", e);
+            }
+            
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             api::api_request,
             models::models_cache_get,
@@ -41,6 +56,17 @@ pub fn run() {
             chat_manager::chat_regenerate,
             chat_manager::chat_continue,
             chat_manager::get_default_character_rules,
+            chat_manager::get_default_system_prompt_template,
+            chat_manager::list_prompt_templates,
+            chat_manager::create_prompt_template,
+            chat_manager::update_prompt_template,
+            chat_manager::delete_prompt_template,
+            chat_manager::get_prompt_template,
+            chat_manager::get_app_default_template_id,
+            chat_manager::is_app_default_template,
+            chat_manager::reset_app_default_template,
+            chat_manager::get_applicable_prompts_for_character,
+            chat_manager::get_applicable_prompts_for_model,
             secrets::secret_get,
             secrets::secret_set,
             secrets::secret_delete,

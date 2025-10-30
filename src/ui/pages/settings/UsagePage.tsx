@@ -10,7 +10,7 @@ import { BottomMenu } from '../../components';
  */
 function formatCurrency(value: number): string {
   if (value === 0) return '$0';
-  
+
   if (value < 0.00001) {
     return `$${value.toFixed(10).replace(/\.?0+$/, '')}`;
   }
@@ -357,9 +357,9 @@ export function UsagePage() {
       const csv = await exportCSV(filter);
       if (csv && csv.length > 0) {
         const fileName = `usage-${new Date().toISOString().split('T')[0]}.csv`;
-        
+
         const filePath = await saveCSV(csv, fileName);
-        
+
         if (filePath) {
           setExportSuccess(filePath);
           setTimeout(() => setExportSuccess(null), 4000);
@@ -384,6 +384,7 @@ export function UsagePage() {
       {/* Filters BottomMenu */}
       <BottomMenu
         isOpen={showFilters}
+        includeExitIcon={false}
         onClose={() => setShowFilters(false)}
         title="Filters"
       >
@@ -395,15 +396,30 @@ export function UsagePage() {
             onEndChange={setEndDate}
           />
 
-          <label className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 transition cursor-pointer">
-            <input
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 transition cursor-pointer">
+            <span className="text-sm text-white">Show successful requests only</span>
+            <div className="flex items-center flex-shrink-0">
+              <input
+              id="show-only-successful"
               type="checkbox"
               checked={successOnly}
               onChange={(e) => setSuccessOnly(e.target.checked)}
-              className="rounded border-white/20 checked:bg-emerald-500 cursor-pointer"
-            />
-            <span className="text-sm text-white">Show successful requests only</span>
-          </label>
+              className="peer sr-only"
+              />
+              <label
+              htmlFor="show-only-successful"
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${successOnly
+                ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                : 'bg-white/20'
+                }`}
+              >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${successOnly ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+              </label>
+            </div>
+            </label>
 
           <button
             onClick={handleExportCSV}
@@ -450,26 +466,26 @@ export function UsagePage() {
               className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2.5"
             >
               <h2 className="text-lg font-semibold text-white mb-3">Overview</h2>
-              <StatRow 
-                label="Total Cost" 
+              <StatRow
+                label="Total Cost"
                 value={formatCurrency(stats.totalCost)}
               />
-              <StatRow 
-                label="Total Requests" 
+              <StatRow
+                label="Total Requests"
                 value={formatNumber(stats.totalRequests)}
                 secondary={`${stats.successfulRequests} successful`}
               />
-              <StatRow 
-                label="Total Tokens" 
+              <StatRow
+                label="Total Tokens"
                 value={formatNumber(stats.totalTokens)}
                 secondary={`${formatNumber(stats.totalTokens / Math.max(stats.totalRequests, 1))} avg`}
               />
-              <StatRow 
-                label="Average Cost" 
+              <StatRow
+                label="Average Cost"
                 value={formatCurrency(stats.averageCostPerRequest)}
               />
-              <StatRow 
-                label="Success Rate" 
+              <StatRow
+                label="Success Rate"
                 value={`${stats.totalRequests > 0 ? ((stats.successfulRequests / stats.totalRequests) * 100).toFixed(1) : 0}%`}
               />
             </motion.div>
@@ -482,7 +498,7 @@ export function UsagePage() {
               className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3"
             >
               <h3 className="text-sm font-medium text-white">Cost Split</h3>
-              
+
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-white/50">Input Tokens</span>

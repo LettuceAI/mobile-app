@@ -10,6 +10,7 @@ use super::request::{
     extract_usage, new_assistant_variant, normalize_headers, provider_base_url,
     system_role_for_provider,
 };
+use super::prompts;
 use super::service::{
     append_system_message, push_message_for_api, record_usage_if_available, resolve_api_key,
     ChatContext,
@@ -17,7 +18,7 @@ use super::service::{
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
-    Model, RegenerateResult, Session, Settings, StoredMessage,
+    Model, PromptScope, RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
 use crate::utils::{emit_debug, log_backend};
 
@@ -195,7 +196,7 @@ pub async fn chat_completion(
         }),
     );
 
-    let system_prompt = context.build_system_prompt(&character, persona, &session);
+    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
     let recent_msgs = recent_messages(&session);
 
     let system_role = system_role_for_provider(provider_cred);
@@ -516,7 +517,7 @@ pub async fn chat_regenerate(
 
     let api_key = resolve_api_key(&app, provider_cred, "chat_regenerate")?;
 
-    let system_prompt = context.build_system_prompt(&character, persona, &session);
+    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
     let system_role = system_role_for_provider(provider_cred);
     let messages_for_api = {
@@ -806,7 +807,7 @@ pub async fn chat_continue(
 
     let api_key = resolve_api_key(&app, provider_cred, "chat_continue")?;
 
-    let system_prompt = context.build_system_prompt(&character, persona, &session);
+    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
     let recent_msgs = recent_messages(&session);
 
     let system_role = system_role_for_provider(provider_cred);
@@ -1016,4 +1017,81 @@ pub async fn chat_continue(
 #[tauri::command]
 pub fn get_default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
     default_character_rules(pure_mode_enabled)
+}
+
+#[tauri::command]
+pub fn get_default_system_prompt_template() -> String {
+    use super::storage::default_system_prompt_template;
+    default_system_prompt_template()
+}
+
+// ==================== Prompt Template Commands ====================
+
+#[tauri::command]
+pub fn list_prompt_templates(app: AppHandle) -> Result<Vec<SystemPromptTemplate>, String> {
+    prompts::load_templates(&app)
+}
+
+#[tauri::command]
+pub fn create_prompt_template(
+    app: AppHandle,
+    name: String,
+    scope: PromptScope,
+    target_ids: Vec<String>,
+    content: String,
+) -> Result<SystemPromptTemplate, String> {
+    prompts::create_template(&app, name, scope, target_ids, content)
+}
+
+#[tauri::command]
+pub fn update_prompt_template(
+    app: AppHandle,
+    id: String,
+    name: Option<String>,
+    scope: Option<PromptScope>,
+    target_ids: Option<Vec<String>>,
+    content: Option<String>,
+) -> Result<SystemPromptTemplate, String> {
+    prompts::update_template(&app, id, name, scope, target_ids, content)
+}
+
+#[tauri::command]
+pub fn delete_prompt_template(app: AppHandle, id: String) -> Result<(), String> {
+    prompts::delete_template(&app, id)
+}
+
+#[tauri::command]
+pub fn get_prompt_template(app: AppHandle, id: String) -> Result<Option<SystemPromptTemplate>, String> {
+    prompts::get_template(&app, &id)
+}
+
+#[tauri::command]
+pub fn get_app_default_template_id() -> String {
+    prompts::APP_DEFAULT_TEMPLATE_ID.to_string()
+}
+
+#[tauri::command]
+pub fn is_app_default_template(id: String) -> bool {
+    prompts::is_app_default_template(&id)
+}
+
+#[tauri::command]
+pub fn reset_app_default_template(app: AppHandle) -> Result<SystemPromptTemplate, String> {
+    prompts::reset_app_default_template(&app)
+}
+
+#[tauri::command]
+pub fn get_applicable_prompts_for_character(
+    app: AppHandle,
+    character_id: String,
+) -> Result<Vec<SystemPromptTemplate>, String> {
+    prompts::get_applicable_for_character(&app, &character_id)
+}
+
+#[tauri::command]
+pub fn get_applicable_prompts_for_model(
+    app: AppHandle,
+    model_id: String,
+) -> Result<Vec<SystemPromptTemplate>, String> {
+    prompts::get_applicable_for_model(&app, &model_id)
 }

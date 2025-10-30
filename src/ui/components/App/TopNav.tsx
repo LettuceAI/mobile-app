@@ -18,6 +18,9 @@ export function TopNav({ currentPath }: TopNavProps) {
     if (currentPath === "/settings/security") return "Security";
     if (currentPath === "/settings/reset") return "Reset";
     if (currentPath === "/settings/usage") return "Usage Analytics";
+    if (currentPath === "/settings/prompts/new") return "Create Template";
+    if (currentPath.startsWith("/settings/prompts/")) return "Edit Template";
+    if (currentPath === "/settings/prompts") return "Prompt Templates";
     if (currentPath.startsWith("/settings")) return "Settings";
     if (currentPath.startsWith("/create")) return "Create";
     if (currentPath.startsWith("/onboarding")) return "Setup";

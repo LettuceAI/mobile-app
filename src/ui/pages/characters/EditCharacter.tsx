@@ -1,11 +1,12 @@
 import { SetStateAction, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
-import type { Model, Scene } from "../../../core/storage/schemas";
+import type { Model, Scene, SystemPromptTemplate } from "../../../core/storage/schemas";
 import { processBackgroundImage } from "../../../core/utils/image";
 import { convertToImageRef } from "../../../core/storage/images";
+import { getApplicablePromptsForCharacter } from "../../../core/prompts";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
@@ -22,8 +23,11 @@ export function EditCharacterPage() {
   const [defaultSceneId, setDefaultSceneId] = useState<string | null>(null);
   const [newSceneContent, setNewSceneContent] = useState("");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [systemPromptTemplateId, setSystemPromptTemplateId] = useState<string | null>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editingSceneContent, setEditingSceneContent] = useState("");
 
@@ -35,6 +39,7 @@ export function EditCharacterPage() {
 
     loadCharacter();
     loadModels();
+    loadPromptTemplates();
   }, [characterId]);
 
   const loadCharacter = async () => {
@@ -67,6 +72,7 @@ export function EditCharacterPage() {
       setScenes(character.scenes || []);
       setDefaultSceneId(character.defaultSceneId || null);
       setSelectedModelId(character.defaultModelId || null);
+      setSystemPromptTemplateId(character.promptTemplateId || null);
     } catch (err) {
       console.error("Failed to load character:", err);
       setError("Failed to load character");
@@ -84,6 +90,20 @@ export function EditCharacterPage() {
       console.error("Failed to load models:", err);
     } finally {
       setLoadingModels(false);
+    }
+  };
+
+  const loadPromptTemplates = async () => {
+    if (!characterId) return;
+    
+    try {
+      setLoadingTemplates(true);
+      const templates = await getApplicablePromptsForCharacter(characterId);
+      setPromptTemplates(templates);
+    } catch (err) {
+      console.error("Failed to load prompt templates:", err);
+    } finally {
+      setLoadingTemplates(false);
     }
   };
 
@@ -112,6 +132,7 @@ export function EditCharacterPage() {
         scenes: scenes,
         defaultSceneId: defaultSceneId,
         defaultModelId: selectedModelId,
+        promptTemplateId: systemPromptTemplateId,
       });
 
       navigate("/chat");
@@ -524,6 +545,40 @@ export function EditCharacterPage() {
             )}
             <p className="text-xs text-white/50">
               Override the default AI model for this character
+            </p>
+          </div>
+
+          {/* System Prompt Template Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
+                <FileText className="h-4 w-4 text-blue-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">System Prompt</h3>
+              <span className="ml-auto text-xs text-white/40">(Optional)</span>
+            </div>
+            
+            {loadingTemplates ? (
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                <span className="text-sm text-white/50">Loading templates...</span>
+              </div>
+            ) : (
+              <select
+                value={systemPromptTemplateId || ""}
+                onChange={(e) => setSystemPromptTemplateId(e.target.value || null)}
+                className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
+              >
+                <option value="">Use app default prompt</option>
+                {promptTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="text-xs text-white/50">
+              Select a custom system prompt template for this character
             </p>
           </div>
 

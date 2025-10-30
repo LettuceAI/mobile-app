@@ -7,10 +7,46 @@ use crate::storage_manager::{
 };
 use crate::utils::emit_debug;
 
+use super::prompts;
 use super::types::{
     AdvancedModelSettings, Character, Model, Persona, ProviderCredential, Session, Settings,
     StoredMessage,
 };
+
+/// # Custom System Prompts
+///
+/// Users can customize system prompts at different levels with this priority order:
+/// 1. **Session-level** (session.system_prompt) - Highest priority
+/// 2. **Character-level** (character.system_prompt)
+/// 3. **Model-level** (model.system_prompt)
+/// 4. **App-wide** (settings.system_prompt)
+/// 5. **Default** (default_system_prompt_template()) - Lowest priority
+///
+/// ## Template Variables
+/// - `{{char.name}}` - Character name
+/// - `{{char.desc}}` - Character description
+/// - `{{scene}}` - Starting scene content (auto-formatted with header)
+/// - `{{persona.name}}` - Persona name
+/// - `{{persona.desc}}` - Persona description
+/// - `{{rules}}` - Character rules (formatted as bullet list)
+///
+/// ## Important Notes
+/// - **NSFW toggle is ignored when using custom prompts** - users must handle content filtering
+///   in their custom prompt if desired
+/// - Custom prompts should include at minimum: `{{char.name}}`, `{{char.desc}}`, and `{{scene}}`
+/// - Legacy variables (`{{ai_name}}`, `{{ai_description}}`, etc.) are still supported for
+///   backwards compatibility
+
+/// Default system prompt template when no custom prompt is set
+/// Template variables: {{char.name}}, {{char.desc}}, {{scene}}, {{persona.name}}, {{persona.desc}}, {{rules}}
+pub fn default_system_prompt_template() -> String {
+    let mut template = String::new();
+    template.push_str("{{scene}}");
+    template.push_str("# Character\nYou are {{char.name}}.\n\n{{char.desc}}");
+    template.push_str("\n\n# User\n{{persona.desc}}");
+    template.push_str("\n\n# Guidelines\n{{rules}}");
+    template
+}
 
 pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
     let mut rules = vec![
@@ -51,6 +87,9 @@ fn default_settings() -> Settings {
         models: Vec::new(),
         app_state: serde_json::Value::Null,
         advanced_model_settings: AdvancedModelSettings::default(),
+        prompt_template_id: None,
+        system_prompt: None,
+        migration_version: 0,
     }
 }
 
@@ -139,18 +178,53 @@ pub fn choose_persona<'a>(
 pub fn build_system_prompt(
     app: &AppHandle,
     character: &Character,
+    model: &Model,
     persona: Option<&Persona>,
     session: &Session,
     settings: &Settings,
 ) -> Option<String> {
-    let mut template = String::new();
     let mut debug_parts: Vec<Value> = Vec::new();
 
-    // Add starting scene if one is selected
-    if let Some(selected_scene_id) = &session.selected_scene_id {
+    // Priority: session > character template > model template > app-wide template > default
+    let base_template = if let Some(session_prompt) = &session.system_prompt {
+        debug_parts.push(json!({ "source": "session_override" }));
+        session_prompt.clone()
+    } else if let Some(char_template_id) = &character.prompt_template_id {
+        // Resolve character prompt template
+        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
+            debug_parts.push(json!({ "source": "character_template", "template_id": char_template_id }));
+            template.content
+        } else {
+            debug_parts.push(json!({ "source": "character_template_not_found", "template_id": char_template_id, "fallback": "default" }));
+            default_system_prompt_template()
+        }
+    } else if let Some(model_template_id) = &model.prompt_template_id {
+        // Resolve model prompt template
+        if let Ok(Some(template)) = prompts::get_template(app, model_template_id) {
+            debug_parts.push(json!({ "source": "model_template", "template_id": model_template_id }));
+            template.content
+        } else {
+            debug_parts.push(json!({ "source": "model_template_not_found", "template_id": model_template_id, "fallback": "default" }));
+            default_system_prompt_template()
+        }
+    } else if let Some(app_template_id) = &settings.prompt_template_id {
+        // Resolve app-wide prompt template
+        if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
+            debug_parts.push(json!({ "source": "app_wide_template", "template_id": app_template_id }));
+            template.content
+        } else {
+            debug_parts.push(json!({ "source": "app_wide_template_not_found", "template_id": app_template_id, "fallback": "default" }));
+            default_system_prompt_template()
+        }
+    } else {
+        debug_parts.push(json!({ "source": "default_template" }));
+        default_system_prompt_template()
+    };
+
+    // Build scene content if one is selected
+    let scene_content = if let Some(selected_scene_id) = &session.selected_scene_id {
         if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
-            // Get the active content (variant or original)
-            let scene_content = if let Some(variant_id) = &scene.selected_variant_id {
+            let content = if let Some(variant_id) = &scene.selected_variant_id {
                 scene
                     .variants
                     .iter()
@@ -161,48 +235,43 @@ pub fn build_system_prompt(
                 &scene.content
             };
 
-            if !scene_content.trim().is_empty() {
-                template.push_str("# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n");
-                template.push_str(scene_content.trim());
-                template.push_str("\n\n");
+            if !content.trim().is_empty() {
+                let formatted = format!(
+                    "# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n{}\n\n",
+                    content.trim()
+                );
                 debug_parts.push(json!({
-                    "source": "starting_scene",
-                    "content": scene_content,
+                    "scene_id": selected_scene_id,
+                    "scene_content": content,
                 }));
+                formatted
+            } else {
+                String::new()
             }
-        }
-    }
-
-    if let Some(base) = &session.system_prompt {
-        let trimmed = base.trim();
-        if !trimmed.is_empty() {
-            template.push_str(trimmed);
-            template.push_str("\n\n");
-            debug_parts.push(json!({
-                "source": "session_system_prompt",
-                "content": trimmed,
-            }));
+        } else {
+            String::new()
         }
     } else {
-        template.push_str("# Character\nYou are {{ai_name}}.\n\n{{ai_description}}");
-        if persona.is_some() {
-            template.push_str("\n\n# User\n{{persona_description}}");
-        }
-        template.push_str("\n\n# Guidelines\n{{ai_rules}}");
-        template.push_str("\n\n");
-        debug_parts.push(json!({
-            "source": "default_template",
-            "content": template.clone(),
-        }));
-    }
+        String::new()
+    };
 
-    let ai_name = character.name.clone();
-    let ai_description = character
+    // Get character info
+    let char_name = &character.name;
+    let char_desc = character
         .description
         .as_ref()
         .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
         .unwrap_or("");
 
+    // Get persona info
+    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    let persona_desc = persona
+        .map(|p| p.description.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+
+    // Build rules - Note: NSFW toggle is ignored when using custom prompts
     let pure_mode_enabled = settings
         .app_state
         .get("pureModeEnabled")
@@ -214,57 +283,46 @@ pub fn build_system_prompt(
     } else {
         character.rules.clone()
     };
-    let ai_rules = rules_to_use.join("\n- ");
-    let ai_rules = format!("- {}", ai_rules);
+    let rules_formatted = format!("- {}", rules_to_use.join("\n- "));
 
-    template = template.replace("{{ai_name}}", &ai_name);
-    template = template.replace("{{ai_description}}", ai_description);
-    template = template.replace("{{ai_rules}}", &ai_rules);
+    // Replace all template variables
+    let mut result = base_template;
+    result = result.replace("{{scene}}", &scene_content);
+    result = result.replace("{{char.name}}", char_name);
+    result = result.replace("{{char.desc}}", char_desc);
+    result = result.replace("{{persona.name}}", persona_name);
+    result = result.replace("{{persona.desc}}", persona_desc);
+    result = result.replace("{{rules}}", &rules_formatted);
 
-    if let Some(p) = persona {
-        template = template.replace("{{persona_name}}", &p.title);
-        template = template.replace("{{persona_description}}", p.description.trim());
-    } else {
-        template = template.replace("{{persona_name}}", "");
-        template = template.replace("{{persona_description}}", "");
-    }
+    // Legacy template variable support (for backwards compatibility)
+    result = result.replace("{{ai_name}}", char_name);
+    result = result.replace("{{ai_description}}", char_desc);
+    result = result.replace("{{ai_rules}}", &rules_formatted);
+    result = result.replace("{{persona_name}}", persona_name);
+    result = result.replace("{{persona_description}}", persona_desc);
 
     debug_parts.push(json!({
-        "source": "placeholder_replacement",
-        "ai_name": ai_name,
-        "ai_description": ai_description,
-        "ai_rules": ai_rules,
-        "persona": persona.map(|p| json!({
-            "name": p.title,
-            "description": p.description,
-        })),
+        "template_vars": {
+            "char_name": char_name,
+            "char_desc": char_desc,
+            "persona_name": persona_name,
+            "persona_desc": persona_desc,
+            "scene_present": !scene_content.is_empty(),
+        }
     }));
-
-    let result = if template.trim().is_empty() {
-        None
-    } else {
-        Some(template.trim().to_string())
-    };
 
     emit_debug(
         app,
         "system_prompt_built",
-        json!({
-            "sessionId": session.id,
-            "characterId": character.id,
-            "personaId": persona.map(|p| p.id.clone()),
-            "parts": debug_parts,
-            "preview": result.as_ref().map(|prompt| {
-                if prompt.len() > 400 {
-                    format!("{}…", &prompt[..400])
-                } else {
-                    prompt.clone()
-                }
-            }),
-        }),
+        json!({ "debug": debug_parts }),
     );
 
-    result
+    let trimmed = result.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 pub fn recent_messages(session: &Session) -> Vec<StoredMessage> {

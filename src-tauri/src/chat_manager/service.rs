@@ -66,10 +66,11 @@ impl ChatContext {
     pub fn build_system_prompt(
         &self,
         character: &Character,
+        model: &Model,
         persona: Option<&Persona>,
         session: &Session,
     ) -> Option<String> {
-        build_system_prompt(&self.app, character, persona, session, &self.settings)
+        build_system_prompt(&self.app, character, model, persona, session, &self.settings)
     }
 
     pub fn choose_persona(&self, explicit_persona_id: Option<&str>) -> Option<&Persona> {

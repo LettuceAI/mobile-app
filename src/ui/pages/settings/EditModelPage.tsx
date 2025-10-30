@@ -1,5 +1,6 @@
-import { Save, Loader2, Trash2, SlidersHorizontal } from "lucide-react";
+import { Save, Loader2, Trash2, SlidersHorizontal, FileText } from "lucide-react";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 
 import { formatAdvancedModelSettingsSummary, sanitizeAdvancedModelSettings } from "../../components/AdvancedModelSettingsForm";
 import {
@@ -8,8 +9,13 @@ import {
   ADVANCED_MAX_TOKENS_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
 import { useModelEditorController } from "./hooks/useModelEditorController";
+import type { SystemPromptTemplate } from "../../../core/storage/schemas";
+import { getApplicablePromptsForModel } from "../../../core/prompts";
 
 export function EditModelPage() {
+  const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
   const {
     state: {
       loading,
@@ -39,6 +45,32 @@ export function EditModelPage() {
     handleDelete,
     handleSetDefault,
   } = useModelEditorController();
+
+  useEffect(() => {
+    if (editorModel?.id) {
+      loadPromptTemplates();
+    }
+  }, [editorModel?.id]);
+
+  const loadPromptTemplates = async () => {
+    if (!editorModel?.id) return;
+    
+    try {
+      setLoadingTemplates(true);
+      const templates = await getApplicablePromptsForModel(editorModel.id);
+      setPromptTemplates(templates);
+    } catch (err) {
+      console.error("Failed to load prompt templates:", err);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handlePromptTemplateChange = (templateId: string) => {
+    if (!editorModel) return;
+    editorModel.promptTemplateId = templateId || null;
+    handleModelNameChange(editorModel.name); // Trigger state update
+  };
 
   if (loading || !editorModel) {
     return (
@@ -113,6 +145,35 @@ export function EditModelPage() {
               </select>
             )}
             <p className="text-xs text-white/50">Choose provider credentials to use</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-medium text-white/70">SYSTEM PROMPT TEMPLATE (OPTIONAL)</label>
+            {loadingTemplates ? (
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                <span className="text-sm text-white/50">Loading templates...</span>
+              </div>
+            ) : (
+              <div className="relative">
+                <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                <select
+                  value={editorModel.promptTemplateId || ""}
+                  onChange={(e) => handlePromptTemplateChange(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 pl-9 text-white transition focus:border-white/30 focus:outline-none"
+                >
+                  <option value="">Use app default prompt</option>
+                  {promptTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <p className="text-xs text-white/50">
+              Select a custom system prompt template for this model
+            </p>
           </div>
 
           {!isNew && (
