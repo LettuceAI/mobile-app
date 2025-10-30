@@ -29,6 +29,18 @@ export const providerRegistry: RegisteredProvider[] = [
     defaults: { baseUrl: "https://openrouter.ai/api" },
   },
   {
+    id: "mistral",
+    name: "Mistral AI",
+    make: () => OpenAICompatibleProvider,
+    defaults: { baseUrl: "https://api.mistral.ai" },
+  },
+  {
+    id: "groq",
+    name: "Groq",
+    make: () => OpenAICompatibleProvider,
+    defaults: { baseUrl: "https://api.groq.com" },
+  },
+  {
     id: "openai-compatible",
     name: "OpenAI-Compatible",
     make: () => OpenAICompatibleProvider,

@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 src-tauri/gen/android/keystore.properties
+target/rust-analyzer/flycheck0/stderr
+target/rust-analyzer/flycheck0/stdout

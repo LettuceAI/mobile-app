@@ -1,6 +1,7 @@
 mod commands;
 pub mod prompts;
 mod request;
+mod request_builder;
 mod service;
 mod storage;
 pub mod types;

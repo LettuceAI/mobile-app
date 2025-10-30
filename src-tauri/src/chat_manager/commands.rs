@@ -213,29 +213,30 @@ pub async fn chat_completion(
         None
     };
 
-    let base_url = provider_base_url(provider_cred);
-    let endpoint = chat_completions_endpoint(&base_url);
-    let headers = normalize_headers(provider_cred, &api_key);
-
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
-    let body = json!({
-        "model": model.name,
-        "messages": messages_for_api,
-        "stream": should_stream,
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": max_tokens,
-    });
+    // Build provider-specific request using the request_builder
+    let built = super::request_builder::build_chat_request(
+        provider_cred,
+        &api_key,
+        &model.name,
+        &messages_for_api,
+        None,
+        temperature,
+        top_p,
+        max_tokens,
+        should_stream,
+        request_id.clone(),
+    );
 
     log_backend(
         &app,
         "chat_completion",
         format!(
             "request prepared endpoint={} stream={} request_id={:?}",
-            endpoint.as_str(),
+            built.url.as_str(),
             should_stream,
             &request_id
         ),
@@ -249,19 +250,19 @@ pub async fn chat_completion(
             "model": model.name,
             "stream": should_stream,
             "requestId": request_id,
-            "endpoint": endpoint,
+            "endpoint": built.url,
         }),
     );
 
     let api_request_payload = ApiRequest {
-        url: endpoint,
+        url: built.url,
         method: Some("POST".into()),
-        headers: Some(headers),
+        headers: Some(built.headers),
         query: None,
-        body: Some(body),
+        body: Some(built.body),
         timeout_ms: Some(120_000),
-        stream: Some(should_stream),
-        request_id: request_id.clone(),
+        stream: Some(built.stream),
+        request_id: built.request_id.clone(),
     };
 
     let api_response = match api_request(app.clone(), api_request_payload).await {
@@ -550,22 +551,22 @@ pub async fn chat_regenerate(
         ensure_assistant_variant(message);
     }
 
-    let base_url = provider_base_url(provider_cred);
-    let endpoint = chat_completions_endpoint(&base_url);
-    let headers = normalize_headers(provider_cred, &api_key);
-
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
-    let body = json!({
-        "model": model.name,
-        "messages": messages_for_api,
-        "stream": should_stream,
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": max_tokens,
-    });
+    let built = super::request_builder::build_chat_request(
+        provider_cred,
+        &api_key,
+        &model.name,
+        &messages_for_api,
+        None,
+        temperature,
+        top_p,
+        max_tokens,
+        should_stream,
+        request_id.clone(),
+    );
 
     emit_debug(
         &app,
@@ -574,7 +575,7 @@ pub async fn chat_regenerate(
             "sessionId": session.id,
             "messageId": message_id,
             "requestId": request_id,
-            "endpoint": endpoint,
+            "endpoint": built.url,
         }),
     );
 
@@ -583,21 +584,21 @@ pub async fn chat_regenerate(
         "chat_regenerate",
         format!(
             "request prepared endpoint={} stream={} request_id={:?}",
-            endpoint.as_str(),
+            built.url.as_str(),
             should_stream,
             &request_id
         ),
     );
 
     let api_request_payload = ApiRequest {
-        url: endpoint,
+        url: built.url,
         method: Some("POST".into()),
-        headers: Some(headers),
+        headers: Some(built.headers),
         query: None,
-        body: Some(body),
+        body: Some(built.body),
         timeout_ms: Some(120_000),
-        stream: Some(should_stream),
-        request_id: request_id.clone(),
+        stream: Some(built.stream),
+        request_id: built.request_id.clone(),
     };
 
     let api_response = match api_request(app.clone(), api_request_payload).await {
@@ -829,22 +830,22 @@ pub async fn chat_continue(
         None
     };
 
-    let base_url = provider_base_url(provider_cred);
-    let endpoint = chat_completions_endpoint(&base_url);
-    let headers = normalize_headers(provider_cred, &api_key);
-
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
-    let body = json!({
-        "model": model.name,
-        "messages": messages_for_api,
-        "stream": should_stream,
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": max_tokens,
-    });
+    let built = super::request_builder::build_chat_request(
+        provider_cred,
+        &api_key,
+        &model.name,
+        &messages_for_api,
+        None,
+        temperature,
+        top_p,
+        max_tokens,
+        should_stream,
+        request_id.clone(),
+    );
 
     emit_debug(
         &app,
@@ -854,7 +855,7 @@ pub async fn chat_continue(
             "model": model.name,
             "stream": should_stream,
             "requestId": request_id,
-            "endpoint": endpoint,
+            "endpoint": built.url,
         }),
     );
 
@@ -863,21 +864,21 @@ pub async fn chat_continue(
         "chat_continue",
         format!(
             "request prepared endpoint={} stream={} request_id={:?}",
-            endpoint.as_str(),
+            built.url.as_str(),
             should_stream,
             &request_id
         ),
     );
 
     let api_request_payload = ApiRequest {
-        url: endpoint,
+        url: built.url,
         method: Some("POST".into()),
-        headers: Some(headers),
+        headers: Some(built.headers),
         query: None,
-        body: Some(body),
+        body: Some(built.body),
         timeout_ms: Some(120_000),
-        stream: Some(should_stream),
-        request_id: request_id.clone(),
+        stream: Some(built.stream),
+        request_id: built.request_id.clone(),
     };
 
     let api_response = match api_request(app.clone(), api_request_payload).await {

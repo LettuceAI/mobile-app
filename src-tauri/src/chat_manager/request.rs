@@ -9,18 +9,40 @@ pub fn provider_base_url(cred: &ProviderCredential) -> String {
     providers::resolve_base_url(&cred.provider_id, cred.base_url.as_deref())
 }
 
-pub fn chat_completions_endpoint(base_url: &str) -> String {
+pub fn chat_completions_endpoint(base_url: &str, provider_id: &str) -> String {
     let trimmed = base_url.trim_end_matches('/');
-    if trimmed.ends_with("/v1") {
-        format!("{}/chat/completions", trimmed)
-    } else {
-        format!("{}/v1/chat/completions", trimmed)
+    
+    match provider_id {
+        "mistral" => {
+            if trimmed.ends_with("/v1") {
+                format!("{}/conversations", trimmed)
+            } else {
+                format!("{}/v1/conversations", trimmed)
+            }
+        }
+        _ => {
+            if trimmed.ends_with("/v1") {
+                format!("{}/chat/completions", trimmed)
+            } else {
+                format!("{}/v1/chat/completions", trimmed)
+            }
+        }
     }
 }
 
 pub fn normalize_headers(cred: &ProviderCredential, api_key: &str) -> HashMap<String, String> {
     let mut out: HashMap<String, String> = HashMap::new();
-    out.insert("Authorization".into(), format!("Bearer {}", api_key));
+    
+    // Different providers use different auth headers
+    match cred.provider_id.as_str() {
+        "mistral" => {
+            out.insert("X-API-KEY".into(), api_key.to_string());
+        }
+        _ => {
+            out.insert("Authorization".into(), format!("Bearer {}", api_key));
+        }
+    }
+    
     out.insert("Content-Type".into(), "application/json".into());
     out.insert("Accept".into(), "text/event-stream".into());
     if !out.contains_key("User-Agent") {

@@ -50,6 +50,22 @@ fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
             system_role: "system".to_string(),
             default_headers: HashMap::new(),
         },
+        ProviderConfig {
+            id: "mistral".to_string(),
+            name: "Mistral AI".to_string(),
+            default_base_url: "https://api.mistral.ai".to_string(),
+            api_endpoint_path: "/v1/chat/completions".to_string(),
+            system_role: "system".to_string(),
+            default_headers: HashMap::new(),
+        },
+        ProviderConfig {
+            id: "groq".to_string(),
+            name: "Groq".to_string(),
+            default_base_url: "https://api.groq.com".to_string(),
+            api_endpoint_path: "/openai/deployments/default/chat/completions".to_string(),
+            system_role: "system".to_string(),
+            default_headers: HashMap::new(),
+        },
     ]
 }
 
@@ -87,6 +103,7 @@ pub fn build_endpoint_url(provider_id: &str, custom_base_url: Option<&str>) -> S
 pub fn get_system_role(provider_id: &str) -> &'static str {
     match provider_id {
         "openai" | "openrouter" => "developer",
+        "mistral" | "groq" => "system",
         _ => "system",
     }
 }

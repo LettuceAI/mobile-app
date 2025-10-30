@@ -120,7 +120,6 @@ pub fn update_template(
         .find(|t| t.id == id)
         .ok_or_else(|| format!("Template not found: {}", id))?;
     
-    // Prevent changing scope of app default template (only if trying to change to a different scope)
     if is_app_default_template(&id) {
         if let Some(s) = &scope {
             if *s != template.scope {
