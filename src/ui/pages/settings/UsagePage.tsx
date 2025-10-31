@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { motion, AnimatePresence, animate } from 'framer-motion';
 import { useUsageTracking, RequestUsage, UsageStats, UsageFilter } from '../../../core/usage';
-import { ChevronDown, Download, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, Download, CheckCircle2, Check } from 'lucide-react';
 import { BottomMenu } from '../../components';
 
 /**
@@ -77,7 +77,7 @@ function DateRangePicker({
 /**
  * Simple stat display component
  */
-function StatRow({ label, value, secondary }: { label: string; value: string; secondary?: string }) {
+function StatRow({ label, value, secondary }: { label: string; value: ReactNode; secondary?: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between">
       <span className="text-sm text-white/50">{label}</span>
@@ -89,28 +89,51 @@ function StatRow({ label, value, secondary }: { label: string; value: string; se
   );
 }
 
+function AnimatedNumber({ value, formatter, duration = 0.4 }: { value: number; formatter: (n: number) => string; duration?: number }) {
+  const [display, setDisplay] = useState<number>(value);
+  const prev = useRef<number>(value);
+
+  useEffect(() => {
+    const from = prev.current;
+    const controls = animate(from, value, {
+      duration,
+      ease: 'easeOut',
+      onUpdate: (latest) => setDisplay(latest as number),
+    });
+    prev.current = value;
+    return () => controls.stop();
+  }, [value, duration]);
+
+  return <>{formatter(display)}</>;
+}
+
 /**
  * Request detail row - minimal design
  */
-function RequestRow({ request }: { request: RequestUsage }) {
+function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+    <div className={`rounded-xl border border-white/10 ${alt ? 'bg-white/[0.065]' : 'bg-white/5'} overflow-hidden`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.08] transition active:scale-[0.99]"
       >
         <div className="flex-1 min-w-0 text-left">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <p className="text-sm font-medium text-white truncate">{request.characterName}</p>
+            {/* Provider/Model badge next to title */}
+            {(request.providerLabel || request.modelName) && (
+              <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] text-white/80">
+                {request.providerLabel || request.modelName}
+              </span>
+            )}
             {!request.success && (
               <span className="text-[10px] text-red-400">Failed</span>
             )}
           </div>
           <p className="text-xs text-white/40 mt-0.5">
-            {request.modelName}
-            {request.totalTokens && ` • ${formatNumber(request.totalTokens)} tokens`}
+            {request.totalTokens ? `${formatNumber(request.totalTokens)} tokens` : ''}
           </p>
         </div>
 
@@ -201,91 +224,7 @@ function RequestRow({ request }: { request: RequestUsage }) {
 /**
  * Provider/Model breakdown section - Mobile optimized with display names
  */
-function BreakdownSection({
-  title,
-  items,
-  records,
-  keyType,
-}: {
-  title: string;
-  items: Record<
-    string,
-    {
-      totalRequests: number;
-      totalTokens: number;
-      totalCost: number;
-      successfulRequests: number;
-    }
-  >;
-  records: RequestUsage[];
-  keyType: 'provider' | 'model' | 'character';
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  const nameMap = new Map<string, string>();
-  records.forEach((record) => {
-    if (keyType === 'provider' && record.providerId) {
-      nameMap.set(record.providerId, record.providerLabel);
-    } else if (keyType === 'model' && record.modelId) {
-      nameMap.set(record.modelId, record.modelName);
-    } else if (keyType === 'character' && record.characterId) {
-      nameMap.set(record.characterId, record.characterName);
-    }
-  });
-
-  const sortedItems = Object.entries(items).sort((a, b) => b[1].totalCost - a[1].totalCost);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-lg border border-white/10 bg-white/5"
-    >
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-3 flex items-center justify-between hover:bg-white/[0.08] transition"
-      >
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-        <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown className="h-4 w-4 text-white/40" />
-        </motion.div>
-      </button>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden border-t border-white/10"
-          >
-            <div className="space-y-2 px-3 py-3">
-              {sortedItems.map(([id, stats]) => (
-                <div
-                  key={id}
-                  className="flex items-center justify-between rounded-lg bg-black/30 px-3 py-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate">{nameMap.get(id) || id}</p>
-                    <p className="text-xs text-white/50">
-                      {stats.successfulRequests}/{stats.totalRequests} • {formatNumber(stats.totalTokens)} tokens
-                    </p>
-                  </div>
-                  <div className="text-right ml-2">
-                    <p className="text-xs font-semibold text-emerald-400">
-                      {formatCurrency(stats.totalCost)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
+/* Removed BreakdownSection in favor of lightweight filter chips above Recent */
 
 /**
  * Usage Analytics Page
@@ -305,11 +244,18 @@ export function UsagePage() {
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [successOnly, setSuccessOnly] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  // Deprecated pagination (replaced by Load more)
   const RECORDS_PER_PAGE = 10;
+
+  // Filters for recent requests
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const [showModelFilter, setShowModelFilter] = useState(false);
+  const [showCharacterFilter, setShowCharacterFilter] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(RECORDS_PER_PAGE);
 
   const loadData = async () => {
     setLoading(true);
@@ -326,7 +272,7 @@ export function UsagePage() {
 
     if (newStats) setStats(newStats);
     if (newRecords) setRecords(newRecords);
-    setCurrentPage(1);
+    setVisibleCount(RECORDS_PER_PAGE);
     setLoading(false);
   };
 
@@ -374,6 +320,58 @@ export function UsagePage() {
     }
   };
 
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(RECORDS_PER_PAGE);
+  }, [selectedModelId, selectedCharacterId]);
+
+  // Derived lists for filters
+  const modelOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of records) {
+      if (r.modelId && r.modelName && !map.has(r.modelId)) map.set(r.modelId, r.modelName);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [records]);
+
+  const characterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of records) {
+      if (r.characterId && r.characterName && !map.has(r.characterId)) map.set(r.characterId, r.characterName);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [records]);
+
+  const filteredRecords = useMemo(() => {
+    let list = records.slice();
+    if (selectedModelId) list = list.filter(r => r.modelId === selectedModelId);
+    if (selectedCharacterId) list = list.filter(r => r.characterId === selectedCharacterId);
+    return list;
+  }, [records, selectedModelId, selectedCharacterId]);
+
+  // Derived stats based on current filter (All / By Model / By Character)
+  const displayStats = useMemo(() => {
+    const totals = filteredRecords.reduce(
+      (acc, r) => {
+        const totalTokens = (r.totalTokens ?? 0) || ((r.promptTokens ?? 0) + (r.completionTokens ?? 0));
+        const promptCost = r.cost?.promptCost ?? 0;
+        const completionCost = r.cost?.completionCost ?? 0;
+        const totalCost = r.cost?.totalCost ?? (promptCost + completionCost);
+        acc.totalRequests += 1;
+        acc.successfulRequests += r.success ? 1 : 0;
+        acc.totalTokens += totalTokens;
+        acc.promptCost += promptCost;
+        acc.completionCost += completionCost;
+        acc.totalCost += totalCost;
+        return acc;
+      },
+      { totalRequests: 0, successfulRequests: 0, totalTokens: 0, promptCost: 0, completionCost: 0, totalCost: 0 }
+    );
+    const averageCostPerRequest = totals.totalRequests > 0 ? totals.totalCost / totals.totalRequests : 0;
+    const successRate = totals.totalRequests > 0 ? (totals.successfulRequests / totals.totalRequests) * 100 : 0;
+    return { ...totals, averageCostPerRequest, successRate };
+  }, [filteredRecords]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -396,30 +394,30 @@ export function UsagePage() {
             onEndChange={setEndDate}
           />
 
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 transition cursor-pointer">
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 transition cursor-pointer">
             <span className="text-sm text-white">Show successful requests only</span>
             <div className="flex items-center flex-shrink-0">
               <input
-              id="show-only-successful"
-              type="checkbox"
-              checked={successOnly}
-              onChange={(e) => setSuccessOnly(e.target.checked)}
-              className="peer sr-only"
+                id="show-only-successful"
+                type="checkbox"
+                checked={successOnly}
+                onChange={(e) => setSuccessOnly(e.target.checked)}
+                className="peer sr-only"
               />
               <label
-              htmlFor="show-only-successful"
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${successOnly
-                ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                : 'bg-white/20'
-                }`}
+                htmlFor="show-only-successful"
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${successOnly
+                  ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                  : 'bg-white/20'
+                  }`}
               >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${successOnly ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${successOnly ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                />
               </label>
             </div>
-            </label>
+          </label>
 
           <button
             onClick={handleExportCSV}
@@ -432,7 +430,7 @@ export function UsagePage() {
         </div>
       </BottomMenu>
 
-      {/* Content */}
+  {/* Content */}
       <div className="space-y-4 px-4 py-4">
         {/* Export Success Toast */}
         <AnimatePresence>
@@ -459,7 +457,7 @@ export function UsagePage() {
           </div>
         ) : stats ? (
           <>
-            {/* Overview Card */}
+            {/* Overview Card (filtered) */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -468,29 +466,29 @@ export function UsagePage() {
               <h2 className="text-lg font-semibold text-white mb-3">Overview</h2>
               <StatRow
                 label="Total Cost"
-                value={formatCurrency(stats.totalCost)}
+                value={<AnimatedNumber value={displayStats.totalCost} formatter={formatCurrency} />}
               />
               <StatRow
                 label="Total Requests"
-                value={formatNumber(stats.totalRequests)}
-                secondary={`${stats.successfulRequests} successful`}
+                value={<AnimatedNumber value={displayStats.totalRequests} formatter={(v) => formatNumber(Math.round(v))} />}
+                secondary={<><AnimatedNumber value={displayStats.successfulRequests} formatter={(v) => formatNumber(Math.round(v))} />{' '}successful</>}
               />
               <StatRow
                 label="Total Tokens"
-                value={formatNumber(stats.totalTokens)}
-                secondary={`${formatNumber(stats.totalTokens / Math.max(stats.totalRequests, 1))} avg`}
+                value={<AnimatedNumber value={displayStats.totalTokens} formatter={(v) => formatNumber(Math.round(v))} />}
+                secondary={<><AnimatedNumber value={displayStats.totalTokens / Math.max(displayStats.totalRequests, 1)} formatter={(v) => formatNumber(Math.round(v))} />{' '}avg</>}
               />
               <StatRow
                 label="Average Cost"
-                value={formatCurrency(stats.averageCostPerRequest)}
+                value={<AnimatedNumber value={displayStats.averageCostPerRequest} formatter={formatCurrency} />}
               />
               <StatRow
                 label="Success Rate"
-                value={`${stats.totalRequests > 0 ? ((stats.successfulRequests / stats.totalRequests) * 100).toFixed(1) : 0}%`}
+                value={<><AnimatedNumber value={displayStats.successRate} formatter={(v) => v.toFixed(1)} />%</>}
               />
             </motion.div>
 
-            {/* Cost Breakdown */}
+            {/* Cost Breakdown (filtered) */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -503,72 +501,165 @@ export function UsagePage() {
                 <div className="flex justify-between text-xs">
                   <span className="text-white/50">Input Tokens</span>
                   <span className="text-white/80">
-                    {formatCurrency(records.reduce((sum, r) => sum + (r.cost?.promptCost || 0), 0))}
+                    <AnimatedNumber value={displayStats.promptCost} formatter={formatCurrency} />
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-white/50">Output Tokens</span>
                   <span className="text-white/80">
-                    {formatCurrency(records.reduce((sum, r) => sum + (r.cost?.completionCost || 0), 0))}
+                    <AnimatedNumber value={displayStats.completionCost} formatter={formatCurrency} />
                   </span>
                 </div>
               </div>
             </motion.div>
 
-            {/* Breakdowns */}
-            {Object.keys(stats.byProvider).length > 0 && (
-              <BreakdownSection title="By Provider" items={stats.byProvider} records={records} keyType="provider" />
-            )}
+            {/* Filter Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <motion.button
+                onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); }}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${!selectedModelId && !selectedCharacterId ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
+                whileTap={{ scale: 0.98 }}
+              >
+                All
+              </motion.button>
+              <motion.button
+                onClick={() => setShowModelFilter((v) => !v)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${selectedModelId ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
+                whileTap={{ scale: 0.98 }}
+              >
+                {selectedModelId ? (modelOptions.find(m => m.id === selectedModelId)?.name || 'Model') : 'By Model'}
+              </motion.button>
+              <motion.button
+                onClick={() => setShowCharacterFilter((v) => !v)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${selectedCharacterId ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
+                whileTap={{ scale: 0.98 }}
+              >
+                {selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Character') : 'By Character'}
+              </motion.button>
+            </div>
 
-            {Object.keys(stats.byModel).length > 0 && (
-              <BreakdownSection title="By Model" items={stats.byModel} records={records} keyType="model" />
-            )}
+            {/* Model Filter Inline Menu (visual improvements) */}
+            <AnimatePresence>
+              {showModelFilter && modelOptions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
+                >
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {modelOptions.map(opt => {
+                      const selected = selectedModelId === opt.id;
+                      return (
+                        <motion.button
+                          key={opt.id}
+                          onClick={() => { setSelectedModelId(opt.id); setShowModelFilter(false); }}
+                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs transition border ${selected ? 'bg-emerald-500/15 text-emerald-100 border-emerald-400/30' : 'text-white/80 hover:bg-white/10/60 border-transparent'}`}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="truncate pr-2">{opt.name}</span>
+                          {selected && <Check className="h-4 w-4 text-emerald-400" />}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                  <div className="h-px bg-white/10 my-2" />
+                  <div className="flex justify-end">
+                    <motion.button
+                      onClick={() => { setSelectedModelId(null); setShowModelFilter(false); }}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Clear
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-            {Object.keys(stats.byCharacter).length > 0 && (
-              <BreakdownSection title="By Character" items={stats.byCharacter} records={records} keyType="character" />
-            )}
+            {/* Character Filter Inline Menu (visual improvements) */}
+            <AnimatePresence>
+              {showCharacterFilter && characterOptions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
+                >
+                  {/* Top gradient highlight */}
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-white/10 to-transparent" />
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {characterOptions.map(opt => {
+                      const selected = selectedCharacterId === opt.id;
+                      return (
+                        <motion.button
+                          key={opt.id}
+                          onClick={() => { setSelectedCharacterId(opt.id); setShowCharacterFilter(false); }}
+                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs transition border ${selected ? 'bg-emerald-500/15 text-emerald-100 border-emerald-400/30' : 'text-white/80 hover:bg-white/10/60 border-transparent'}`}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="truncate pr-2">{opt.name}</span>
+                          {selected && <Check className="h-4 w-4 text-emerald-400" />}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                  <div className="h-px bg-white/10 my-2" />
+                  <div className="flex justify-end">
+                    <motion.button
+                      onClick={() => { setSelectedCharacterId(null); setShowCharacterFilter(false); }}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Clear
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Recent Requests */}
-            {records.length > 0 && (
+            {filteredRecords.length > 0 && (
               <div className="space-y-2">
                 <h3 className="px-1 text-sm font-medium text-white/70">
-                  Recent ({records.length})
+                  Recent Requests ({filteredRecords.length})
                 </h3>
                 <div className="space-y-2">
-                  {records
+                  <AnimatePresence initial={false}>
+                  {filteredRecords
                     .sort((a, b) => b.timestamp - a.timestamp)
-                    .slice((currentPage - 1) * RECORDS_PER_PAGE, currentPage * RECORDS_PER_PAGE)
-                    .map((request) => (
-                      <RequestRow key={request.id} request={request} />
+                    .slice(0, visibleCount)
+                    .map((request, idx) => (
+                      <motion.div
+                        key={request.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        layout
+                      >
+                        <RequestRow request={request} alt={idx % 2 === 1} />
+                      </motion.div>
                     ))}
+                  </AnimatePresence>
                 </div>
-
-                {/* Pagination */}
-                {Math.ceil(records.length / RECORDS_PER_PAGE) > 1 && (
-                  <div className="flex items-center gap-2 pt-2">
-                    <button
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:border-white/20 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-[0.99]"
+                {visibleCount < filteredRecords.length && (
+                  <div className="pt-2">
+                    <motion.button
+                      onClick={() => setVisibleCount((v) => v + RECORDS_PER_PAGE)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:border-white/20 hover:bg-white/10 transition active:scale-[0.99]"
+                      whileTap={{ scale: 0.98 }}
                     >
-                      Previous
-                    </button>
-                    <span className="text-xs text-white/50 px-2">
-                      {currentPage} / {Math.ceil(records.length / RECORDS_PER_PAGE)}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(Math.min(Math.ceil(records.length / RECORDS_PER_PAGE), currentPage + 1))}
-                      disabled={currentPage === Math.ceil(records.length / RECORDS_PER_PAGE)}
-                      className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:border-white/20 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-[0.99]"
-                    >
-                      Next
-                    </button>
+                      Load more
+                    </motion.button>
                   </div>
                 )}
               </div>
             )}
 
-            {records.length === 0 && (
+            {filteredRecords.length === 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
