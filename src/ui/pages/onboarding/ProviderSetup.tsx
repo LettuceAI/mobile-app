@@ -1,3 +1,4 @@
+import React from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -7,7 +8,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { providerRegistry } from "../../../core/providers/registry";
+import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
 import { useProviderController } from "./hooks/useProviderController";
 
 import openaiIcon from "../../../assets/openai.svg";
@@ -37,7 +38,21 @@ export function ProviderSetupPage() {
     goToWelcome,
   } = useProviderController();
 
-  const selectedProvider = providerRegistry.find((p) => p.id === selectedProviderId);
+  const [capabilities, setCapabilities] = React.useState<ProviderCapabilitiesCamel[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const caps = (await getProviderCapabilities()).map(toCamel);
+        if (!cancelled) setCapabilities(caps);
+      } catch (e) {
+        console.warn("[Onboarding] Failed to load provider capabilities", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedProvider = capabilities.find((p) => p.id === selectedProviderId);
 
   return (
     <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8 pb-16 overflow-y-auto">
@@ -67,7 +82,7 @@ export function ProviderSetupPage() {
 
         {/* Provider Selection */}
         <div className="w-full max-w-sm space-y-3 mb-8">
-          {providerRegistry.map((provider) => {
+          {capabilities.map((provider) => {
             const isActive = selectedProviderId === provider.id;
             return (
               <button
@@ -77,7 +92,7 @@ export function ProviderSetupPage() {
                     ? "border-white/25 bg-white/15 shadow-lg"
                     : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
                 }`}
-                onClick={() => handleSelectProvider(provider)}
+                onClick={() => handleSelectProvider({ id: provider.id, name: provider.name, defaultBaseUrl: provider.defaultBaseUrl })}
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/8">

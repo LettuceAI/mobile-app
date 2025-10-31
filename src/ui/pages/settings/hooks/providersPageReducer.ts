@@ -1,4 +1,5 @@
 import type { ProviderCredential } from "../../../../core/storage/schemas";
+import type { ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
 
 export type ProvidersPageState = {
   providers: ProviderCredential[];
@@ -9,6 +10,7 @@ export type ProvidersPageState = {
   isSaving: boolean;
   isDeleting: boolean;
   validationError: string | null;
+  capabilities: ProviderCapabilitiesCamel[];
 };
 
 export type ProvidersPageAction =
@@ -23,7 +25,8 @@ export type ProvidersPageAction =
   | { type: "set_api_key"; payload: string }
   | { type: "set_is_saving"; payload: boolean }
   | { type: "set_is_deleting"; payload: boolean }
-  | { type: "set_validation_error"; payload: string | null };
+  | { type: "set_validation_error"; payload: string | null }
+  | { type: "set_capabilities"; payload: ProviderCapabilitiesCamel[] };
 
 export const initialProvidersPageState: ProvidersPageState = {
   providers: [],
@@ -34,6 +37,7 @@ export const initialProvidersPageState: ProvidersPageState = {
   isSaving: false,
   isDeleting: false,
   validationError: null,
+  capabilities: [],
 };
 
 export function providersPageReducer(
@@ -96,6 +100,11 @@ export function providersPageReducer(
       return {
         ...state,
         validationError: action.payload,
+      };
+    case "set_capabilities":
+      return {
+        ...state,
+        capabilities: action.payload,
       };
     default:
       return state;

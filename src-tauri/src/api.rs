@@ -354,6 +354,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 url_for_log, api_key_for_log, event_name
             ),
         );
+        let mut usage_emitted = false;
         while let Some(chunk) = body_stream.next().await {
             match chunk {
                 Ok(chunk) => {
@@ -392,6 +393,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                                     "data": usage,
                                 }),
                             );
+                            usage_emitted = true;
                         }
                         if text.contains("[DONE]") {
                             let _ = app.emit(
@@ -416,7 +418,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 }
             }
         }
-        let text = String::from_utf8_lossy(&collected).to_string();
+    let text = String::from_utf8_lossy(&collected).to_string();
         log_backend(
             &app,
             "api_request",
@@ -425,6 +427,24 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 collected.len()
             ),
         );
+        // Emit a final usage event if not already emitted and we can extract it
+        if let Some(req_id) = &request_id {
+            if !usage_emitted {
+                let normalized_event = format!("api-normalized://{}", req_id);
+                let value = super::api::parse_body_to_value(&text);
+                if let Some(usage) = chat_request::extract_usage(&value) {
+                    let _ = app.emit(
+                        &normalized_event,
+                        json!({
+                            "requestId": req_id,
+                            "type": "usage",
+                            "data": usage,
+                        }),
+                    );
+                }
+            }
+        }
+
         // If HTTP status was not OK, emit a normalized error event as well
         if !ok {
             if let Some(req_id) = &request_id {

@@ -1,9 +1,9 @@
-use crate::{secrets, storage_manager, utils::log_backend};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
+use crate::{secrets, utils::log_backend};
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
+use super::util::{build_headers, build_verify_url, resolve_base_url, extract_error_message};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,113 +15,6 @@ pub struct VerifyProviderApiKeyResult {
     pub details: Option<Value>,
 }
 
-fn default_base_url(provider_id: &str) -> Option<&'static str> {
-    match provider_id {
-        "openai" => Some("https://api.openai.com"),
-        "anthropic" => Some("https://api.anthropic.com"),
-        "openrouter" => Some("https://openrouter.ai/api"),
-        _ => None,
-    }
-}
-
-fn resolve_base_url(
-    app: &tauri::AppHandle,
-    provider_id: &str,
-    base_override: Option<String>,
-    credential_id: Option<&str>,
-) -> Result<String, String> {
-    if let Some(explicit) = base_override.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    }) {
-        return Ok(explicit);
-    }
-
-    if let Some(cred_id) = credential_id {
-        if let Some(raw) = storage_manager::internal_read_settings(app)? {
-            if let Ok(json) = serde_json::from_str::<Value>(&raw) {
-                if let Some(creds) = json.get("providerCredentials").and_then(|v| v.as_array()) {
-                    for cred in creds {
-                        if cred.get("id").and_then(|v| v.as_str()) == Some(cred_id) {
-                            if let Some(base) = cred
-                                .get("baseUrl")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.trim())
-                                .filter(|s| !s.is_empty())
-                            {
-                                return Ok(base.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    default_base_url(provider_id)
-        .map(|url| url.to_string())
-        .ok_or_else(|| format!("Unsupported provider {}", provider_id))
-}
-
-fn extract_error_message(payload: &Value) -> Option<String> {
-    if let Some(error) = payload.get("error") {
-        match error {
-            Value::String(s) => Some(s.clone()),
-            Value::Object(map) => {
-                if let Some(Value::String(message)) = map.get("message") {
-                    Some(message.clone())
-                } else if let Some(Value::String(typ)) = map.get("type") {
-                    Some(typ.clone())
-                } else {
-                    Some(error.to_string())
-                }
-            }
-            other => Some(other.to_string()),
-        }
-    } else if let Some(Value::String(message)) = payload.get("message") {
-        Some(message.clone())
-    } else {
-        None
-    }
-}
-
-fn build_headers(provider_id: &str, api_key: &str) -> Result<HeaderMap, String> {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        AUTHORIZATION,
-        HeaderValue::from_str(&format!("Bearer {}", api_key))
-            .map_err(|e| format!("invalid authorization header: {e}"))?,
-    );
-    headers.insert(
-        reqwest::header::ACCEPT,
-        HeaderValue::from_static("application/json"),
-    );
-
-    if provider_id == "anthropic" {
-        headers.insert(
-            HeaderName::from_static("anthropic-version"),
-            HeaderValue::from_static("2023-06-01"),
-        );
-        headers.insert(
-            HeaderName::from_static("x-api-key"),
-            HeaderValue::from_str(api_key).map_err(|e| format!("invalid x-api-key header: {e}"))?,
-        );
-    }
-
-    Ok(headers)
-}
-
-fn build_url(provider_id: &str, base_url: &str) -> String {
-    let trimmed = base_url.trim_end_matches('/');
-    match provider_id {
-        "openrouter" => format!("{}/v1/key", trimmed),
-        _ => format!("{}/v1/models", trimmed),
-    }
-}
 
 #[tauri::command]
 pub async fn verify_provider_api_key(
@@ -211,7 +104,7 @@ pub async fn verify_provider_api_key(
         .map_err(|e| e.to_string())?;
 
     let headers = build_headers(&provider_id, &resolved_key)?;
-    let url = build_url(&provider_id, &base);
+    let url = build_verify_url(&provider_id, &base);
 
     let response = match client.get(&url).headers(headers).send().await {
         Ok(resp) => resp,

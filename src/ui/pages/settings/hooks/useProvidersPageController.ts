@@ -7,7 +7,7 @@ import {
   removeProviderCredential,
   SETTINGS_UPDATED_EVENT,
 } from "../../../../core/storage/repo";
-import { providerRegistry } from "../../../../core/providers/registry";
+import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
 import { getSecret, setSecret } from "../../../../core/secrets";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
 import {
@@ -60,6 +60,22 @@ export function useProvidersPageController(): ControllerReturn {
     void reload();
   }, [reload]);
 
+  // Load provider capabilities from backend
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const caps = (await getProviderCapabilities()).map(toCamel);
+        if (!cancelled) {
+          dispatch({ type: "set_capabilities", payload: caps });
+        }
+      } catch (e) {
+        console.warn("[ProvidersPage] Failed to load provider capabilities", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     const handler = () => {
       void reload();
@@ -71,6 +87,7 @@ export function useProvidersPageController(): ControllerReturn {
   const openEditor = useCallback(
     (provider?: ProviderCredential) => {
       const newId = provider?.id ?? crypto.randomUUID();
+      const firstCap: ProviderCapabilitiesCamel | undefined = state.capabilities[0];
       const baseProvider: ProviderCredential = provider
         ? {
             ...provider,
@@ -80,10 +97,10 @@ export function useProvidersPageController(): ControllerReturn {
           }
         : ({
             id: newId,
-            providerId: providerRegistry[0].id,
+            providerId: firstCap?.id || "openai",
             label: "",
             apiKeyRef: {
-              providerId: providerRegistry[0].id,
+              providerId: firstCap?.id || "openai",
               key: "apiKey",
               credId: newId,
             },

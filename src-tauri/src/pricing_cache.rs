@@ -11,7 +11,7 @@ const CACHE_TTL_HOURS: u64 = 6;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelsCacheEntry {
     pub id: String,
-    pub pricing: Option<crate::usage::ModelPricing>,
+    pub pricing: Option<crate::models::ModelPricing>,
     pub cached_at: u64,
 }
 
@@ -65,7 +65,7 @@ pub fn save_models_cache(app: &AppHandle, cache: &ModelsCache) -> Result<(), Str
 pub fn get_cached_pricing(
     app: &AppHandle,
     model_id: &str,
-) -> Result<Option<crate::usage::ModelPricing>, String> {
+) -> Result<Option<crate::models::ModelPricing>, String> {
     let cache = load_models_cache(app)?;
     let current_time = now_secs();
 
@@ -82,7 +82,7 @@ pub fn get_cached_pricing(
 pub fn cache_model_pricing(
     app: &AppHandle,
     model_id: &str,
-    pricing: Option<crate::usage::ModelPricing>,
+    pricing: Option<crate::models::ModelPricing>,
 ) -> Result<(), String> {
     let mut cache = load_models_cache(app)?;
     let now = now_secs();

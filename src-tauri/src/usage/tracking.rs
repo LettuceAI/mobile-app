@@ -1,33 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-/// Pricing information for a model from OpenRouter
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelPricing {
-    pub prompt: String,     // Price per 1k input tokens
-    pub completion: String, // Price per 1k output tokens
-    #[serde(default)]
-    pub request: String, // Price per request
-    #[serde(default)]
-    pub image: String, // Price per image
-    #[serde(default)]
-    pub web_search: String, // Price per web search
-    #[serde(default)]
-    pub internal_reasoning: String, // Price per internal reasoning token
-}
-
-/// Cost calculation result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RequestCost {
-    pub prompt_tokens: u64,
-    pub completion_tokens: u64,
-    pub total_tokens: u64,
-    pub prompt_cost: f64,     // Cost for prompt tokens
-    pub completion_cost: f64, // Cost for completion tokens
-    pub total_cost: f64,      // Total cost in USD
-}
+use crate::models::RequestCost;
 
 /// Individual request/message usage tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]

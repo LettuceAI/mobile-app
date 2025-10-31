@@ -2,7 +2,7 @@ mod commands;
 pub mod prompts;
 pub mod request;
 pub mod sse;
-mod provider_adapter;
+pub mod provider_adapter;
 mod request_builder;
 mod service;
 mod storage;

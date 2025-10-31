@@ -13,7 +13,7 @@ import type {
   Model,
   ProviderCredential,
 } from "../../../../core/storage/schemas";
-import { providerRegistry } from "../../../../core/providers/registry";
+import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
 import {
   createDefaultAdvancedModelSettings,
 } from "../../../../core/storage/schemas";
@@ -55,6 +55,23 @@ export function useModelEditorController(): ControllerReturn {
   const { modelId } = useParams<{ modelId: string }>();
   const isNew = !modelId || modelId === "new";
   const [state, dispatch] = useModelEditorState();
+  const [capabilities, setCapabilities] = useReducer(
+    (_: ProviderCapabilitiesCamel[], a: ProviderCapabilitiesCamel[]) => a,
+    [],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const caps = (await getProviderCapabilities()).map(toCamel);
+        if (!cancelled) setCapabilities(caps);
+      } catch (e) {
+        console.warn("[ModelEditor] Failed to load provider capabilities", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,13 +92,13 @@ export function useModelEditorController(): ControllerReturn {
 
         if (isNew) {
           const firstProvider = providers[0];
-          const firstRegistry = providerRegistry[0];
+          const firstCap = capabilities[0];
           nextEditorModel = {
             id: crypto.randomUUID(),
             name: "",
             displayName: "",
-            providerId: firstProvider?.providerId || firstRegistry?.id || "",
-            providerLabel: firstProvider?.label || firstRegistry?.name || "",
+            providerId: firstProvider?.providerId || firstCap?.id || "",
+            providerLabel: firstProvider?.label || firstCap?.name || "",
             createdAt: Date.now(),
           } as Model;
         } else {
@@ -148,10 +165,10 @@ export function useModelEditorController(): ControllerReturn {
 
   const providerDisplay = useMemo(() => {
     return (prov: ProviderCredential) => {
-      const reg = providerRegistry.find((p) => p.id === prov.providerId);
-      return `${prov.label} (${reg?.name || prov.providerId})`;
+      const cap = capabilities.find((p) => p.id === prov.providerId);
+      return `${prov.label} (${cap?.name || prov.providerId})`;
     };
-  }, []);
+  }, [capabilities]);
 
   const canSave = useMemo(() => {
     const { editorModel, providers, saving, verifying } = state;

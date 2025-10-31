@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::chat_manager::provider_adapter::adapter_for;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
@@ -8,6 +9,8 @@ pub struct ProviderConfig {
     pub default_base_url: String,
     pub api_endpoint_path: String,
     pub system_role: String,
+    pub supports_stream: bool,
+    pub required_auth_headers: Vec<String>,
     pub default_headers: HashMap<String, String>,
 }
 
@@ -16,57 +19,51 @@ pub fn get_provider_configs() -> Vec<ProviderConfig> {
     get_all_provider_configs_internal()
 }
 
+fn path_from_url(url: &str) -> String {
+    // naive extraction of path from a URL without pulling in a URL parser
+    if let Some(scheme_idx) = url.find("://") {
+        if let Some(path_start) = url[scheme_idx + 3..].find('/') {
+            return url[scheme_idx + 3 + path_start..].to_string();
+        }
+        return "/".to_string();
+    }
+    // already looks like a path
+    url.to_string()
+}
+
 fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
-    vec![
-        ProviderConfig {
-            id: "openai".to_string(),
-            name: "OpenAI".to_string(),
-            default_base_url: "https://api.openai.com".to_string(),
-            api_endpoint_path: "/v1/chat/completions".to_string(),
-            system_role: "developer".to_string(),
-            default_headers: HashMap::new(),
-        },
-        ProviderConfig {
-            id: "anthropic".to_string(),
-            name: "Anthropic".to_string(),
-            default_base_url: "https://api.anthropic.com".to_string(),
-            api_endpoint_path: "/v1/chat/completions".to_string(),
-            system_role: "system".to_string(),
-            default_headers: HashMap::new(),
-        },
-        ProviderConfig {
-            id: "openrouter".to_string(),
-            name: "OpenRouter".to_string(),
-            default_base_url: "https://openrouter.ai/api".to_string(),
-            api_endpoint_path: "/v1/chat/completions".to_string(),
-            system_role: "developer".to_string(),
-            default_headers: HashMap::new(),
-        },
-        ProviderConfig {
-            id: "google".to_string(),
-            name: "Google".to_string(),
-            default_base_url: "https://generativelanguage.googleapis.com".to_string(),
-            api_endpoint_path: "/v1/chat/completions".to_string(),
-            system_role: "system".to_string(),
-            default_headers: HashMap::new(),
-        },
-        ProviderConfig {
-            id: "mistral".to_string(),
-            name: "Mistral AI".to_string(),
-            default_base_url: "https://api.mistral.ai".to_string(),
-            api_endpoint_path: "/v1/chat/completions".to_string(),
-            system_role: "system".to_string(),
-            default_headers: HashMap::new(),
-        },
-        ProviderConfig {
-            id: "groq".to_string(),
-            name: "Groq".to_string(),
-            default_base_url: "https://api.groq.com".to_string(),
-            api_endpoint_path: "/openai/deployments/default/chat/completions".to_string(),
-            system_role: "system".to_string(),
-            default_headers: HashMap::new(),
-        },
-    ]
+    let base_configs = vec![
+        ("openai", "OpenAI", "https://api.openai.com"),
+        ("anthropic", "Anthropic", "https://api.anthropic.com"),
+        ("openrouter", "OpenRouter", "https://openrouter.ai/api"),
+        ("google", "Google", "https://generativelanguage.googleapis.com"),
+        ("mistral", "Mistral AI", "https://api.mistral.ai"),
+        ("groq", "Groq", "https://api.groq.com"),
+    ];
+
+    base_configs
+        .into_iter()
+        .map(|(id, name, base)| {
+            let adapter = adapter_for(id);
+            let endpoint_full = adapter.endpoint(base);
+            let api_endpoint_path = path_from_url(&endpoint_full);
+            let required_auth_headers: Vec<String> = match id {
+                "anthropic" => vec!["x-api-key".into()],
+                "mistral" => vec!["x-api-key".into(), "X-API-KEY".into()],
+                _ => vec!["authorization".into(), "Authorization".into()],
+            };
+            ProviderConfig {
+                id: id.to_string(),
+                name: name.to_string(),
+                default_base_url: base.to_string(),
+                api_endpoint_path,
+                system_role: adapter.system_role().to_string(),
+                supports_stream: adapter.supports_stream(),
+                required_auth_headers,
+                default_headers: HashMap::new(),
+            }
+        })
+        .collect()
 }
 
 pub fn get_provider_config(provider_id: &str) -> Option<ProviderConfig> {
@@ -102,11 +99,7 @@ pub fn build_endpoint_url(provider_id: &str, custom_base_url: Option<&str>) -> S
 
 #[allow(dead_code)]
 pub fn get_system_role(provider_id: &str) -> &'static str {
-    match provider_id {
-        "openai" | "openrouter" => "developer",
-        "mistral" | "groq" => "system",
-        _ => "system",
-    }
+    adapter_for(provider_id).system_role()
 }
 
 #[cfg(test)]

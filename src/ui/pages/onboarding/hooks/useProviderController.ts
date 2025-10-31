@@ -6,7 +6,6 @@ import { addOrUpdateProviderCredential } from "../../../../core/storage/repo";
 import { setProviderSetupCompleted } from "../../../../core/storage/appState";
 import { setSecret } from "../../../../core/secrets";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
-import type { RegisteredProvider } from "../../../../core/providers/registry";
 
 import {
     getDefaultBaseUrl,
@@ -19,7 +18,7 @@ type ControllerReturn = {
     state: ProviderState;
     canTest: boolean;
     canSave: boolean;
-    handleSelectProvider: (provider: RegisteredProvider) => void;
+    handleSelectProvider: (provider: { id: string; name: string; defaultBaseUrl?: string }) => void;
     handleLabelChange: (value: string) => void;
     handleApiKeyChange: (value: string) => void;
     handleBaseUrlChange: (value: string) => void;
@@ -48,13 +47,13 @@ export function useProviderController(): ControllerReturn {
         return () => window.clearTimeout(timeout);
     }, [showForm, selectedProviderId]);
 
-    const handleSelectProvider = useCallback((provider: RegisteredProvider) => {
+    const handleSelectProvider = useCallback((provider: { id: string; name: string; defaultBaseUrl?: string }) => {
         dispatch({
             type: "select_provider",
             payload: {
                 providerId: provider.id,
                 label: `My ${provider.name}`,
-                baseUrl: getDefaultBaseUrl(provider.id),
+                baseUrl: provider.defaultBaseUrl || getDefaultBaseUrl(provider.id),
             },
         });
     }, []);

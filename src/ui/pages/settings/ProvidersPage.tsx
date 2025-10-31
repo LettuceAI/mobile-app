@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Trash2, ChevronRight, Edit3, EthernetPort } from "lucide-react";
-import { providerRegistry } from "../../../core/providers/registry";
+import type { ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
 import { useProvidersPageController } from "./hooks/useProvidersPageController";
 
@@ -15,6 +15,7 @@ export function ProvidersPage() {
       isSaving,
       isDeleting,
       validationError,
+      capabilities,
     },
     openEditor,
     closeEditor,
@@ -60,7 +61,7 @@ export function ProvidersPage() {
           <EmptyState onCreate={() => openEditor()} />
         )}
         {providers.map(provider => {
-          const registryInfo = providerRegistry.find(p => p.id === provider.providerId);
+          const cap: ProviderCapabilitiesCamel | undefined = capabilities.find(p => p.id === provider.providerId);
           return (
             <button
               key={provider.id}
@@ -70,10 +71,10 @@ export function ProvidersPage() {
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-white">{provider.label || registryInfo?.name}</span>
+                    <span className="truncate text-sm font-medium text-white">{provider.label || cap?.name}</span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-1 text-[11px] text-white/50">
-                    <span className="truncate">{registryInfo?.name}</span>
+                    <span className="truncate">{cap?.name}</span>
                     {provider.baseUrl && (
                       <>
                         <span className="opacity-40">•</span>
@@ -97,8 +98,8 @@ export function ProvidersPage() {
         {selectedProvider && (
           <div className="space-y-4">
             <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-              <p className="truncate text-sm font-medium text-white">{selectedProvider.label || providerRegistry.find(p => p.id === selectedProvider.providerId)?.name}</p>
-              <p className="mt-0.5 truncate text-[11px] text-white/50">{providerRegistry.find(p => p.id === selectedProvider.providerId)?.name}</p>
+              <p className="truncate text-sm font-medium text-white">{selectedProvider.label || capabilities.find(p => p.id === selectedProvider.providerId)?.name}</p>
+              <p className="mt-0.5 truncate text-[11px] text-white/50">{capabilities.find(p => p.id === selectedProvider.providerId)?.name}</p>
             </div>
             <MenuButton
               icon={Edit3}
@@ -143,7 +144,7 @@ export function ProvidersPage() {
                 }}
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
               >
-                {providerRegistry.map(p => (
+                {capabilities.map(p => (
                   <option key={p.id} value={p.id} className="bg-black">{p.name}</option>
                 ))}
               </select>

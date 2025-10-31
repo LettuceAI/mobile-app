@@ -1,6 +1,6 @@
 use crate::api::{api_request, ApiRequest};
 use crate::pricing_cache;
-use crate::usage::{ModelPricing, RequestCost};
+use crate::models::{ModelPricing, RequestCost};
 use crate::utils::log_backend;
 use std::collections::HashMap;
 use tauri::AppHandle;

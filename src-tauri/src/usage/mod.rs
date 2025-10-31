@@ -1,3 +1,5 @@
+//! Usage tracking: record per-request token/cost info, query, stats and CSV export.
+//! Persists to a simple JSON log under the app data directory.
 pub mod commands;
 pub mod repository;
 pub mod tracking;
