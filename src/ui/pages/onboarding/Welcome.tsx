@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 import {
@@ -243,18 +243,6 @@ function SkipWarning({
           <h3 className={cn(typography.h2.size, typography.h2.weight, "text-white")}>
             Skip setup?
           </h3>
-          <button
-            onClick={handleClose}
-            className={cn(
-              "flex h-8 w-8 items-center justify-center border border-white/10 bg-white/5 text-white/60",
-              radius.full,
-              interactive.transition.fast,
-              interactive.active.scale,
-              "hover:border-white/20 hover:bg-white/10 hover:text-white"
-            )}
-          >
-            <X size={16} />
-          </button>
         </div>
 
         {/* Warning content */}

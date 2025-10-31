@@ -43,7 +43,7 @@ export function BottomMenu({
   isOpen,
   onClose,
   title = "Menu",
-  includeExitIcon = true,
+  includeExitIcon = false,
   location = "bottom",
   children,
   className = "",
@@ -152,13 +152,13 @@ export function BottomMenu({
               <h3 className="text-lg font-semibold text-white">{title}</h3>
               {includeExitIcon && (
                 <motion.button
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-all duration-150 hover:border-white/20 hover:text-white hover:bg-white/10"
+                  className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-all duration-150 hover:border-white/20 hover:text-white hover:bg-white/10"
                   whileTap={{ scale: 0.9 }}
                   transition={{ type: "tween", duration: 0.1 }}
                   onClick={onClose}
                   style={{ willChange: 'transform' }}
                 >
-                  <X size={18} />
+                  <X size={14} />
                 </motion.button>
               )}
             </div>

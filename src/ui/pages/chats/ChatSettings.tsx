@@ -1,11 +1,11 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
-import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import {
   AdvancedModelSettingsForm,
@@ -72,36 +72,73 @@ interface PersonaOptionProps {
   isDefault?: boolean;
   isSelected: boolean;
   onClick: () => void;
+  onLongPress: () => void;
 }
 
-function PersonaOption({ title, description, isDefault, isSelected, onClick }: PersonaOptionProps) {
+function PersonaOption({ title, description, isDefault, isSelected, onClick, onLongPress }: PersonaOptionProps) {
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
+  const [isLongPressTriggered, setIsLongPressTriggered] = useState(false);
+
+  const handleTouchStart = () => {
+    setIsLongPressTriggered(false);
+    const timer = setTimeout(() => {
+      setIsLongPressTriggered(true);
+      onLongPress();
+    }, 500);
+    setLongPressTimer(timer);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    if (!isLongPressTriggered) {
+      onClick();
+    }
+  };
+
   return (
     <button
-      onClick={onClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       className={cn(
-        "flex w-full items-center justify-between",
+        "group relative flex w-full items-center gap-3 justify-between",
         radius.lg,
         "p-4 text-left",
         interactive.transition.default,
+        interactive.active.scale,
         isSelected
-          ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+          ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
           : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
       )}
+      aria-pressed={isSelected}
     >
-      <div className="flex-1">
-        <div className={cn(typography.body.size, typography.h3.weight)}>
-          {title}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>{title}</div>
           {isDefault && (
-            <span className={cn(typography.caption.size, "ml-2 text-blue-300")}>(app default)</span>
+            <span className={cn(
+              "shrink-0 rounded-full border border-blue-400/30 bg-blue-400/10 px-2 text-[10px] font-medium text-blue-200"
+            )}>
+              App default
+            </span>
           )}
         </div>
-        <div className={cn(typography.bodySmall.size, "text-gray-400 mt-1 line-clamp-2")}>
-          {description}
-        </div>
+        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>{description}</div>
       </div>
-      {isSelected && (
-        <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 ml-2" />
-      )}
+
+      <div
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-full border",
+          isSelected
+            ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
+            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20"
+        )}
+        aria-hidden="true"
+      >
+        {isSelected ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+      </div>
     </button>
   );
 }
@@ -113,40 +150,57 @@ interface ModelOptionProps {
   isCharacterDefault: boolean;
   onClick: () => void;
 }
-
 function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, onClick }: ModelOptionProps) {
+  const defaultBadge = isCharacterDefault
+    ? { label: "Character default", color: "text-emerald-200 border-emerald-400/40 bg-emerald-400/10" }
+    : isGlobalDefault
+      ? { label: "App default", color: "text-blue-200 border-blue-400/30 bg-blue-400/10" }
+      : null;
+
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex w-full items-center justify-between",
+        "group relative flex w-full items-center justify-between gap-3",
         radius.lg,
         "p-4 text-left",
         interactive.transition.default,
+        interactive.active.scale,
         isSelected
-          ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
+          ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
           : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
       )}
+      aria-pressed={isSelected}
     >
-      <div className="flex-1">
-        <div className={cn(typography.body.size, typography.h3.weight)}>
-          {model.displayName}
-        </div>
-        <div className={cn(typography.bodySmall.size, "text-gray-400 mt-1")}>
-          {model.name}
-          {isGlobalDefault && !isCharacterDefault && (
-            <span className="ml-1 text-blue-300">(app default)</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>{model.displayName}</div>
+          {defaultBadge && (
+            <span
+              className={cn(
+                "shrink-0 rounded-full border px-2 text-[10px] font-medium",
+                defaultBadge.color
+              )}
+            >
+              {defaultBadge.label}
+            </span>
           )}
         </div>
+        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>{model.name}</div>
       </div>
-      {isSelected && (
-        <div className="flex items-center gap-2">
-          <Check className="h-4 w-4 text-emerald-400" />
-          <span className={cn(typography.bodySmall.size, typography.h3.weight, "text-emerald-200")}>
-            {isCharacterDefault ? "Character" : "Default"}
-          </span>
-        </div>
-      )}
+
+      <div
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-full",
+          "border", // always have border to keep size
+          isSelected
+            ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
+            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20"
+        )}
+        aria-hidden="true"
+      >
+        {isSelected ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+      </div>
     </button>
   );
 }
@@ -167,6 +221,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [showSessionAdvancedMenu, setShowSessionAdvancedMenu] = useState(false);
   const [sessionAdvancedDraft, setSessionAdvancedDraft] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
   const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
+  const [showPersonaActions, setShowPersonaActions] = useState(false);
+  const [selectedPersonaForActions, setSelectedPersonaForActions] = useState<Persona | null>(null);
 
   const loadModels = useCallback(async () => {
     try {
@@ -257,21 +313,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
     if (!characterId) return;
 
     try {
-      // Update the character's default model
       const updatedCharacter = await saveCharacter({
         ...currentCharacter,
         defaultModelId: modelId
       });
       setCurrentCharacter(updatedCharacter);
-      setShowModelSelector(false);
 
-      // Only redirect back to chat if we have a sessionId
-      const urlParams = new URLSearchParams(window.location.search);
+      /*const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('sessionId');
       if (sessionId) {
         navigate(`/chat/${characterId}?sessionId=${sessionId}`, { replace: true });
-      }
-      // Otherwise stay in settings - model updated successfully
+      }*/
     } catch (error) {
       console.error("Failed to change character model:", error);
     }
@@ -396,7 +448,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
   const getCurrentPersonaDisplay = () => {
     if (!currentSession) return "Open a chat session first";
-    
+
     const currentPersonaId = currentSession?.personaId;
     if (currentPersonaId === "") return "No persona";
     if (!currentPersonaId) {
@@ -416,14 +468,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
     <div className="min-h-screen bg-[#050505] text-gray-100">
       {/* Header */}
       <header className={cn(
-        "relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6 backdrop-blur",
+        "relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6",
         "pt-[calc(env(safe-area-inset-top)+32px)]"
       )}>
         <div className="flex items-center gap-4">
           <button
             onClick={handleBack}
             className={cn(
-              "flex h-10 w-10 items-center justify-center",
+              "flex items-center justify-center",
               radius.full,
               "border border-white/15 bg-white/5 text-white",
               interactive.transition.default,
@@ -431,13 +483,20 @@ function ChatSettingsContent({ character }: { character: Character }) {
             )}
             aria-label="Back to chat"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={14} />
           </button>
           <div className="flex flex-col items-start min-w-0 flex-1">
-            <h1 className={cn(typography.body.size, typography.h3.weight, "text-white")}>
+            <h1 className={cn(
+              typography.h1.size,
+              typography.h1.weight,
+              "text-white text-left truncate whitespace-nowrap"
+            )}>
               Chat Settings
             </h1>
-            <p className={cn(typography.caption.size, "text-gray-400 mt-0.5")}>
+            <p className={cn(
+              typography.bodySmall.size,
+              "text-white/50 mt-1 text-left truncate whitespace-nowrap"
+            )}>
               Manage conversation preferences
             </p>
           </div>
@@ -525,7 +584,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
         isOpen={showPersonaSelector}
         onClose={() => setShowPersonaSelector(false)}
         title="Select Persona"
-        includeExitIcon={true}
+        includeExitIcon={false}
         location="bottom"
       >
         <MenuSection>
@@ -543,8 +602,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
               <PersonaOption
                 title="No Persona"
                 description="Disable persona for this conversation"
-                isSelected={currentSession?.personaId === ""}
+                isSelected={currentSession?.personaId === null || currentSession?.personaId === undefined}
                 onClick={() => handleChangePersona(null)}
+                onLongPress={() => {}}
               />
               {personas.map((persona) => (
                 <PersonaOption
@@ -554,6 +614,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   isDefault={persona.isDefault}
                   isSelected={persona.id === currentSession?.personaId}
                   onClick={() => handleChangePersona(persona.id)}
+                  onLongPress={() => {
+                    setSelectedPersonaForActions(persona);
+                    setShowPersonaActions(true);
+                  }}
                 />
               ))}
             </div>
@@ -566,7 +630,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
         isOpen={showModelSelector}
         onClose={() => setShowModelSelector(false)}
         title="Select Model"
-        includeExitIcon={true}
+        includeExitIcon={false}
         location="bottom"
       >
         <MenuSection>
@@ -593,6 +657,52 @@ function ChatSettingsContent({ character }: { character: Character }) {
               ))}
             </div>
           )}
+        </MenuSection>
+      </BottomMenu>
+
+      {/* Persona Actions */}
+      <BottomMenu
+        isOpen={showPersonaActions}
+        onClose={() => setShowPersonaActions(false)}
+        title="Persona Actions"
+      >
+        <MenuSection>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                if (selectedPersonaForActions) {
+                  navigate(`/settings/personas/${selectedPersonaForActions.id}/edit`);
+                }
+                setShowPersonaActions(false);
+              }}
+              className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
+                <Edit2 className="h-4 w-4 text-white/70" />
+              </div>
+              <span className="text-sm font-medium text-white">Edit Persona</span>
+            </button>
+
+            <button
+              onClick={async () => {
+                if (selectedPersonaForActions) {
+                  try {
+                    await deletePersona(selectedPersonaForActions.id);
+                    loadPersonas();
+                  } catch (error) {
+                    console.error("Failed to delete persona:", error);
+                  }
+                }
+                setShowPersonaActions(false);
+              }}
+              className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-red-500/20">
+                <Trash2 className="h-4 w-4 text-red-400" />
+              </div>
+              <span className="text-sm font-medium text-red-300">Delete Persona</span>
+            </button>
+          </div>
         </MenuSection>
       </BottomMenu>
 

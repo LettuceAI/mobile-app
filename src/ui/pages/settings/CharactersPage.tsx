@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Trash2, Edit2, ChevronRight, Sparkles } from "lucide-react";
+import { Trash2, Edit2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Character } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
@@ -86,18 +86,13 @@ export function CharactersPage() {
         ) : (
           <div className="space-y-3">
             {/* Characters List */}
-            <AnimatePresence mode="popLayout">
-              {characters.map((character, index) => {
+            <AnimatePresence>
+              {characters.map((character) => {
                 const descriptionPreview = character.description?.trim() || "No description yet";
                 
                 return (
-                  <motion.button
+                  <motion.div
                     key={character.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: index * 0.05 }}
-                    onClick={() => setSelectedCharacter(character)}
                     className={cn(
                       "group relative flex w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
                       radius.md,
@@ -140,55 +135,40 @@ export function CharactersPage() {
                       </p>
                     </div>
 
-                    {/* Arrow indicator */}
-                    <span className={cn(
-                      "relative flex h-9 w-9 shrink-0 items-center justify-center",
-                      radius.full,
-                      "border border-white/10 bg-white/5 text-white/70",
-                      "transition-all group-hover:border-white/25 group-hover:text-white"
-                    )}>
-                      <ChevronRight size={16} />
-                    </span>
-                  </motion.button>
+                    {/* Actions */}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        onClick={() => handleEditCharacter(character)}
+                        className={cn(
+                          "relative flex items-center justify-center",
+                          radius.full,
+                          "border border-white/10 bg-white/5 text-white/70",
+                          "transition-all hover:border-white/25 hover:text-white"
+                        )}
+                        aria-label="Edit Character"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                      <button
+                        onClick={() => { setSelectedCharacter(character); setShowDeleteConfirm(true); }}
+                        className={cn(
+                          "relative flex items-center justify-center",
+                          radius.full,
+                          "border border-red-500/30 bg-red-500/10 text-red-300",
+                          "transition-all hover:border-red-500/50 hover:bg-red-500/20"
+                        )}
+                        aria-label="Delete Character"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </motion.div>
                 );
               })}
             </AnimatePresence>
           </div>
         )}
       </main>
-
-      {/* Character Actions Menu */}
-      <BottomMenu
-        isOpen={Boolean(selectedCharacter)}
-        onClose={() => setSelectedCharacter(null)}
-        title={selectedCharacter?.name || ""}
-      >
-        {selectedCharacter && (
-          <div className="space-y-2">
-            <button
-              onClick={() => handleEditCharacter(selectedCharacter)}
-              className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
-                <Edit2 className="h-4 w-4 text-white/70" />
-              </div>
-              <span className="text-sm font-medium text-white">Edit Character</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowDeleteConfirm(true);
-              }}
-              className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-red-500/20">
-                <Trash2 className="h-4 w-4 text-red-400" />
-              </div>
-              <span className="text-sm font-medium text-red-300">Delete Character</span>
-            </button>
-          </div>
-        )}
-      </BottomMenu>
 
       {/* Delete Confirmation */}
       <BottomMenu

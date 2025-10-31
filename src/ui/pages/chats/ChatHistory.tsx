@@ -117,9 +117,10 @@ export function ChatHistoryPage() {
     <div className="min-h-screen bg-[#050505]">
       {/* Header */}
       <div
-        className="border-b border-white/10 px-4 py-4"
-        style={{ paddingTop: "calc(env(safe-area-inset-top) + 16px)" }}
-      >
+        className={cn(
+          "relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6",
+          "pt-[calc(env(safe-area-inset-top)+32px)]"
+        )}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -129,7 +130,7 @@ export function ChatHistoryPage() {
               "active:scale-95 transition-transform"
             )}
           >
-            <ArrowLeft height={16} width={16} />
+            <ArrowLeft size={14} />
           </button>
           <div className="min-w-0 text-left overflow-hidden">
             <h1 className={cn(
@@ -144,7 +145,7 @@ export function ChatHistoryPage() {
                 typography.bodySmall.size,
                 "text-white/50 mt-1 text-left truncate whitespace-nowrap"
               )}>
-                {character.name}
+                Chat History for {character.name}
               </p>
             )}
           </div>

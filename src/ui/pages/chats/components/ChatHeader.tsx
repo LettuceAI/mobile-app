@@ -55,11 +55,8 @@ export function ChatHeader({ character, sessionId, hasBackgroundImage }: ChatHea
           <button
             onClick={() => {
               if (!characterId) return;
-              const settingsUrl = sessionId 
-                ? `/chat/${characterId}/settings?sessionId=${sessionId}`
-                : `/chat/${characterId}/settings`;
-              
-              console.log("Navigating to:", settingsUrl)
+              const settingsUrl = `/chat/${characterId}/settings?sessionId=${sessionId}`;
+              console.log("Navigating to:", settingsUrl);
               navigate(settingsUrl);
             }}
             className="min-w-0 flex-1 text-left"
