@@ -1,4 +1,4 @@
-use crate::{secrets, utils::log_backend};
+use crate::{secrets, utils::log_backend, chat_manager::types::ProviderId};
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
@@ -24,7 +24,7 @@ pub async fn verify_provider_api_key(
     api_key: Option<String>,
     base_url: Option<String>,
 ) -> Result<VerifyProviderApiKeyResult, String> {
-    if !matches!(provider_id.as_str(), "openai" | "anthropic" | "openrouter") {
+    if !matches!(provider_id.as_str(), "openai" | "anthropic" | "openrouter" | "groq" | "mistral") {
         return Ok(VerifyProviderApiKeyResult {
             provider_id,
             valid: true,
@@ -80,9 +80,10 @@ pub async fn verify_provider_api_key(
         });
     };
 
+    let pid: ProviderId = provider_id.clone().into();
     let base = match resolve_base_url(
         &app,
-        &provider_id,
+        &pid,
         base_url.clone(),
         credential_id.as_deref(),
     ) {
@@ -103,8 +104,8 @@ pub async fn verify_provider_api_key(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let headers = build_headers(&provider_id, &resolved_key)?;
-    let url = build_verify_url(&provider_id, &base);
+    let headers = build_headers(&pid, &resolved_key)?;
+    let url = build_verify_url(&pid, &base);
 
     let response = match client.get(&url).headers(headers).send().await {
         Ok(resp) => resp,

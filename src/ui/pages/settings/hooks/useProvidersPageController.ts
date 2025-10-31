@@ -162,7 +162,7 @@ export function useProvidersPageController(): ControllerReturn {
     dispatch({ type: "set_is_saving", payload: true });
 
     try {
-      const requiresVerification = ["openai", "anthropic", "openrouter"].includes(
+      const requiresVerification = ["openai", "anthropic", "openrouter", "groq", "mistral"].includes(
         editorProvider.providerId,
       );
       const trimmedKey = apiKey.trim();

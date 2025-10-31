@@ -214,7 +214,7 @@ pub struct Persona {
     pub updated_at: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSummary {
     pub prompt_tokens: Option<u64>,
@@ -290,7 +290,7 @@ pub struct ContinueResult {
     pub assistant_message: StoredMessage,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorEnvelope {
     #[serde(default)]
@@ -304,4 +304,42 @@ pub struct ErrorEnvelope {
     pub retryable: Option<bool>,
     #[serde(default)]
     pub status: Option<u16>,
+}
+
+/// Provider-agnostic normalized stream/update events.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
+pub enum NormalizedEvent {
+    #[serde(rename = "delta")]
+    Delta { text: String },
+    #[serde(rename = "usage")]
+    Usage { usage: UsageSummary },
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "error")]
+    Error { envelope: ErrorEnvelope },
+}
+
+// Newtypes for stronger ids (not yet widely used – future-proofing)
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+#[allow(dead_code)]
+pub struct ProviderId(pub String);
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+#[allow(dead_code)]
+pub struct ModelId(pub String);
+
+// Ergonomic conversions for constructing ProviderId
+impl From<&str> for ProviderId {
+    fn from(value: &str) -> Self {
+        ProviderId(value.to_string())
+    }
+}
+
+impl From<String> for ProviderId {
+    fn from(value: String) -> Self {
+        ProviderId(value)
+    }
 }

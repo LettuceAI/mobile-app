@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
+use serde::Serialize;
 use serde_json::{json, Value};
+use super::types::ProviderId;
 
 pub trait ProviderAdapter {
     fn endpoint(&self, base_url: &str) -> String;
@@ -10,6 +12,10 @@ pub trait ProviderAdapter {
     fn supports_stream(&self) -> bool {
         true
     }
+    /// The required auth header keys for this provider (case sensitive suggestions for UI).
+    fn required_auth_headers(&self) -> &'static [&'static str];
+    /// A template of default headers (values redacted) to show expected headers without secrets.
+    fn default_headers_template(&self) -> HashMap<String, String>;
     /// Build default headers for this provider using the given API key.
     /// `extra` headers from credentials are merged on top (overriding defaults when keys match).
     fn headers(
@@ -34,6 +40,68 @@ pub struct GroqAdapter;
 pub struct MistralAdapter;
 pub struct AnthropicAdapter;
 
+// --- Typed request bodies per provider ---
+
+#[derive(Serialize)]
+struct OpenAIChatRequest<'a> {
+    model: &'a str,
+    messages: &'a Vec<Value>,
+    stream: bool,
+    temperature: f64,
+    #[serde(rename = "top_p")]
+    top_p: f64,
+    #[serde(rename = "max_tokens")]
+    max_tokens: u32,
+}
+
+#[derive(Serialize)]
+struct MistralCompletionArgs {
+    temperature: f64,
+    #[serde(rename = "top_p")]
+    top_p: f64,
+    #[serde(rename = "max_tokens")]
+    max_tokens: u32,
+}
+
+#[derive(Serialize)]
+struct MistralConversationRequest<'a> {
+    model: &'a str,
+    inputs: Vec<Value>,
+    tools: Vec<Value>,
+    #[serde(rename = "completion_args")]
+    completion_args: MistralCompletionArgs,
+    stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<String>,
+}
+
+#[derive(Serialize)]
+struct AnthropicContent {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    text: String,
+}
+
+#[derive(Serialize)]
+struct AnthropicMessage {
+    role: String,
+    content: Vec<AnthropicContent>,
+}
+
+#[derive(Serialize)]
+struct AnthropicMessagesRequest {
+    model: String,
+    messages: Vec<AnthropicMessage>,
+    temperature: f64,
+    #[serde(rename = "top_p")]
+    top_p: f64,
+    #[serde(rename = "max_tokens")]
+    max_tokens: u32,
+    stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+}
+
 impl ProviderAdapter for OpenAIAdapter {
     fn endpoint(&self, base_url: &str) -> String {
         let trimmed = base_url.trim_end_matches('/');
@@ -45,6 +113,18 @@ impl ProviderAdapter for OpenAIAdapter {
     }
 
     fn system_role(&self) -> &'static str { "developer" }
+
+    fn required_auth_headers(&self) -> &'static [&'static str] {
+        &["Authorization"]
+    }
+
+    fn default_headers_template(&self) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        out.insert("Authorization".into(), "Bearer <apiKey>".into());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out
+    }
 
     fn headers(
         &self,
@@ -74,14 +154,15 @@ impl ProviderAdapter for OpenAIAdapter {
         max_tokens: u32,
         should_stream: bool,
     ) -> Value {
-        json!({
-            "model": model_name,
-            "messages": messages_for_api,
-            "stream": should_stream,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": max_tokens,
-        })
+        let body = OpenAIChatRequest {
+            model: model_name,
+            messages: messages_for_api,
+            stream: should_stream,
+            temperature,
+            top_p,
+            max_tokens,
+        };
+        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
 
@@ -96,6 +177,14 @@ impl ProviderAdapter for GroqAdapter {
     }
 
     fn system_role(&self) -> &'static str { "system" }
+
+    fn required_auth_headers(&self) -> &'static [&'static str] {
+        &["Authorization"]
+    }
+
+    fn default_headers_template(&self) -> HashMap<String, String> {
+        OpenAIAdapter.default_headers_template()
+    }
 
     fn headers(
         &self,
@@ -140,6 +229,18 @@ impl ProviderAdapter for MistralAdapter {
     }
 
     fn system_role(&self) -> &'static str { "system" }
+
+    fn required_auth_headers(&self) -> &'static [&'static str] {
+        &["X-API-KEY", "x-api-key"]
+    }
+
+    fn default_headers_template(&self) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        out.insert("X-API-KEY".into(), "<apiKey>".into());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out
+    }
 
     fn headers(
         &self,
@@ -196,18 +297,15 @@ impl ProviderAdapter for MistralAdapter {
             inputs.push(msg.clone());
         }
 
-        json!({
-            "model": model_name,
-            "inputs": inputs,
-            "tools": [],
-            "completion_args": {
-                "temperature": temperature,
-                "top_p": top_p,
-                "max_tokens": max_tokens,
-            },
-            "stream": should_stream,
-            "instructions": instructions,
-        })
+        let body = MistralConversationRequest {
+            model: model_name,
+            inputs,
+            tools: Vec::new(),
+            completion_args: MistralCompletionArgs { temperature, top_p, max_tokens },
+            stream: should_stream,
+            instructions,
+        };
+        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
 
@@ -222,6 +320,19 @@ impl ProviderAdapter for AnthropicAdapter {
     }
 
     fn system_role(&self) -> &'static str { "system" }
+
+    fn required_auth_headers(&self) -> &'static [&'static str] {
+        &["x-api-key", "anthropic-version"]
+    }
+
+    fn default_headers_template(&self) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        out.insert("x-api-key".into(), "<apiKey>".into());
+        out.insert("anthropic-version".into(), "2023-06-01".into());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out
+    }
 
     fn headers(
         &self,
@@ -251,7 +362,7 @@ impl ProviderAdapter for AnthropicAdapter {
         max_tokens: u32,
         should_stream: bool,
     ) -> Value {
-        let mut msgs: Vec<Value> = Vec::new();
+        let mut msgs: Vec<AnthropicMessage> = Vec::new();
         for msg in messages_for_api {
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
             if role == "system" || role == "developer" {
@@ -265,36 +376,28 @@ impl ProviderAdapter for AnthropicAdapter {
             if content_text.is_empty() {
                 continue;
             }
-            let mapped_role = match role {
-                "assistant" => "assistant",
-                _ => "user",
-            };
-            msgs.push(json!({
-                "role": mapped_role,
-                "content": [{"type": "text", "text": content_text}],
-            }));
+            let mapped_role = match role { "assistant" => "assistant", _ => "user" }.to_string();
+            msgs.push(AnthropicMessage {
+                role: mapped_role,
+                content: vec![AnthropicContent { kind: "text", text: content_text }],
+            });
         }
 
-        let mut body = json!({
-            "model": model_name,
-            "messages": msgs,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": max_tokens,
-            "stream": should_stream,
-        });
-
-        if let Some(sys) = system_prompt {
-            if !sys.is_empty() {
-                body["system"] = json!(sys);
-            }
-        }
-        body
+        let body = AnthropicMessagesRequest {
+            model: model_name.to_string(),
+            messages: msgs,
+            temperature,
+            top_p,
+            max_tokens,
+            stream: should_stream,
+            system: system_prompt.filter(|s| !s.is_empty()),
+        };
+        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
 
-pub fn adapter_for(provider_id: &str) -> Box<dyn ProviderAdapter + Send + Sync> {
-    match provider_id {
+pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send + Sync> {
+    match provider_id.0.as_str() {
         "anthropic" => Box::new(AnthropicAdapter),
         "mistral" => Box::new(MistralAdapter),
         "groq" => Box::new(GroqAdapter),

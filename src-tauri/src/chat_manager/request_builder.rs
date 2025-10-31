@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use super::provider_adapter::adapter_for;
 use super::request::provider_base_url;
-use super::types::ProviderCredential;
+use super::types::{ProviderCredential, ProviderId};
 
 pub struct BuiltRequest {
     pub url: String,
@@ -31,7 +31,7 @@ pub fn build_chat_request(
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
 
-    let adapter = adapter_for(provider_cred.provider_id.as_str());
+    let adapter = adapter_for(&ProviderId(provider_cred.provider_id.clone()));
     let endpoint = adapter.endpoint(&base_url);
     let headers = adapter.headers(api_key, provider_cred.headers.as_ref());
     let effective_stream = should_stream && adapter.supports_stream();
@@ -57,6 +57,6 @@ pub fn build_chat_request(
 
 /// Returns the preferred system role keyword for the given provider.
 pub fn system_role_for(provider_cred: &ProviderCredential) -> &'static str {
-    let adapter = adapter_for(provider_cred.provider_id.as_str());
+    let adapter = adapter_for(&ProviderId(provider_cred.provider_id.clone()));
     adapter.system_role()
 }

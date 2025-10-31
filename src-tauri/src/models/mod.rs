@@ -5,6 +5,7 @@
 //! - `verify`: best-effort model existence checks for selected providers
 pub mod cache;
 pub mod cost;
+pub mod pricing;
 pub mod verify;
 pub mod types;
 

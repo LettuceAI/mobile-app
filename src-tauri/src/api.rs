@@ -1,13 +1,13 @@
 use futures_util::StreamExt;
 use reqwest::{header::HeaderMap, header::HeaderName, header::HeaderValue, Method};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
-use std::time::Duration;
-use tauri::Emitter;
 
 use crate::utils::log_backend;
-use crate::chat_manager::{sse, request as chat_request, types::ErrorEnvelope};
+use crate::chat_manager::{sse, request as chat_request, types::{ErrorEnvelope, NormalizedEvent}};
+use crate::transport::{self, emit_normalized};
+use crate::serde_utils::{json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json, truncate_for_log};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,66 +37,11 @@ impl ApiResponse {
     }
 }
 
-fn json_value_to_string(value: &Value) -> Option<String> {
-    match value {
-        Value::Null => None,
-        Value::Bool(b) => Some(b.to_string()),
-        Value::Number(n) => Some(n.to_string()),
-        Value::String(s) => Some(s.clone()),
-        other => Some(other.to_string()),
-    }
-}
-
-fn parse_body_to_value(text: &str) -> Value {
-    if text.trim().is_empty() {
-        Value::Null
-    } else {
-        serde_json::from_str(text).unwrap_or_else(|_| Value::String(text.to_string()))
-    }
-}
-
-fn truncate_for_log(text: &str, max: usize) -> String {
-    if text.len() <= max {
-        text.to_string()
-    } else {
-        let truncated: String = text.chars().take(max).collect();
-        format!("{}…", truncated)
-    }
-}
-
-fn sanitize_header_value(key: &str, value: &str) -> String {
-    let lowered = key.to_ascii_lowercase();
-    if lowered.contains("authorization")
-        || lowered.contains("api-key")
-        || lowered.contains("apikey")
-        || lowered.contains("secret")
-        || lowered.contains("token")
-        || lowered.contains("cookie")
-    {
-        "***".into()
-    } else {
-        truncate_for_log(value, 64)
-    }
-}
-
-fn summarize_json(value: &Value) -> String {
-    truncate_for_log(&value.to_string(), 512)
-}
-
 #[tauri::command]
 pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiResponse, String> {
     log_backend(&app, "api_request", "[api_request] started");
 
-    let mut client_builder = reqwest::Client::builder();
-    if let Some(ms) = req.timeout_ms {
-        log_backend(
-            &app,
-            "api_request",
-            &format!("[api_request] setting timeout: {} ms", ms),
-        );
-        client_builder = client_builder.timeout(Duration::from_millis(ms));
-    }
-    let client = match client_builder.build() {
+    let client = match transport::build_client(req.timeout_ms) {
         Ok(c) => c,
         Err(e) => {
             log_backend(
@@ -295,7 +240,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     }
 
     log_backend(&app, "api_request", "[api_request] sending request...");
-    let response = match request_builder.send().await {
+    let response = match transport::send_with_retries(&app, "api_request", request_builder, 2).await {
         Ok(resp) => {
             log_backend(
                 &app,
@@ -343,7 +288,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     }
 
     let data = if stream && request_id.is_some() {
-        let mut collected: Vec<u8> = Vec::new();
+    let mut collected: Vec<u8> = Vec::new();
         let event_name = format!("api://{}", request_id.clone().unwrap());
         let mut body_stream = response.bytes_stream();
         log_backend(
@@ -355,11 +300,12 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             ),
         );
         let mut usage_emitted = false;
+        let mut decoder = sse::SseDecoder::new();
         while let Some(chunk) = body_stream.next().await {
             match chunk {
                 Ok(chunk) => {
                     let text = String::from_utf8_lossy(&chunk).to_string();
-                    let _ = app.emit(&event_name, text.clone());
+                    transport::emit_raw(&app, &event_name, &text);
                     log_backend(
                         &app,
                         "api_request",
@@ -369,41 +315,11 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                             url_for_log
                         ),
                     );
-                    // Also emit normalized events for consumers that want provider-agnostic stream
+                    // Buffered SSE decoding to normalized events
                     if let Some(req_id) = &request_id {
-                        let normalized_event = format!("api-normalized://{}", req_id);
-                        if let Some(delta) = sse::accumulate_text_from_sse(&text) {
-                            if !delta.is_empty() {
-                                let _ = app.emit(
-                                    &normalized_event,
-                                    json!({
-                                        "requestId": req_id,
-                                        "type": "delta",
-                                        "data": { "text": delta },
-                                    }),
-                                );
-                            }
-                        }
-                        if let Some(usage) = sse::usage_from_sse(&text) {
-                            let _ = app.emit(
-                                &normalized_event,
-                                json!({
-                                    "requestId": req_id,
-                                    "type": "usage",
-                                    "data": usage,
-                                }),
-                            );
-                            usage_emitted = true;
-                        }
-                        if text.contains("[DONE]") {
-                            let _ = app.emit(
-                                &normalized_event,
-                                json!({
-                                    "requestId": req_id,
-                                    "type": "done",
-                                    "data": null,
-                                }),
-                            );
+                        for event in decoder.feed(&text) {
+                            if let NormalizedEvent::Usage { .. } = event { usage_emitted = true; }
+                            emit_normalized(&app, req_id, event);
                         }
                     }
                     collected.extend_from_slice(&chunk);
@@ -430,17 +346,9 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         // Emit a final usage event if not already emitted and we can extract it
         if let Some(req_id) = &request_id {
             if !usage_emitted {
-                let normalized_event = format!("api-normalized://{}", req_id);
-                let value = super::api::parse_body_to_value(&text);
+                let value = crate::serde_utils::parse_body_to_value(&text);
                 if let Some(usage) = chat_request::extract_usage(&value) {
-                    let _ = app.emit(
-                        &normalized_event,
-                        json!({
-                            "requestId": req_id,
-                            "type": "usage",
-                            "data": usage,
-                        }),
-                    );
+                    emit_normalized(&app, req_id, NormalizedEvent::Usage { usage });
                 }
             }
         }
@@ -448,8 +356,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         // If HTTP status was not OK, emit a normalized error event as well
         if !ok {
             if let Some(req_id) = &request_id {
-                let normalized_event = format!("api-normalized://{}", req_id);
-                let value = super::api::parse_body_to_value(&text);
+                let value = crate::serde_utils::parse_body_to_value(&text);
                 let message = chat_request::extract_error_message(&value)
                     .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
                 let envelope = ErrorEnvelope {
@@ -460,11 +367,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                     retryable: None,
                     status: Some(status.as_u16()),
                 };
-                let _ = app.emit(&normalized_event, json!({
-                    "requestId": req_id,
-                    "type": "error",
-                    "data": envelope,
-                }));
+                emit_normalized(&app, req_id, NormalizedEvent::Error { envelope });
             }
         }
         parse_body_to_value(&text)
@@ -489,7 +392,6 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 // Also emit normalized error event for non-stream responses when possible
                 if !ok {
                     if let Some(req_id) = &request_id {
-                        let normalized_event = format!("api-normalized://{}", req_id);
                         let message = chat_request::extract_error_message(&value)
                             .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
                         let envelope = ErrorEnvelope {
@@ -500,11 +402,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                             retryable: None,
                             status: Some(status.as_u16()),
                         };
-                        let _ = app.emit(&normalized_event, json!({
-                            "requestId": req_id,
-                            "type": "error",
-                            "data": envelope,
-                        }));
+                        emit_normalized(&app, req_id, NormalizedEvent::Error { envelope });
                     }
                 }
                 value

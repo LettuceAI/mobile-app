@@ -8,6 +8,9 @@ mod secrets;
 mod storage_manager;
 mod usage;
 mod utils;
+mod transport;
+mod serde_utils;
+mod error;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

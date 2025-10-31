@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::types::UsageSummary;
+use super::types::{UsageSummary, NormalizedEvent};
 
 pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
     let mut out = String::new();
@@ -40,6 +40,58 @@ pub fn usage_from_sse(raw: &str) -> Option<UsageSummary> {
         }
     }
     last
+}
+
+/// Buffered SSE decoder that can handle JSON fragments split across chunk boundaries
+/// and produce provider-agnostic normalized events.
+#[derive(Default)]
+pub struct SseDecoder {
+    buffer: String,
+}
+
+impl SseDecoder {
+    pub fn new() -> Self { Self { buffer: String::new() } }
+
+    /// Feed a raw text chunk, returning any complete normalized events parsed from it.
+    pub fn feed(&mut self, chunk: &str) -> Vec<NormalizedEvent> {
+        self.buffer.push_str(chunk);
+        let mut events: Vec<NormalizedEvent> = Vec::new();
+
+        // Process complete lines; keep the trailing partial line in buffer
+        let mut last_newline = 0usize;
+        for (idx, ch) in self.buffer.char_indices() {
+            if ch == '\n' {
+                let line = &self.buffer[last_newline..idx];
+                last_newline = idx + 1; // skip the newline
+                let l = line.trim();
+                if l.is_empty() { continue; }
+                // Common SSE format: data: <payload>
+                if let Some(rest) = l.strip_prefix("data:") {
+                    let payload = rest.trim();
+                    if payload.is_empty() { continue; }
+                    if payload == "[DONE]" {
+                        events.push(NormalizedEvent::Done);
+                        continue;
+                    }
+                    if let Ok(v) = serde_json::from_str::<Value>(payload) {
+                        if let Some(piece) = extract_text_from_value(&v) {
+                            if !piece.is_empty() {
+                                events.push(NormalizedEvent::Delta { text: piece });
+                            }
+                        }
+                        if let Some(usage) = usage_from_value(&v) {
+                            events.push(NormalizedEvent::Usage { usage });
+                        }
+                    }
+                }
+            }
+        }
+        // retain leftover tail (after the last processed newline)
+        if last_newline > 0 {
+            self.buffer.drain(..last_newline);
+        }
+        events
+    }
 }
 
 fn extract_text_from_value(v: &Value) -> Option<String> {
