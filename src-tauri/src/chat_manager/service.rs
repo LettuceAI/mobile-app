@@ -232,8 +232,61 @@ pub fn push_message_for_api(target: &mut Vec<Value>, message: &super::types::Sto
         return;
     }
 
+    let content = super::request::message_text_for_api(message);
+
+    // Basic dynamic placeholder support in ad-hoc prompts/messages:
+    // Replace {{char}} and {{persona}} when the previous system message has context stored in metadata.
+    // Since we don't pass metadata here, we keep replacement minimal and allow providers to receive
+    // already-processed system prompts. User messages generally shouldn't need these replacements,
+    // but we support them if they appear by carrying over session-resolved names via light-weight hints.
+    // For now, we do not have direct access to character/persona here; replacements are handled in
+    // system prompt and scenes. This ensures consistency and avoids accidental user text mutation.
+
     target.push(serde_json::json!({
         "role": message.role,
-        "content": super::request::message_text_for_api(message)
+        "content": content
     }));
+}
+
+/// Push a message with dynamic placeholder replacements into the API message list.
+/// Replaces {{char}} and {{persona}} with provided values before sending.
+pub fn push_message_for_api_with_context(
+    target: &mut Vec<Value>,
+    message: &super::types::StoredMessage,
+    char_name: &str,
+    persona_name: &str,
+) {
+    if message.role == "scene" {
+        return;
+    }
+
+    let content = super::request::message_text_for_api(message)
+        .replace("{{char}}", char_name)
+        .replace("{{persona}}", persona_name);
+
+    target.push(serde_json::json!({
+        "role": message.role,
+        "content": content
+    }));
+}
+
+/// Replace simple placeholders in already-built API messages as a final guard.
+/// Mutates each message's `content` string by replacing `{{char}}` and `{{persona}}`.
+pub fn sanitize_placeholders_in_messages(
+    messages: &mut Vec<serde_json::Value>,
+    char_name: &str,
+    persona_name: &str,
+) {
+    for msg in messages.iter_mut() {
+        if let Some(obj) = msg.as_object_mut() {
+            if let Some(content) = obj.get_mut("content") {
+                if let Some(s) = content.as_str() {
+                    let updated = s
+                        .replace("{{char}}", char_name)
+                        .replace("{{persona}}", persona_name);
+                    *content = serde_json::Value::String(updated);
+                }
+            }
+        }
+    }
 }

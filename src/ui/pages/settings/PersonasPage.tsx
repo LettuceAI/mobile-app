@@ -76,14 +76,10 @@ export function PersonasPage() {
             )}
 
             {/* Personas List */}
-            <AnimatePresence mode="popLayout">
-              {personas.map((persona, index) => (
+            <AnimatePresence>
+              {personas.map((persona) => (
                 <motion.button
                   key={persona.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: index * 0.05 }}
                   onClick={() => setSelectedPersona(persona)}
                   className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left transition-all duration-200 active:scale-[0.995] ${
                     persona.isDefault

@@ -349,6 +349,13 @@ export function EditCharacterPage() {
             <p className="text-xs text-white/50">
               Be detailed to create a unique personality
             </p>
+            <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-3.5 py-3">
+              <div className="text-[11px] font-medium text-blue-200">Available Placeholders</div>
+              <div className="mt-2 space-y-1 text-xs text-blue-200/70">
+                <div><code className="text-emerald-300">{"{{char}}"}</code> - Character name</div>
+                <div><code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (empty if none)</div>
+              </div>
+            </div>
           </div>
 
           {/* Starting Scenes Section */}

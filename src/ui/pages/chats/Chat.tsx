@@ -5,6 +5,7 @@ import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
 
 import { useChatController } from "./hooks/useChatController";
+import { replacePlaceholders } from "../../../core/utils/placeholders";
 import {
   ChatHeader,
   ChatFooter,
@@ -231,6 +232,10 @@ export function ChatConversationPage() {
             const isAssistant = message.role === "assistant";
             const isUser = message.role === "user";
             const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");
+            // Replace placeholders for display only
+            const charName = character?.name ?? "";
+            const personaName = chatController.persona?.title ?? "";
+            const displayContent = replacePlaceholders(message.content, charName, personaName);
             const eventHandlers = actionable
               ? {
                 onMouseDown: handlePressStart(message),
@@ -260,6 +265,7 @@ export function ChatConversationPage() {
                 handleRegenerate={handleRegenerate}
                 isStartingSceneMessage={isStartingSceneMessage(message)}
                 theme={theme}
+                displayContent={displayContent}
               />
             );
           })}

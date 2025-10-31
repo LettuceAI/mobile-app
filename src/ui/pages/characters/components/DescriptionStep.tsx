@@ -114,6 +114,13 @@ export function DescriptionStep({
         <p className={cn(typography.bodySmall.size, "text-white/40")}>
           Be specific about tone, traits, and conversation style
         </p>
+        <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-4 py-3">
+          <div className="text-xs font-medium text-blue-200">Available Placeholders:</div>
+          <div className="mt-2 space-y-1 text-xs text-blue-200/70">
+            <div><code className="text-emerald-300">{"{{char}}"}</code> - Character name</div>
+            <div><code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (empty if none)</div>
+          </div>
+        </div>
       </div>
 
       {/* Model Selection */}

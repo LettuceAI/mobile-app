@@ -11,8 +11,7 @@ use super::request::{
 };
 use super::prompts;
 use super::service::{
-    append_system_message, push_message_for_api, record_usage_if_available, resolve_api_key,
-    ChatContext,
+    append_system_message, record_usage_if_available, resolve_api_key, ChatContext,
 };
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::types::{
@@ -201,9 +200,24 @@ pub async fn chat_completion(
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
     append_system_message(&mut messages_for_api, system_role, system_prompt);
+    // Dynamic placeholder values
+    let char_name = &character.name;
+    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
     for msg in &recent_msgs {
-        push_message_for_api(&mut messages_for_api, msg);
+        crate::chat_manager::service::push_message_for_api_with_context(
+            &mut messages_for_api,
+            msg,
+            char_name,
+            persona_name,
+        );
     }
+
+    // Final guard: sanitize any remaining placeholders in messages (including system)
+    crate::chat_manager::service::sanitize_placeholders_in_messages(
+        &mut messages_for_api,
+        char_name,
+        persona_name,
+    );
 
     let should_stream = stream.unwrap_or(true);
     let request_id = if should_stream {
@@ -524,6 +538,9 @@ pub async fn chat_regenerate(
     let messages_for_api = {
         let mut out = Vec::new();
         append_system_message(&mut out, system_role, system_prompt);
+        // Dynamic placeholder values
+        let char_name = &character.name;
+        let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
         for (idx, msg) in session.messages.iter().enumerate() {
             if idx > target_index {
                 break;
@@ -531,8 +548,19 @@ pub async fn chat_regenerate(
             if idx == target_index {
                 continue;
             }
-            push_message_for_api(&mut out, msg);
+            crate::chat_manager::service::push_message_for_api_with_context(
+                &mut out,
+                msg,
+                char_name,
+                persona_name,
+            );
         }
+        // Final guard for system + built messages
+        crate::chat_manager::service::sanitize_placeholders_in_messages(
+            &mut out,
+            char_name,
+            persona_name,
+        );
         out
     };
 
@@ -815,9 +843,22 @@ pub async fn chat_continue(
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
     append_system_message(&mut messages_for_api, system_role, system_prompt);
+    // Dynamic placeholder values
+    let char_name = &character.name;
+    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
     for msg in &recent_msgs {
-        push_message_for_api(&mut messages_for_api, msg);
+        crate::chat_manager::service::push_message_for_api_with_context(
+            &mut messages_for_api,
+            msg,
+            char_name,
+            persona_name,
+        );
     }
+    crate::chat_manager::service::sanitize_placeholders_in_messages(
+        &mut messages_for_api,
+        char_name,
+        persona_name,
+    );
 
     messages_for_api.push(json!({
         "role": "user",

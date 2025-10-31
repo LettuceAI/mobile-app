@@ -30,6 +30,11 @@ use super::types::{
 /// - `{{persona.desc}}` - Persona description
 /// - `{{rules}}` - Character rules (formatted as bullet list)
 ///
+/// ### Character Description Placeholders
+/// In the character description field itself, you can also use:
+/// - `{{char}}` → Replaced with the character's name
+/// - `{{persona}}` → Replaced with the selected persona's name (empty string if none)
+///
 /// ## Important Notes
 /// - **NSFW toggle is ignored when using custom prompts** - users must handle content filtering
 ///   in their custom prompt if desired
@@ -221,7 +226,23 @@ pub fn build_system_prompt(
         default_system_prompt_template()
     };
 
-    // Build scene content if one is selected
+    // Get character info early (needed for dynamic replacements in scenes)
+    let char_name = &character.name;
+    let raw_char_desc = character
+        .description
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+
+    // Get persona info
+    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    let persona_desc = persona
+        .map(|p| p.description.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+
+    // Build scene content if one is selected (with dynamic placeholder replacements)
     let scene_content = if let Some(selected_scene_id) = &session.selected_scene_id {
         if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
             let content = if let Some(variant_id) = &scene.selected_variant_id {
@@ -235,10 +256,16 @@ pub fn build_system_prompt(
                 &scene.content
             };
 
-            if !content.trim().is_empty() {
+            let content_trimmed = content.trim();
+            if !content_trimmed.is_empty() {
+                // Replace {{char}} and {{persona}} placeholders dynamically in scene text
+                let mut content_processed = content_trimmed.to_string();
+                content_processed = content_processed.replace("{{char}}", char_name);
+                content_processed = content_processed.replace("{{persona}}", persona_name);
+
                 let formatted = format!(
                     "# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n{}\n\n",
-                    content.trim()
+                    content_processed
                 );
                 debug_parts.push(json!({
                     "scene_id": selected_scene_id,
@@ -255,21 +282,11 @@ pub fn build_system_prompt(
         String::new()
     };
 
-    // Get character info
-    let char_name = &character.name;
-    let char_desc = character
-        .description
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("");
-
-    // Get persona info
-    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
-    let persona_desc = persona
-        .map(|p| p.description.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("");
+    // Process placeholders inside the character description itself
+    // Supports {{char}} -> character name and {{persona}} -> persona name (or empty string)
+    let mut char_desc = raw_char_desc.to_string();
+    char_desc = char_desc.replace("{{char}}", char_name);
+    char_desc = char_desc.replace("{{persona}}", persona_name);
 
     // Build rules - Note: NSFW toggle is ignored when using custom prompts
     let pure_mode_enabled = settings
@@ -289,14 +306,19 @@ pub fn build_system_prompt(
     let mut result = base_template;
     result = result.replace("{{scene}}", &scene_content);
     result = result.replace("{{char.name}}", char_name);
-    result = result.replace("{{char.desc}}", char_desc);
+    result = result.replace("{{char.desc}}", &char_desc);
     result = result.replace("{{persona.name}}", persona_name);
     result = result.replace("{{persona.desc}}", persona_desc);
     result = result.replace("{{rules}}", &rules_formatted);
 
+    // Global fallback replacements in entire template for simple placeholders
+    // Allows users to use {{char}} and {{persona}} anywhere in templates
+    result = result.replace("{{char}}", char_name);
+    result = result.replace("{{persona}}", persona_name);
+
     // Legacy template variable support (for backwards compatibility)
     result = result.replace("{{ai_name}}", char_name);
-    result = result.replace("{{ai_description}}", char_desc);
+    result = result.replace("{{ai_description}}", &char_desc);
     result = result.replace("{{ai_rules}}", &rules_formatted);
     result = result.replace("{{persona_name}}", persona_name);
     result = result.replace("{{persona_description}}", persona_desc);

@@ -25,6 +25,8 @@ interface ChatMessageProps {
   handleRegenerate: (message: StoredMessage) => Promise<void>;
   isStartingSceneMessage: boolean;
   theme: ThemeColors;
+  // When provided, this content will be rendered instead of message.content
+  displayContent?: string;
 }
 
 // Memoized action buttons component
@@ -88,6 +90,7 @@ function ChatMessageInner({
   handleRegenerate,
   isStartingSceneMessage,
   theme,
+  displayContent,
 }: ChatMessageProps) {
   // Memoize all computed values
   const computed = useMemo(() => {
@@ -185,7 +188,7 @@ function ChatMessageInner({
         ) : (
           <MarkdownRenderer 
             key={message.id + ":" + computed.selectedVariantIndex}
-            content={message.content} 
+            content={displayContent ?? message.content} 
             className="text-inherit" 
           />
         )}
