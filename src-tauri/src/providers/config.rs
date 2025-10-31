@@ -38,7 +38,6 @@ fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
         ("openai", "OpenAI", "https://api.openai.com"),
         ("anthropic", "Anthropic", "https://api.anthropic.com"),
         ("openrouter", "OpenRouter", "https://openrouter.ai/api"),
-        ("google", "Google", "https://generativelanguage.googleapis.com"),
         ("mistral", "Mistral AI", "https://api.mistral.ai"),
         ("groq", "Groq", "https://api.groq.com"),
     ];

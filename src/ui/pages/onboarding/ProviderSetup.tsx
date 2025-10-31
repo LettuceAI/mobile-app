@@ -11,9 +11,10 @@ import {
 import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
 import { useProviderController } from "./hooks/useProviderController";
 
-import openaiIcon from "../../../assets/openai.svg";
-import anthropicIcon from "../../../assets/anthropic.svg";
-import openrouterIcon from "../../../assets/openrouter.svg";
+import OpenAIIcon from "../../../assets/openai_dark.svg";
+import AnthropicIcon from "../../../assets/anthropic_dark.svg";
+import OpenRouterIcon from "../../../assets/openrouter_dark.svg";
+import MistralAIIcon from "../../../assets/mistralai_dark.svg";
 
 export function ProviderSetupPage() {
   const {
@@ -263,14 +264,16 @@ function getProviderDescription(providerId: string): string {
 function getProviderIcon(providerId: string) {
   switch (providerId) {
     case "openai":
-      return <img src={openaiIcon} alt="OpenAI" className="h-5 w-5" />;
+      return <img src={OpenAIIcon} alt="OpenAI" className="h-6 w-6" />;
     case "anthropic":
-      return <img src={anthropicIcon} alt="Anthropic" className="h-5 w-5" />;
+      return <img src={AnthropicIcon} alt="Anthropic" className="h-6 w-6" />;
     case "openrouter":
-      return <img src={openrouterIcon} alt="OpenRouter" className="h-5 w-5" />;
+      return <img src={OpenRouterIcon} alt="OpenRouter" className="h-6 w-6" />;
+    case "mistral":
+      return <img src={MistralAIIcon} alt="MistralAI" className="h-6 w-6" />;
     case "custom":
-      return <Settings className="h-5 w-5 text-gray-400" />;
+      return <Settings className="h-6 w-6 text-gray-400" />;
     default:
-      return <Wrench className="h-5 w-5 text-gray-500" />;
+      return <Wrench className="h-6 w-6 text-gray-500" />;
   }
 }
