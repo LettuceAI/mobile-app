@@ -1,6 +1,6 @@
 mod commands;
 pub mod prompts;
-mod request;
+pub mod request;
 pub mod sse;
 mod provider_adapter;
 mod request_builder;

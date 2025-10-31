@@ -7,9 +7,7 @@ use std::time::Duration;
 use tauri::Emitter;
 
 use crate::utils::log_backend;
-use crate::{
-    chat_manager::sse,
-};
+use crate::chat_manager::{sse, request as chat_request, types::ErrorEnvelope};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +20,7 @@ pub struct ApiRequest {
     pub timeout_ms: Option<u64>,
     pub stream: Option<bool>,
     pub request_id: Option<String>,
+    pub provider_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -426,6 +425,28 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 collected.len()
             ),
         );
+        // If HTTP status was not OK, emit a normalized error event as well
+        if !ok {
+            if let Some(req_id) = &request_id {
+                let normalized_event = format!("api-normalized://{}", req_id);
+                let value = super::api::parse_body_to_value(&text);
+                let message = chat_request::extract_error_message(&value)
+                    .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+                let envelope = ErrorEnvelope {
+                    code: None,
+                    message,
+                    provider_id: req.provider_id.clone(),
+                    request_id: request_id.clone(),
+                    retryable: None,
+                    status: Some(status.as_u16()),
+                };
+                let _ = app.emit(&normalized_event, json!({
+                    "requestId": req_id,
+                    "type": "error",
+                    "data": envelope,
+                }));
+            }
+        }
         parse_body_to_value(&text)
     } else {
         match response.bytes().await {
@@ -444,7 +465,29 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                         truncate_for_log(&text, 256)
                     ),
                 );
-                parse_body_to_value(&text)
+                let value = parse_body_to_value(&text);
+                // Also emit normalized error event for non-stream responses when possible
+                if !ok {
+                    if let Some(req_id) = &request_id {
+                        let normalized_event = format!("api-normalized://{}", req_id);
+                        let message = chat_request::extract_error_message(&value)
+                            .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+                        let envelope = ErrorEnvelope {
+                            code: None,
+                            message,
+                            provider_id: req.provider_id.clone(),
+                            request_id: request_id.clone(),
+                            retryable: None,
+                            status: Some(status.as_u16()),
+                        };
+                        let _ = app.emit(&normalized_event, json!({
+                            "requestId": req_id,
+                            "type": "error",
+                            "data": envelope,
+                        }));
+                    }
+                }
+                value
             }
             Err(e) => {
                 log_backend(

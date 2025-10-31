@@ -439,11 +439,29 @@ export function useChatController(
         ]
       });
 
-      let unlisten: UnlistenFn | null = null;
+      let unlistenRaw: UnlistenFn | null = null;
+      let unlistenNormalized: UnlistenFn | null = null;
+      let normalizedActive = false;
       const streamBatcher = createStreamBatcher(dispatch);
 
       try {
-        unlisten = await listen<string>(`api://${requestId}`, (event) => {
+        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          try {
+            const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+            if (payload && payload.type === "delta" && payload.data?.text) {
+              normalizedActive = true;
+              streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+            } else if (payload && payload.type === "error" && payload.data?.message) {
+              dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
+            }
+          } catch {
+            // ignore malformed payloads
+          }
+        });
+        
+        // Fallback
+        unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
+          if (normalizedActive) return;
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
           streamBatcher.update(assistantPlaceholder.id, delta);
@@ -496,9 +514,8 @@ export function useChatController(
         }
       } finally {
         streamBatcher.cancel();
-        if (unlisten) {
-          unlisten();
-        }
+        if (unlistenRaw) unlistenRaw();
+        if (unlistenNormalized) unlistenNormalized();
         dispatch({ type: "SET_SENDING", payload: false });
       }
     },
@@ -520,11 +537,30 @@ export function useChatController(
         ]
       });
 
-      let unlisten: UnlistenFn | null = null;
+      let unlistenRaw: UnlistenFn | null = null;
+      let unlistenNormalized: UnlistenFn | null = null;
+      let normalizedActive = false;
       const streamBatcher = createStreamBatcher(dispatch);
 
       try {
-        unlisten = await listen<string>(`api://${requestId}`, (event) => {
+        // Prefer normalized provider-agnostic stream if available
+        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          try {
+            const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+            if (payload && payload.type === "delta" && payload.data?.text) {
+              normalizedActive = true;
+              streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+            } else if (payload && payload.type === "error" && payload.data?.message) {
+              dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
+            }
+          } catch {
+            // ignore malformed payloads
+          }
+        });
+
+        // Fallback: raw SSE (OpenAI-style) if normalized isn't emitted
+        unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
+          if (normalizedActive) return;
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
           streamBatcher.update(assistantPlaceholder.id, delta);
@@ -575,9 +611,8 @@ export function useChatController(
         }
       } finally {
         streamBatcher.cancel();
-        if (unlisten) {
-          unlisten();
-        }
+        if (unlistenRaw) unlistenRaw();
+        if (unlistenNormalized) unlistenNormalized();
         dispatch({ type: "SET_SENDING", payload: false });
       }
     },
@@ -597,7 +632,9 @@ export function useChatController(
       }
 
       const requestId = crypto.randomUUID();
-      let unlisten: UnlistenFn | null = null;
+  let unlistenRaw: UnlistenFn | null = null;
+  let unlistenNormalized: UnlistenFn | null = null;
+  let normalizedActive = false;
 
       dispatch({ 
         type: "BATCH", 
@@ -615,7 +652,24 @@ export function useChatController(
       const streamBatcher = createStreamBatcher(dispatch);
 
       try {
-        unlisten = await listen<string>(`api://${requestId}`, (event) => {
+        // Prefer normalized provider-agnostic stream if available
+        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          try {
+            const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+            if (payload && payload.type === "delta" && payload.data?.text) {
+              normalizedActive = true;
+              streamBatcher.update(message.id, String(payload.data.text));
+            } else if (payload && payload.type === "error" && payload.data?.message) {
+              dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
+            }
+          } catch {
+            // ignore malformed payloads
+          }
+        });
+
+        // Fallback: raw SSE (OpenAI-style) if normalized isn't emitted
+        unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
+          if (normalizedActive) return;
           const delta = parseStreamDelta(event.payload ?? "");
           if (!delta) return;
           streamBatcher.update(message.id, delta);
@@ -670,9 +724,8 @@ export function useChatController(
         }
       } finally {
         streamBatcher.cancel();
-        if (unlisten) {
-          unlisten();
-        }
+        if (unlistenRaw) unlistenRaw();
+        if (unlistenNormalized) unlistenNormalized();
         dispatch({ type: "SET_REGENERATING_MESSAGE_ID", payload: null });
       }
     },

@@ -140,6 +140,7 @@ pub async fn fetch_openrouter_model_pricing(
         timeout_ms: Some(30_000),
         stream: None,
         request_id: None,
+        provider_id: Some("openrouter".to_string()),
     };
 
     match api_request(app.clone(), request).await {

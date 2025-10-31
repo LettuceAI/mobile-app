@@ -6,6 +6,10 @@ pub trait ProviderAdapter {
     fn endpoint(&self, base_url: &str) -> String;
     /// Preferred system role keyword for this provider when sending a system message.
     fn system_role(&self) -> &'static str;
+    /// Whether this provider supports Server-Sent Events (streaming responses).
+    fn supports_stream(&self) -> bool {
+        true
+    }
     /// Build default headers for this provider using the given API key.
     /// `extra` headers from credentials are merged on top (overriding defaults when keys match).
     fn headers(
@@ -226,8 +230,6 @@ impl ProviderAdapter for AnthropicAdapter {
     ) -> HashMap<String, String> {
         let mut out: HashMap<String, String> = HashMap::new();
         out.insert("x-api-key".into(), api_key.to_string());
-        // Align with verify.rs configuration
-        out.insert("anthropic-version".into(), "2023-06-01".into());
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("Accept".into(), "text/event-stream".into());
         out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
@@ -249,13 +251,10 @@ impl ProviderAdapter for AnthropicAdapter {
         max_tokens: u32,
         should_stream: bool,
     ) -> Value {
-        // Convert OpenAI-style messages into Anthropic Messages API format
-        // Each content is wrapped into a text block
         let mut msgs: Vec<Value> = Vec::new();
         for msg in messages_for_api {
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
             if role == "system" || role == "developer" {
-                // system prompt passed separately below
                 continue;
             }
             let content_text = msg

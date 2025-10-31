@@ -262,6 +262,7 @@ pub async fn chat_completion(
         timeout_ms: Some(120_000),
         stream: Some(built.stream),
         request_id: built.request_id.clone(),
+        provider_id: Some(provider_cred.provider_id.clone()),
     };
 
     let api_response = match api_request(app.clone(), api_request_payload).await {
@@ -598,6 +599,7 @@ pub async fn chat_regenerate(
         timeout_ms: Some(120_000),
         stream: Some(built.stream),
         request_id: built.request_id.clone(),
+        provider_id: Some(provider_cred.provider_id.clone()),
     };
 
     let api_response = match api_request(app.clone(), api_request_payload).await {
@@ -878,6 +880,7 @@ pub async fn chat_continue(
         timeout_ms: Some(120_000),
         stream: Some(built.stream),
         request_id: built.request_id.clone(),
+        provider_id: Some(provider_cred.provider_id.clone()),
     };
 
     let api_response = match api_request(app.clone(), api_request_payload).await {

@@ -289,3 +289,19 @@ pub struct ContinueResult {
     pub request_id: Option<String>,
     pub assistant_message: StoredMessage,
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorEnvelope {
+    #[serde(default)]
+    pub code: Option<String>,
+    pub message: String,
+    #[serde(default)]
+    pub provider_id: Option<String>,
+    #[serde(default)]
+    pub request_id: Option<String>,
+    #[serde(default)]
+    pub retryable: Option<bool>,
+    #[serde(default)]
+    pub status: Option<u16>,
+}

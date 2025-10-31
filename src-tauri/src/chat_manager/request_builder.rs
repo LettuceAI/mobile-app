@@ -34,6 +34,7 @@ pub fn build_chat_request(
     let adapter = adapter_for(provider_cred.provider_id.as_str());
     let endpoint = adapter.endpoint(&base_url);
     let headers = adapter.headers(api_key, provider_cred.headers.as_ref());
+    let effective_stream = should_stream && adapter.supports_stream();
 
     let body = adapter.body(
         model_name,
@@ -49,7 +50,7 @@ pub fn build_chat_request(
         url: endpoint,
         headers,
         body,
-        stream: should_stream,
+        stream: effective_stream,
         request_id,
     }
 }
