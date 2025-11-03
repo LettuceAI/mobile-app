@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useCallback } from "react";
 import { readSettings, saveCharacter, convertToImageRef } from "../../../../core/storage";
-import type { Model, Scene } from "../../../../core/storage/schemas";
-
+import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
+import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
 export enum Step {
   Identity = 1,
@@ -19,10 +19,15 @@ interface CharacterFormState {
   defaultSceneId: string | null;
   description: string;
   selectedModelId: string | null;
+  systemPromptTemplateId: string | null;
   
   // Models
   models: Model[];
   loadingModels: boolean;
+  
+  // Prompt templates
+  promptTemplates: SystemPromptTemplate[];
+  loadingTemplates: boolean;
   
   // UI state
   saving: boolean;
@@ -38,8 +43,11 @@ type CharacterFormAction =
   | { type: 'SET_DEFAULT_SCENE_ID'; payload: string | null }
   | { type: 'SET_DESCRIPTION'; payload: string }
   | { type: 'SET_SELECTED_MODEL_ID'; payload: string | null }
+  | { type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID'; payload: string | null }
   | { type: 'SET_MODELS'; payload: Model[] }
   | { type: 'SET_LOADING_MODELS'; payload: boolean }
+  | { type: 'SET_PROMPT_TEMPLATES'; payload: SystemPromptTemplate[] }
+  | { type: 'SET_LOADING_TEMPLATES'; payload: boolean }
   | { type: 'SET_SAVING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'RESET_FORM' };
@@ -53,8 +61,11 @@ const initialState: CharacterFormState = {
   defaultSceneId: null,
   description: '',
   selectedModelId: null,
+  systemPromptTemplateId: null,
   models: [],
   loadingModels: true,
+  promptTemplates: [],
+  loadingTemplates: true,
   saving: false,
   error: null,
 };
@@ -80,10 +91,16 @@ function characterFormReducer(
       return { ...state, description: action.payload };
     case 'SET_SELECTED_MODEL_ID':
       return { ...state, selectedModelId: action.payload };
+    case 'SET_SYSTEM_PROMPT_TEMPLATE_ID':
+      return { ...state, systemPromptTemplateId: action.payload };
     case 'SET_MODELS':
       return { ...state, models: action.payload };
     case 'SET_LOADING_MODELS':
       return { ...state, loadingModels: action.payload };
+    case 'SET_PROMPT_TEMPLATES':
+      return { ...state, promptTemplates: action.payload };
+    case 'SET_LOADING_TEMPLATES':
+      return { ...state, loadingTemplates: action.payload };
     case 'SET_SAVING':
       return { ...state, saving: action.payload };
     case 'SET_ERROR':
@@ -98,23 +115,30 @@ function characterFormReducer(
 export function useCharacterForm() {
   const [state, dispatch] = useReducer(characterFormReducer, initialState);
 
-  // Load models on mount
+  // Load models and prompt templates on mount
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const settings = await readSettings();
+        const [settings, templates] = await Promise.all([
+          readSettings(),
+          listPromptTemplates(),
+        ]);
+        
         if (cancelled) return;
         
         dispatch({ type: 'SET_MODELS', payload: settings.models });
         const defaultId = settings.defaultModelId ?? settings.models[0]?.id ?? null;
         dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: defaultId });
+        
+        dispatch({ type: 'SET_PROMPT_TEMPLATES', payload: templates });
       } catch (err) {
         console.error("Failed to load settings", err);
       } finally {
         if (!cancelled) {
           dispatch({ type: 'SET_LOADING_MODELS', payload: false });
+          dispatch({ type: 'SET_LOADING_TEMPLATES', payload: false });
         }
       }
     })();
@@ -162,6 +186,10 @@ export function useCharacterForm() {
 
   const setSelectedModelId = useCallback((id: string | null) => {
     dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: id });
+  }, []);
+
+  const setSystemPromptTemplateId = useCallback((id: string | null) => {
+    dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: id });
   }, []);
 
   const handleAvatarUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,6 +260,7 @@ export function useCharacterForm() {
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
+        promptTemplateId: state.systemPromptTemplateId,
       };
       
       console.log("[CreateCharacter] Saving character data:", JSON.stringify(characterData, null, 2));
@@ -246,7 +275,7 @@ export function useCharacterForm() {
     } finally {
       dispatch({ type: 'SET_SAVING', payload: false });
     }
-  }, [state.name, state.avatarPath, state.backgroundImagePath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.saving]);
+  }, [state.name, state.avatarPath, state.backgroundImagePath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.systemPromptTemplateId, state.saving]);
 
   // Computed values
   const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
@@ -265,6 +294,7 @@ export function useCharacterForm() {
       setDefaultSceneId,
       setDescription,
       setSelectedModelId,
+      setSystemPromptTemplateId,
       handleAvatarUpload,
       handleBackgroundImageUpload,
       handleSave,

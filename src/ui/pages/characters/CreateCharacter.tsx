@@ -82,6 +82,10 @@ export function CreateCharacterPage() {
               loadingModels={state.loadingModels}
               selectedModelId={state.selectedModelId}
               onSelectModel={actions.setSelectedModelId}
+              promptTemplates={state.promptTemplates}
+              loadingTemplates={state.loadingTemplates}
+              systemPromptTemplateId={state.systemPromptTemplateId}
+              onSelectSystemPrompt={actions.setSystemPromptTemplateId}
               onSave={handleSave}
               canSave={computed.canSaveDescription}
               saving={state.saving}

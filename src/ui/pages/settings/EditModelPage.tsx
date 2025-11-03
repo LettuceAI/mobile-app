@@ -160,12 +160,14 @@ export function EditModelPage() {
                   onChange={(e) => handlePromptTemplateChange(e.target.value)}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 pl-9 text-white transition focus:border-white/30 focus:outline-none"
                 >
-                  <option value="">Use app default prompt</option>
-                  {promptTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
+                  <option value="">Use app default</option>
+                  {promptTemplates
+                    .filter(t => t.name !== "App Default")
+                    .map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
                 </select>
               </div>
             )}

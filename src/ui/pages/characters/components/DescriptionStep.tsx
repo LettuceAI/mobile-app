@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, AlertCircle, Brain } from "lucide-react";
-import type { Model } from "../../../../core/storage/schemas";
+import { Sparkles, AlertCircle, Brain, FileText, Loader2 } from "lucide-react";
+import type { Model, SystemPromptTemplate } from "../../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 
 interface DescriptionStepProps {
@@ -10,6 +10,10 @@ interface DescriptionStepProps {
   loadingModels: boolean;
   selectedModelId: string | null;
   onSelectModel: (value: string | null) => void;
+  promptTemplates: SystemPromptTemplate[];
+  loadingTemplates: boolean;
+  systemPromptTemplateId: string | null;
+  onSelectSystemPrompt: (value: string | null) => void;
   onSave: () => void;
   canSave: boolean;
   saving: boolean;
@@ -23,6 +27,10 @@ export function DescriptionStep({
   loadingModels,
   selectedModelId,
   onSelectModel,
+  promptTemplates,
+  loadingTemplates,
+  systemPromptTemplateId,
+  onSelectSystemPrompt,
   onSave,
   canSave,
   saving,
@@ -222,6 +230,61 @@ export function DescriptionStep({
         )}
         <p className={cn(typography.bodySmall.size, "text-white/40")}>
           This model will power the character's responses
+        </p>
+      </div>
+
+      {/* System Prompt Selection */}
+      <div className={spacing.field}>
+        <label
+          className={cn(
+            typography.label.size,
+            typography.label.weight,
+            typography.label.tracking,
+            "uppercase text-white/70"
+          )}
+        >
+          System Prompt (Optional)
+        </label>
+        {loadingTemplates ? (
+          <div
+            className={cn(
+              "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+              radius.md
+            )}
+          >
+            <Loader2 className="h-4 w-4 animate-spin text-white/60" />
+            <span className={cn(typography.body.size, "text-white/60")}>Loading templates...</span>
+          </div>
+        ) : (
+          <div className="relative">
+            <select
+              value={systemPromptTemplateId ?? ""}
+              onChange={(e) => onSelectSystemPrompt(e.target.value || null)}
+              className={cn(
+                "w-full appearance-none border bg-black/20 px-4 py-3.5 pr-10 text-base text-white backdrop-blur-xl",
+                radius.md,
+                interactive.transition.default,
+                "focus:border-white/30 focus:bg-black/30 focus:outline-none",
+                systemPromptTemplateId ? "border-white/20" : "border-white/10"
+              )}
+            >
+              <option value="" className="bg-[#0b0b0d] text-white">Use app default</option>
+              {promptTemplates
+                .filter(t => t.name !== "App Default")
+                .map((template) => (
+                  <option key={template.id} value={template.id} className="bg-[#0b0b0d] text-white">
+                    {template.name}
+                  </option>
+                ))}
+            </select>
+            {/* Custom dropdown icon */}
+            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+              <FileText className="h-4 w-4 text-white/40" />
+            </div>
+          </div>
+        )}
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
+          Choose a custom system prompt or use the default
         </p>
       </div>
 

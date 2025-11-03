@@ -593,12 +593,14 @@ export function EditCharacterPage() {
                 onChange={(e) => setSystemPromptTemplateId(e.target.value || null)}
                 className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
               >
-                <option value="">Use app default prompt</option>
-                {promptTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
+                <option value="">Use app default</option>
+                {promptTemplates
+                  .filter(t => t.name !== "App Default")
+                  .map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
               </select>
             )}
             <p className="text-xs text-white/50">
