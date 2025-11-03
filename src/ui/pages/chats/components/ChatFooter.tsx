@@ -1,4 +1,4 @@
-import { Send, Sparkles } from "lucide-react";
+import { ChevronsRight, SendHorizonal } from "lucide-react";
 import type { Character } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, shadows, cn } from "../../../design-tokens";
 
@@ -81,9 +81,9 @@ export function ChatFooter({
             {sending ? (
             <span className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : hasDraft ? (
-            <Send size={16} />
+            <SendHorizonal size={16} />
             ) : (
-            <Sparkles size={16} />
+            <ChevronsRight size={16} />
             )}
         </button>
       </div>
