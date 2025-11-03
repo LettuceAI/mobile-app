@@ -10,7 +10,7 @@ use crate::storage_manager::{
 use crate::utils::log_backend;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 2;
+const CURRENT_MIGRATION_VERSION: u32 = 3;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -53,6 +53,12 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_backend(app, "migrations", "Running migration v1 -> v2: Convert prompts to template system".to_string());
         migrate_v1_to_v2(app)?;
         version = 2;
+    }
+
+    if version < 3 {
+        log_backend(app, "migrations", "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)".to_string());
+        migrate_v2_to_v3(app)?;
+        version = 3;
     }
 
     // Future migrations go here:
@@ -200,6 +206,81 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
         app,
         "migrations",
         "Character systemPrompt fields will be added on next save (handled by serde defaults)".to_string(),
+    );
+
+    Ok(())
+}
+
+/// Migration v2 -> v3: Normalize prompt templates to global prompts (remove reliance on scopes)
+///
+/// We keep the same storage file/format (no new file), but update all templates so they no longer
+/// carry meaningful scope assignments:
+/// - Set `scope` to AppWide for all non-default templates
+/// - Clear `targetIds` for all templates
+///
+/// Notes:
+/// - App Default template already uses AppWide scope; we don't change its scope (and updates are
+///   prevented by prompts::update_template anyway)
+/// - Character/Model/Settings continue to reference templates by ID; behavior is unchanged because
+///   runtime selection uses explicit references, not scope matching
+fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
+    use crate::chat_manager::prompts;
+    use crate::chat_manager::types::PromptScope;
+
+    // Ensure App Default exists (idempotent)
+    let _ = prompts::ensure_app_default_template(app);
+
+    let templates = prompts::load_templates(app)?;
+    let mut changed = 0usize;
+
+    for t in templates.iter() {
+        // Skip changing scope for App Default; it is already AppWide
+        if prompts::is_app_default_template(&t.id) {
+            // We still clear target IDs if any lingered (should be empty by design)
+            if !t.target_ids.is_empty() {
+                let _ = prompts::update_template(
+                    app,
+                    t.id.clone(),
+                    None,
+                    None,                 // keep scope as-is for App Default
+                    Some(Vec::new()),     // clear target ids
+                    None,
+                )?;
+                changed += 1;
+            }
+            continue;
+        }
+
+        let mut need_update = false;
+        let mut new_scope: Option<PromptScope> = None;
+        let mut new_targets: Option<Vec<String>> = None;
+
+        if t.scope != PromptScope::AppWide {
+            new_scope = Some(PromptScope::AppWide);
+            need_update = true;
+        }
+        if !t.target_ids.is_empty() {
+            new_targets = Some(Vec::new());
+            need_update = true;
+        }
+
+        if need_update {
+            let _updated = prompts::update_template(
+                app,
+                t.id.clone(),
+                None,
+                new_scope,
+                new_targets,
+                None,
+            )?;
+            changed += 1;
+        }
+    }
+
+    log_backend(
+        app,
+        "migrations",
+        format!("v2->v3 migration completed. Templates normalized: {}", changed),
     );
 
     Ok(())

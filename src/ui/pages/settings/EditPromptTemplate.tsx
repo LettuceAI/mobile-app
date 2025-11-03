@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
-import { Globe, User, Cpu, Lock, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { cn } from "../../design-tokens";
-import { 
-  createPromptTemplate, 
-  updatePromptTemplate, 
+import {
+  createPromptTemplate,
+  updatePromptTemplate,
   getPromptTemplate,
   getAppDefaultTemplateId,
-  resetAppDefaultTemplate 
-} from "../../../core/prompts";
-import { listCharacters, readSettings } from "../../../core/storage";
-import type { PromptScope, Character, Model } from "../../../core/storage/schemas";
+  resetAppDefaultTemplate,
+  getDefaultSystemPromptTemplate,
+  renderPromptPreview,
+} from "../../../core/prompts/service";
+import { listCharacters, listPersonas } from "../../../core/storage";
+import type { Character, Persona } from "../../../core/storage/schemas";
 
 export function EditPromptTemplate() {
   const navigate = useNavigate();
@@ -19,12 +21,14 @@ export function EditPromptTemplate() {
   const isEditing = !!id;
 
   const [name, setName] = useState("");
-  const [scope, setScope] = useState<PromptScope>("appWide");
   const [content, setContent] = useState("");
-  const [targetIds, setTargetIds] = useState<string[]>([]);
-  
+
   const [characters, setCharacters] = useState<Character[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [previewCharacterId, setPreviewCharacterId] = useState<string | null>(null);
+  const [previewPersonaId, setPreviewPersonaId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [previewing, setPreviewing] = useState(false);
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [isAppDefault, setIsAppDefault] = useState(false);
@@ -36,24 +40,28 @@ export function EditPromptTemplate() {
 
   async function loadData() {
     try {
-      const chars = await listCharacters();
+      // Load characters and personas for preview context
+      const [chars, pers] = await Promise.all([listCharacters(), listPersonas()]);
       setCharacters(chars);
-      const settings = await readSettings();
-      setModels(settings.models);
+      setPersonas(pers);
+      setPreviewCharacterId(chars[0]?.id ?? null);
+      setPreviewPersonaId(pers.find((p) => p.isDefault)?.id ?? null);
 
       if (isEditing && id) {
         const [template, appDefaultId] = await Promise.all([
           getPromptTemplate(id),
           getAppDefaultTemplateId(),
         ]);
-        
+
         if (template) {
           setName(template.name);
-          setScope(template.scope);
           setContent(template.content);
-          setTargetIds(template.targetIds);
           setIsAppDefault(template.id === appDefaultId);
         }
+      } else {
+        // Prefill content with the app's default system prompt when creating a new template
+        const def = await getDefaultSystemPromptTemplate();
+        setContent(def);
       }
     } catch (error) {
       console.error("Failed to load data:", error);
@@ -67,27 +75,16 @@ export function EditPromptTemplate() {
       return;
     }
 
-    if ((scope === "modelSpecific" || scope === "characterSpecific") && targetIds.length === 0) {
-      alert(`Please select at least one ${scope === "modelSpecific" ? "model" : "character"}`);
-      return;
-    }
-
     setSaving(true);
     try {
       if (isEditing && id) {
         await updatePromptTemplate(id, {
           name: name.trim(),
-          scope: isAppDefault ? undefined : scope,
           content: content.trim(),
-          targetIds: scope === "appWide" ? [] : targetIds,
         });
       } else {
-        await createPromptTemplate(
-          name.trim(),
-          scope,
-          scope === "appWide" ? [] : targetIds,
-          content.trim()
-        );
+        // New templates are global/app-wide by default in the simplified model
+        await createPromptTemplate(name.trim(), "appWide" as any, [], content.trim());
       }
       navigate("/settings/prompts");
     } catch (error) {
@@ -116,30 +113,22 @@ export function EditPromptTemplate() {
     }
   }
 
-  function getScopeIcon(s: PromptScope) {
-    switch (s) {
-      case "appWide":
-        return <Globe className="h-4 w-4" />;
-      case "modelSpecific":
-        return <Cpu className="h-4 w-4" />;
-      case "characterSpecific":
-        return <User className="h-4 w-4" />;
+  async function handlePreview() {
+    if (!previewCharacterId) return;
+    setPreviewing(true);
+    try {
+      const rendered = await renderPromptPreview(content, {
+        characterId: previewCharacterId,
+        personaId: previewPersonaId ?? undefined,
+      });
+      setPreview(rendered);
+    } catch (e) {
+      console.error("Preview failed", e);
+      setPreview("<failed to render preview>");
+    } finally {
+      setPreviewing(false);
     }
   }
-
-  function getScopeColor(s: PromptScope) {
-    switch (s) {
-      case "appWide":
-        return "border-emerald-400/30 bg-emerald-400/10 text-emerald-300";
-      case "modelSpecific":
-        return "border-purple-400/30 bg-purple-400/10 text-purple-300";
-      case "characterSpecific":
-        return "border-blue-400/30 bg-blue-400/10 text-blue-300";
-    }
-  }
-
-  const targetList = scope === "modelSpecific" ? models : characters;
-  const targetLabel = scope === "modelSpecific" ? "model" : "character";
 
   if (loading) {
     return (
@@ -173,93 +162,58 @@ export function EditPromptTemplate() {
               />
             </div>
 
-            {/* Scope */}
+            {/* Preview Context (does not save) */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                  Scope
-                </label>
-                {isAppDefault && (
-                  <div className="flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-xs text-amber-200">
-                    <Lock className="h-3 w-3" />
-                    <span>Protected</span>
-                  </div>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {(["appWide", "modelSpecific", "characterSpecific"] as PromptScope[]).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      if (!isAppDefault) {
-                        setScope(s);
-                        setTargetIds([]);
-                      }
-                    }}
-                    disabled={isAppDefault}
-                    className={cn(
-                      "flex flex-col items-center gap-2 rounded-xl border p-4 transition",
-                      scope === s
-                        ? getScopeColor(s)
-                        : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10",
-                      isAppDefault && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    {getScopeIcon(s)}
-                    <span className="text-xs font-medium">
-                      {s === "appWide" ? "App-wide" : s === "modelSpecific" ? "Model" : "Character"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-white/40">
-                {scope === "appWide" && "Available everywhere as a default option"}
-                {scope === "modelSpecific" && "Available only for selected models"}
-                {scope === "characterSpecific" && "Available only for selected characters"}
-              </p>
-            </div>
+              <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+                Preview Context (does not save)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={previewCharacterId ?? ""}
+                  onChange={(e) => setPreviewCharacterId(e.target.value || null)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white focus:border-white/30 focus:outline-none"
+                >
+                  <option value="">Select character…</option>
+                  {characters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
 
-            {/* Target Selection */}
-            {scope !== "appWide" && (
-              <div className="space-y-2">
-                <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                  Select {targetLabel}s ({targetIds.length} selected)
-                </label>
-                {targetList.length === 0 ? (
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center text-sm text-white/50">
-                    No {targetLabel}s available
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                    <div className="flex flex-wrap gap-2">
-                      {targetList.map((target) => {
-                        const selected = targetIds.includes(target.id);
-                        return (
-                          <button
-                            key={target.id}
-                            onClick={() => {
-                              setTargetIds(
-                                selected
-                                  ? targetIds.filter((tid) => tid !== target.id)
-                                  : [...targetIds, target.id]
-                              );
-                            }}
-                            className={cn(
-                              "rounded-lg border px-3 py-2 text-sm transition",
-                              selected
-                                ? "border-white/30 bg-white/20 text-white"
-                                : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                            )}
-                          >
-                            {target.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <select
+                  value={previewPersonaId ?? ""}
+                  onChange={(e) => setPreviewPersonaId(e.target.value || null)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white focus:border-white/30 focus:outline-none"
+                >
+                  <option value="">No persona</option>
+                  {personas.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePreview}
+                  disabled={!previewCharacterId || previewing}
+                  className={cn(
+                    "rounded-xl border px-4 py-2 text-sm transition",
+                    !previewCharacterId || previewing
+                      ? "border-white/10 bg-white/5 text-white/30"
+                      : "border-blue-400/40 bg-blue-400/20 text-blue-100 hover:bg-blue-400/30"
+                  )}
+                >
+                  {previewing ? "Rendering…" : "Render Preview"}
+                </button>
+              </div>
+              {preview && (
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+                  {preview}
+                </pre>
+              )}
+            </div>
 
             {/* Content */}
             <div className="space-y-2">

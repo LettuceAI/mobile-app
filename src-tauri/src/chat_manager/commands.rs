@@ -10,14 +10,13 @@ use super::request::{
     new_assistant_variant,
 };
 use super::prompts;
-use super::service::{
-    append_system_message, record_usage_if_available, resolve_api_key, ChatContext,
-};
+use super::service::{record_usage_if_available, resolve_api_key, ChatContext};
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
     Model, PromptScope, RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
+use super::prompt_engine;
 use crate::utils::{emit_debug, log_backend};
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
@@ -199,12 +198,12 @@ pub async fn chat_completion(
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
-    append_system_message(&mut messages_for_api, system_role, system_prompt);
+    crate::chat_manager::messages::push_system_message(&mut messages_for_api, system_role, system_prompt);
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
     for msg in &recent_msgs {
-        crate::chat_manager::service::push_message_for_api_with_context(
+        crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
             msg,
             char_name,
@@ -213,7 +212,7 @@ pub async fn chat_completion(
     }
 
     // Final guard: sanitize any remaining placeholders in messages (including system)
-    crate::chat_manager::service::sanitize_placeholders_in_messages(
+    crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
         &mut messages_for_api,
         char_name,
         persona_name,
@@ -537,7 +536,7 @@ pub async fn chat_regenerate(
     let system_role = super::request_builder::system_role_for(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
-        append_system_message(&mut out, system_role, system_prompt);
+        crate::chat_manager::messages::push_system_message(&mut out, system_role, system_prompt);
         // Dynamic placeholder values
         let char_name = &character.name;
         let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -548,7 +547,7 @@ pub async fn chat_regenerate(
             if idx == target_index {
                 continue;
             }
-            crate::chat_manager::service::push_message_for_api_with_context(
+            crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                 &mut out,
                 msg,
                 char_name,
@@ -556,7 +555,7 @@ pub async fn chat_regenerate(
             );
         }
         // Final guard for system + built messages
-        crate::chat_manager::service::sanitize_placeholders_in_messages(
+        crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
             &mut out,
             char_name,
             persona_name,
@@ -842,19 +841,19 @@ pub async fn chat_continue(
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
-    append_system_message(&mut messages_for_api, system_role, system_prompt);
+    crate::chat_manager::messages::push_system_message(&mut messages_for_api, system_role, system_prompt);
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
     for msg in &recent_msgs {
-        crate::chat_manager::service::push_message_for_api_with_context(
+        crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
             msg,
             char_name,
             persona_name,
         );
     }
-    crate::chat_manager::service::sanitize_placeholders_in_messages(
+    crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
         &mut messages_for_api,
         char_name,
         persona_name,
@@ -1124,18 +1123,48 @@ pub fn reset_app_default_template(app: AppHandle) -> Result<SystemPromptTemplate
     prompts::reset_app_default_template(&app)
 }
 
-#[tauri::command]
-pub fn get_applicable_prompts_for_character(
-    app: AppHandle,
-    character_id: String,
-) -> Result<Vec<SystemPromptTemplate>, String> {
-    prompts::get_applicable_for_character(&app, &character_id)
-}
+// Deprecated: get_applicable_prompts_for_* commands removed in favor of global list on client
+
+// ==================== Prompt Preview Command ====================
 
 #[tauri::command]
-pub fn get_applicable_prompts_for_model(
+pub fn render_prompt_preview(
     app: AppHandle,
-    model_id: String,
-) -> Result<Vec<SystemPromptTemplate>, String> {
-    prompts::get_applicable_for_model(&app, &model_id)
+    content: String,
+    character_id: String,
+    session_id: Option<String>,
+    persona_id: Option<String>,
+) -> Result<String, String> {
+    let context = super::service::ChatContext::initialize(app.clone())?;
+    let settings = &context.settings;
+
+    let character = context.find_character(&character_id)?;
+
+    // Load session if provided, otherwise synthesize a minimal one
+    let session: Session = if let Some(sid) = session_id.as_ref() {
+        context
+            .load_session(sid)
+            .and_then(|opt| opt.ok_or_else(|| "Session not found".to_string()))?
+    } else {
+        // Minimal ephemeral session for preview
+        let now = now_millis()?;
+        Session {
+            id: "preview".to_string(),
+            character_id: character.id.clone(),
+            title: "Preview".to_string(),
+            system_prompt: None,
+            selected_scene_id: None,
+            persona_id: None,
+            advanced_model_settings: None,
+            messages: vec![],
+            archived: false,
+            created_at: now,
+            updated_at: now,
+        }
+    };
+
+    let persona = context.choose_persona(persona_id.as_deref());
+
+    let rendered = prompt_engine::render_with_context(&app, &content, &character, persona, &session, settings);
+    Ok(rendered)
 }

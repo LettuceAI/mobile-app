@@ -10,7 +10,7 @@ import {
 } from "../../components/AdvancedModelSettingsForm";
 import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate } from "../../../core/storage/schemas";
-import { getApplicablePromptsForModel } from "../../../core/prompts";
+import { listPromptTemplates } from "../../../core/prompts/service";
 
 export function EditModelPage() {
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
@@ -53,11 +53,9 @@ export function EditModelPage() {
   }, [editorModel?.id]);
 
   const loadPromptTemplates = async () => {
-    if (!editorModel?.id) return;
-    
     try {
       setLoadingTemplates(true);
-      const templates = await getApplicablePromptsForModel(editorModel.id);
+      const templates = await listPromptTemplates();
       setPromptTemplates(templates);
     } catch (err) {
       console.error("Failed to load prompt templates:", err);

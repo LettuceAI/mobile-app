@@ -124,6 +124,13 @@ export function useCharacterForm() {
     };
   }, []);
 
+  // Auto-set default scene if there's only one scene
+  useEffect(() => {
+    if (state.scenes.length === 1 && !state.defaultSceneId) {
+      dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: state.scenes[0].id });
+    }
+  }, [state.scenes, state.defaultSceneId]);
+
   // Actions
   const setStep = useCallback((step: Step) => {
     dispatch({ type: 'SET_STEP', payload: step });

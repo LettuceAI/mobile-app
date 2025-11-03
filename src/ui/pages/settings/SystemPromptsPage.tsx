@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2, Globe, User, Cpu, Lock } from "lucide-react";
+import { Pencil, Trash2, Lock, Search } from "lucide-react";
 import { cn } from "../../design-tokens";
-import { listPromptTemplates, deletePromptTemplate, getAppDefaultTemplateId, isAppDefaultTemplate } from "../../../core/prompts";
-import type { SystemPromptTemplate, PromptScope } from "../../../core/storage/schemas";
+import { listPromptTemplates, deletePromptTemplate, getAppDefaultTemplateId, isAppDefaultTemplate } from "../../../core/prompts/service";
+import type { SystemPromptTemplate } from "../../../core/storage/schemas";
 
 export function SystemPromptsPage() {
   const navigate = useNavigate();
@@ -12,6 +12,8 @@ export function SystemPromptsPage() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [appDefaultId, setAppDefaultId] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [activeTag, setActiveTag] = useState<"all" | "default" | "custom">("all");
 
   useEffect(() => {
     loadData();
@@ -74,38 +76,17 @@ export function SystemPromptsPage() {
     }
   }
 
-  function getScopeIcon(scope: PromptScope) {
-    switch (scope) {
-      case "appWide":
-        return <Globe className="h-3.5 w-3.5" />;
-      case "modelSpecific":
-        return <Cpu className="h-3.5 w-3.5" />;
-      case "characterSpecific":
-        return <User className="h-3.5 w-3.5" />;
-    }
-  }
-
-  function getScopeColor(scope: PromptScope) {
-    switch (scope) {
-      case "appWide":
-        return "border-emerald-400/30 bg-emerald-400/10 text-emerald-300";
-      case "modelSpecific":
-        return "border-purple-400/30 bg-purple-400/10 text-purple-300";
-      case "characterSpecific":
-        return "border-blue-400/30 bg-blue-400/10 text-blue-300";
-    }
-  }
-
-  function getScopeLabel(scope: PromptScope) {
-    switch (scope) {
-      case "appWide":
-        return "App";
-      case "modelSpecific":
-        return "Model";
-      case "characterSpecific":
-        return "Character";
-    }
-  }
+  // Derived view: filtered by search and tag
+  const filtered = templates.filter(t => {
+    if (activeTag === "default" && t.id !== appDefaultId) return false;
+    if (activeTag === "custom" && t.id === appDefaultId) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.name.toLowerCase().includes(q) ||
+      t.content.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="flex min-h-screen flex-col bg-[#050505]">
@@ -118,8 +99,41 @@ export function SystemPromptsPage() {
           {/* Info Card */}
           <div className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-3">
             <p className="text-xs text-blue-200/80">
-              Create reusable prompt templates with different scopes. Use the + button below to add new templates.
+              Create reusable system prompts. Use the + button below to add new templates.
             </p>
+          </div>
+
+          {/* Search & Tags */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search prompts by name or content..."
+                className="w-full rounded-xl border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-white/25 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {([
+                { key: "all", label: "All" },
+                { key: "default", label: "Default" },
+                { key: "custom", label: "Custom" },
+              ] as const).map(tag => (
+                <button
+                  key={tag.key}
+                  onClick={() => setActiveTag(tag.key)}
+                  className={cn(
+                    "rounded-lg border px-2.5 py-1 text-[11px] transition",
+                    activeTag === tag.key
+                      ? "border-blue-400/40 bg-blue-400/15 text-blue-100"
+                      : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                  )}
+                >
+                  {tag.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Templates List */}
@@ -127,15 +141,15 @@ export function SystemPromptsPage() {
             <div className="flex items-center justify-center py-12">
               <div className="text-sm text-white/50">Loading...</div>
             </div>
-          ) : templates.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-              <p className="text-sm text-white/50">No templates yet</p>
-              <p className="mt-1 text-xs text-white/40">Tap the + button to create one</p>
+              <p className="text-sm text-white/50">No matching templates</p>
+              <p className="mt-1 text-xs text-white/40">Adjust your search or tag filters</p>
             </div>
           ) : (
             <div className="space-y-3">{/* Changed from space-y-2 to space-y-3 */}
               <AnimatePresence mode="popLayout">
-                {templates.map((template) => (
+                {filtered.map((template) => (
                   <motion.div
                     key={template.id}
                     layout
@@ -149,10 +163,11 @@ export function SystemPromptsPage() {
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-2">
                             <h3 className="text-sm font-semibold text-white">{template.name}</h3>
-                            <div className={cn("flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-medium", getScopeColor(template.scope))}>
-                              {getScopeIcon(template.scope)}
-                              {getScopeLabel(template.scope)}
-                            </div>
+                            {template.id === appDefaultId && (
+                              <div className="flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                                Default
+                              </div>
+                            )}
                           </div>
                           
                           <button
@@ -165,13 +180,6 @@ export function SystemPromptsPage() {
                               <div className="line-clamp-2">{template.content}</div>
                             )}
                           </button>
-                          
-                          {template.targetIds.length > 0 && (
-                            <p className="text-[10px] text-white/40">
-                              Applied to {template.targetIds.length} {template.scope === "modelSpecific" ? "model" : "character"}
-                              {template.targetIds.length > 1 ? "s" : ""}
-                            </p>
-                          )}
                         </div>
 
                         <div className="flex flex-col items-end gap-2">

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Globe, Cpu, User } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "../design-tokens";
-import { createPromptTemplate, updatePromptTemplate } from "../../core/prompts";
-import { listCharacters, readSettings } from "../../core/storage";
-import type { SystemPromptTemplate, PromptScope, Character, Model } from "../../core/storage/schemas";
+import { createPromptTemplate, updatePromptTemplate } from "../../core/prompts/service";
+import { renderPromptPreview } from "../../core/prompts/service";
+import { listCharacters, listPersonas } from "../../core/storage";
+import type { SystemPromptTemplate, Character, Persona } from "../../core/storage/schemas";
 
 interface PromptTemplateEditorProps {
   template?: SystemPromptTemplate;
@@ -16,31 +17,36 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
   const isEditing = !!template;
   
   const [name, setName] = useState(template?.name || "");
-  const [scope, setScope] = useState<PromptScope>(template?.scope || "appWide");
   const [content, setContent] = useState(template?.content || "");
-  const [targetIds, setTargetIds] = useState<string[]>(template?.targetIds || []);
+  // Simplified: scopes and targetIds removed in UI; new templates are App-wide by default
   
   const [characters, setCharacters] = useState<Character[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
-  const [loading, setLoading] = useState(false);
+  // loading removed from UI now that target selection is gone
   const [saving, setSaving] = useState(false);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [previewCharacterId, setPreviewCharacterId] = useState<string | null>(null);
+  const [previewPersonaId, setPreviewPersonaId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
   async function loadData() {
-    setLoading(true);
+    // no longer showing a loading placeholder
     try {
       const chars = await listCharacters();
       setCharacters(chars);
+      setPreviewCharacterId(chars[0]?.id ?? null);
       
-      const settings = await readSettings();
-      setModels(settings.models);
+      const pers = await listPersonas();
+      setPersonas(pers);
+      setPreviewPersonaId(pers.find(p => p.isDefault)?.id ?? null);
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {
-      setLoading(false);
+      // no-op
     }
   }
 
@@ -50,27 +56,15 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
       return;
     }
 
-    if ((scope === "modelSpecific" || scope === "characterSpecific") && targetIds.length === 0) {
-      alert(`Please select at least one ${scope === "modelSpecific" ? "model" : "character"}`);
-      return;
-    }
-
     setSaving(true);
     try {
       if (isEditing) {
         await updatePromptTemplate(template.id, {
           name: name.trim(),
-          scope,
           content: content.trim(),
-          targetIds: scope === "appWide" ? [] : targetIds,
         });
       } else {
-        await createPromptTemplate(
-          name.trim(),
-          scope,
-          scope === "appWide" ? [] : targetIds,
-          content.trim()
-        );
+        await createPromptTemplate(name.trim(), "appWide" as any, [], content.trim());
       }
       
       onSave();
@@ -83,22 +77,22 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
     }
   }
 
-  function handleScopeChange(newScope: PromptScope) {
-    setScope(newScope);
-    setTargetIds([]);
+  async function handlePreview() {
+    if (!previewCharacterId) return;
+    setPreviewing(true);
+    try {
+      const rendered = await renderPromptPreview(content, {
+        characterId: previewCharacterId,
+        personaId: previewPersonaId ?? undefined,
+      });
+      setPreview(rendered);
+    } catch (e) {
+      console.error("Preview failed", e);
+      setPreview("<failed to render preview>");
+    } finally {
+      setPreviewing(false);
+    }
   }
-
-  function toggleTargetId(id: string) {
-    setTargetIds(prev => 
-      prev.includes(id) 
-        ? prev.filter(tid => tid !== id)
-        : [...prev, id]
-    );
-  }
-
-  const showTargetSelection = scope === "modelSpecific" || scope === "characterSpecific";
-  const targetList = scope === "modelSpecific" ? models : characters;
-  const targetLabel = scope === "modelSpecific" ? "Models" : "Characters";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -136,88 +130,56 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
             />
           </div>
 
-          {/* Scope Selection */}
+          {/* Preview Context */}
           <div className="space-y-2">
             <label className="text-[11px] font-medium text-white/70">
-              SCOPE
+              PREVIEW CONTEXT (does not save)
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => handleScopeChange("appWide")}
-                className={cn(
-                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm transition",
-                  scope === "appWide"
-                    ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
-                    : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
-                )}
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={previewCharacterId ?? ""}
+                onChange={(e) => setPreviewCharacterId(e.target.value || null)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white focus:border-white/30 focus:outline-none"
               >
-                <Globe className="h-4 w-4" />
-                App-wide
-              </button>
-              <button
-                onClick={() => handleScopeChange("modelSpecific")}
-                className={cn(
-                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm transition",
-                  scope === "modelSpecific"
-                    ? "border-purple-400/40 bg-purple-400/20 text-purple-100"
-                    : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
-                )}
-              >
-                <Cpu className="h-4 w-4" />
-                Model
-              </button>
-              <button
-                onClick={() => handleScopeChange("characterSpecific")}
-                className={cn(
-                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm transition",
-                  scope === "characterSpecific"
-                    ? "border-blue-400/40 bg-blue-400/20 text-blue-100"
-                    : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
-                )}
-              >
-                <User className="h-4 w-4" />
-                Character
-              </button>
-            </div>
-          </div>
+                <option value="">Select character…</option>
+                {characters.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
 
-          {/* Target Selection */}
-          {showTargetSelection && (
-            <div className="space-y-2">
-              <label className="text-[11px] font-medium text-white/70">
-                SELECT {targetLabel.toUpperCase()}
-              </label>
-              {loading ? (
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white/50">
-                  Loading {targetLabel.toLowerCase()}...
-                </div>
-              ) : targetList.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white/50">
-                  No {targetLabel.toLowerCase()} available
-                </div>
-              ) : (
-                <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
-                  {targetList.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => toggleTargetId(item.id)}
-                      className={cn(
-                        "w-full rounded-lg border px-3 py-2 text-left text-sm transition",
-                        targetIds.includes(item.id)
-                          ? "border-white/30 bg-white/20 text-white"
-                          : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
-                      )}
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-white/50">
-                Selected: {targetIds.length} {targetLabel.toLowerCase()}
-              </p>
+              <select
+                value={previewPersonaId ?? ""}
+                onChange={(e) => setPreviewPersonaId(e.target.value || null)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white focus:border-white/30 focus:outline-none"
+              >
+                <option value="">No persona</option>
+                {personas.map((p) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
             </div>
-          )}
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePreview}
+                disabled={!previewCharacterId || previewing}
+                className={cn(
+                  "rounded-xl border px-4 py-2 text-sm transition",
+                  !previewCharacterId || previewing
+                    ? "border-white/10 bg-white/5 text-white/30"
+                    : "border-blue-400/40 bg-blue-400/20 text-blue-100 hover:bg-blue-400/30"
+                )}
+              >
+                {previewing ? "Rendering…" : "Render Preview"}
+              </button>
+            </div>
+
+            {preview && (
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+                {preview}
+              </pre>
+            )}
+          </div>
 
           {/* Content Textarea */}
           <div className="space-y-2">

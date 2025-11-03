@@ -183,19 +183,31 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     const idx = list.findIndex((x) => x.id === c.id);
     if (idx === -1) throw new Error("Character not found");
     entity = { ...list[idx], ...c, updatedAt: now() } as Character;
+    
+    // Auto-set defaultSceneId if not set and there's exactly one scene
+    if (!entity.defaultSceneId && entity.scenes.length === 1) {
+      entity.defaultSceneId = entity.scenes[0].id;
+    }
+    
     updated = [...list.slice(0, idx), entity, ...list.slice(idx + 1)];
   } else {
     const timestamp = now();
     const settings = await readSettings();
     const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
     const defaultRules = c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
+    
+    const scenes = c.scenes ?? [];
+    // Auto-set defaultSceneId: use provided, or first scene if only one exists
+    const autoDefaultSceneId = c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null);
+    
     entity = {
       id: (c.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
       name: c.name,
       avatarPath: c.avatarPath,
       backgroundImagePath: c.backgroundImagePath,
       description: c.description,
-      scenes: c.scenes ?? [],
+      scenes: scenes,
+      defaultSceneId: autoDefaultSceneId,
       rules: defaultRules,
       defaultModelId: c.defaultModelId ?? null,
       createdAt: timestamp,

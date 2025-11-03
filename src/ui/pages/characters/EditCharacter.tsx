@@ -6,7 +6,7 @@ import { listCharacters, saveCharacter, readSettings } from "../../../core/stora
 import type { Model, Scene, SystemPromptTemplate } from "../../../core/storage/schemas";
 import { processBackgroundImage } from "../../../core/utils/image";
 import { convertToImageRef } from "../../../core/storage/images";
-import { getApplicablePromptsForCharacter } from "../../../core/prompts";
+import { listPromptTemplates } from "../../../core/prompts/service";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
@@ -41,6 +41,13 @@ export function EditCharacterPage() {
     loadModels();
     loadPromptTemplates();
   }, [characterId]);
+
+  // Auto-set default scene if there's only one scene
+  useEffect(() => {
+    if (scenes.length === 1 && !defaultSceneId) {
+      setDefaultSceneId(scenes[0].id);
+    }
+  }, [scenes, defaultSceneId]);
 
   const loadCharacter = async () => {
     if (!characterId) return;
@@ -94,11 +101,10 @@ export function EditCharacterPage() {
   };
 
   const loadPromptTemplates = async () => {
-    if (!characterId) return;
-    
     try {
       setLoadingTemplates(true);
-      const templates = await getApplicablePromptsForCharacter(characterId);
+      // Global list (scopes removed)
+      const templates = await listPromptTemplates();
       setPromptTemplates(templates);
     } catch (err) {
       console.error("Failed to load prompt templates:", err);
@@ -150,19 +156,30 @@ export function EditCharacterPage() {
     const sceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const timestamp = Date.now();
     
-    setScenes([...scenes, {
+    const newScenes = [...scenes, {
       id: sceneId,
       content: newSceneContent.trim(),
       createdAt: timestamp,
-    }]);
+    }];
+    
+    setScenes(newScenes);
+    
+    // Auto-set as default if it's the only scene
+    if (newScenes.length === 1) {
+      setDefaultSceneId(sceneId);
+    }
+    
     setNewSceneContent("");
   };
 
   const deleteScene = (sceneId: string) => {
-    setScenes(scenes.filter(s => s.id !== sceneId));
+    const newScenes = scenes.filter(s => s.id !== sceneId);
+    setScenes(newScenes);
+    
     // Clear default if we're deleting the default scene
     if (defaultSceneId === sceneId) {
-      setDefaultSceneId(null);
+      // Auto-set to the only remaining scene if there's exactly one left
+      setDefaultSceneId(newScenes.length === 1 ? newScenes[0].id : null);
     }
   };
 

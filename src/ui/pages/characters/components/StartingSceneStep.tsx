@@ -40,8 +40,8 @@ export function StartingSceneStep({
     const updatedScenes = [...scenes, newScene];
     onScenesChange(updatedScenes);
 
-    // Set as default if it's the first scene
-    if (scenes.length === 0) {
+    // Set as default if it's the only scene
+    if (updatedScenes.length === 1) {
       onDefaultSceneIdChange(sceneId);
     }
 
@@ -54,7 +54,8 @@ export function StartingSceneStep({
 
     // Clear default if we're deleting the default scene
     if (defaultSceneId === sceneId) {
-      onDefaultSceneIdChange(updatedScenes[0]?.id || null);
+      // Auto-set to the only remaining scene if there's exactly one left
+      onDefaultSceneIdChange(updatedScenes.length === 1 ? updatedScenes[0].id : (updatedScenes[0]?.id || null));
     }
   };
 

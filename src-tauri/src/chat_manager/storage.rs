@@ -1,13 +1,14 @@
-use serde_json::{json, Value};
+// no direct serde_json usage here
 use tauri::AppHandle;
 
 use crate::storage_manager::{
     storage_read_characters, storage_read_personas, storage_read_session, storage_read_settings,
     storage_write_session, storage_write_settings,
 };
-use crate::utils::emit_debug;
+// emit_debug no longer used here; prompt_engine handles debug emission
 
-use super::prompts;
+// prompts not used directly here after delegating to prompt_engine
+use super::prompt_engine;
 use super::types::{
     AdvancedModelSettings, Character, Model, Persona, ProviderCredential, Session, Settings,
     StoredMessage,
@@ -43,14 +44,9 @@ use super::types::{
 ///   backwards compatibility
 
 /// Default system prompt template when no custom prompt is set
-/// Template variables: {{char.name}}, {{char.desc}}, {{scene}}, {{persona.name}}, {{persona.desc}}, {{rules}}
+/// Delegates to the centralized prompt engine.
 pub fn default_system_prompt_template() -> String {
-    let mut template = String::new();
-    template.push_str("{{scene}}");
-    template.push_str("# Character\nYou are {{char.name}}.\n\n{{char.desc}}");
-    template.push_str("\n\n# User\n{{persona.desc}}");
-    template.push_str("\n\n# Guidelines\n{{rules}}");
-    template
+    prompt_engine::default_system_prompt_template()
 }
 
 pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
@@ -188,163 +184,7 @@ pub fn build_system_prompt(
     session: &Session,
     settings: &Settings,
 ) -> Option<String> {
-    let mut debug_parts: Vec<Value> = Vec::new();
-
-    // Priority: session > character template > model template > app-wide template > default
-    let base_template = if let Some(session_prompt) = &session.system_prompt {
-        debug_parts.push(json!({ "source": "session_override" }));
-        session_prompt.clone()
-    } else if let Some(char_template_id) = &character.prompt_template_id {
-        // Resolve character prompt template
-        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
-            debug_parts.push(json!({ "source": "character_template", "template_id": char_template_id }));
-            template.content
-        } else {
-            debug_parts.push(json!({ "source": "character_template_not_found", "template_id": char_template_id, "fallback": "default" }));
-            default_system_prompt_template()
-        }
-    } else if let Some(model_template_id) = &model.prompt_template_id {
-        // Resolve model prompt template
-        if let Ok(Some(template)) = prompts::get_template(app, model_template_id) {
-            debug_parts.push(json!({ "source": "model_template", "template_id": model_template_id }));
-            template.content
-        } else {
-            debug_parts.push(json!({ "source": "model_template_not_found", "template_id": model_template_id, "fallback": "default" }));
-            default_system_prompt_template()
-        }
-    } else if let Some(app_template_id) = &settings.prompt_template_id {
-        // Resolve app-wide prompt template
-        if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
-            debug_parts.push(json!({ "source": "app_wide_template", "template_id": app_template_id }));
-            template.content
-        } else {
-            debug_parts.push(json!({ "source": "app_wide_template_not_found", "template_id": app_template_id, "fallback": "default" }));
-            default_system_prompt_template()
-        }
-    } else {
-        debug_parts.push(json!({ "source": "default_template" }));
-        default_system_prompt_template()
-    };
-
-    // Get character info early (needed for dynamic replacements in scenes)
-    let char_name = &character.name;
-    let raw_char_desc = character
-        .description
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("");
-
-    // Get persona info
-    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
-    let persona_desc = persona
-        .map(|p| p.description.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("");
-
-    // Build scene content if one is selected (with dynamic placeholder replacements)
-    let scene_content = if let Some(selected_scene_id) = &session.selected_scene_id {
-        if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
-            let content = if let Some(variant_id) = &scene.selected_variant_id {
-                scene
-                    .variants
-                    .iter()
-                    .find(|v| &v.id == variant_id)
-                    .map(|v| v.content.as_str())
-                    .unwrap_or(&scene.content)
-            } else {
-                &scene.content
-            };
-
-            let content_trimmed = content.trim();
-            if !content_trimmed.is_empty() {
-                // Replace {{char}} and {{persona}} placeholders dynamically in scene text
-                let mut content_processed = content_trimmed.to_string();
-                content_processed = content_processed.replace("{{char}}", char_name);
-                content_processed = content_processed.replace("{{persona}}", persona_name);
-
-                let formatted = format!(
-                    "# Starting Scene\nThis is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n{}\n\n",
-                    content_processed
-                );
-                debug_parts.push(json!({
-                    "scene_id": selected_scene_id,
-                    "scene_content": content,
-                }));
-                formatted
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        }
-    } else {
-        String::new()
-    };
-
-    // Process placeholders inside the character description itself
-    // Supports {{char}} -> character name and {{persona}} -> persona name (or empty string)
-    let mut char_desc = raw_char_desc.to_string();
-    char_desc = char_desc.replace("{{char}}", char_name);
-    char_desc = char_desc.replace("{{persona}}", persona_name);
-
-    // Build rules - Note: NSFW toggle is ignored when using custom prompts
-    let pure_mode_enabled = settings
-        .app_state
-        .get("pureModeEnabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-
-    let rules_to_use = if character.rules.is_empty() {
-        default_character_rules(pure_mode_enabled)
-    } else {
-        character.rules.clone()
-    };
-    let rules_formatted = format!("- {}", rules_to_use.join("\n- "));
-
-    // Replace all template variables
-    let mut result = base_template;
-    result = result.replace("{{scene}}", &scene_content);
-    result = result.replace("{{char.name}}", char_name);
-    result = result.replace("{{char.desc}}", &char_desc);
-    result = result.replace("{{persona.name}}", persona_name);
-    result = result.replace("{{persona.desc}}", persona_desc);
-    result = result.replace("{{rules}}", &rules_formatted);
-
-    // Global fallback replacements in entire template for simple placeholders
-    // Allows users to use {{char}} and {{persona}} anywhere in templates
-    result = result.replace("{{char}}", char_name);
-    result = result.replace("{{persona}}", persona_name);
-
-    // Legacy template variable support (for backwards compatibility)
-    result = result.replace("{{ai_name}}", char_name);
-    result = result.replace("{{ai_description}}", &char_desc);
-    result = result.replace("{{ai_rules}}", &rules_formatted);
-    result = result.replace("{{persona_name}}", persona_name);
-    result = result.replace("{{persona_description}}", persona_desc);
-
-    debug_parts.push(json!({
-        "template_vars": {
-            "char_name": char_name,
-            "char_desc": char_desc,
-            "persona_name": persona_name,
-            "persona_desc": persona_desc,
-            "scene_present": !scene_content.is_empty(),
-        }
-    }));
-
-    emit_debug(
-        app,
-        "system_prompt_built",
-        json!({ "debug": debug_parts }),
-    );
-
-    let trimmed = result.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+    prompt_engine::build_system_prompt(app, character, model, persona, session, settings)
 }
 
 pub fn recent_messages(session: &Session) -> Vec<StoredMessage> {

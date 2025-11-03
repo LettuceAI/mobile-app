@@ -167,31 +167,7 @@ pub fn get_template(app: &AppHandle, id: &str) -> Result<Option<SystemPromptTemp
     Ok(templates.into_iter().find(|t| t.id == id))
 }
 
-/// Get templates applicable to a specific character
-pub fn get_applicable_for_character(app: &AppHandle, character_id: &str) -> Result<Vec<SystemPromptTemplate>, String> {
-    let templates = load_templates(app)?;
-    Ok(templates
-        .into_iter()
-        .filter(|t| match &t.scope {
-            PromptScope::AppWide => true,
-            PromptScope::CharacterSpecific => t.target_ids.contains(&character_id.to_string()),
-            PromptScope::ModelSpecific => false,
-        })
-        .collect())
-}
-
-/// Get templates applicable to a specific model
-pub fn get_applicable_for_model(app: &AppHandle, model_id: &str) -> Result<Vec<SystemPromptTemplate>, String> {
-    let templates = load_templates(app)?;
-    Ok(templates
-        .into_iter()
-        .filter(|t| match &t.scope {
-            PromptScope::AppWide => true,
-            PromptScope::ModelSpecific => t.target_ids.contains(&model_id.to_string()),
-            PromptScope::CharacterSpecific => false,
-        })
-        .collect())
-}
+// Deprecated: get_applicable_for_* functions removed. UI now uses global list.
 
 /// Ensure the "App Default" template exists, creating it if necessary
 /// Returns the ID of the app default template
