@@ -8,12 +8,33 @@ use super::types::{Character, Model, Persona, Session, Settings};
 /// Template variables: {{char.name}}, {{char.desc}}, {{scene}}, {{persona.name}}, {{persona.desc}}, {{rules}}
 pub fn default_system_prompt_template() -> String {
     let mut template = String::new();
-    template.push_str("# Starting Scene\n");
-    template.push_str("This is the starting scene for the roleplay. You must roleplay according to this scenario and stay in character at all times.\n\n");
-    template.push_str("{{scene}}\n\n");
-    template.push_str("# Character\nYou are {{char.name}}.\n\n{{char.desc}}");
-    template.push_str("\n\n# User\n{{persona.desc}}");
-    template.push_str("\n\n# Guidelines\n{{rules}}");
+    template.push_str("You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.\n\n");
+    
+    template.push_str("# Scenario\n{{scene}}\n\n");
+    
+    template.push_str("# Your Character: {{char.name}}\n");
+    template.push_str("{{char.desc}}\n\n");
+    template.push_str("Embody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.\n\n");
+    
+    template.push_str("# {{persona.name}}'s Character\n");
+    template.push_str("{{persona.desc}}\n\n");
+    
+    template.push_str("# Roleplay Guidelines\n{{rules}}\n\n");
+    
+    template.push_str("# Core Instructions\n");
+    template.push_str("- Write as {{char.name}} from their perspective\n");
+    template.push_str("- You may also act as and portray any other characters mentioned in the scenario or {{char.name}}'s description (friends, companions, NPCs) when they're relevant to the scene\n");
+    template.push_str("- React authentically to {{persona.name}}'s actions and dialogue\n");
+    template.push_str("- Keep responses concise and focused - short to medium length - so {{persona.name}} can actively participate in the roleplay\n");
+    template.push_str("- Show don't tell: Express emotions through actions, body language, and dialogue\n");
+    template.push_str("- Maintain narrative consistency with the established scenario and all character traits\n");
+    template.push_str("- Never break character unless {{persona.name}} explicitly asks you to step out of roleplay\n");
+    template.push_str("- Never speak or act for {{persona.name}} - only describe the environment and other characters' reactions\n");
+    template.push_str("- Avoid summarizing or rushing through scenes. Let moments unfold naturally\n");
+    template.push_str("- Drive the story forward with your responses while respecting {{persona.name}}'s agency and choices\n");
+    template.push_str("- Use vivid, sensory details to create an immersive experience\n");
+    template.push_str("- When multiple characters are present, write their interactions naturally and distinguish their unique voices\n");
+    
     template
 }
 
