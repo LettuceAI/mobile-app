@@ -861,7 +861,7 @@ pub async fn chat_continue(
 
     messages_for_api.push(json!({
         "role": "user",
-        "content": "[Continue the scene/roleplay. Do not regenerate or rewrite your previous message. Instead, continue naturally from where you left off, advancing the story, action, or dialogue forward.]"
+        "content": "[CONTINUE] You were in the middle of a response. Continue writing from exactly where you left off. Do NOT restart, regenerate, or rewrite what you already said. Simply pick up the narrative thread and continue the scene forward with new content."
     }));
 
     let should_stream = stream.unwrap_or(true);
