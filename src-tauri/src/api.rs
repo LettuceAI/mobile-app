@@ -130,11 +130,11 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             }
         }
         header_map.insert(
-            HeaderName::from_static("referer"),
+            HeaderName::from_bytes(b"HTTP-Referer").unwrap(),
             HeaderValue::from_static("https://github.com/LettuceAI/"),
         );
         header_map.insert(
-            HeaderName::from_static("x-title"),
+            HeaderName::from_bytes(b"X-Title").unwrap(),
             HeaderValue::from_static("LettuceAI"),
         );
         log_backend(&app, "api_request", "All headers set");
@@ -143,11 +143,11 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     } else {
         let mut header_map = HeaderMap::new();
         header_map.insert(
-            HeaderName::from_static("referer"),
+            HeaderName::from_bytes(b"HTTP-Referer").unwrap(),
             HeaderValue::from_static("https://github.com/LettuceAI/"),
         );
         header_map.insert(
-            HeaderName::from_static("x-title"),
+            HeaderName::from_bytes(b"X-Title").unwrap(),
             HeaderValue::from_static("LettuceAI"),
         );
         log_backend(&app, "api_request", "[api_request] using default headers");
@@ -161,7 +161,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 "api_request",
                 &format!(
                     "[api_request] setting body as text: {}",
-                    truncate_for_log(text, 128)
+                    truncate_for_log(text, 512)
                 ),
             );
             request_builder = request_builder.body(text.to_owned());
@@ -280,7 +280,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 &format!(
                     "[api_request] response header: {}={}",
                     key,
-                    truncate_for_log(text, 64)
+                    truncate_for_log(text, 512)
                 ),
             );
             headers.insert(key.to_string(), text.to_string());
@@ -385,7 +385,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                     "api_request",
                     &format!(
                         "[api_request] response body preview: {}",
-                        truncate_for_log(&text, 256)
+                        truncate_for_log(&text, 512)
                     ),
                 );
                 let value = parse_body_to_value(&text);
