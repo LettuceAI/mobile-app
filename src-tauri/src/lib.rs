@@ -69,6 +69,7 @@ pub fn run() {
             chat_manager::is_app_default_template,
             chat_manager::reset_app_default_template,
             chat_manager::render_prompt_preview,
+            chat_manager::regenerate_session_system_prompt,
             secrets::secret_get,
             secrets::secret_set,
             secrets::secret_delete,

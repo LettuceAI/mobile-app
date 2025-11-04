@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import { invoke } from "@tauri-apps/api/core";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
@@ -332,19 +333,28 @@ function ChatSettingsContent({ character }: { character: Character }) {
   };
 
   const handleChangePersona = async (personaId: string | null) => {
-    if (!currentSession) {
-      console.log("No current session");
+    if (!currentSession || !character) {
+      console.log("No current session or character");
       return;
     }
 
     try {
       console.log("Changing persona to:", personaId);
+      
+      // Regenerate the system prompt with the new persona
+      const systemPrompt = await invoke<string>("regenerate_session_system_prompt", {
+        sessionId: currentSession.id,
+        personaId: personaId || "",
+      });
+      
+      // Update and save session with new persona and system prompt
       const updatedSession = {
         ...currentSession,
-        // Use empty string to explicitly disable persona
         personaId: personaId === null ? "" : personaId,
+        systemPrompt: systemPrompt || undefined,
         updatedAt: Date.now(),
       };
+      
       console.log("Updated session:", updatedSession);
       await saveSession(updatedSession);
       console.log("Session saved successfully");
@@ -352,7 +362,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
       setShowPersonaSelector(false);
       setSessionAdvancedSettings(updatedSession.advancedModelSettings ?? null);
 
-      // Only redirect back to chat if we have both characterId and sessionId
       if (characterId && currentSession.id) {
         navigate(`/chat/${characterId}?sessionId=${currentSession.id}`, { replace: true });
       }

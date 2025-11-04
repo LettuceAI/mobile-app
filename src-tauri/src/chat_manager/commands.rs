@@ -1167,3 +1167,28 @@ pub fn render_prompt_preview(
     let rendered = prompt_engine::render_with_context(&app, &content, &character, persona, &session, settings);
     Ok(rendered)
 }
+
+#[tauri::command]
+pub fn regenerate_session_system_prompt(
+    app: AppHandle,
+    session_id: String,
+    persona_id: Option<String>,
+) -> Result<String, String> {
+    let context = super::service::ChatContext::initialize(app.clone())?;
+    
+    let mut session = context
+        .load_session(&session_id)
+        .and_then(|opt| opt.ok_or_else(|| "Session not found".to_string()))?;
+    
+    if let Some(pid) = persona_id {
+        session.persona_id = if pid.is_empty() { None } else { Some(pid) };
+    }
+    
+    let character = context.find_character(&session.character_id)?;
+    let (model, _provider_cred) = context.select_model(&character)?;
+    let persona = context.choose_persona(session.persona_id.as_deref());
+    
+    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
+    
+    Ok(system_prompt.unwrap_or_default())
+}
