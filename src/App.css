@@ -114,9 +114,6 @@ h1 {
   text-align: center;
 }
 
-/* Removed generic input/button styling to prevent light theme overrides */
-/* All buttons use design-tokens and component-level styling */
-
 #greet-input {
   margin-right: 5px;
 }
@@ -163,5 +160,4 @@ button { padding: 0.6em 0.9em; }
   a:hover {
     color: #9b87f5;
   }
-  /* Button styling removed to maintain consistent dark mode appearance */
 }

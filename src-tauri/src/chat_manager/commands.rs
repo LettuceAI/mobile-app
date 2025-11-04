@@ -229,7 +229,6 @@ pub async fn chat_completion(
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
 
-    // Build provider-specific request using the request_builder
     let built = super::request_builder::build_chat_request(
         provider_cred,
         &api_key,

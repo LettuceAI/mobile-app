@@ -8,7 +8,9 @@ import { useChatController } from "./hooks/useChatController";
 import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import {
-  AdvancedModelSettingsForm,
+  ADVANCED_TEMPERATURE_RANGE,
+  ADVANCED_TOP_P_RANGE,
+  ADVANCED_MAX_TOKENS_RANGE,
   formatAdvancedModelSettingsSummary,
   sanitizeAdvancedModelSettings,
 } from "../../components/AdvancedModelSettingsForm";
@@ -749,11 +751,121 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
               </div>
 
-              <AdvancedModelSettingsForm
-                settings={sessionAdvancedDraft}
-                onChange={setSessionAdvancedDraft}
-                disabled={!sessionOverrideEnabled}
-              />
+              {/* Advanced Settings Controls */}
+              {sessionOverrideEnabled && (
+                <div className="space-y-3">
+                  {/* Temperature */}
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-white">Temperature</label>
+                        <p className="mt-0.5 text-xs text-white/50">Controls randomness and creativity</p>
+                      </div>
+                      <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
+                        {sessionAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={ADVANCED_TEMPERATURE_RANGE.min}
+                      max={ADVANCED_TEMPERATURE_RANGE.max}
+                      step={0.01}
+                      value={sessionAdvancedDraft.temperature ?? 0.7}
+                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, temperature: Number(e.target.value) })}
+                      className="w-full"
+                      style={{
+                        background: `linear-gradient(to right, rgb(52, 211, 153) 0%, rgb(52, 211, 153) ${((sessionAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                      }}
+                    />
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-white/40">0 - Precise</span>
+                      <span className="text-white/40">2 - Creative</span>
+                    </div>
+                  </div>
+
+                  {/* Top P */}
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-white">Top P</label>
+                        <p className="mt-0.5 text-xs text-white/50">Nucleus sampling threshold</p>
+                      </div>
+                      <span className="rounded-lg border border-blue-400/30 bg-blue-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-blue-200">
+                        {sessionAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={ADVANCED_TOP_P_RANGE.min}
+                      max={ADVANCED_TOP_P_RANGE.max}
+                      step={0.01}
+                      value={sessionAdvancedDraft.topP ?? 1}
+                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, topP: Number(e.target.value) })}
+                      className="w-full"
+                      style={{
+                        background: `linear-gradient(to right, rgb(96, 165, 250) 0%, rgb(96, 165, 250) ${((sessionAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                      }}
+                    />
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-white/40">0 - Focused</span>
+                      <span className="text-white/40">1 - Diverse</span>
+                    </div>
+                  </div>
+
+                  {/* Max Tokens */}
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="mb-3">
+                      <label className="text-sm font-medium text-white">Max Output Tokens</label>
+                      <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
+                    </div>
+                    
+                    <div className="flex gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: null })}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          !sessionAdvancedDraft.maxOutputTokens
+                            ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                            : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                        }`}
+                      >
+                        Auto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: 1024 })}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          sessionAdvancedDraft.maxOutputTokens
+                            ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                            : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                        }`}
+                      >
+                        Custom
+                      </button>
+                    </div>
+                    
+                    {sessionAdvancedDraft.maxOutputTokens !== null && sessionAdvancedDraft.maxOutputTokens !== undefined && (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={ADVANCED_MAX_TOKENS_RANGE.min}
+                        max={ADVANCED_MAX_TOKENS_RANGE.max}
+                        value={sessionAdvancedDraft.maxOutputTokens ?? ''}
+                        onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: Number(e.target.value) })}
+                        placeholder="1024"
+                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                      />
+                    )}
+                    
+                    <p className="mt-2 text-xs text-white/40">
+                      {!sessionAdvancedDraft.maxOutputTokens 
+                        ? 'Let the model decide the response length'
+                        : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button

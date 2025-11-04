@@ -209,60 +209,66 @@ export function EditModelPage() {
 
           {/* Advanced Settings */}
           <section className="space-y-3">
-            {/* Header */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            {/* Header with Toggle */}
+            <button
+              onClick={toggleOverride}
+              className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-left transition active:bg-white/10"
+            >
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <SlidersHorizontal className="h-4 w-4 flex-shrink-0 text-emerald-400" />
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-white">Advanced Settings</h2>
-                    <p className="text-xs text-white/50 truncate">
-                      {formatAdvancedModelSettingsSummary(
-                        overrideEnabled ? sanitizeAdvancedModelSettings(modelAdvancedDraft) : globalAdvanced,
-                        "Inherits global defaults",
-                      )}
-                    </p>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="rounded-lg border border-purple-400/30 bg-purple-400/10 p-2">
+                    <SlidersHorizontal className="h-4 w-4 text-purple-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-white">Advanced Settings</h3>
+                    {!overrideEnabled ? (
+                      <p className="text-xs text-white/50 truncate">Using global defaults</p>
+                    ) : (
+                      <p className="text-xs text-white/50 truncate">
+                        {formatAdvancedModelSettingsSummary(
+                          sanitizeAdvancedModelSettings(modelAdvancedDraft),
+                          "Custom settings",
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center">
-                  <input
-                    id="overwrite-advanced-settings"
-                    type="checkbox"
-                    onChange={toggleOverride}
-                    className="peer sr-only"
-                  />
-                  <label
-                    htmlFor="overwrite-advanced-settings"
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${overrideEnabled
-                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                      : 'bg-white/20'
-                      }`}
+                <div className="flex items-center shrink-0">
+                  <div
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-all duration-200 ${
+                      overrideEnabled
+                        ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                        : 'bg-white/20'
+                    }`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${overrideEnabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                        overrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                     />
-                  </label>
+                  </div>
                 </div>
               </div>
-            </div>
+            </button>
 
-            {/* Controls */}
+            {/* Expanded Settings */}
             {overrideEnabled && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4"
+                transition={{ duration: 0.2 }}
+                className="space-y-3"
               >
                 {/* Temperature */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                      Temperature
-                    </label>
-                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-white">Temperature</label>
+                      <p className="mt-0.5 text-xs text-white/50">Controls randomness and creativity</p>
+                    </div>
+                    <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
                       {modelAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
                     </span>
                   </div>
@@ -273,26 +279,25 @@ export function EditModelPage() {
                     step={0.01}
                     value={modelAdvancedDraft.temperature ?? 0.7}
                     onChange={(e) => handleTemperatureChange(Number(e.target.value))}
-                    className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
-          focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
-          [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
-          [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
-          [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
+                    className="w-full"
+                    style={{
+                      background: `linear-gradient(to right, rgb(52, 211, 153) 0%, rgb(52, 211, 153) ${((modelAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                    }}
                   />
-                  <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
-                    <span>{ADVANCED_TEMPERATURE_RANGE.min}</span>
-                    <span>{ADVANCED_TEMPERATURE_RANGE.max}</span>
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-white/40">0 - Precise</span>
+                    <span className="text-white/40">2 - Creative</span>
                   </div>
                 </div>
 
                 {/* Top P */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                      Top P
-                    </label>
-                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-white">Top P</label>
+                      <p className="mt-0.5 text-xs text-white/50">Nucleus sampling threshold</p>
+                    </div>
+                    <span className="rounded-lg border border-blue-400/30 bg-blue-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-blue-200">
                       {modelAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
                     </span>
                   </div>
@@ -303,62 +308,99 @@ export function EditModelPage() {
                     step={0.01}
                     value={modelAdvancedDraft.topP ?? 1}
                     onChange={(e) => handleTopPChange(Number(e.target.value))}
-                    className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
-          focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
-          [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
-          [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
-          [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
+                    className="w-full"
+                    style={{
+                      background: `linear-gradient(to right, rgb(96, 165, 250) 0%, rgb(96, 165, 250) ${((modelAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                    }}
                   />
-                  <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
-                    <span>{ADVANCED_TOP_P_RANGE.min}</span>
-                    <span>{ADVANCED_TOP_P_RANGE.max}</span>
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-white/40">0 - Focused</span>
+                    <span className="text-white/40">1 - Diverse</span>
                   </div>
                 </div>
 
                 {/* Max Tokens */}
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                    Max Tokens
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    min={ADVANCED_MAX_TOKENS_RANGE.min}
-                    max={ADVANCED_MAX_TOKENS_RANGE.max}
-                    value={modelAdvancedDraft.maxOutputTokens ?? ''}
-                    onChange={(e) => handleMaxTokensChange(Number(e.target.value))}
-                    placeholder="1024"
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
-                  />
-                  <p className="mt-1 text-xs text-white/50">
-                    Suggested range: {ADVANCED_MAX_TOKENS_RANGE.min} - {ADVANCED_MAX_TOKENS_RANGE.max}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3">
+                    <label className="text-sm font-medium text-white">Max Output Tokens</label>
+                    <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
+                  </div>
+                  
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => handleMaxTokensChange(null as any)}
+                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        !modelAdvancedDraft.maxOutputTokens
+                          ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                          : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                      }`}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMaxTokensChange(1024)}
+                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        modelAdvancedDraft.maxOutputTokens
+                          ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                          : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                      }`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  
+                  {modelAdvancedDraft.maxOutputTokens !== null && modelAdvancedDraft.maxOutputTokens !== undefined && (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={ADVANCED_MAX_TOKENS_RANGE.min}
+                      max={ADVANCED_MAX_TOKENS_RANGE.max}
+                      value={modelAdvancedDraft.maxOutputTokens ?? ''}
+                      onChange={(e) => handleMaxTokensChange(Number(e.target.value))}
+                      placeholder="1024"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                    />
+                  )}
+                  
+                  <p className="mt-2 text-xs text-white/40">
+                    {!modelAdvancedDraft.maxOutputTokens 
+                      ? 'Let the model decide the response length'
+                      : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
+                    }
                   </p>
                 </div>
 
                 {/* Presets */}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setModelAdvancedDraft({ temperature: 0.7, topP: 1.0, maxOutputTokens: 1024 })}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-emerald-400/50 hover:text-white"
-                  >
-                    Balanced
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModelAdvancedDraft({ temperature: 0.9, topP: 1.0, maxOutputTokens: 1024 })}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-emerald-400/50 hover:text-white"
-                  >
-                    Creative
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModelAdvancedDraft({ temperature: 0.2, topP: 0.9, maxOutputTokens: 512 })}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-emerald-400/50 hover:text-white"
-                  >
-                    Precise
-                  </button>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-white/60">Quick Presets</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setModelAdvancedDraft({ temperature: 0.2, topP: 0.9, maxOutputTokens: 512 })}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center transition active:scale-95 active:bg-white/10"
+                    >
+                      <div className="text-xs font-semibold text-white">Precise</div>
+                      <div className="mt-0.5 text-[10px] text-white/50">Focused</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelAdvancedDraft({ temperature: 0.7, topP: 1.0, maxOutputTokens: 1024 })}
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2.5 text-center transition active:scale-95 active:bg-emerald-400/20"
+                    >
+                      <div className="text-xs font-semibold text-emerald-200">Balanced</div>
+                      <div className="mt-0.5 text-[10px] text-emerald-300/60">Default</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelAdvancedDraft({ temperature: 0.9, topP: 1.0, maxOutputTokens: 1024 })}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center transition active:scale-95 active:bg-white/10"
+                    >
+                      <div className="text-xs font-semibold text-white">Creative</div>
+                      <div className="mt-0.5 text-[10px] text-white/50">Random</div>
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             )}
