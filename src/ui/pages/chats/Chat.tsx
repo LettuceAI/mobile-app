@@ -53,6 +53,7 @@ export function ChatConversationPage() {
     handleSend,
     handleContinue,
     handleRegenerate,
+    handleAbort,
     getVariantState,
     handleVariantDrag,
     handleSaveEdit,
@@ -284,6 +285,7 @@ export function ChatConversationPage() {
           sending={sending}
           character={character}
           onSendMessage={handleSendMessage}
+          onAbort={handleAbort}
           hasBackgroundImage={!!backgroundImageData}
         />
       </div>

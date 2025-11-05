@@ -4,7 +4,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
-import { continueConversation, regenerateAssistantMessage, sendChatTurn } from "../../../../core/chat/manager";
+import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 
 export interface VariantState {
@@ -30,6 +30,7 @@ export interface ChatController {
   editDraft: string;
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
+  activeRequestId: string | null;
 
   // Setters 
   setDraft: (value: string) => void;
@@ -45,6 +46,7 @@ export interface ChatController {
   handleSend: (message: string) => Promise<void>;
   handleContinue: () => Promise<void>;
   handleRegenerate: (message: StoredMessage) => Promise<void>;
+  handleAbort: () => Promise<void>;
   getVariantState: (message: StoredMessage) => VariantState;
   applyVariantSelection: (messageId: string, variantId: string) => Promise<void>;
   handleVariantSwipe: (messageId: string, direction: "prev" | "next") => Promise<void>;
@@ -135,7 +137,6 @@ export function useChatController(
   const [settingsVersion, setSettingsVersion] = useState(0);
   const { sessionId } = options;
   
-  // Move longPressTimer to useRef to avoid re-renders
   const longPressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -267,7 +268,6 @@ export function useChatController(
   }, []);
 
   const getVariantState = useCallback((message: StoredMessage): VariantState => {
-    // For starting scene messages, return scene count instead of message variants
     if (isStartingSceneMessage(message)) {
       if (!state.character || !state.session?.selectedSceneId) {
         return { variants: [], selectedIndex: -1, total: 0 };
@@ -276,13 +276,12 @@ export function useChatController(
       const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
       
       return {
-        variants: state.character.scenes as any, // Using scenes as variants for display purposes
+        variants: state.character.scenes as any, 
         selectedIndex: currentSceneIndex,
         total: state.character.scenes.length,
       };
     }
     
-    // Regular message variant logic
     const variants = message.variants ?? [];
     if (variants.length === 0) {
       return {
@@ -348,9 +347,7 @@ export function useChatController(
       const currentMessage = state.messages.find((msg) => msg.id === messageId);
       if (!currentMessage) return;
 
-      // Check if this is a starting scene message
       if (isStartingSceneMessage(currentMessage)) {
-        // Handle scene switching
         if (!state.character || !state.session?.selectedSceneId) return;
         
         const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
@@ -366,7 +363,6 @@ export function useChatController(
           ? nextScene.variants?.find(v => v.id === nextScene.selectedVariantId)?.content ?? nextScene.content
           : nextScene.content;
         
-        // Update the first message with new scene content
         const updatedMessage: StoredMessage = {
           ...currentMessage,
           content: sceneContent,
@@ -376,7 +372,6 @@ export function useChatController(
           msg.id === messageId ? updatedMessage : msg
         );
         
-        // Update session with new selectedSceneId
         const updatedSession: Session = {
           ...state.session,
           selectedSceneId: nextScene.id,
@@ -435,6 +430,7 @@ export function useChatController(
         type: "BATCH", 
         actions: [
           { type: "SET_SENDING", payload: true },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
           { type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] }
         ]
       });
@@ -516,7 +512,13 @@ export function useChatController(
         streamBatcher.cancel();
         if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
-        dispatch({ type: "SET_SENDING", payload: false });
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SENDING", payload: false },
+            { type: "SET_ACTIVE_REQUEST_ID", payload: null }
+          ]
+        });
       }
     },
     [state.character, state.persona?.id, state.session, state.messages],
@@ -533,6 +535,7 @@ export function useChatController(
         type: "BATCH", 
         actions: [
           { type: "SET_SENDING", payload: true },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
           { type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] }
         ]
       });
@@ -558,7 +561,7 @@ export function useChatController(
           }
         });
 
-        // Fallback: raw SSE (OpenAI-style) if normalized isn't emitted
+        // Fallback: raw SSE if normalized isn't emitted
         unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
           if (normalizedActive) return;
           const delta = parseStreamDelta(event.payload ?? "");
@@ -590,30 +593,41 @@ export function useChatController(
         });
       } catch (err) {
         console.error("ChatController: continue failed", err);
-        dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
-        dispatch({ 
-          type: "SET_MESSAGES", 
-          payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id) 
-        });
-        if (state.session) {
-          const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
-          const syncedSession: Session = {
-            ...state.session,
-            messages: currentMessages,
-            updatedAt: Date.now(),
-          };
-          try {
-            await saveSession(syncedSession);
-            dispatch({ type: "SET_SESSION", payload: syncedSession });
-          } catch (saveErr) {
-            console.error("ChatController: failed to sync session after continue error", saveErr);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        dispatch({ type: "SET_ERROR", payload: errMsg });
+
+        const abortedByUser = errMsg.toLowerCase().includes("aborted by user") || errMsg.toLowerCase().includes("cancelled");
+        if (!abortedByUser) {
+          dispatch({ 
+            type: "SET_MESSAGES", 
+            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id) 
+          });
+          if (state.session) {
+            const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
+            const syncedSession: Session = {
+              ...state.session,
+              messages: currentMessages,
+              updatedAt: Date.now(),
+            };
+            try {
+              await saveSession(syncedSession);
+              dispatch({ type: "SET_SESSION", payload: syncedSession });
+            } catch (saveErr) {
+              console.error("ChatController: failed to sync session after continue error", saveErr);
+            }
           }
         }
       } finally {
         streamBatcher.cancel();
         if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
-        dispatch({ type: "SET_SENDING", payload: false });
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SENDING", payload: false },
+            { type: "SET_ACTIVE_REQUEST_ID", payload: null }
+          ]
+        });
       }
     },
     [state.character, state.persona?.id, state.session, state.messages],
@@ -631,6 +645,12 @@ export function useChatController(
         return;
       }
 
+      const messageInSession = state.messages.find(m => m.id === message.id);
+      if (!messageInSession) {
+        console.error("ChatController: cannot regenerate - message not found in current messages", message.id);
+        return;
+      }
+
       const requestId = crypto.randomUUID();
   let unlistenRaw: UnlistenFn | null = null;
   let unlistenNormalized: UnlistenFn | null = null;
@@ -640,6 +660,7 @@ export function useChatController(
         type: "BATCH", 
         actions: [
           { type: "SET_REGENERATING_MESSAGE_ID", payload: message.id },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
           { type: "SET_ERROR", payload: null },
           { type: "SET_HELD_MESSAGE_ID", payload: null },
           { 
@@ -667,7 +688,7 @@ export function useChatController(
           }
         });
 
-        // Fallback: raw SSE (OpenAI-style) if normalized isn't emitted
+        // Fallback: raw SSE if normalized isn't emitted
         unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
           if (normalizedActive) return;
           const delta = parseStreamDelta(event.payload ?? "");
@@ -726,11 +747,113 @@ export function useChatController(
         streamBatcher.cancel();
         if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
-        dispatch({ type: "SET_REGENERATING_MESSAGE_ID", payload: null });
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_REGENERATING_MESSAGE_ID", payload: null },
+            { type: "SET_ACTIVE_REQUEST_ID", payload: null }
+          ]
+        });
       }
     },
     [state.messageAction, state.messages, state.regeneratingMessageId, state.session],
   );
+
+  const handleAbort = useCallback(async () => {
+    if (!state.activeRequestId || !state.session) return;
+    
+    try {
+      await abortMessage(state.activeRequestId);
+      console.log("ChatController: aborted request", state.activeRequestId);
+      
+      const messagesWithoutPlaceholders = state.messages.map(msg => {
+        if (msg.id.startsWith('placeholder-')) {
+          if (msg.content.trim().length > 0) {
+            return {
+              ...msg,
+              id: crypto.randomUUID(), 
+            };
+          }
+          return null;
+        }
+        return msg;
+      }).filter((msg): msg is StoredMessage => msg !== null);
+      
+      const updatedSession: Session = {
+        ...state.session,
+        messages: messagesWithoutPlaceholders,
+        updatedAt: Date.now(),
+      };
+      
+      console.log("ChatController: saving session after abort with message IDs:", messagesWithoutPlaceholders.map(m => ({ id: m.id, role: m.role, contentLength: m.content.length })));
+      
+      try {
+        await saveSession(updatedSession);
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SESSION", payload: updatedSession },
+            { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
+          ]
+        });
+        console.log("ChatController: successfully saved session after abort");
+      } catch (saveErr) {
+        console.error("ChatController: failed to save incomplete messages after abort", saveErr);
+        dispatch({ type: "SET_MESSAGES", payload: messagesWithoutPlaceholders });
+      }
+      
+      dispatch({ 
+        type: "BATCH", 
+        actions: [
+          { type: "SET_SENDING", payload: false },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: null }
+        ]
+      });
+    } catch (err) {
+      console.error("ChatController: abort failed", err);
+      try {
+        const messagesWithoutPlaceholders = state.messages.map(msg => {
+          if (msg.id.startsWith('placeholder-')) {
+            if (msg.content.trim().length > 0) {
+              return {
+                ...msg,
+                id: crypto.randomUUID(),
+              };
+            }
+            return null;
+          }
+          return msg;
+        }).filter((msg): msg is StoredMessage => msg !== null);
+        
+        const updatedSession: Session = {
+          ...state.session!,
+          messages: messagesWithoutPlaceholders,
+          updatedAt: Date.now(),
+        };
+        await saveSession(updatedSession);
+        dispatch({ 
+          type: "BATCH", 
+          actions: [
+            { type: "SET_SESSION", payload: updatedSession },
+            { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
+          ]
+        });
+      } catch (saveErr) {
+        console.error("ChatController: failed to save after abort error", saveErr);
+        // Even if everything fails, try to clean up placeholders from UI
+        const cleaned = state.messages.filter(msg => !msg.id.startsWith('placeholder-') || msg.content.trim().length > 0);
+        dispatch({ type: "SET_MESSAGES", payload: cleaned });
+      }
+      
+      dispatch({ 
+        type: "BATCH", 
+        actions: [
+          { type: "SET_SENDING", payload: false },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: null }
+        ]
+      });
+    }
+  }, [state.activeRequestId, state.session, state.messages]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!state.session || !state.messageAction) return;
@@ -869,6 +992,7 @@ export function useChatController(
     editDraft: state.editDraft,
     heldMessageId: state.heldMessageId,
     regeneratingMessageId: state.regeneratingMessageId,
+    activeRequestId: state.activeRequestId,
     
     // Setters
     setDraft: useCallback((value: string) => dispatch({ type: "SET_DRAFT", payload: value }), []),
@@ -884,6 +1008,7 @@ export function useChatController(
     handleSend,
     handleContinue,
     handleRegenerate,
+    handleAbort,
     getVariantState,
     applyVariantSelection,
     handleVariantSwipe,

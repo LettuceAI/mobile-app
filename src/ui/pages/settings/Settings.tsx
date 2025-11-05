@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText, Wrench } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
+import { isDevelopmentMode } from "../../../core/utils/env";
 
 
 
@@ -181,7 +182,15 @@ export function SettingsPage() {
       subtitle: 'Clear all app data',
       tone: 'danger' as const,
       onClick: () => navigate('/settings/reset')
-    }
+    },
+    ...(isDevelopmentMode() ? [{
+      key: 'developer',
+      icon: <Wrench />,
+      title: 'Developer Tools',
+      subtitle: 'Test data generators & debug info',
+      tone: 'default' as const,
+      onClick: () => navigate('/settings/developer')
+    }] : [])
   ]), [providerCount, modelCount, characterCount, navigate]);
 
   return (
@@ -262,6 +271,27 @@ export function SettingsPage() {
               ))}
             </div>
           </div>
+
+          {/* Section: Developer (only in dev mode) */}
+          {isDevelopmentMode() && (
+            <div>
+              <h2 className={cn(
+                "mb-2 px-1",
+                typography.overline.size,
+                typography.overline.weight,
+                typography.overline.tracking,
+                typography.overline.transform,
+                "text-white/35"
+              )}>
+                Developer
+              </h2>
+              <div className={spacing.field}>
+                {items.filter(i => ['developer'].includes(i.key)).map(item => (
+                  <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
+                ))}
+              </div>
+            </div>
+          )}
           
           {/* Loading overlay */}
           {isLoading && (

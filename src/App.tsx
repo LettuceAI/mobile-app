@@ -13,6 +13,7 @@ import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
 import { UsagePage } from "./ui/pages/settings/UsagePage";
 import { CharactersPage } from "./ui/pages/settings/CharactersPage";
+import { DeveloperPage } from "./ui/pages/settings/DeveloperPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
@@ -170,6 +171,7 @@ function AppContent() {
               <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/security" element={<SecurityPage />} />
               <Route path="/settings/usage" element={<UsagePage />} />
+              <Route path="/settings/developer" element={<DeveloperPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />

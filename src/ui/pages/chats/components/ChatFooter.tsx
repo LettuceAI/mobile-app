@@ -1,4 +1,4 @@
-import { ChevronsRight, SendHorizonal } from "lucide-react";
+import { ChevronsRight, SendHorizonal, Square } from "lucide-react";
 import type { Character } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, shadows, cn } from "../../../design-tokens";
 
@@ -9,6 +9,7 @@ interface ChatFooterProps {
   sending: boolean;
   character: Character;
   onSendMessage: () => Promise<void>;
+  onAbort?: () => Promise<void>;
   hasBackgroundImage?: boolean;
 }
 
@@ -19,6 +20,7 @@ export function ChatFooter({
   sending, 
   character, 
   onSendMessage,
+  onAbort,
   hasBackgroundImage
 }: ChatFooterProps) {
   const hasDraft = draft.trim().length > 0;
@@ -59,26 +61,32 @@ export function ChatFooter({
               onSendMessage();
             }
           }}
+          disabled={sending}
         />
         <button
-          onClick={onSendMessage}
-          disabled={sending}
+          onClick={sending && onAbort ? onAbort : onSendMessage}
+          disabled={sending && !onAbort}
           className={cn(
             "flex shrink-0 items-center justify-center",
             radius.full,
-            hasDraft
+            sending && onAbort
+              ? "border border-red-400/40 bg-red-400/20 text-red-100"
+              : hasDraft
               ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
               : "border border-white/15 bg-white/10 text-white/70",
             interactive.transition.fast,
             interactive.active.scale,
-            hasDraft && "hover:border-emerald-400/60 hover:bg-emerald-400/30",
-            !hasDraft && "hover:border-white/25 hover:bg-white/15",
+            sending && onAbort && "hover:border-red-400/60 hover:bg-red-400/30",
+            !sending && hasDraft && "hover:border-emerald-400/60 hover:bg-emerald-400/30",
+            !sending && !hasDraft && "hover:border-white/25 hover:bg-white/15",
             "disabled:cursor-not-allowed disabled:opacity-40"
           )}
-          title={hasDraft ? "Send message" : "Continue conversation"}
-          aria-label={hasDraft ? "Send message" : "Continue conversation"}
+          title={sending && onAbort ? "Stop generation" : hasDraft ? "Send message" : "Continue conversation"}
+          aria-label={sending && onAbort ? "Stop generation" : hasDraft ? "Send message" : "Continue conversation"}
         >
-            {sending ? (
+            {sending && onAbort ? (
+            <Square size={16} fill="currentColor" />
+            ) : sending ? (
             <span className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : hasDraft ? (
             <SendHorizonal size={16} />

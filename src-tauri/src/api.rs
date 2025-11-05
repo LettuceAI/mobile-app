@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
+use crate::abort_manager::AbortRegistry;
 use crate::utils::log_backend;
 use crate::chat_manager::{sse, request as chat_request, types::{ErrorEnvelope, NormalizedEvent}};
 use crate::transport::{self, emit_normalized};
@@ -299,41 +300,100 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 url_for_log, api_key_for_log, event_name
             ),
         );
+        
+        // Register this request for abort capability
+        let mut abort_rx = {
+            use tauri::Manager;
+            let registry = app.state::<AbortRegistry>();
+            registry.register(request_id.clone().unwrap())
+        };
+        
         let mut usage_emitted = false;
         let mut decoder = sse::SseDecoder::new();
-        while let Some(chunk) = body_stream.next().await {
-            match chunk {
-                Ok(chunk) => {
-                    let text = String::from_utf8_lossy(&chunk).to_string();
-                    transport::emit_raw(&app, &event_name, &text);
+        let mut aborted = false;
+        
+        loop {
+            tokio::select! {
+                // Check for abort signal
+                _ = &mut abort_rx => {
                     log_backend(
                         &app,
                         "api_request",
-                        &format!(
-                            "[api_request] stream chunk: {} bytes for {}",
-                            chunk.len(),
-                            url_for_log
-                        ),
+                        &format!("[api_request] request aborted by user: {}", url_for_log),
                     );
-                    // Buffered SSE decoding to normalized events
-                    if let Some(req_id) = &request_id {
-                        for event in decoder.feed(&text) {
-                            if let NormalizedEvent::Usage { .. } = event { usage_emitted = true; }
-                            emit_normalized(&app, req_id, event);
+                    aborted = true;
+                    break;
+                }
+                // Process stream chunks
+                chunk_result = body_stream.next() => {
+                    match chunk_result {
+                        Some(Ok(chunk)) => {
+                            let text = String::from_utf8_lossy(&chunk).to_string();
+                            transport::emit_raw(&app, &event_name, &text);
+                            log_backend(
+                                &app,
+                                "api_request",
+                                &format!(
+                                    "[api_request] stream chunk: {} bytes for {}",
+                                    chunk.len(),
+                                    url_for_log
+                                ),
+                            );
+                            // Buffered SSE decoding to normalized events
+                            if let Some(req_id) = &request_id {
+                                for event in decoder.feed(&text) {
+                                    if let NormalizedEvent::Usage { .. } = event { usage_emitted = true; }
+                                    emit_normalized(&app, req_id, event);
+                                }
+                            }
+                            collected.extend_from_slice(&chunk);
+                        }
+                        Some(Err(e)) => {
+                            log_backend(
+                                &app,
+                                "api_request",
+                                &format!("[api_request] stream error: {}", e),
+                            );
+                            // Unregister before returning error
+                            if let Some(req_id) = &request_id {
+                                use tauri::Manager;
+                                let registry = app.state::<AbortRegistry>();
+                                registry.unregister(req_id);
+                            }
+                            return Err(e.to_string());
+                        }
+                        None => {
+                            // Stream complete
+                            break;
                         }
                     }
-                    collected.extend_from_slice(&chunk);
-                }
-                Err(e) => {
-                    log_backend(
-                        &app,
-                        "api_request",
-                        &format!("[api_request] stream error: {}", e),
-                    );
-                    return Err(e.to_string());
                 }
             }
         }
+        
+        // Unregister the request
+        if let Some(req_id) = &request_id {
+            use tauri::Manager;
+            let registry = app.state::<AbortRegistry>();
+            registry.unregister(req_id);
+        }
+        
+        if aborted {
+            // Emit abort error event
+            if let Some(req_id) = &request_id {
+                let envelope = ErrorEnvelope {
+                    code: Some("ABORTED".to_string()),
+                    message: "Request was cancelled by user".to_string(),
+                    provider_id: req.provider_id.clone(),
+                    request_id: request_id.clone(),
+                    retryable: Some(false),
+                    status: None,
+                };
+                emit_normalized(&app, req_id, NormalizedEvent::Error { envelope });
+            }
+            return Err("Request aborted by user".to_string());
+        }
+        
     let text = String::from_utf8_lossy(&collected).to_string();
         log_backend(
             &app,
@@ -433,4 +493,29 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         headers,
         data,
     })
+}
+
+#[tauri::command]
+pub async fn abort_request(
+    app: tauri::AppHandle,
+    request_id: String,
+) -> Result<(), String> {
+    use tauri::Manager;
+    
+    log_backend(
+        &app,
+        "abort_request",
+        &format!("[abort_request] attempting to abort request_id={}", request_id),
+    );
+    
+    let registry = app.state::<AbortRegistry>();
+    registry.abort(&request_id)?;
+    
+    log_backend(
+        &app,
+        "abort_request",
+        &format!("[abort_request] successfully aborted request_id={}", request_id),
+    );
+    
+    Ok(())
 }

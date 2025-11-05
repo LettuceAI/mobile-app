@@ -1,3 +1,4 @@
+mod abort_manager;
 mod api;
 mod chat_manager;
 mod migrations;
@@ -14,10 +15,16 @@ mod error;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use tauri::Manager;
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Initialize abort registry
+            let abort_registry = abort_manager::AbortRegistry::new();
+            app.manage(abort_registry);
+            
             // Run migrations on app startup
             if let Err(e) = migrations::run_migrations(app.handle()) {
                 eprintln!("Migration error: {}", e);
@@ -33,6 +40,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             api::api_request,
+            api::abort_request,
             models::models_cache_get,
             models::models_cache_update,
             models::verify_model_exists,

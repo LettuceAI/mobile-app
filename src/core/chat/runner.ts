@@ -1,1 +1,1 @@
-export { sendChatTurn } from "./manager";
+export { sendChatTurn, abortMessage } from "./manager";

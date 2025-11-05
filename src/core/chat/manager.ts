@@ -82,3 +82,9 @@ export async function regenerateAssistantMessage(params: {
     },
   });
 }
+
+export async function abortMessage(requestId: string): Promise<void> {
+  return invoke<void>("abort_request", {
+    requestId,
+  });
+}

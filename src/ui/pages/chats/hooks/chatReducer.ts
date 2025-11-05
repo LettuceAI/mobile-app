@@ -28,6 +28,7 @@ export interface ChatState {
   // Interaction state
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
+  activeRequestId: string | null;
 }
 
 export type ChatAction =
@@ -47,6 +48,7 @@ export type ChatAction =
   | { type: "SET_EDIT_DRAFT"; payload: string }
   | { type: "SET_HELD_MESSAGE_ID"; payload: string | null }
   | { type: "SET_REGENERATING_MESSAGE_ID"; payload: string | null }
+  | { type: "SET_ACTIVE_REQUEST_ID"; payload: string | null }
   | { type: "RESET_MESSAGE_ACTIONS" }
   | { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } }
   | { type: "REPLACE_PLACEHOLDER_MESSAGES"; payload: { userPlaceholder: StoredMessage; assistantPlaceholder: StoredMessage; userMessage: StoredMessage; assistantMessage: StoredMessage } }
@@ -68,6 +70,7 @@ export const initialChatState: ChatState = {
   editDraft: "",
   heldMessageId: null,
   regeneratingMessageId: null,
+  activeRequestId: null,
 };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -120,6 +123,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     
     case "SET_REGENERATING_MESSAGE_ID":
       return { ...state, regeneratingMessageId: action.payload };
+    
+    case "SET_ACTIVE_REQUEST_ID":
+      return { ...state, activeRequestId: action.payload };
     
     case "RESET_MESSAGE_ACTIONS":
       return {
