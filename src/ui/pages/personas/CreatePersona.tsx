@@ -29,7 +29,7 @@ export function CreatePersonaPage() {
                 isDefault,
             });
 
-            navigate("/settings");
+            navigate("/chat");
         } catch (e: any) {
             setError(e?.message || "Failed to save persona");
         } finally {

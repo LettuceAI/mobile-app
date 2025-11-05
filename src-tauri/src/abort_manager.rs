@@ -61,6 +61,7 @@ impl AbortRegistry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_registered(&self, request_id: &str) -> bool {
         if let Ok(map) = self.inner.lock() {
             map.contains_key(request_id)

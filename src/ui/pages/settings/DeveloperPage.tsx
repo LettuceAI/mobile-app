@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Sparkles, User, MessageSquare } from "lucide-react";
+import { Sparkles, User, MessageSquare } from "lucide-react";
 import { typography, radius, interactive, cn } from "../../design-tokens";
 import { saveCharacter, savePersona, createSession, listCharacters, listPersonas } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 
 export function DeveloperPage() {
-  const navigate = useNavigate();
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
 

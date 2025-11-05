@@ -46,6 +46,7 @@ pub fn emit_raw(app: &tauri::AppHandle, event_name: &str, chunk: &str) {
     let _ = app.emit(event_name, chunk.to_string());
 }
 
+#[allow(dead_code)]
 pub async fn send_request(builder: reqwest::RequestBuilder) -> Result<reqwest::Response, AppError> {
     builder.send().await.map_err(AppError::from)
 }

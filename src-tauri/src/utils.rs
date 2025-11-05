@@ -86,6 +86,7 @@ pub(crate) fn log_error(app: &AppHandle, component: &str, message: impl AsRef<st
     log_backend(app, component, LogLevel::Error, message);
 }
 
+#[allow(dead_code)]
 pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<str>) {
     log_backend(app, component, LogLevel::Debug, message);
 }
