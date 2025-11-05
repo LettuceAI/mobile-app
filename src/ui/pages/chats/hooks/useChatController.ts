@@ -6,6 +6,7 @@ import { createSession, getDefaultPersona, getSession, listCharacters, listSessi
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
+import { logManager } from "../../../../core/utils/logger";
 
 export interface VariantState {
   variants: StoredMessage["variants"];
@@ -133,6 +134,7 @@ export function useChatController(
   characterId?: string,
   options: { sessionId?: string } = {}
 ): ChatController {
+  const log = logManager({ component: "useChatController" });
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
   const [settingsVersion, setSettingsVersion] = useState(0);
   const { sessionId } = options;
@@ -764,7 +766,7 @@ export function useChatController(
     
     try {
       await abortMessage(state.activeRequestId);
-      console.log("ChatController: aborted request", state.activeRequestId);
+      log.info("aborted request", state.activeRequestId);
       
       const messagesWithoutPlaceholders = state.messages.map(msg => {
         if (msg.id.startsWith('placeholder-')) {
@@ -796,9 +798,9 @@ export function useChatController(
             { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
           ]
         });
-        console.log("ChatController: successfully saved session after abort");
+        log.info("successfully saved session after abort");
       } catch (saveErr) {
-        console.error("ChatController: failed to save incomplete messages after abort", saveErr);
+        log.error("failed to save incomplete messages after abort", saveErr);
         dispatch({ type: "SET_MESSAGES", payload: messagesWithoutPlaceholders });
       }
       
@@ -810,7 +812,7 @@ export function useChatController(
         ]
       });
     } catch (err) {
-      console.error("ChatController: abort failed", err);
+      log.error("abort failed", err);
       try {
         const messagesWithoutPlaceholders = state.messages.map(msg => {
           if (msg.id.startsWith('placeholder-')) {
@@ -839,7 +841,7 @@ export function useChatController(
           ]
         });
       } catch (saveErr) {
-        console.error("ChatController: failed to save after abort error", saveErr);
+        log.error("failed to save after abort error", saveErr);
         // Even if everything fails, try to clean up placeholders from UI
         const cleaned = state.messages.filter(msg => !msg.id.startsWith('placeholder-') || msg.content.trim().length > 0);
         dispatch({ type: "SET_MESSAGES", payload: cleaned });

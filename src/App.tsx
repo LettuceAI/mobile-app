@@ -18,12 +18,16 @@ import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } fro
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
+import { SearchPage } from "./ui/pages/search";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { isOnboardingCompleted } from "./core/storage/appState";
 import { TopNav, BottomNav } from "./ui/components/App";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useAndroidBackHandler } from "./ui/hooks/useAndroidBackHandler";
+import { logManager, isLoggingEnabled } from "./core/utils/logger";
+
+const chatLog = logManager({ component: "Chat" });
 
 function App() {
   useEffect(() => {
@@ -36,26 +40,34 @@ function App() {
             event.payload !== null &&
             "state" in event.payload
           ) {
-            const { state, payload, message } = event.payload as {
+            const { state, level, payload, message } = event.payload as {
               state: string;
+              level?: string;
               payload?: unknown;
               message?: string;
             };
+            
+            // Backend logs come pre-formatted with timestamp
             if (message !== undefined) {
-              // log_backend
-              console.log(`[backend-${state}]`, message);
+              if (isLoggingEnabled()) {
+                const method = level?.toLowerCase() || "log";
+                if (method in console) {
+                  (console as any)[method](message);
+                } else {
+                  console.log(message);
+                }
+              }
             } else if (payload !== undefined) {
-              // emit_debug
-              console.log(`[chat-${state}]`, payload);
+              chatLog.with({ fn: state }).log(payload);
             } else {
-              console.log(`[chat-${state}]`, event.payload);
+              chatLog.with({ fn: state }).log(event.payload);
             }
           } else {
-            console.log("[chat-unknown]", event.payload);
+            chatLog.warn("unknown event payload", event.payload);
           }
         });
       } catch (err) {
-        console.warn("ChatController: failed to attach debug listener", err);
+        console.error("Failed to attach debug listener:", err);
       }
     })();
     return () => {
@@ -78,6 +90,7 @@ function AppContent() {
   const location = useLocation();
   const isChatRoute = location.pathname === "/chat" || location.pathname === "/";
   const isChatDetailRoute = location.pathname.startsWith("/chat/");
+  const isSearchRoute = location.pathname === "/search";
   const isOnboardingRoute = useMemo(
     () =>
       location.pathname.startsWith("/welcome") ||
@@ -88,7 +101,7 @@ function AppContent() {
     () => location.pathname.startsWith("/create/"),
     [location.pathname]
   );
-  const showGlobalChrome = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute;
+  const showGlobalChrome = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute;
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } = useFirstTimeTooltip("create_button");
@@ -144,7 +157,9 @@ function AppContent() {
                 ? "overflow-hidden px-0 pt-0 pb-0"
                 : isCreateRoute
                   ? "overflow-hidden px-0 pt-0 pb-0"
-                  : "overflow-y-auto px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))]"
+                  : isSearchRoute
+                    ? "overflow-hidden px-0 pt-0 pb-0"
+                    : "overflow-y-auto px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))]"
             }`}
         >
           <motion.div
@@ -160,6 +175,7 @@ function AppContent() {
               <Route path="/welcome" element={<WelcomePage />} />
               <Route path="/onboarding/provider" element={<ProviderSetupPage />} />
               <Route path="/onboarding/models" element={<ModelSetupPage />} />
+              <Route path="/search" element={<SearchPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/providers" element={<ProvidersPage />} />
               <Route path="/settings/models" element={<ModelsPage />} />

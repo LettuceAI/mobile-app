@@ -1,4 +1,4 @@
-use crate::{secrets, utils::log_backend, chat_manager::types::ProviderId};
+use crate::{chat_manager::types::ProviderId, secrets, utils::log_info};
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
@@ -34,7 +34,7 @@ pub async fn verify_provider_api_key(
         });
     }
 
-    log_backend(
+    log_info(
         &app,
         "verify_provider_api_key",
         format!(

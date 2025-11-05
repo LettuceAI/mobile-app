@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::models::{calculate_request_cost, get_model_pricing};
 use crate::secrets::secret_for_cred_get;
 use crate::usage::{add_usage_record, RequestUsage};
-use crate::utils::{log_backend, now_millis};
+use crate::utils::{log_error, log_info, log_warn, now_millis};
 
 use super::storage::{
     build_system_prompt, choose_persona, load_characters, load_personas, load_session,
@@ -95,7 +95,7 @@ pub fn resolve_api_key(
         ) {
             Ok(Some(value)) => Ok(value),
             Ok(None) => {
-                log_backend(
+                log_error(
                     app,
                     log_scope,
                     format!(
@@ -107,12 +107,12 @@ pub fn resolve_api_key(
                 Err("Missing API key".into())
             }
             Err(err) => {
-                log_backend(app, log_scope, format!("failed to read API key: {}", err));
+                log_error(app, log_scope, format!("failed to read API key: {}", err));
                 Err(err)
             }
         }
     } else {
-        log_backend(
+        log_error(
             app,
             log_scope,
             format!(
@@ -175,14 +175,14 @@ pub async fn record_usage_if_available(
                 ) {
                     Some(cost) => {
                         request_usage.cost = Some(cost.clone());
-                        log_backend(
+                        log_info(
                             context.app(),
                             log_scope,
                             format!("calculated cost for request: ${:.6}", cost.total_cost),
                         );
                     }
                     None => {
-                        log_backend(
+                        log_error(
                             context.app(),
                             log_scope,
                             "failed to calculate request cost".to_string(),
@@ -191,14 +191,14 @@ pub async fn record_usage_if_available(
                 }
             }
             Ok(None) => {
-                log_backend(
+                log_warn(
                     context.app(),
                     log_scope,
                     "no pricing found for model (might be free)".to_string(),
                 );
             }
             Err(err) => {
-                log_backend(
+                log_error(
                     context.app(),
                     log_scope,
                     format!("failed to fetch pricing: {}", err),
@@ -208,7 +208,7 @@ pub async fn record_usage_if_available(
     }
 
     if let Err(err) = add_usage_record(context.app(), request_usage) {
-        log_backend(
+        log_error(
             context.app(),
             log_scope,
             format!("failed to save usage record: {}", err),

@@ -1,7 +1,7 @@
 use crate::api::{api_request, ApiRequest};
 use crate::models::ModelPricing;
 use crate::pricing_cache;
-use crate::utils::log_backend;
+use crate::utils::{log_error, log_info, log_warn};
 use std::collections::HashMap;
 use tauri::AppHandle;
 
@@ -12,7 +12,7 @@ pub async fn fetch_openrouter_model_pricing(
     model_id: &str,
 ) -> Result<Option<ModelPricing>, String> {
     if model_id.contains(":free") {
-        log_backend(
+        log_warn(
             &app,
             "cost_calculator",
             format!("Skipping free model: {}", model_id),
@@ -21,7 +21,7 @@ pub async fn fetch_openrouter_model_pricing(
     }
 
     if let Ok(Some(cached)) = pricing_cache::get_cached_pricing(&app, model_id) {
-        log_backend(
+        log_info(
             &app,
             "cost_calculator",
             format!("Using cached pricing for {}", model_id),
@@ -29,7 +29,7 @@ pub async fn fetch_openrouter_model_pricing(
         return Ok(Some(cached));
     }
 
-    log_backend(
+    log_info(
         &app,
         "cost_calculator",
         format!("Fetching pricing for OpenRouter model: {}", model_id),
@@ -54,7 +54,7 @@ pub async fn fetch_openrouter_model_pricing(
     match api_request(app.clone(), request).await {
         Ok(response) => {
             if !response.ok {
-                log_backend(
+                log_error(
                     &app,
                     "cost_calculator",
                     format!(
@@ -78,7 +78,7 @@ pub async fn fetch_openrouter_model_pricing(
                             Some(pricing.clone()),
                         );
 
-                        log_backend(
+                        log_info(
                             &app,
                             "cost_calculator",
                             format!(
@@ -92,7 +92,7 @@ pub async fn fetch_openrouter_model_pricing(
                 }
             }
 
-            log_backend(
+            log_warn(
                 &app,
                 "cost_calculator",
                 format!(
@@ -104,7 +104,7 @@ pub async fn fetch_openrouter_model_pricing(
             Ok(None)
         }
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "cost_calculator",
                 format!("Failed to fetch OpenRouter pricing: {}", err),
@@ -194,7 +194,7 @@ pub async fn get_model_pricing(
             if let Some(key) = api_key {
                 fetch_openrouter_model_pricing(app, key, model_id).await
             } else {
-                log_backend(
+                log_error(
                     &app,
                     "cost_calculator",
                     "No API key for OpenRouter pricing lookup",
@@ -203,7 +203,7 @@ pub async fn get_model_pricing(
             }
         }
         _ => {
-            log_backend(
+            log_warn(
                 &app,
                 "cost_calculator",
                 format!("Pricing not supported for provider: {}", provider_id),

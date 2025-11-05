@@ -32,10 +32,60 @@ pub fn emit_debug(app: &AppHandle, phase: &str, payload: Value) {
     let _ = app.emit("chat://debug", event);
 }
 
-pub(crate) fn log_backend(app: &AppHandle, scope: &str, message: impl AsRef<str>) {
+#[derive(Debug, Clone, Copy)]
+pub enum LogLevel {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl LogLevel {
+    fn as_str(&self) -> &'static str {
+        match self {
+            LogLevel::Debug => "DEBUG",
+            LogLevel::Info => "INFO",
+            LogLevel::Warn => "WARN",
+            LogLevel::Error => "ERROR",
+        }
+    }
+}
+
+/// Structured backend logger that emits formatted log messages via event system.
+/// Format: [HH:MM:SS] component[/function] LEVEL message
+pub(crate) fn log_backend(app: &AppHandle, component: &str, level: LogLevel, message: impl AsRef<str>) {
+    use chrono::Local;
+    let now = Local::now();
+    let timestamp = now.format("%H:%M:%S");
+    let formatted = format!(
+        "[{}] {} {} {}",
+        timestamp,
+        component,
+        level.as_str(),
+        message.as_ref()
+    );
+    
     let event = json!({
-        "state": scope,
-        "message": message.as_ref(),
+        "state": component,
+        "level": level.as_str(),
+        "message": formatted,
     });
     let _ = app.emit("chat://debug", event);
+}
+
+/// Convenience wrappers for common log levels
+pub(crate) fn log_info(app: &AppHandle, component: &str, message: impl AsRef<str>) {
+    log_backend(app, component, LogLevel::Info, message);
+}
+
+pub(crate) fn log_warn(app: &AppHandle, component: &str, message: impl AsRef<str>) {
+    log_backend(app, component, LogLevel::Warn, message);
+}
+
+pub(crate) fn log_error(app: &AppHandle, component: &str, message: impl AsRef<str>) {
+    log_backend(app, component, LogLevel::Error, message);
+}
+
+pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<str>) {
+    log_backend(app, component, LogLevel::Debug, message);
 }

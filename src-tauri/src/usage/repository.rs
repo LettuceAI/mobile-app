@@ -6,7 +6,7 @@ use tauri::AppHandle;
 use super::tracking::{
     CharacterStats, ModelStats, ProviderStats, RequestUsage, UsageFilter, UsageStats,
 };
-use crate::utils::{ensure_lettuce_dir, log_backend};
+use crate::utils::{ensure_lettuce_dir, log_info};
 
 const USAGE_LOG_FILE: &str = "usage_log.json";
 
@@ -51,7 +51,7 @@ impl UsageRepository {
     fn add_record(&self, usage: RequestUsage) -> Result<(), String> {
         let mut log = self.load_all()?;
 
-        log_backend(
+        log_info(
             &self.app,
             "usage_tracking",
             format!(
@@ -117,7 +117,7 @@ impl UsageRepository {
         let deleted = original_len - retained.len() as u64;
         self.save_all(&retained)?;
 
-        log_backend(
+        log_info(
             &self.app,
             "usage_tracking",
             format!("Cleared {} old usage records", deleted),

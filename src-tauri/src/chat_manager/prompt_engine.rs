@@ -177,28 +177,27 @@ fn render_with_context_internal(
                 content_processed = content_processed.replace("{{persona}}", persona_name);
                 
                 if let Some(app) = app {
-                    super::super::utils::log_backend(app, "prompt_engine", 
+                    super::super::utils::log_info(app, "prompt_engine",
                         format!("Scene found and processed. ID: {}, length: {}", selected_scene_id, content_processed.len()));
                 }
                 content_processed
             } else {
                 if let Some(app) = app {
-                    super::super::utils::log_backend(app, "prompt_engine", 
+                    super::super::utils::log_warn(app, "prompt_engine",
                         format!("Scene found but content is empty. ID: {}", selected_scene_id));
                 }
                 String::new()
             }
         } else {
             if let Some(app) = app {
-                super::super::utils::log_backend(app, "prompt_engine", 
-                    format!("Scene ID selected but not found in character. ID: {}, available scenes: {}", 
-                        selected_scene_id, character.scenes.len()));
+                super::super::utils::log_warn(app, "prompt_engine",
+                    format!("Scene ID selected but not found in character. ID: {}, available scenes: {}", selected_scene_id, character.scenes.len()));
             }
             String::new()
         }
     } else {
         if let Some(app) = app {
-            super::super::utils::log_backend(app, "prompt_engine", "No scene selected in session");
+            super::super::utils::log_info(app, "prompt_engine", "No scene selected in session");
         }
         String::new()
     };
@@ -227,9 +226,9 @@ fn render_with_context_internal(
     let mut result = base_template.to_string();
     
     if let Some(app) = app {
-        super::super::utils::log_backend(app, "prompt_engine", 
+        super::super::utils::log_info(app, "prompt_engine",
             format!("Before {{{{scene}}}} replacement - scene_content length: {}", scene_content.len()));
-        super::super::utils::log_backend(app, "prompt_engine", 
+        super::super::utils::log_info(app, "prompt_engine",
             format!("Template contains {{{{scene}}}}: {}", base_template.contains("{{scene}}")));
     }
     

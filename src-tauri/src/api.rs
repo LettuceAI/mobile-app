@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::abort_manager::AbortRegistry;
-use crate::utils::log_backend;
+use crate::utils::{log_error, log_info, log_warn};
 use crate::chat_manager::{sse, request as chat_request, types::{ErrorEnvelope, NormalizedEvent}};
 use crate::transport::{self, emit_normalized};
 use crate::serde_utils::{json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json, truncate_for_log};
@@ -40,15 +40,15 @@ impl ApiResponse {
 
 #[tauri::command]
 pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiResponse, String> {
-    log_backend(&app, "api_request", "[api_request] started");
+    log_info(&app, "api_request", "started");
 
     let client = match transport::build_client(req.timeout_ms) {
         Ok(c) => c,
         Err(e) => {
-            log_backend(
+            log_error(
                 &app,
                 "api_request",
-                &format!("[api_request] client build error: {}", e),
+                &format!("client build error: {}", e),
             );
             return Err(e.to_string());
         }
@@ -59,7 +59,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let method = match Method::from_bytes(method_str.as_bytes()) {
         Ok(m) => m,
         Err(e) => {
-            log_backend(
+            log_error(
                 &app,
                 "api_request",
                 &format!("[api_request] invalid method: {}", method_str),
@@ -82,7 +82,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
 
     let mut request_builder = client.request(method.clone(), &req.url);
 
-    log_backend(
+    log_info(
         &app,
         "api_request",
         &format!("[api_request] method={} url={}", method_str, url_for_log),
@@ -96,7 +96,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             }
         }
         if !params.is_empty() {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!("[api_request] adding query params: {:?}", params),
@@ -108,7 +108,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     if let Some(headers) = &req.headers {
         let mut header_map = HeaderMap::new();
         for (key, value) in headers {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!(
@@ -123,7 +123,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             ) {
                 header_map.insert(name, header_value);
             } else {
-                log_backend(
+                log_warn(
                     &app,
                     "api_request",
                     &format!("[api_request] invalid header: {}={}", key, value),
@@ -138,7 +138,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             HeaderName::from_bytes(b"X-Title").unwrap(),
             HeaderValue::from_static("LettuceAI"),
         );
-        log_backend(&app, "api_request", "All headers set");
+        log_info(&app, "api_request", "All headers set");
 
         request_builder = request_builder.headers(header_map);
     } else {
@@ -151,13 +151,13 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             HeaderName::from_bytes(b"X-Title").unwrap(),
             HeaderValue::from_static("LettuceAI"),
         );
-        log_backend(&app, "api_request", "[api_request] using default headers");
+        log_info(&app, "api_request", "[api_request] using default headers");
         request_builder = request_builder.headers(header_map);
     }
 
     if let Some(body) = req.body.clone() {
         if let Some(text) = body.as_str() {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!(
@@ -167,7 +167,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             );
             request_builder = request_builder.body(text.to_owned());
         } else if !body.is_null() {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!(
@@ -201,7 +201,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         })
         .unwrap_or_else(|| "<none>".to_string());
 
-    log_backend(
+    log_info(
         &app,
         "api_request",
         &format!(
@@ -212,19 +212,19 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
 
     if let Some(headers) = &header_preview {
         if !headers.is_empty() {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!("[api_request] headers: {}", headers.join(", ")),
             );
         }
     } else {
-        log_backend(&app, "api_request", "[api_request] headers: <default>");
+        log_info(&app, "api_request", "[api_request] headers: <default>");
     }
 
     if let Some(keys) = &query_keys {
         if !keys.is_empty() {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!("[api_request] query params: {:?}", keys),
@@ -233,17 +233,17 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     }
 
     if let Some(body) = &body_preview {
-        log_backend(
+        log_info(
             &app,
             "api_request",
             &format!("[api_request] body preview: {}", body),
         );
     }
 
-    log_backend(&app, "api_request", "[api_request] sending request...");
+    log_info(&app, "api_request", "[api_request] sending request...");
     let response = match transport::send_with_retries(&app, "api_request", request_builder, 2).await {
         Ok(resp) => {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 "[api_request] request sent successfully",
@@ -251,7 +251,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             resp
         }
         Err(err) => {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!(
@@ -265,7 +265,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let status = response.status();
     let ok = status.is_success();
 
-    log_backend(
+    log_info(
         &app,
         "api_request",
         &format!("[api_request] response status: {} ok: {}", status, ok),
@@ -275,7 +275,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
 
     for (key, value) in response.headers().iter() {
         if let Ok(text) = value.to_str() {
-            log_backend(
+            log_info(
                 &app,
                 "api_request",
                 &format!(
@@ -292,7 +292,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let mut collected: Vec<u8> = Vec::new();
         let event_name = format!("api://{}", request_id.clone().unwrap());
         let mut body_stream = response.bytes_stream();
-        log_backend(
+        log_info(
             &app,
             "api_request",
             &format!(
@@ -316,7 +316,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             tokio::select! {
                 // Check for abort signal
                 _ = &mut abort_rx => {
-                    log_backend(
+                    log_warn(
                         &app,
                         "api_request",
                         &format!("[api_request] request aborted by user: {}", url_for_log),
@@ -330,7 +330,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                         Some(Ok(chunk)) => {
                             let text = String::from_utf8_lossy(&chunk).to_string();
                             transport::emit_raw(&app, &event_name, &text);
-                            log_backend(
+                            log_info(
                                 &app,
                                 "api_request",
                                 &format!(
@@ -349,7 +349,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                             collected.extend_from_slice(&chunk);
                         }
                         Some(Err(e)) => {
-                            log_backend(
+                            log_error(
                                 &app,
                                 "api_request",
                                 &format!("[api_request] stream error: {}", e),
@@ -395,7 +395,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         }
         
     let text = String::from_utf8_lossy(&collected).to_string();
-        log_backend(
+        log_info(
             &app,
             "api_request",
             &format!(
@@ -434,13 +434,13 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     } else {
         match response.bytes().await {
             Ok(bytes) => {
-                log_backend(
+                log_info(
                     &app,
                     "api_request",
                     &format!("[api_request] response body bytes: {}", bytes.len()),
                 );
                 let text = String::from_utf8_lossy(&bytes).to_string();
-                log_backend(
+                log_info(
                     &app,
                     "api_request",
                     &format!(
@@ -449,7 +449,6 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                     ),
                 );
                 let value = parse_body_to_value(&text);
-                // Also emit normalized error event for non-stream responses when possible
                 if !ok {
                     if let Some(req_id) = &request_id {
                         let message = chat_request::extract_error_message(&value)
@@ -468,7 +467,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 value
             }
             Err(e) => {
-                log_backend(
+                log_error(
                     &app,
                     "api_request",
                     &format!("[api_request] error reading response body: {}", e),
@@ -478,7 +477,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         }
     };
 
-    log_backend(
+    log_info(
         &app,
         "api_request",
         &format!(
@@ -502,7 +501,7 @@ pub async fn abort_request(
 ) -> Result<(), String> {
     use tauri::Manager;
     
-    log_backend(
+    log_info(
         &app,
         "abort_request",
         &format!("[abort_request] attempting to abort request_id={}", request_id),
@@ -510,8 +509,8 @@ pub async fn abort_request(
     
     let registry = app.state::<AbortRegistry>();
     registry.abort(&request_id)?;
-    
-    log_backend(
+
+    log_info(
         &app,
         "abort_request",
         &format!("[abort_request] successfully aborted request_id={}", request_id),

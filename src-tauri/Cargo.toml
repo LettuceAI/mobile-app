@@ -35,6 +35,7 @@ tauri-plugin-app-events = "0.2.0"
 base64 = "0.22"
 tauri-plugin-process = "2"
 tokio = { version = "1", features = ["macros", "rt", "time"] }
+chrono = "0.4"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 machine-uid = "0.3"

@@ -5,9 +5,8 @@ use tauri::Emitter;
 
 use crate::chat_manager::types::NormalizedEvent;
 use crate::error::AppError;
-use crate::utils::log_backend;
+use crate::utils::log_warn;
 
-/// Build a reqwest client with an optional timeout.
 pub fn build_client(timeout_ms: Option<u64>) -> Result<reqwest::Client, AppError> {
     let mut builder = reqwest::Client::builder();
     if let Some(ms) = timeout_ms {
@@ -16,7 +15,6 @@ pub fn build_client(timeout_ms: Option<u64>) -> Result<reqwest::Client, AppError
     builder.build().map_err(AppError::from)
 }
 
-/// Emit a normalized event to the app for the given request id.
 pub fn emit_normalized(app: &tauri::AppHandle, request_id: &str, event: NormalizedEvent) {
     let channel = format!("api-normalized://{}", request_id);
     let payload = match &event {
@@ -44,24 +42,20 @@ pub fn emit_normalized(app: &tauri::AppHandle, request_id: &str, event: Normaliz
     let _ = app.emit(&channel, payload);
 }
 
-/// Emit raw stream text to the app over the api:// channel
 pub fn emit_raw(app: &tauri::AppHandle, event_name: &str, chunk: &str) {
     let _ = app.emit(event_name, chunk.to_string());
 }
 
-/// Simple one-shot send without retries
 pub async fn send_request(builder: reqwest::RequestBuilder) -> Result<reqwest::Response, AppError> {
     builder.send().await.map_err(AppError::from)
 }
 
-/// Simple retry wrapper around send(), with backoff for timeouts and 5xx errors.
 pub async fn send_with_retries(
     app: &tauri::AppHandle,
     scope: &str,
     builder: reqwest::RequestBuilder,
     max_retries: u32,
 ) -> Result<reqwest::Response, AppError> {
-    // If this request cannot be cloned, perform a single attempt.
     let base = match builder.try_clone() {
         Some(b) => b,
         None => return builder.send().await.map_err(AppError::from),
@@ -77,7 +71,7 @@ pub async fn send_with_retries(
                 if resp.status().is_server_error() && attempt < max_retries {
                     attempt += 1;
                     let delay = backoff_delay_ms(attempt);
-                    log_backend(app, scope, format!("server error {} - retrying in {}ms (attempt {}/{})", resp.status(), delay, attempt, max_retries));
+                    log_warn(app, scope, format!("server error {} - retrying in {}ms (attempt {}/{})", resp.status(), delay, attempt, max_retries));
                     sleep(Duration::from_millis(delay)).await;
                     // continue loop
                 } else {
@@ -88,7 +82,7 @@ pub async fn send_with_retries(
                 if (err.is_timeout() || err.is_request()) && attempt < max_retries {
                     attempt += 1;
                     let delay = backoff_delay_ms(attempt);
-                    log_backend(app, scope, format!("request error '{}' - retrying in {}ms (attempt {}/{})", err, delay, attempt, max_retries));
+                    log_warn(app, scope, format!("request error '{}' - retrying in {}ms (attempt {}/{})", err, delay, attempt, max_retries));
                     sleep(Duration::from_millis(delay)).await;
                 } else {
                     return Err(AppError::from(err));

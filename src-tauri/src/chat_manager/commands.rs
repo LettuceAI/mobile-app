@@ -3,7 +3,7 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
-use crate::utils::now_millis;
+use crate::utils::{log_error, log_warn, log_info, now_millis};
 
 use super::request::{
     ensure_assistant_variant, extract_error_message, extract_text, extract_usage,
@@ -17,7 +17,7 @@ use super::types::{
     Model, PromptScope, RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
 use super::prompt_engine;
-use crate::utils::{emit_debug, log_backend};
+use crate::utils::emit_debug;
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
@@ -82,7 +82,7 @@ pub async fn chat_completion(
         request_id,
     } = args;
 
-    log_backend(
+    log_info(
         &app,
         "chat_completion",
         format!(
@@ -103,7 +103,7 @@ pub async fn chat_completion(
     let character = match context.find_character(&character_id) {
         Ok(found) => found,
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_completion",
                 format!("character {} not found", &character_id),
@@ -115,7 +115,7 @@ pub async fn chat_completion(
     let mut session = match context.load_session(&session_id)? {
         Some(s) => s,
         None => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_completion",
                 format!("session {} not found", &session_id),
@@ -144,7 +144,7 @@ pub async fn chat_completion(
 
     let (model, provider_cred) = context.select_model(&character)?;
 
-    log_backend(
+    log_info(
         &app,
         "chat_completion",
         format!(
@@ -242,7 +242,7 @@ pub async fn chat_completion(
         request_id.clone(),
     );
 
-    log_backend(
+    log_info(
         &app,
         "chat_completion",
         format!(
@@ -280,7 +280,7 @@ pub async fn chat_completion(
     let api_response = match api_request(app.clone(), api_request_payload).await {
         Ok(resp) => resp,
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_completion",
                 format!("api_request failed: {}", err),
@@ -314,7 +314,7 @@ pub async fn chat_completion(
         } else {
             format!("{} (status {})", err_message, api_response.status)
         };
-        log_backend(
+        log_error(
             &app,
             "chat_completion",
             format!("provider error: {}", &combined_error),
@@ -327,7 +327,7 @@ pub async fn chat_completion(
         .ok_or_else(|| {
             let preview =
                 serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
-            log_backend(
+            log_error(
                 &app,
                 "chat_completion",
                 format!("empty response from provider, preview={}", &preview),
@@ -364,7 +364,7 @@ pub async fn chat_completion(
     session.updated_at = now_millis()?;
     save_session(&app, &session)?;
 
-    log_backend(
+    log_info(
         &app,
         "chat_completion",
         format!(
@@ -423,7 +423,7 @@ pub async fn chat_regenerate(
     let context = ChatContext::initialize(app.clone())?;
     let settings = &context.settings;
 
-    log_backend(
+    log_info(
         &app,
         "chat_regenerate",
         format!(
@@ -435,7 +435,7 @@ pub async fn chat_regenerate(
     let mut session = match context.load_session(&session_id)? {
         Some(s) => s,
         None => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_regenerate",
                 format!("session {} not found", &session_id),
@@ -494,7 +494,7 @@ pub async fn chat_regenerate(
     let character = match context.find_character(&session.character_id) {
         Ok(found) => found,
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_regenerate",
                 format!("character {} not found", &session.character_id),
@@ -507,7 +507,7 @@ pub async fn chat_regenerate(
 
     let (model, provider_cred) = context.select_model(&character)?;
 
-    log_backend(
+    log_info(
         &app,
         "chat_regenerate",
         format!(
@@ -605,7 +605,7 @@ pub async fn chat_regenerate(
         }),
     );
 
-    log_backend(
+    log_info(
         &app,
         "chat_regenerate",
         format!(
@@ -631,7 +631,7 @@ pub async fn chat_regenerate(
     let api_response = match api_request(app.clone(), api_request_payload).await {
         Ok(resp) => resp,
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_regenerate",
                 format!("api_request failed: {}", err),
@@ -716,7 +716,7 @@ pub async fn chat_regenerate(
         }),
     );
 
-    log_backend(
+    log_info(
         &app,
         "chat_regenerate",
         format!(
@@ -763,7 +763,7 @@ pub async fn chat_continue(
     let context = ChatContext::initialize(app.clone())?;
     let settings = &context.settings;
 
-    log_backend(
+    log_info(
         &app,
         "chat_continue",
         format!(
@@ -775,7 +775,7 @@ pub async fn chat_continue(
     let mut session = match context.load_session(&session_id)? {
         Some(s) => s,
         None => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_continue",
                 format!("session {} not found", &session_id),
@@ -797,7 +797,7 @@ pub async fn chat_continue(
     let character = match context.find_character(&character_id) {
         Ok(found) => found,
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_continue",
                 format!("character {} not found", &character_id),
@@ -812,7 +812,7 @@ pub async fn chat_continue(
 
     let (model, provider_cred) = context.select_model(&character)?;
 
-    log_backend(
+    log_info(
         &app,
         "chat_continue",
         format!(
@@ -899,7 +899,7 @@ pub async fn chat_continue(
         }),
     );
 
-    log_backend(
+    log_info(
         &app,
         "chat_continue",
         format!(
@@ -925,7 +925,7 @@ pub async fn chat_continue(
     let api_response = match api_request(app.clone(), api_request_payload).await {
         Ok(resp) => resp,
         Err(err) => {
-            log_backend(
+            log_error(
                 &app,
                 "chat_continue",
                 format!("api_request failed: {}", err),
@@ -946,7 +946,7 @@ pub async fn chat_continue(
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
-        log_backend(
+        log_error(
             &app,
             "chat_continue",
             format!(
@@ -974,7 +974,7 @@ pub async fn chat_continue(
         .ok_or_else(|| {
             let preview =
                 serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
-            log_backend(
+            log_warn(
                 &app,
                 "chat_continue",
                 format!("empty response from provider, preview={}", &preview),
@@ -1025,7 +1025,7 @@ pub async fn chat_continue(
         }),
     );
 
-    log_backend(
+    log_info(
         &app,
         "chat_continue",
         format!(

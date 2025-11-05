@@ -7,20 +7,20 @@ use crate::storage_manager::{
     storage_read_characters, storage_read_settings, storage_write_characters,
     storage_write_settings,
 };
-use crate::utils::log_backend;
+use crate::utils::{log_error, log_info};
 
 /// Current migration version
 const CURRENT_MIGRATION_VERSION: u32 = 3;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
-    log_backend(app, "migrations", "Starting migration check".to_string());
+    log_info(app, "migrations", "Starting migration check".to_string());
 
     // Get current migration version from settings
     let current_version = get_migration_version(app)?;
 
     if current_version >= CURRENT_MIGRATION_VERSION {
-        log_backend(
+        log_info(
             app,
             "migrations",
             format!(
@@ -31,7 +31,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    log_backend(
+    log_info(
         app,
         "migrations",
         format!(
@@ -44,19 +44,19 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     let mut version = current_version;
 
     if version < 1 {
-        log_backend(app, "migrations", "Running migration v0 -> v1: Add custom prompt fields".to_string());
+        log_info(app, "migrations", "Running migration v0 -> v1: Add custom prompt fields".to_string());
         migrate_v0_to_v1(app)?;
         version = 1;
     }
 
     if version < 2 {
-        log_backend(app, "migrations", "Running migration v1 -> v2: Convert prompts to template system".to_string());
+        log_info(app, "migrations", "Running migration v1 -> v2: Convert prompts to template system".to_string());
         migrate_v1_to_v2(app)?;
         version = 2;
     }
 
     if version < 3 {
-        log_backend(app, "migrations", "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)".to_string());
+        log_info(app, "migrations", "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)".to_string());
         migrate_v2_to_v3(app)?;
         version = 3;
     }
@@ -70,7 +70,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     // Update migration version
     set_migration_version(app, version)?;
 
-    log_backend(
+    log_info(
         app,
         "migrations",
         format!("Migrations completed successfully. Now at version {}", version),
@@ -94,7 +94,7 @@ fn get_migration_version(app: &AppHandle) -> Result<u32, String> {
         }
         Ok(None) => Ok(0), // No settings file means version 0
         Err(e) => {
-            log_backend(
+            log_error(
                 app,
                 "migrations",
                 format!("Error reading settings for migration version: {}", e),
@@ -166,7 +166,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
             if !obj.contains_key("systemPrompt") {
                 obj.insert("systemPrompt".to_string(), Value::Null);
                 changed = true;
-                log_backend(app, "migrations", "Added systemPrompt to settings".to_string());
+                log_info(app, "migrations", "Added systemPrompt to settings".to_string());
             }
 
             // Add systemPrompt to all models if not present
@@ -180,7 +180,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
                     }
                 }
                 if changed {
-                    log_backend(
+                    log_info(
                         app,
                         "migrations",
                         format!("Added systemPrompt to {} models", models.len()),
@@ -194,7 +194,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
                 app.clone(),
                 serde_json::to_string(&settings).map_err(|e| e.to_string())?,
             )?;
-            log_backend(app, "migrations", "Settings migration completed".to_string());
+            log_info(app, "migrations", "Settings migration completed".to_string());
         }
     }
 
@@ -202,7 +202,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
     // Note: Characters are stored individually, so we'd need to iterate through all character files
     // Since Rust's serde will handle missing fields with #[serde(default)], we rely on that
     // The field will be automatically added when characters are saved next time
-    log_backend(
+    log_info(
         app,
         "migrations",
         "Character systemPrompt fields will be added on next save (handled by serde defaults)".to_string(),
@@ -277,7 +277,7 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
         }
     }
 
-    log_backend(
+    log_info(
         app,
         "migrations",
         format!("v2->v3 migration completed. Templates normalized: {}", changed),
@@ -374,7 +374,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                 app.clone(),
                 serde_json::to_string(&settings).map_err(|e| e.to_string())?,
             )?;
-            log_backend(
+            log_info(
                 app,
                 "migrations",
                 format!("Migrated settings prompts, created {} templates", templates_created),
@@ -432,7 +432,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                     app.clone(),
                     serde_json::to_string(&characters).map_err(|e| e.to_string())?,
                 )?;
-                log_backend(
+                log_info(
                     app,
                     "migrations",
                     format!("Migrated character prompts, total templates created: {}", templates_created),
@@ -441,7 +441,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
         }
     }
 
-    log_backend(
+    log_info(
         app,
         "migrations",
         format!("v1->v2 migration completed. Total prompt templates created: {}", templates_created),

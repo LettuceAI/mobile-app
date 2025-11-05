@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Filter } from "lucide-react";
+import { ChevronLeft, Filter, Search } from "lucide-react";
 import { typography, interactive, cn } from "../../design-tokens";
 
 interface TopNavProps {
@@ -36,6 +36,10 @@ export function TopNav({ currentPath }: TopNavProps) {
 
   const showFilterButton = useMemo(() => {
     return currentPath === "/settings/usage";
+  }, [currentPath]);
+
+  const showSearchButton = useMemo(() => {
+    return currentPath === "/chat" || currentPath === "/";
   }, [currentPath]);
 
   const handleBack = () => {
@@ -98,7 +102,21 @@ export function TopNav({ currentPath }: TopNavProps) {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center justify-end min-w-0 flex-1">
+        <div className="flex items-center justify-end min-w-0 flex-1 gap-2">
+          {showSearchButton && (
+            <button
+              onClick={() => navigate("/search")}
+              className={cn(
+                "rounded-full border border-white/15 bg-white/5 p-2",
+                "hover:border-white/25 hover:bg-white/10",
+                interactive.transition.fast,
+                interactive.active.scale
+              )}
+              aria-label="Search"
+            >
+              <Search size={16} className="text-white" />
+            </button>
+          )}
           {showFilterButton && (
             <button
               onClick={handleFilterClick}
