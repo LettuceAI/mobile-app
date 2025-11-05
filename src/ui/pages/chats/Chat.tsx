@@ -304,6 +304,7 @@ export function ChatConversationPage() {
         handleSaveEdit={handleSaveEdit}
         handleDeleteMessage={handleDeleteMessage}
         handleRewindToMessage={chatController.handleRewindToMessage}
+        handleTogglePin={chatController.handleTogglePin}
         setMessageAction={setMessageAction}
       />
     </div>

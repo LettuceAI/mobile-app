@@ -268,6 +268,18 @@ export async function archiveSession(id: string, archived = true): Promise<Sessi
   return updated;
 }
 
+export async function updateSessionTitle(id: string, title: string): Promise<Session | null> {
+  const existing = await getSession(id);
+  if (!existing) return null;
+  const updated: Session = {
+    ...existing,
+    title: title.trim(),
+    updatedAt: now(),
+  };
+  await saveSession(updated);
+  return updated;
+}
+
 export async function deleteSession(id: string): Promise<void> {
   await storageBridge.deleteSession(id);
   const ids = await listSessionIds();
@@ -321,6 +333,29 @@ export async function createSession(characterId: string, title: string, systemPr
   };
   await saveSession(s);
   return s;
+}
+
+export async function toggleMessagePin(sessionId: string, messageId: string): Promise<Session | null> {
+  const session = await getSession(sessionId);
+  if (!session) return null;
+  
+  const messageIndex = session.messages.findIndex(m => m.id === messageId);
+  if (messageIndex === -1) return null;
+  
+  const updatedMessages = [...session.messages];
+  updatedMessages[messageIndex] = {
+    ...updatedMessages[messageIndex],
+    isPinned: !updatedMessages[messageIndex].isPinned,
+  };
+  
+  const updated: Session = {
+    ...session,
+    messages: updatedMessages,
+    updatedAt: now(),
+  };
+  
+  await saveSession(updated);
+  return updated;
 }
 
 // Persona management functions

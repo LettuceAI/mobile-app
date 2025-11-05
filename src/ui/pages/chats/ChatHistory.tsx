@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Trash2, MessageCircle, AlertCircle } from "lucide-react";
+import { ArrowLeft, Trash2, MessageCircle, AlertCircle, Edit3 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import type { Character } from "../../../core/storage/schemas";
@@ -7,7 +7,8 @@ import {
   listCharacters,
   listSessionIds,
   getSession,
-  deleteSession
+  deleteSession,
+  updateSessionTitle
 } from "../../../core/storage";
 import { typography, radius, cn } from "../../design-tokens";
 
@@ -83,6 +84,24 @@ export function ChatHistoryPage() {
       setSessions(prev => prev.filter(s => s.id !== sessionId));
     } catch (err) {
       setError(`Failed to delete: ${err}`);
+    } finally {
+      setBusyIds(prev => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+  }, []);
+
+  const handleRename = useCallback(async (sessionId: string, newTitle: string) => {
+    setBusyIds(prev => new Set(prev).add(sessionId));
+    try {
+      await updateSessionTitle(sessionId, newTitle);
+      setSessions(prev => prev.map(s => 
+        s.id === sessionId ? { ...s, title: newTitle } : s
+      ));
+    } catch (err) {
+      setError(`Failed to rename: ${err}`);
     } finally {
       setBusyIds(prev => {
         const next = new Set(prev);
@@ -194,6 +213,7 @@ export function ChatHistoryPage() {
                 session={session}
                 onSelect={() => navigate(`/chat/${characterId}?sessionId=${session.id}`)}
                 onDelete={() => handleDelete(session.id)}
+                onRename={(newTitle) => handleRename(session.id, newTitle)}
                 isBusy={busyIds.has(session.id)}
               />
             ))}
@@ -208,13 +228,30 @@ function SessionCard({
   session,
   onSelect,
   onDelete,
+  onRename,
   isBusy,
 }: {
   session: SessionPreview;
   onSelect: () => void;
   onDelete: () => void;
+  onRename: (newTitle: string) => void;
   isBusy: boolean;
 }) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [editTitle, setEditTitle] = useState(session.title);
+
+  const handleRenameSubmit = () => {
+    if (editTitle.trim() && editTitle !== session.title) {
+      onRename(editTitle.trim());
+    }
+    setIsRenaming(false);
+  };
+
+  const handleCancel = () => {
+    setEditTitle(session.title);
+    setIsRenaming(false);
+  };
+
   return (
     <div className={cn(
       "border border-white/10 bg-white/5 overflow-hidden",
@@ -224,7 +261,7 @@ function SessionCard({
       {/* Main content - tap to open */}
       <button
         onClick={onSelect}
-        disabled={isBusy}
+        disabled={isBusy || isRenaming}
         className="w-full p-4 text-left disabled:opacity-50 active:bg-white/10 transition-colors"
       >
         <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white mb-2")}>
@@ -242,22 +279,85 @@ function SessionCard({
         )}
       </button>
 
-      {/* Simple delete button */}
-      <div className="px-4 pb-3 border-t border-white/5 pt-3">
-        <button
-          onClick={onDelete}
-          disabled={isBusy}
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
-            radius.md,
-            typography.bodySmall.size,
-            "active:scale-95 active:bg-red-400/10 active:text-red-300 active:border-red-400/40 disabled:opacity-50 transition-all"
-          )}
-        >
-          <Trash2 size={14} />
-          Delete
-        </button>
-      </div>
+      {/* Rename input when editing */}
+      {isRenaming && (
+        <div className="px-4 pb-3 border-t border-white/5 pt-3">
+          <input
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleRenameSubmit();
+              if (e.key === "Escape") handleCancel();
+            }}
+            autoFocus
+            className={cn(
+              "w-full px-3 py-2 bg-white/10 border border-white/20 text-white mb-2",
+              radius.md,
+              typography.body.size,
+              "focus:outline-none focus:border-blue-400/60"
+            )}
+            placeholder="Chat title..."
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleRenameSubmit}
+              disabled={!editTitle.trim()}
+              className={cn(
+                "flex-1 px-3 py-2 border border-blue-400/40 bg-blue-400/20 text-blue-100",
+                radius.md,
+                typography.bodySmall.size,
+                "active:scale-95 disabled:opacity-50 transition-all"
+              )}
+            >
+              Save
+            </button>
+            <button
+              onClick={handleCancel}
+              className={cn(
+                "flex-1 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
+                radius.md,
+                typography.bodySmall.size,
+                "active:scale-95 transition-all"
+              )}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {!isRenaming && (
+        <div className="px-4 pb-3 border-t border-white/5 pt-3 flex gap-2">
+          <button
+            onClick={() => setIsRenaming(true)}
+            disabled={isBusy}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
+              radius.md,
+              typography.bodySmall.size,
+              "active:scale-95 active:bg-blue-400/10 active:text-blue-300 active:border-blue-400/40 disabled:opacity-50 transition-all"
+            )}
+          >
+            <Edit3 size={14} />
+            Rename
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={isBusy}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
+              radius.md,
+              typography.bodySmall.size,
+              "active:scale-95 active:bg-red-400/10 active:text-red-300 active:border-red-400/40 disabled:opacity-50 transition-all"
+            )}
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

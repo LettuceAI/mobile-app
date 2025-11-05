@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT } from "../../../../core/storage/repo";
+import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
@@ -55,6 +55,7 @@ export interface ChatController {
   handleSaveEdit: () => Promise<void>;
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
+  handleTogglePin: (message: StoredMessage) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
   isStartingSceneMessage: (message: StoredMessage) => boolean;
@@ -905,6 +906,12 @@ export function useChatController(
   const handleDeleteMessage = useCallback(
     async (message: StoredMessage) => {
       if (!state.session) return;
+      
+      if (message.isPinned) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: "Cannot delete pinned message. Unpin it first." });
+        return;
+      }
+      
       const confirmed = window.confirm("Delete this message?");
       if (!confirmed) return;
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
@@ -933,6 +940,22 @@ export function useChatController(
   const handleRewindToMessage = useCallback(
     async (message: StoredMessage) => {
       if (!state.session) return;
+      
+      // Check if there are any pinned messages after this message
+      const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+      if (messageIndex === -1) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
+        return;
+      }
+      
+      const messagesAfter = state.session.messages.slice(messageIndex + 1);
+      const hasPinnedAfter = messagesAfter.some(msg => msg.isPinned);
+      
+      if (hasPinnedAfter) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: "Cannot rewind: there are pinned messages after this point. Unpin them first." });
+        return;
+      }
+      
       const confirmed = window.confirm(
         "Rewind conversation to this message? All messages after this point will be removed."
       );
@@ -943,12 +966,6 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
       
       try {
-        const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
-        if (messageIndex === -1) {
-          dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
-          return;
-        }
-        
         const updatedMessages = state.session.messages.slice(0, messageIndex + 1);
         const updatedSession: Session = {
           ...state.session,
@@ -960,6 +977,36 @@ export function useChatController(
         dispatch({ type: "SET_SESSION", payload: updatedSession });
         dispatch({ type: "REWIND_TO_MESSAGE", payload: { messageId: message.id, messages: updatedMessages } });
         resetMessageActions();
+      } catch (err) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+      } finally {
+        dispatch({ type: "SET_ACTION_BUSY", payload: false });
+      }
+    },
+    [resetMessageActions, state.session],
+  );
+
+  const handleTogglePin = useCallback(
+    async (message: StoredMessage) => {
+      if (!state.session) return;
+      
+      dispatch({ type: "SET_ACTION_BUSY", payload: true });
+      dispatch({ type: "SET_ACTION_ERROR", payload: null });
+      dispatch({ type: "SET_ACTION_STATUS", payload: null });
+      
+      try {
+        const updatedSession = await toggleMessagePin(state.session.id, message.id);
+        
+        if (updatedSession) {
+          dispatch({ type: "SET_SESSION", payload: updatedSession });
+          dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages });
+          dispatch({ type: "SET_ACTION_STATUS", payload: message.isPinned ? "Message unpinned" : "Message pinned" });
+          setTimeout(() => {
+            resetMessageActions();
+          }, 1000);
+        } else {
+          dispatch({ type: "SET_ACTION_ERROR", payload: "Failed to toggle pin" });
+        }
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
       } finally {
@@ -1018,6 +1065,7 @@ export function useChatController(
     handleSaveEdit,
     handleDeleteMessage,
     handleRewindToMessage,
+    handleTogglePin,
     resetMessageActions,
     initializeLongPressTimer: (timer) => {
       if (timer === null) {

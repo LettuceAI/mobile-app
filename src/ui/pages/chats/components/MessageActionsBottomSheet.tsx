@@ -1,4 +1,4 @@
-import { Edit3, Copy, RotateCcw, Trash2 } from "lucide-react";
+import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff } from "lucide-react";
 import { BottomMenu } from "../../../components/BottomMenu";
 import type { StoredMessage } from "../../../../core/storage/schemas";
 
@@ -21,6 +21,7 @@ interface MessageActionsBottomSheetProps {
   handleSaveEdit: () => Promise<void>;
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
+  handleTogglePin: (message: StoredMessage) => Promise<void>;
   setMessageAction: (value: MessageActionState | null) => void;
 }
 
@@ -38,6 +39,7 @@ export function MessageActionsBottomSheet({
   handleSaveEdit,
   handleDeleteMessage,
   handleRewindToMessage,
+  handleTogglePin,
   setMessageAction,
 }: MessageActionsBottomSheetProps) {
   return (
@@ -127,6 +129,37 @@ export function MessageActionsBottomSheet({
                 </div>
               </button>
 
+              {/* Pin/Unpin action - available for all messages */}
+              <button
+                onClick={() => void handleTogglePin(messageAction.message)}
+                disabled={actionBusy}
+                className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition hover:border-blue-500/30 hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  messageAction.message.isPinned
+                    ? "border-blue-500/20 bg-blue-500/10"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div className={`flex h-7 w-7 items-center justify-center rounded-lg border ${
+                  messageAction.message.isPinned
+                    ? "border-blue-500/20 bg-blue-500/15"
+                    : "border-white/10 bg-white/10"
+                }`}>
+                  {messageAction.message.isPinned ? (
+                    <PinOff size={16} className="text-blue-200" />
+                  ) : (
+                    <Pin size={16} className="text-white" />
+                  )}
+                </div>
+                <div>
+                  <div className={`font-medium ${messageAction.message.isPinned ? "text-blue-100" : "text-white"}`}>
+                    {messageAction.message.isPinned ? "Unpin message" : "Pin message"}
+                  </div>
+                  <div className={`text-sm ${messageAction.message.isPinned ? "text-blue-200/70" : "text-gray-400"}`}>
+                    {messageAction.message.isPinned ? "Remove pin protection" : "Protect from deletion and rewind"}
+                  </div>
+                </div>
+              </button>
+
               {/* Assistant-specific actions */}
               {messageAction.message.role === "assistant" && (
                 <button
@@ -147,7 +180,7 @@ export function MessageActionsBottomSheet({
               {/* Delete action */}
               <button
                 onClick={() => void handleDeleteMessage(messageAction.message)}
-                disabled={actionBusy}
+                disabled={actionBusy || messageAction.message.isPinned}
                 className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-2 text-left transition hover:border-red-500/30 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/15">
@@ -155,7 +188,9 @@ export function MessageActionsBottomSheet({
                 </div>
                 <div>
                   <div className="font-medium text-red-100">Delete message</div>
-                  <div className="text-sm text-red-200/70">Remove this message permanently</div>
+                  <div className="text-sm text-red-200/70">
+                    {messageAction.message.isPinned ? "Unpin first to delete" : "Remove this message permanently"}
+                  </div>
                 </div>
               </button>
             </div>

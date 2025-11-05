@@ -1,6 +1,6 @@
 import { motion, type PanInfo } from "framer-motion";
 import React, { useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Pin } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
@@ -183,6 +183,18 @@ function ChatMessageInner({
         {...eventHandlers}
         {...dragProps}
       >
+        {/* Pin indicator */}
+        {message.isPinned && (
+          <motion.div 
+            className="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-blue-500/40 bg-blue-500/20 shadow-lg"
+            initial={{ scale: 0, rotate: -45 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          >
+            <Pin size={12} className="text-blue-300" />
+          </motion.div>
+        )}
+        
         {computed.showTypingIndicator ? (
           <TypingIndicator />
         ) : (
