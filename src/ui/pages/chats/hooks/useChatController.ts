@@ -664,6 +664,7 @@ export function useChatController(
         actions: [
           { type: "SET_REGENERATING_MESSAGE_ID", payload: message.id },
           { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
+          { type: "SET_SENDING", payload: true },
           { type: "SET_ERROR", payload: null },
           { type: "SET_HELD_MESSAGE_ID", payload: null },
           { 
@@ -754,7 +755,8 @@ export function useChatController(
           type: "BATCH", 
           actions: [
             { type: "SET_REGENERATING_MESSAGE_ID", payload: null },
-            { type: "SET_ACTIVE_REQUEST_ID", payload: null }
+            { type: "SET_ACTIVE_REQUEST_ID", payload: null },
+            { type: "SET_SENDING", payload: false }
           ]
         });
       }
