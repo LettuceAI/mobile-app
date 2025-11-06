@@ -8,6 +8,7 @@ import { processBackgroundImage } from "../../../core/utils/image";
 import { convertToImageRef } from "../../../core/storage/images";
 import { saveAvatar, loadAvatar } from "../../../core/storage/avatars";
 import { listPromptTemplates } from "../../../core/prompts/service";
+import { invalidateAvatarCache } from "../../hooks/useAvatar";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
@@ -137,18 +138,19 @@ export function EditCharacterPage() {
       let avatarFilename: string | undefined = undefined;
       if (avatarPath) {
         if (avatarPath.startsWith("data:")) {
-          // New upload - save it
           avatarFilename = await saveAvatar(characterId, avatarPath);
           if (!avatarFilename) {
             console.error("[EditCharacter] Failed to save avatar image");
+          } else {
+            invalidateAvatarCache(characterId);
           }
         } else {
-          // Existing avatar filename - keep it
           avatarFilename = avatarPath;
         }
+      } else {
+        invalidateAvatarCache(characterId);
       }
 
-      // Background images still use the old system (they're stored per-session)
       const backgroundImageId = backgroundImagePath 
         ? (backgroundImagePath.startsWith("data:") ? await convertToImageRef(backgroundImagePath) : backgroundImagePath)
         : undefined;

@@ -5,6 +5,7 @@ import { convertToImageRef } from "../../../../core/storage/images";
 import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
+import { invalidateAvatarCache } from "../../../hooks/useAvatar";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
@@ -246,6 +247,7 @@ export function useCharacterForm() {
           console.error("[CreateCharacter] Failed to save avatar image");
         } else {
           console.log("[CreateCharacter] Avatar saved as:", avatarFilename);
+          invalidateAvatarCache(characterId);
         }
       }
       

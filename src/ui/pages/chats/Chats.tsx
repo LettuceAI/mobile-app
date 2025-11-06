@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Edit2, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -182,84 +182,31 @@ function CharacterList({
   onSelect: (character: Character) => void | Promise<void>;
   onLongPress: (character: Character) => void;
 }) {
-  const handleClick = (character: Character) => {
-    void onSelect(character);
-  };
+  const [visibleCount, setVisibleCount] = useState(5);
 
-  const handleContextMenu = (character: Character, e: React.MouseEvent) => {
-    e.preventDefault();
-    onLongPress(character);
-  };
+  useEffect(() => {
+    if (visibleCount < characters.length) {
+      const timer = setTimeout(() => {
+        setVisibleCount(prev => Math.min(prev + 5, characters.length));
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [visibleCount, characters.length]);
+
+  useEffect(() => {
+    setVisibleCount(5);
+  }, [characters]);
 
   return (
     <div className={spacing.item}>
-      {characters.map((character) => {
-        const descriptionPreview = character.description?.trim() || "No description yet";
-
-        return (
-          <div key={character.id} className="relative">
-            <button
-              onClick={() => handleClick(character)}
-              onContextMenu={(e) => handleContextMenu(character, e)}
-              className={cn(
-                "group relative flex h-[72px] w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
-                radius.md,
-                "border border-white/10 bg-white/5",
-                interactive.transition.default,
-                "hover:border-white/20 hover:bg-white/[0.08]",
-                interactive.active.scale
-              )}
-            >
-              {/* Hover gradient effect */}
-              <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-
-              {/* Avatar */}
-              <div className={cn(
-                "relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden",
-                radius.md,
-                "border border-white/15 bg-white/5",
-                typography.body.size,
-                typography.body.weight,
-                "text-white"
-              )}>
-                {renderAvatar(character)}
-              </div>
-
-              {/* Content */}
-              <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className={cn(
-                    "truncate",
-                    typography.body.size,
-                    typography.h3.weight,
-                    "text-white"
-                  )}>
-                    {character.name}
-                  </h3>
-                </div>
-                <p className={cn(
-                  typography.bodySmall.size,
-                  "text-white/50 line-clamp-1"
-                )}>
-                  {descriptionPreview}
-                </p>
-              </div>
-
-              {/* Arrow indicator */}
-              <span className={cn(
-                "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center",
-                radius.full,
-                "border border-white/10 bg-white/5 text-white/50",
-                "transition-all group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white/80"
-              )}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </span>
-            </button>
-          </div>
-        );
-      })}
+      {characters.slice(0, visibleCount).map((character) => (
+        <CharacterCard
+          key={character.id}
+          character={character}
+          onSelect={onSelect}
+          onLongPress={onLongPress}
+        />
+      ))}
     </div>
   );
 }
@@ -323,7 +270,7 @@ function isImageLike(s?: string) {
   return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
 
-function CharacterAvatar({ character }: { character: Character }) {
+const CharacterAvatar = memo(({ character }: { character: Character }) => {
   const avatarUrl = useAvatar(character.id, character.avatarPath);
   
   if (avatarUrl && isImageLike(avatarUrl)) {
@@ -338,11 +285,96 @@ function CharacterAvatar({ character }: { character: Character }) {
   
   const initials = character.name.slice(0, 2).toUpperCase();
   return <span>{initials}</span>;
-}
+});
 
-function renderAvatar(c: Character) {
-  return <CharacterAvatar character={c} />;
-}
+CharacterAvatar.displayName = 'CharacterAvatar';
+
+const CharacterCard = memo(({ 
+  character, 
+  onSelect, 
+  onLongPress 
+}: { 
+  character: Character; 
+  onSelect: (character: Character) => void;
+  onLongPress: (character: Character) => void;
+}) => {
+  const descriptionPreview = character.description?.trim() || "No description yet";
+
+  const handleClick = () => {
+    onSelect(character);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onLongPress(character);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        className={cn(
+          "group relative flex h-[72px] w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
+          radius.md,
+          "border border-white/10 bg-white/5",
+          interactive.transition.default,
+          "hover:border-white/20 hover:bg-white/[0.08]",
+          interactive.active.scale
+        )}
+      >
+        {/* Hover gradient effect */}
+        <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+
+        {/* Avatar */}
+        <div className={cn(
+          "relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden",
+          radius.md,
+          "border border-white/15 bg-white/5",
+          typography.body.size,
+          typography.body.weight,
+          "text-white"
+        )}>
+          <CharacterAvatar character={character} />
+        </div>
+
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className={cn(
+              "truncate",
+              typography.body.size,
+              typography.h3.weight,
+              "text-white"
+            )}>
+              {character.name}
+            </h3>
+          </div>
+          <p className={cn(
+            typography.bodySmall.size,
+            "text-white/50 line-clamp-1"
+          )}>
+            {descriptionPreview}
+          </p>
+        </div>
+
+        {/* Arrow indicator */}
+        <span className={cn(
+          "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center",
+          radius.full,
+          "border border-white/10 bg-white/5 text-white/50",
+          "transition-all group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white/80"
+        )}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </span>
+      </button>
+    </div>
+  );
+});
+
+CharacterCard.displayName = 'CharacterCard';
 
 
 
