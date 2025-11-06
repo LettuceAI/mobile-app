@@ -186,21 +186,15 @@ export function ModelsPage() {
                                 transition={{ duration: 0.2, ease: "easeOut" }}
                                 className="overflow-hidden"
                             >
-                                <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-white/80">
-                                            <Settings2 className="h-4 w-4" />
-                                        </div>
-                                        <h3 className="text-sm font-semibold text-white">Custom Parameters</h3>
-                                    </div>
-
-                                    {/* Temperature Slider */}
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                                                Temperature
-                                            </label>
-                                            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                                <div className="space-y-3">
+                                    {/* Temperature */}
+                                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                        <div className="mb-3 flex items-start justify-between gap-3">
+                                            <div className="flex-1">
+                                                <label className="text-sm font-medium text-white">Temperature</label>
+                                                <p className="mt-0.5 text-xs text-white/50">Controls randomness and creativity</p>
+                                            </div>
+                                            <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
                                                 {advancedDraft.temperature?.toFixed(2) ?? "0.70"}
                                             </span>
                                         </div>
@@ -214,26 +208,25 @@ export function ModelsPage() {
                                                 updateAdvancedDraft({ temperature: Number(e.target.value) });
                                                 setForceCustomMode(true);
                                             }}
-                                            className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
-                                                focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
-                                                [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
-                                                [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
-                                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
-                                                [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
+                                            className="w-full"
+                                            style={{
+                                                background: `linear-gradient(to right, rgb(52, 211, 153) 0%, rgb(52, 211, 153) ${((advancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((advancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                                            }}
                                         />
-                                        <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
-                                            <span>{ADVANCED_TEMPERATURE_RANGE.min}</span>
-                                            <span>{ADVANCED_TEMPERATURE_RANGE.max}</span>
+                                        <div className="mt-2 flex items-center justify-between text-xs">
+                                            <span className="text-white/40">0 - Precise</span>
+                                            <span className="text-white/40">2 - Creative</span>
                                         </div>
                                     </div>
 
                                     {/* Top P */}
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <label className="text-xs font-medium uppercase tracking-wider text-white/70">
-                                                Top P
-                                            </label>
-                                            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                        <div className="mb-3 flex items-start justify-between gap-3">
+                                            <div className="flex-1">
+                                                <label className="text-sm font-medium text-white">Top P</label>
+                                                <p className="mt-0.5 text-xs text-white/50">Nucleus sampling threshold</p>
+                                            </div>
+                                            <span className="rounded-lg border border-blue-400/30 bg-blue-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-blue-200">
                                                 {advancedDraft.topP?.toFixed(2) ?? "1.00"}
                                             </span>
                                         </div>
@@ -247,37 +240,78 @@ export function ModelsPage() {
                                                 updateAdvancedDraft({ topP: Number(e.target.value) });
                                                 setForceCustomMode(true);
                                             }}
-                                            className="h-2 w-full appearance-none cursor-pointer rounded-full bg-white/10 outline-none transition-all 
-                                                focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2 focus:ring-offset-[#050505]
-                                                [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10
-                                                [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10
-                                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-400/40 [&::-webkit-slider-thumb]:bg-gradient-to-br [&::-webkit-slider-thumb]:from-emerald-400 [&::-webkit-slider-thumb]:to-emerald-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-emerald-400/20 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95 [&::-webkit-slider-thumb]:mt-[-6px]
-                                                [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-400/40 [&::-moz-range-thumb]:bg-gradient-to-br [&::-moz-range-thumb]:from-emerald-400 [&::-moz-range-thumb]:to-emerald-500 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-emerald-400/20 [&::-moz-range-thumb]:transition-transform [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:scale-95"
+                                            className="w-full"
+                                            style={{
+                                                background: `linear-gradient(to right, rgb(96, 165, 250) 0%, rgb(96, 165, 250) ${((advancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((advancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                                            }}
                                         />
-                                        <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
-                                            <span>{ADVANCED_TOP_P_RANGE.min}</span>
-                                            <span>{ADVANCED_TOP_P_RANGE.max}</span>
+                                        <div className="mt-2 flex items-center justify-between text-xs">
+                                            <span className="text-white/40">0 - Focused</span>
+                                            <span className="text-white/40">1 - Diverse</span>
                                         </div>
                                     </div>
 
-                                    
-
                                     {/* Max Tokens */}
-                                    <div>
-                                        <label className="mb-2 block text-xs font-medium text-white/70">Max Output Tokens</label>
-                                        <input
-                                            type="number"
-                                            min={ADVANCED_MAX_TOKENS_RANGE.min}
-                                            max={ADVANCED_MAX_TOKENS_RANGE.max}
-                                            value={advancedDraft.maxOutputTokens ?? ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value === '' ? null : Number(e.target.value);
-                                                updateAdvancedDraft({ maxOutputTokens: val });
-                                                setForceCustomMode(true);
-                                            }}
-                                            placeholder="Auto"
-                                            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-emerald-400/50 focus:outline-none"
-                                        />
+                                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                        <div className="mb-3">
+                                            <label className="text-sm font-medium text-white">Max Output Tokens</label>
+                                            <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
+                                        </div>
+                                        
+                                        <div className="flex gap-2 mb-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    updateAdvancedDraft({ maxOutputTokens: null });
+                                                    setForceCustomMode(true);
+                                                }}
+                                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                                                    !advancedDraft.maxOutputTokens
+                                                        ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                                                        : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                                                }`}
+                                            >
+                                                Auto
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    updateAdvancedDraft({ maxOutputTokens: 1024 });
+                                                    setForceCustomMode(true);
+                                                }}
+                                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                                                    advancedDraft.maxOutputTokens
+                                                        ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                                                        : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                                                }`}
+                                            >
+                                                Custom
+                                            </button>
+                                        </div>
+                                        
+                                        {advancedDraft.maxOutputTokens !== null && advancedDraft.maxOutputTokens !== undefined && (
+                                            <input
+                                                type="number"
+                                                inputMode="numeric"
+                                                min={ADVANCED_MAX_TOKENS_RANGE.min}
+                                                max={ADVANCED_MAX_TOKENS_RANGE.max}
+                                                value={advancedDraft.maxOutputTokens ?? ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value === '' ? null : Number(e.target.value);
+                                                    updateAdvancedDraft({ maxOutputTokens: val });
+                                                    setForceCustomMode(true);
+                                                }}
+                                                placeholder="1024"
+                                                className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                                            />
+                                        )}
+                                        
+                                        <p className="mt-2 text-xs text-white/40">
+                                            {!advancedDraft.maxOutputTokens 
+                                                ? 'Let the model decide the response length'
+                                                : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
+                                            }
+                                        </p>
                                     </div>
                                 </div>
                             </motion.div>
