@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText, Wrench } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
+import { invoke } from "@tauri-apps/api/core";
 
 
 
@@ -95,6 +96,23 @@ export function SettingsPage() {
   const {
     state: { providers, models, characterCount, personaCount, isLoading },
   } = useSettingsSummary();
+  const [version, setVersion] = useState<string>('unknown');
+
+  const appVersion: () => Promise<string> = useCallback(async () => {
+    try {
+      const appversion = await invoke("get_app_version");
+      return appversion as string;
+    } catch (error) {
+      console.error("Failed to get app version:", error);
+      return "unknown";
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      setVersion(await appVersion());
+    })();
+  }, [appVersion]);
 
   const providerCount = providers.length;
   const modelCount = models.length;
@@ -164,7 +182,7 @@ export function SettingsPage() {
       key: 'github',
       icon: <Github />,
       title: 'Report Issues',
-      subtitle: 'GitHub repository & feedback • v0.3.0 beta',
+      subtitle: `GitHub repository & feedback • v${version}`,
       onClick: async () => {
         try {
           const { openUrl } = await import('@tauri-apps/plugin-opener');

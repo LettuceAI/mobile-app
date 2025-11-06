@@ -21,17 +21,13 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Initialize abort registry
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
             
-            // Run migrations on app startup
             if let Err(e) = migrations::run_migrations(app.handle()) {
                 eprintln!("Migration error: {}", e);
-                // Log but don't fail - allow app to continue
             }
             
-            // Ensure App Default template exists
             if let Err(e) = chat_manager::prompts::ensure_app_default_template(app.handle()) {
                 eprintln!("Failed to ensure app default template: {}", e);
             }
@@ -89,7 +85,8 @@ pub fn run() {
             usage::usage_get_stats,
             usage::usage_clear_before,
             usage::usage_export_csv,
-            usage::usage_save_csv
+            usage::usage_save_csv,
+            utils::get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

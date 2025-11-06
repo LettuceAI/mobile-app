@@ -26,7 +26,7 @@ export function EditModelPage() {
       providers,
       defaultModelId,
       editorModel,
-      globalAdvanced,
+      //globalAdvanced,
       modelAdvancedDraft,
       overrideEnabled,
     },

@@ -90,3 +90,12 @@ pub(crate) fn log_error(app: &AppHandle, component: &str, message: impl AsRef<st
 pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<str>) {
     log_backend(app, component, LogLevel::Debug, message);
 }
+
+pub(crate) fn app_version() -> String {
+    "1.0-beta_3.2".to_string()
+}
+
+#[tauri::command]
+pub fn get_app_version() -> String {
+    app_version()
+}
