@@ -393,3 +393,93 @@ pub fn storage_read_image(app: tauri::AppHandle, image_id: String) -> Result<Str
 
     Err(format!("Image not found: {}", image_id))
 }
+
+#[tauri::command]
+pub fn storage_save_avatar(
+    app: tauri::AppHandle,
+    entity_id: String,
+    base64_data: String,
+) -> Result<String, String> {
+    let data = if let Some(comma_idx) = base64_data.find(',') {
+        &base64_data[comma_idx + 1..]
+    } else {
+        &base64_data
+    };
+
+    // Decode base64
+    let bytes = general_purpose::STANDARD
+        .decode(data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Create avatars/<entity-id> directory
+    let avatars_dir = storage_root(&app)?.join("avatars").join(&entity_id);
+    fs::create_dir_all(&avatars_dir).map_err(|e| e.to_string())?;
+
+    let webp_bytes = match image::load_from_memory(&bytes) {
+        Ok(img) => {
+            let mut webp_data: Vec<u8> = Vec::new();
+            let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
+            img.write_with_encoder(encoder)
+                .map_err(|e| format!("Failed to encode WebP: {}", e))?;
+            webp_data
+        }
+        Err(_) => {
+            bytes
+        }
+    };
+
+    let filename = "avatar.webp";
+    let avatar_path = avatars_dir.join(filename);
+    fs::write(&avatar_path, webp_bytes).map_err(|e| e.to_string())?;
+
+    Ok(filename.to_string())
+}
+
+#[tauri::command]
+pub fn storage_load_avatar(
+    app: tauri::AppHandle,
+    entity_id: String,
+    filename: String,
+) -> Result<String, String> {
+    let avatar_path = storage_root(&app)?
+        .join("avatars")
+        .join(&entity_id)
+        .join(&filename);
+
+    if !avatar_path.exists() {
+        return Err(format!("Avatar not found: {}/{}", entity_id, filename));
+    }
+
+    let bytes = fs::read(&avatar_path).map_err(|e| e.to_string())?;
+
+    // Determine MIME type from file extension
+    let mime_type = if filename.ends_with(".webp") {
+        "image/webp"
+    } else if filename.ends_with(".png") {
+        "image/png"
+    } else if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if filename.ends_with(".gif") {
+        "image/gif"
+    } else {
+        "image/webp"
+    };
+
+    // Encode to base64 and return as data URL
+    let base64_data = general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", mime_type, base64_data))
+}
+
+#[tauri::command]
+pub fn storage_delete_avatar(
+    app: tauri::AppHandle,
+    entity_id: String,
+    filename: String,
+) -> Result<(), String> {
+    let avatar_path = storage_root(&app)?
+        .join("avatars")
+        .join(&entity_id)
+        .join(&filename);
+
+    delete_file_if_exists(&avatar_path)
+}

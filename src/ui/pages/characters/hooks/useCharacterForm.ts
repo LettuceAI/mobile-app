@@ -1,5 +1,7 @@
 import { useReducer, useEffect, useCallback } from "react";
-import { readSettings, saveCharacter, convertToImageRef } from "../../../../core/storage";
+import { readSettings, saveCharacter } from "../../../../core/storage";
+import { saveAvatar } from "../../../../core/storage/avatars";
+import { convertToImageRef } from "../../../../core/storage/images";
 import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
@@ -232,15 +234,22 @@ export function useCharacterForm() {
       console.log("[CreateCharacter] Saving with avatarPath:", state.avatarPath ? "present" : "empty");
       console.log("[CreateCharacter] Saving with backgroundImagePath:", state.backgroundImagePath ? "present" : "empty");
       
-      // Convert base64 images to image IDs before saving
-      let avatarImageId: string | undefined = undefined;
+      // Generate character ID first so we can use it for avatar storage
+      const characterId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      console.log("[CreateCharacter] Generated character ID:", characterId);
+      
+      // Save avatar using new centralized system
+      let avatarFilename: string | undefined = undefined;
       if (state.avatarPath) {
-        avatarImageId = await convertToImageRef(state.avatarPath);
-        if (!avatarImageId) {
+        avatarFilename = await saveAvatar(characterId, state.avatarPath);
+        if (!avatarFilename) {
           console.error("[CreateCharacter] Failed to save avatar image");
+        } else {
+          console.log("[CreateCharacter] Avatar saved as:", avatarFilename);
         }
       }
       
+      // Background images still use the old system (they're stored per-session)
       let backgroundImageId: string | undefined = undefined;
       if (state.backgroundImagePath) {
         backgroundImageId = await convertToImageRef(state.backgroundImagePath);
@@ -249,12 +258,13 @@ export function useCharacterForm() {
         }
       }
       
-      console.log("[CreateCharacter] Avatar image ID:", avatarImageId || "none");
+      console.log("[CreateCharacter] Avatar filename:", avatarFilename || "none");
       console.log("[CreateCharacter] Background image ID:", backgroundImageId || "none");
       
       const characterData = {
+        id: characterId,
         name: state.name.trim(),
-        avatarPath: avatarImageId || undefined,
+        avatarPath: avatarFilename || undefined,
         backgroundImagePath: backgroundImageId || undefined,
         description: state.description.trim(),
         scenes: state.scenes,

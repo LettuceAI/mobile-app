@@ -179,18 +179,20 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
   let updated: Character[];
   let entity: Character;
 
-  if (c.id) {
-    const idx = list.findIndex((x) => x.id === c.id);
-    if (idx === -1) throw new Error("Character not found");
-    entity = { ...list[idx], ...c, updatedAt: now() } as Character;
+  const existingIdx = c.id ? list.findIndex((x) => x.id === c.id) : -1;
+  
+  if (existingIdx !== -1) {
+    // Update existing character
+    entity = { ...list[existingIdx], ...c, updatedAt: now() } as Character;
     
     // Auto-set defaultSceneId if not set and there's exactly one scene
     if (!entity.defaultSceneId && entity.scenes.length === 1) {
       entity.defaultSceneId = entity.scenes[0].id;
     }
     
-    updated = [...list.slice(0, idx), entity, ...list.slice(idx + 1)];
+    updated = [...list.slice(0, existingIdx), entity, ...list.slice(existingIdx + 1)];
   } else {
+    // Create new character
     const timestamp = now();
     const settings = await readSettings();
     const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
@@ -201,7 +203,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     const autoDefaultSceneId = c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null);
     
     entity = {
-      id: (c.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+      id: c.id ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
       name: c.name,
       avatarPath: c.avatarPath,
       backgroundImagePath: c.backgroundImagePath,
@@ -210,6 +212,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
       defaultSceneId: autoDefaultSceneId,
       rules: defaultRules,
       defaultModelId: c.defaultModelId ?? null,
+      promptTemplateId: c.promptTemplateId ?? null,
       createdAt: timestamp,
       updatedAt: timestamp,
     } as Character;

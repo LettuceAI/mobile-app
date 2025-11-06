@@ -6,6 +6,7 @@ import { listCharacters, createSession, listSessionIds, getSession, deleteCharac
 import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu } from "../../components";
+import { useAvatar } from "../../hooks/useAvatar";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -214,7 +215,7 @@ function CharacterList({
 
               {/* Avatar */}
               <div className={cn(
-                "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden",
+                "relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden",
                 radius.md,
                 "border border-white/15 bg-white/5",
                 typography.body.size,
@@ -322,19 +323,25 @@ function isImageLike(s?: string) {
   return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
 
-function renderAvatar(c: Character) {
-  const v = c.avatarPath || "";
-  if (isImageLike(v)) {
+function CharacterAvatar({ character }: { character: Character }) {
+  const avatarUrl = useAvatar(character.id, character.avatarPath);
+  
+  if (avatarUrl && isImageLike(avatarUrl)) {
     return (
       <img
-        src={v}
-        alt={`${c.name} avatar`}
-        className="h-12 w-12 object-cover"
+        src={avatarUrl}
+        alt={`${character.name} avatar`}
+        className="h-14 w-14 object-cover"
       />
     );
   }
-  const display = v || c.name.slice(0, 2).toUpperCase();
-  return <span>{display}</span>;
+  
+  const initials = character.name.slice(0, 2).toUpperCase();
+  return <span>{initials}</span>;
+}
+
+function renderAvatar(c: Character) {
+  return <CharacterAvatar character={c} />;
 }
 
 

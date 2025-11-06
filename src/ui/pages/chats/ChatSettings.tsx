@@ -8,6 +8,7 @@ import { createDefaultAdvancedModelSettings } from "../../../core/storage/schema
 import { useChatController } from "./hooks/useChatController";
 import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
+import { useAvatar } from "../../hooks/useAvatar";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
@@ -215,6 +216,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [models, setModels] = useState<Model[]>([]);
   const [globalDefaultModelId, setGlobalDefaultModelId] = useState<string | null>(null);
   const [currentCharacter, setCurrentCharacter] = useState<Character>(character);
+  const avatarUrl = useAvatar(currentCharacter?.id, currentCharacter?.avatarPath);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
@@ -399,10 +401,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
   }, [characterId, navigate]);
 
   const avatarDisplay = useMemo(() => {
-    if (currentCharacter?.avatarPath && isImageLike(currentCharacter.avatarPath)) {
+    if (avatarUrl && isImageLike(avatarUrl)) {
       return (
         <img
-          src={currentCharacter.avatarPath}
+          src={avatarUrl}
           alt={currentCharacter?.name ?? "avatar"}
           className="h-12 w-12 rounded-full object-cover"
         />
@@ -415,7 +417,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
         {initials}
       </div>
     );
-  }, [currentCharacter]);
+  }, [currentCharacter, avatarUrl]);
 
   const characterName = useMemo(() => currentCharacter?.name ?? "Unknown Character", [currentCharacter?.name]);
   const effectiveModelId = getEffectiveModelId();

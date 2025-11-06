@@ -6,10 +6,6 @@ import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
 import { invoke } from "@tauri-apps/api/core";
 
-
-
-
-
 interface RowProps {
   icon: React.ReactNode;
   title: string;

@@ -5,6 +5,7 @@ import type { Character } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
 import { typography, radius, interactive, cn } from "../../design-tokens";
 import { useCharactersController } from "../characters/hooks/useCharactersController";
+import { useAvatar } from "../../hooks/useAvatar";
 
 const CharacterSkeleton = () => (
   <div className="space-y-3">
@@ -44,16 +45,19 @@ function isImageLike(s?: string) {
   return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
 
-function renderAvatar(character: Character) {
-  if (character.avatarPath && isImageLike(character.avatarPath)) {
+function CharacterAvatar({ character }: { character: Character }) {
+  const avatarUrl = useAvatar(character.id, character.avatarPath);
+  
+  if (avatarUrl && isImageLike(avatarUrl)) {
     return (
       <img
-        src={character.avatarPath}
+        src={avatarUrl}
         alt={character.name}
         className="h-full w-full object-cover"
       />
     );
   }
+  
   const initials = character.name
     .split(" ")
     .map((n) => n[0])
@@ -114,7 +118,7 @@ export function CharactersPage() {
                       typography.body.weight,
                       "text-white"
                     )}>
-                      {renderAvatar(character)}
+                      <CharacterAvatar character={character} />
                     </div>
 
                     {/* Content */}

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ArrowLeft, Settings } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Character } from "../../../../core/storage/schemas";
+import { useAvatar } from "../../../hooks/useAvatar";
 
 interface ChatHeaderProps {
   character: Character;
@@ -18,12 +19,13 @@ function isImageLike(value?: string) {
 export function ChatHeader({ character, sessionId, hasBackgroundImage }: ChatHeaderProps) {
   const navigate = useNavigate();
   const { characterId } = useParams<{ characterId: string }>();
+  const avatarUrl = useAvatar(character?.id, character?.avatarPath);
 
   const avatarDisplay = useMemo(() => {
-    if (character?.avatarPath && isImageLike(character.avatarPath)) {
+    if (avatarUrl && isImageLike(avatarUrl)) {
       return (
         <img
-          src={character.avatarPath}
+          src={avatarUrl}
           alt={character?.name ?? "avatar"}
           className="h-10 w-10 rounded-xl object-cover"
         />
@@ -36,7 +38,7 @@ export function ChatHeader({ character, sessionId, hasBackgroundImage }: ChatHea
         {initials}
       </div>
     );
-  }, [character]);
+  }, [character, avatarUrl]);
 
   const headerTitle = useMemo(() => character?.name ?? "Unknown", [character?.name]);
 

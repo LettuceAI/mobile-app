@@ -6,6 +6,7 @@ import { listCharacters, saveCharacter, readSettings } from "../../../core/stora
 import type { Model, Scene, SystemPromptTemplate } from "../../../core/storage/schemas";
 import { processBackgroundImage } from "../../../core/utils/image";
 import { convertToImageRef } from "../../../core/storage/images";
+import { saveAvatar, loadAvatar } from "../../../core/storage/avatars";
 import { listPromptTemplates } from "../../../core/prompts/service";
 
 export function EditCharacterPage() {
@@ -62,7 +63,19 @@ export function EditCharacterPage() {
 
       setName(character.name);
       setDescription(character.description || "");
-      setAvatarPath(character.avatarPath || "");
+      
+      // Load avatar if it exists
+      if (character.avatarPath) {
+        try {
+          const avatarUrl = await loadAvatar(character.id, character.avatarPath);
+          setAvatarPath(avatarUrl || "");
+        } catch (err) {
+          console.warn("Failed to load avatar:", err);
+          setAvatarPath("");
+        }
+      } else {
+        setAvatarPath("");
+      }
       
       let backgroundImage = character.backgroundImagePath || "";
       if (backgroundImage && !backgroundImage.startsWith("data:") && backgroundImage.length === 36) {
@@ -120,11 +133,22 @@ export function EditCharacterPage() {
       setSaving(true);
       setError(null);
 
-      // Convert base64 images to image IDs before saving
-      // (only if they're data URLs, not already stored IDs)
-      const avatarImageId = avatarPath 
-        ? (avatarPath.startsWith("data:") ? await convertToImageRef(avatarPath) : avatarPath)
-        : undefined;
+      // Save avatar using new centralized system if it's a new upload (data URL)
+      let avatarFilename: string | undefined = undefined;
+      if (avatarPath) {
+        if (avatarPath.startsWith("data:")) {
+          // New upload - save it
+          avatarFilename = await saveAvatar(characterId, avatarPath);
+          if (!avatarFilename) {
+            console.error("[EditCharacter] Failed to save avatar image");
+          }
+        } else {
+          // Existing avatar filename - keep it
+          avatarFilename = avatarPath;
+        }
+      }
+
+      // Background images still use the old system (they're stored per-session)
       const backgroundImageId = backgroundImagePath 
         ? (backgroundImagePath.startsWith("data:") ? await convertToImageRef(backgroundImagePath) : backgroundImagePath)
         : undefined;
@@ -133,7 +157,7 @@ export function EditCharacterPage() {
         id: characterId,
         name: name.trim(),
         description: description.trim(),
-        avatarPath: avatarImageId,
+        avatarPath: avatarFilename,
         backgroundImagePath: backgroundImageId,
         scenes: scenes,
         defaultSceneId: defaultSceneId,
@@ -247,6 +271,21 @@ export function EditCharacterPage() {
       });
   };
 
+  // Handle avatar upload
+  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarPath(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    
+    // Clear input so same file can be selected again
+    event.target.value = "";
+  };
+
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
       <main className="flex-1 overflow-y-auto px-4">
@@ -276,8 +315,30 @@ export function EditCharacterPage() {
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]">
             <div className="flex items-center gap-4 p-4">
               {/* Avatar */}
-              <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10">
-                {getAvatarPreview()}
+              <div className="relative h-16 w-16 flex-shrink-0">
+                <label className="relative block h-full w-full cursor-pointer overflow-hidden rounded-2xl border border-white/10 group">
+                  {getAvatarPreview()}
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Edit2 className="h-5 w-5 text-white" />
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </label>
+                {/* Remove avatar button */}
+                {avatarPath && (
+                  <button
+                    onClick={() => setAvatarPath("")}
+                    className="absolute -top-2 -right-2 rounded-full border border-white/20 bg-red-500/90 p-1 text-white transition hover:bg-red-600 active:scale-95"
+                    title="Remove avatar"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </div>
               
               {/* Name Input */}

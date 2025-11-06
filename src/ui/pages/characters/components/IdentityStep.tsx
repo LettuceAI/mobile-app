@@ -50,22 +50,12 @@ export function IdentityStep({
 
       {/* Avatar Section */}
       <div className="relative flex flex-col items-center gap-3 py-4">
-        {/* Background glow effect */}
-        {avatarPath && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-          >
-            <div className="h-24 w-24 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 blur-3xl" />
-          </motion.div>
-        )}
 
-        <div className="relative z-10">
+        <div className="relative">
           <motion.div
             whileTap={{ scale: 0.97 }}
             className={cn(
-              "relative h-24 w-24 overflow-hidden border-2",
+              "relative h-32 w-32 overflow-hidden border-2",
               radius.full,
               avatarPath ? "border-white/20" : "border-white/10",
               "bg-gradient-to-br from-white/5 to-white/10",
@@ -103,20 +93,19 @@ export function IdentityStep({
           <AnimatePresence>
             {avatarPath && (
               <motion.button
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                onClick={() => onAvatarChange("")}
-                className={cn(
-                  "absolute -top-1 -left-1 z-20 flex h-7 w-7 items-center justify-center border-2 border-[#050505] bg-red-400/20 text-red-300",
-                  radius.full,
-                  shadows.lg,
-                  interactive.transition.default,
-                  "active:scale-95 active:bg-red-400/30"
-                )}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              onClick={() => onAvatarChange("")}
+              className={cn(
+                "absolute -top-1 -left-1 flex h-10 w-10 items-center justify-center bg-red-500",
+                radius.full,
+                interactive.transition.default,
+                "active:scale-95 active:bg-red-600"
+              )}
               >
-                <X size={13} />
+              <X size={24} className="text-white" strokeWidth={3} />
               </motion.button>
             )}
           </AnimatePresence>
