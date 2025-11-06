@@ -2,6 +2,8 @@ import { useCallback, useEffect, useReducer } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { getPersona, savePersona } from "../../../../core/storage/repo";
+import { loadAvatar, saveAvatar } from "../../../../core/storage/avatars";
+import { invalidateAvatarCache } from "../../../hooks/useAvatar";
 
 type PersonaFormState = {
   loading: boolean;
@@ -10,6 +12,7 @@ type PersonaFormState = {
   title: string;
   description: string;
   isDefault: boolean;
+  avatarPath: string | null;
 };
 
 type Action =
@@ -25,6 +28,7 @@ const initialState: PersonaFormState = {
   title: "",
   description: "",
   isDefault: false,
+  avatarPath: null,
 };
 
 function reducer(state: PersonaFormState, action: Action): PersonaFormState {
@@ -60,12 +64,20 @@ export function usePersonaFormController(personaId: string | undefined) {
         return;
       }
 
+      // Load avatar if it exists
+      let avatarDataUrl: string | null = null;
+      if (persona.avatarPath) {
+        const loadedAvatar = await loadAvatar("persona", personaId, persona.avatarPath);
+        avatarDataUrl = loadedAvatar ?? null;
+      }
+
       dispatch({
         type: "set_fields",
         payload: {
           title: persona.title,
           description: persona.description,
           isDefault: persona.isDefault ?? false,
+          avatarPath: avatarDataUrl,
         },
       });
       dispatch({ type: "set_error", payload: null });
@@ -96,12 +108,16 @@ export function usePersonaFormController(personaId: string | undefined) {
     dispatch({ type: "set_fields", payload: { isDefault: value } });
   }, []);
 
+  const setAvatarPath = useCallback((value: string | null) => {
+    dispatch({ type: "set_fields", payload: { avatarPath: value } });
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (!personaId) {
       return;
     }
 
-    const { title, description, isDefault } = state;
+    const { title, description, isDefault, avatarPath } = state;
     if (!title.trim() || !description.trim()) {
       return;
     }
@@ -110,11 +126,23 @@ export function usePersonaFormController(personaId: string | undefined) {
     dispatch({ type: "set_error", payload: null });
 
     try {
+      // Save avatar if provided
+      let avatarFilename: string | undefined = undefined;
+      if (avatarPath) {
+        avatarFilename = await saveAvatar("persona", personaId, avatarPath);
+        if (!avatarFilename) {
+          console.error("[EditPersona] Failed to save avatar image");
+        } else {
+          invalidateAvatarCache("persona", personaId);
+        }
+      }
+
       await savePersona({
         id: personaId,
         title: title.trim(),
         description: description.trim(),
         isDefault,
+        avatarPath: avatarFilename,
       });
 
       navigate("/personas");
@@ -134,6 +162,7 @@ export function usePersonaFormController(personaId: string | undefined) {
     setTitle,
     setDescription,
     setIsDefault,
+    setAvatarPath,
     handleSave,
   };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { loadAvatar } from "../../core/storage/avatars";
+import { loadAvatar, type EntityType } from "../../core/storage/avatars";
 
 const avatarCache = new Map<string, string | Promise<string>>();
 
@@ -7,14 +7,15 @@ const avatarCache = new Map<string, string | Promise<string>>();
  * Invalidate cached avatar for a specific entity
  * Call this when an avatar is updated or deleted
  */
-export function invalidateAvatarCache(entityId: string, avatarFilename?: string) {
+export function invalidateAvatarCache(type: EntityType, entityId: string, avatarFilename?: string) {
   if (avatarFilename) {
-    const cacheKey = `${entityId}:${avatarFilename}`;
+    const cacheKey = `${type}:${entityId}:${avatarFilename}`;
     avatarCache.delete(cacheKey);
   } else {
+    const prefix = `${type}:${entityId}:`;
     const keysToDelete: string[] = [];
     avatarCache.forEach((_, key) => {
-      if (key.startsWith(`${entityId}:`)) {
+      if (key.startsWith(prefix)) {
         keysToDelete.push(key);
       }
     });
@@ -24,20 +25,22 @@ export function invalidateAvatarCache(entityId: string, avatarFilename?: string)
 
 /**
  * Hook to load and display character/persona avatars
- * Automatically fetches avatar from avatars/<entityId>/ directory
+ * Automatically fetches avatar from avatars/<type>-<entityId>/ directory
  * Uses global cache to prevent redundant loads
  * 
+ * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
- * @param avatarFilename - The avatar filename stored in character.avatarPath
+ * @param avatarFilename - The avatar filename stored in entity.avatarPath
  * @returns Data URL of the avatar or undefined if loading/not found
  */
 export function useAvatar(
+  type: EntityType,
   entityId: string | undefined,
   avatarFilename: string | undefined
 ): string | undefined {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(() => {
     if (entityId && avatarFilename) {
-      const cacheKey = `${entityId}:${avatarFilename}`;
+      const cacheKey = `${type}:${entityId}:${avatarFilename}`;
       const cached = avatarCache.get(cacheKey);
       if (typeof cached === 'string') {
         return cached;
@@ -56,13 +59,13 @@ export function useAvatar(
       }
 
       if (avatarFilename.startsWith("data:")) {
-        const cacheKey = `${entityId}:${avatarFilename}`;
+        const cacheKey = `${type}:${entityId}:${avatarFilename}`;
         avatarCache.set(cacheKey, avatarFilename);
         setAvatarUrl(avatarFilename);
         return;
       }
 
-      const cacheKey = `${entityId}:${avatarFilename}`;
+      const cacheKey = `${type}:${entityId}:${avatarFilename}`;
       const cached = avatarCache.get(cacheKey);
 
       if (typeof cached === 'string') {
@@ -72,7 +75,6 @@ export function useAvatar(
         return;
       }
 
-      // If currently loading, wait for it
       if (cached instanceof Promise) {
         try {
           const url = await cached;
@@ -87,8 +89,7 @@ export function useAvatar(
         return;
       }
 
-      // Start loading and cache the promise
-      const loadPromise = loadAvatar(entityId, avatarFilename)
+      const loadPromise = loadAvatar(type, entityId, avatarFilename)
         .then((url) => {
           if (url) {
             avatarCache.set(cacheKey, url);
@@ -120,7 +121,7 @@ export function useAvatar(
     return () => {
       cancelled = true;
     };
-  }, [entityId, avatarFilename]);
+  }, [type, entityId, avatarFilename]);
 
   return avatarUrl;
 }

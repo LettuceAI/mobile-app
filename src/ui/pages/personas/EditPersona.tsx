@@ -1,19 +1,37 @@
 import { useParams } from "react-router-dom";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Camera, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePersonaFormController } from "./hooks/usePersonaFormController";
 
 export function EditPersonaPage() {
   const { personaId } = useParams();
   const {
-    state: { loading, saving, error, title, description, isDefault },
+    state: { loading, saving, error, title, description, isDefault, avatarPath },
     setTitle,
     setDescription,
     setIsDefault,
+    setAvatarPath,
     handleSave,
   } = usePersonaFormController(personaId);
 
   const canSave = title.trim().length > 0 && description.trim().length > 0 && !saving;
+
+  const handleAvatarUpload = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAvatarPath(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
 
   if (loading) {
     return (
@@ -39,6 +57,48 @@ export function EditPersonaPage() {
               <p className="text-sm text-red-200">{error}</p>
             </div>
           )}
+
+          {/* Avatar Section */}
+          <div className="space-y-3">
+            <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
+              Avatar
+            </label>
+            <div className="flex items-center gap-4">
+              {/* Avatar Preview with Upload Button */}
+              <button
+                onClick={handleAvatarUpload}
+                className="group relative h-32 w-32 overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl transition hover:border-white/30 active:scale-95"
+              >
+                {avatarPath ? (
+                  <img
+                    src={avatarPath}
+                    alt="Persona avatar"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Camera className="text-white/30" size={32} />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
+                  <Camera className="text-white" size={24} />
+                </div>
+              </button>
+
+              {/* Remove Button */}
+              {avatarPath && (
+                <button
+                  onClick={() => setAvatarPath(null)}
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 backdrop-blur-xl transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 active:scale-95"
+                >
+                  <X size={20} strokeWidth={3} />
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-white/40">
+              Optional: Add a visual identity for this persona
+            </p>
+          </div>
 
           {/* Title Input */}
           <div className="space-y-2">

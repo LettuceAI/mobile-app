@@ -29,6 +29,7 @@ export function ChatConversationPage() {
 
   const {
     character,
+    persona,
     session,
     messages,
     draft,
@@ -267,6 +268,8 @@ export function ChatConversationPage() {
                 isStartingSceneMessage={isStartingSceneMessage(message)}
                 theme={theme}
                 displayContent={displayContent}
+                character={character}
+                persona={persona}
               />
             );
           })}

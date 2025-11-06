@@ -68,7 +68,7 @@ export function EditCharacterPage() {
       // Load avatar if it exists
       if (character.avatarPath) {
         try {
-          const avatarUrl = await loadAvatar(character.id, character.avatarPath);
+          const avatarUrl = await loadAvatar("character", character.id, character.avatarPath);
           setAvatarPath(avatarUrl || "");
         } catch (err) {
           console.warn("Failed to load avatar:", err);
@@ -138,17 +138,17 @@ export function EditCharacterPage() {
       let avatarFilename: string | undefined = undefined;
       if (avatarPath) {
         if (avatarPath.startsWith("data:")) {
-          avatarFilename = await saveAvatar(characterId, avatarPath);
+          avatarFilename = await saveAvatar("character", characterId, avatarPath);
           if (!avatarFilename) {
             console.error("[EditCharacter] Failed to save avatar image");
           } else {
-            invalidateAvatarCache(characterId);
+            invalidateAvatarCache("character", characterId);
           }
         } else {
           avatarFilename = avatarPath;
         }
       } else {
-        invalidateAvatarCache(characterId);
+        invalidateAvatarCache("character", characterId);
       }
 
       const backgroundImageId = backgroundImagePath 

@@ -216,7 +216,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [models, setModels] = useState<Model[]>([]);
   const [globalDefaultModelId, setGlobalDefaultModelId] = useState<string | null>(null);
   const [currentCharacter, setCurrentCharacter] = useState<Character>(character);
-  const avatarUrl = useAvatar(currentCharacter?.id, currentCharacter?.avatarPath);
+  const avatarUrl = useAvatar("character", currentCharacter?.id, currentCharacter?.avatarPath);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);

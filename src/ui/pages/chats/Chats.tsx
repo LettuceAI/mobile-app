@@ -271,7 +271,7 @@ function isImageLike(s?: string) {
 }
 
 const CharacterAvatar = memo(({ character }: { character: Character }) => {
-  const avatarUrl = useAvatar(character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
   
   if (avatarUrl && isImageLike(avatarUrl)) {
     return (

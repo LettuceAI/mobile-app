@@ -19,7 +19,7 @@ function isImageLike(value?: string) {
 export function ChatHeader({ character, sessionId, hasBackgroundImage }: ChatHeaderProps) {
   const navigate = useNavigate();
   const { characterId } = useParams<{ characterId: string }>();
-  const avatarUrl = useAvatar(character?.id, character?.avatarPath);
+  const avatarUrl = useAvatar("character", character?.id, character?.avatarPath);
 
   const avatarDisplay = useMemo(() => {
     if (avatarUrl && isImageLike(avatarUrl)) {
@@ -48,10 +48,10 @@ export function ChatHeader({ character, sessionId, hasBackgroundImage }: ChatHea
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             onClick={() => navigate("/chat")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+            className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
             aria-label="Back"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={14} />
           </button>
           {avatarDisplay}
           <button

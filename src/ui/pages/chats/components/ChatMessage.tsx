@@ -1,10 +1,11 @@
 import { motion, type PanInfo } from "framer-motion";
 import React, { useMemo } from "react";
-import { RefreshCw, Pin } from "lucide-react";
+import { RefreshCw, Pin, User, Bot } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import type { StoredMessage } from "../../../../core/storage/schemas";
+import type { StoredMessage, Character, Persona } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
 import type { ThemeColors } from "../../../../core/utils/imageAnalysis";
+import { useAvatar } from "../../../hooks/useAvatar";
 
 interface VariantState {
   total: number;
@@ -25,9 +26,51 @@ interface ChatMessageProps {
   handleRegenerate: (message: StoredMessage) => Promise<void>;
   isStartingSceneMessage: boolean;
   theme: ThemeColors;
+  character: Character | null;
+  persona: Persona | null;
   // When provided, this content will be rendered instead of message.content
   displayContent?: string;
 }
+
+// Avatar component for user/assistant
+const MessageAvatar = React.memo(function MessageAvatar({
+  role,
+  character,
+  persona,
+}: {
+  role: "user" | "assistant" | "scene" | "system";
+  character: Character | null;
+  persona: Persona | null;
+}) {
+  const characterAvatar = useAvatar("character", character?.id ?? "", character?.avatarPath);
+  const personaAvatar = useAvatar("persona", persona?.id ?? "", persona?.avatarPath);
+
+  if (role === "user") {
+    return (
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-white/5 to-white/10">
+        {personaAvatar ? (
+          <img src={personaAvatar} alt="User" className="h-full w-full object-cover" />
+        ) : (
+          <User size={16} className="text-white/60" />
+        )}
+      </div>
+    );
+  }
+
+  if (role === "assistant" || role === "scene") {
+    return (
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-white/5 to-white/10">
+        {characterAvatar ? (
+          <img src={characterAvatar} alt="Assistant" className="h-full w-full object-cover" />
+        ) : (
+          <Bot size={16} className="text-white/60" />
+        )}
+      </div>
+    );
+  }
+
+  return null;
+});
 
 // Memoized action buttons component
 const MessageActions = React.memo(function MessageActions({
@@ -90,6 +133,8 @@ function ChatMessageInner({
   handleRegenerate,
   isStartingSceneMessage,
   theme,
+  character,
+  persona,
   displayContent,
 }: ChatMessageProps) {
   // Memoize all computed values
@@ -158,10 +203,15 @@ function ChatMessageInner({
   return (
     <div
       className={cn(
-        "relative flex",
+        "relative flex gap-2",
         message.role === "user" ? "justify-end" : "justify-start"
       )}
     >
+      {/* Avatar for assistant/scene messages (left side) */}
+      {(message.role === "assistant" || message.role === "scene") && (
+        <MessageAvatar role={message.role} character={character} persona={persona} />
+      )}
+
       <motion.div
         initial={computed.shouldAnimate ? { opacity: 0, y: 4 } : false}
         animate={computed.shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
@@ -236,6 +286,11 @@ function ChatMessageInner({
         )}
       </motion.div>
 
+      {/* Avatar for user messages (right side) */}
+      {message.role === "user" && (
+        <MessageAvatar role={message.role} character={character} persona={persona} />
+      )}
+
       {computed.showRegenerateButton && (
         <MessageActions
           disabled={regeneratingMessageId === message.id || sending}
@@ -262,7 +317,11 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     prev.regeneratingMessageId === next.regeneratingMessageId &&
     prev.sending === next.sending &&
     prev.isStartingSceneMessage === next.isStartingSceneMessage &&
-    prev.theme === next.theme
+    prev.theme === next.theme &&
+    prev.character?.id === next.character?.id &&
+    prev.character?.avatarPath === next.character?.avatarPath &&
+    prev.persona?.id === next.persona?.id &&
+    prev.persona?.avatarPath === next.persona?.avatarPath
   );
 });
 

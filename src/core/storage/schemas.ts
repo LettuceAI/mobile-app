@@ -200,6 +200,7 @@ export const PersonaSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1),
   description: z.string().min(1),
+  avatarPath: z.string().optional(),
   isDefault: z.boolean().default(false),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),

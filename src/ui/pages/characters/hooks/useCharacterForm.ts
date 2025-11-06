@@ -242,12 +242,12 @@ export function useCharacterForm() {
       // Save avatar using new centralized system
       let avatarFilename: string | undefined = undefined;
       if (state.avatarPath) {
-        avatarFilename = await saveAvatar(characterId, state.avatarPath);
+        avatarFilename = await saveAvatar("character", characterId, state.avatarPath);
         if (!avatarFilename) {
           console.error("[CreateCharacter] Failed to save avatar image");
         } else {
           console.log("[CreateCharacter] Avatar saved as:", avatarFilename);
-          invalidateAvatarCache(characterId);
+          invalidateAvatarCache("character", characterId);
         }
       }
       

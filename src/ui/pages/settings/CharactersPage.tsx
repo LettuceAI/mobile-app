@@ -46,7 +46,7 @@ function isImageLike(s?: string) {
 }
 
 function CharacterAvatar({ character }: { character: Character }) {
-  const avatarUrl = useAvatar(character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
   
   if (avatarUrl && isImageLike(avatarUrl)) {
     return (

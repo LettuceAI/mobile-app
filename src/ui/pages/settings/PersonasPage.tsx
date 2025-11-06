@@ -4,7 +4,35 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { Persona } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
 import { usePersonasController } from "../personas/hooks/usePersonasController";
+import { useAvatar } from "../../hooks/useAvatar";
 
+const PersonaAvatar = ({ persona }: { persona: Persona }) => {
+  const avatarDataUrl = useAvatar("persona", persona.id, persona.avatarPath);
+  
+  return (
+    <div
+      className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
+        persona.isDefault
+          ? "border-emerald-400/40 bg-emerald-400/20"
+          : "border-white/15 bg-white/8"
+      }`}
+    >
+      {avatarDataUrl ? (
+        <img
+          src={avatarDataUrl}
+          alt={persona.title}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <User
+          className={`h-5 w-5 ${
+            persona.isDefault ? "text-emerald-200" : "text-white/70"
+          }`}
+        />
+      )}
+    </div>
+  );
+};
 const PersonaSkeleton = () => (
   <div className="space-y-3">
     {[1, 2, 3].map((i) => (
@@ -91,19 +119,7 @@ export function PersonasPage() {
                     <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
                   )}
 
-                  <div
-                    className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${
-                      persona.isDefault
-                        ? "border-emerald-400/40 bg-emerald-400/20"
-                        : "border-white/15 bg-white/8"
-                    }`}
-                  >
-                    <User
-                      className={`h-5 w-5 ${
-                        persona.isDefault ? "text-emerald-200" : "text-white/70"
-                      }`}
-                    />
-                  </div>
+                  <PersonaAvatar persona={persona} />
 
                   <div className="relative min-w-0 flex-1">
                     <div className="flex items-center gap-2">
