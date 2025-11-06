@@ -68,6 +68,45 @@ fn resolve_max_tokens(session: &Session, model: &Model, settings: &Settings) -> 
         .unwrap_or(FALLBACK_MAX_OUTPUT_TOKENS)
 }
 
+fn resolve_frequency_penalty(session: &Session, model: &Model, _settings: &Settings) -> Option<f64> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.frequency_penalty)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.frequency_penalty)
+        })
+}
+
+fn resolve_presence_penalty(session: &Session, model: &Model, _settings: &Settings) -> Option<f64> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.presence_penalty)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.presence_penalty)
+        })
+}
+
+fn resolve_top_k(session: &Session, model: &Model, _settings: &Settings) -> Option<u32> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.top_k)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.top_k)
+        })
+}
+
 #[tauri::command]
 pub async fn chat_completion(
     app: AppHandle,
@@ -228,6 +267,9 @@ pub async fn chat_completion(
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
+    let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
+    let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
+    let top_k = resolve_top_k(&session, &model, &settings);
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -240,6 +282,9 @@ pub async fn chat_completion(
         max_tokens,
         should_stream,
         request_id.clone(),
+        frequency_penalty,
+        presence_penalty,
+        top_k,
     );
 
     log_info(
@@ -580,6 +625,9 @@ pub async fn chat_regenerate(
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
+    let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
+    let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
+    let top_k = resolve_top_k(&session, &model, &settings);
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -592,6 +640,9 @@ pub async fn chat_regenerate(
         max_tokens,
         should_stream,
         request_id.clone(),
+        frequency_penalty,
+        presence_penalty,
+        top_k,
     );
 
     emit_debug(
@@ -873,6 +924,9 @@ pub async fn chat_continue(
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
+    let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
+    let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
+    let top_k = resolve_top_k(&session, &model, &settings);
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -885,6 +939,9 @@ pub async fn chat_continue(
         max_tokens,
         should_stream,
         request_id.clone(),
+        frequency_penalty,
+        presence_penalty,
+        top_k,
     );
 
     emit_debug(

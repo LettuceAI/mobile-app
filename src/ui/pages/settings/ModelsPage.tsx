@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Check, ChevronRight, SlidersHorizontal, Target, Scale, Sparkles, Settings2, Lightbulb, Cpu } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronRight, SlidersHorizontal, Target, Scale, Sparkles, Settings2, Lightbulb, Cpu, Info } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -7,13 +7,19 @@ import {
     ADVANCED_TEMPERATURE_RANGE,
     ADVANCED_TOP_P_RANGE,
     ADVANCED_MAX_TOKENS_RANGE,
+    ADVANCED_FREQUENCY_PENALTY_RANGE,
+    ADVANCED_PRESENCE_PENALTY_RANGE,
+    ADVANCED_TOP_K_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
+import { BottomMenu } from "../../components/BottomMenu";
+import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelsController } from "./hooks/useModelsController";
 
 export function ModelsPage() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const isAdvancedView = searchParams.get("view") === "advanced";
+    const [showParameterSupport, setShowParameterSupport] = useState(false);
     const {
         state: {
             providers,
@@ -313,6 +319,135 @@ export function ModelsPage() {
                                             }
                                         </p>
                                     </div>
+
+                                    {/* Frequency Penalty */}
+                                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                        <div className="mb-3 flex items-start justify-between gap-3">
+                                            <div className="flex-1">
+                                                <label className="text-sm font-medium text-white">Frequency Penalty</label>
+                                                <p className="mt-0.5 text-xs text-white/50">Reduce repetition of token sequences</p>
+                                            </div>
+                                            <span className="rounded-lg border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-orange-200">
+                                                {advancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
+                                            max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
+                                            step={0.01}
+                                            value={advancedDraft.frequencyPenalty ?? 0}
+                                            onChange={(e) => {
+                                                updateAdvancedDraft({ frequencyPenalty: Number(e.target.value) });
+                                                setForceCustomMode(true);
+                                            }}
+                                            className="w-full"
+                                            style={{
+                                                background: `linear-gradient(to right, rgb(251, 146, 60) 0%, rgb(251, 146, 60) ${((advancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((advancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                                            }}
+                                        />
+                                        <div className="mt-2 flex items-center justify-between text-xs">
+                                            <span className="text-white/40">-2 - More Rep.</span>
+                                            <span className="text-white/40">2 - Less Rep.</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Presence Penalty */}
+                                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                        <div className="mb-3 flex items-start justify-between gap-3">
+                                            <div className="flex-1">
+                                                <label className="text-sm font-medium text-white">Presence Penalty</label>
+                                                <p className="mt-0.5 text-xs text-white/50">Encourage discussing new topics</p>
+                                            </div>
+                                            <span className="rounded-lg border border-pink-400/30 bg-pink-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-pink-200">
+                                                {advancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
+                                            max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
+                                            step={0.01}
+                                            value={advancedDraft.presencePenalty ?? 0}
+                                            onChange={(e) => {
+                                                updateAdvancedDraft({ presencePenalty: Number(e.target.value) });
+                                                setForceCustomMode(true);
+                                            }}
+                                            className="w-full"
+                                            style={{
+                                                background: `linear-gradient(to right, rgb(244, 114, 182) 0%, rgb(244, 114, 182) ${((advancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((advancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                                            }}
+                                        />
+                                        <div className="mt-2 flex items-center justify-between text-xs">
+                                            <span className="text-white/40">-2 - Repeat</span>
+                                            <span className="text-white/40">2 - Explore</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Top K */}
+                                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                        <div className="mb-3">
+                                            <label className="text-sm font-medium text-white">Top K</label>
+                                            <p className="mt-0.5 text-xs text-white/50">Limit sampling to top K tokens</p>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={ADVANCED_TOP_K_RANGE.min}
+                                            max={ADVANCED_TOP_K_RANGE.max}
+                                            value={advancedDraft.topK ?? ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? null : Number(e.target.value);
+                                                updateAdvancedDraft({ topK: val });
+                                                setForceCustomMode(true);
+                                            }}
+                                            placeholder="40"
+                                            className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                                        />
+                                        <p className="mt-2 text-xs text-white/40">
+                                            Lower values = more focused, higher = more diverse
+                                        </p>
+                                    </div>
+
+                                    {/* Presets */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-medium uppercase tracking-wider text-white/60">Quick Presets</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    updateAdvancedDraft({ temperature: 0.2, topP: 0.9, maxOutputTokens: 512, frequencyPenalty: 0, presencePenalty: 0, topK: null });
+                                                    setForceCustomMode(true);
+                                                }}
+                                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center transition active:scale-95 active:bg-white/10"
+                                            >
+                                                <div className="text-xs font-semibold text-white">Precise</div>
+                                                <div className="mt-0.5 text-[10px] text-white/50">Focused</div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    updateAdvancedDraft({ temperature: 0.7, topP: 1.0, maxOutputTokens: 1024, frequencyPenalty: 0, presencePenalty: 0, topK: null });
+                                                    setForceCustomMode(true);
+                                                }}
+                                                className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2.5 text-center transition active:scale-95 active:bg-emerald-400/20"
+                                            >
+                                                <div className="text-xs font-semibold text-emerald-200">Balanced</div>
+                                                <div className="mt-0.5 text-[10px] text-emerald-300/60">Default</div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    updateAdvancedDraft({ temperature: 0.9, topP: 1.0, maxOutputTokens: 1024, frequencyPenalty: 0, presencePenalty: 0, topK: null });
+                                                    setForceCustomMode(true);
+                                                }}
+                                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center transition active:scale-95 active:bg-white/10"
+                                            >
+                                                <div className="text-xs font-semibold text-white">Creative</div>
+                                                <div className="mt-0.5 text-[10px] text-white/50">Random</div>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         )}
@@ -355,6 +490,10 @@ export function ModelsPage() {
         );
     }
 
+    function providerDisplay(provider: { id: string; providerId: string; label: string; apiKeyRef?: { providerId: string; key: string; credId?: string | undefined; } | undefined; baseUrl?: string | undefined; defaultModel?: string | undefined; headers?: Record<string, string> | undefined; }) {
+        // Prefer label, fallback to providerId, then id
+        return provider.label || provider.providerId || provider.id;
+    }
     return (
         <div className="flex h-full flex-col">
             {/* List (TopNav handles title/back) */}
@@ -368,8 +507,18 @@ export function ModelsPage() {
                             <SlidersHorizontal className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-white">
-                                Response Style
+                            <div className="flex items-center gap-2 text-sm font-medium text-white">
+                                <span>Response Style</span>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowParameterSupport(true);
+                                    }}
+                                    className="group/info flex items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
+                                    aria-label="View parameter support"
+                                >
+                                    <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
+                                </button>
                             </div>
                             <div className="mt-0.5 truncate text-xs text-emerald-100/80">
                                 {advancedSummary}
@@ -416,6 +565,21 @@ export function ModelsPage() {
                     );
                 })}
             </div>
+
+            {/* Parameter Support Bottom Menu */}
+            <BottomMenu
+                isOpen={showParameterSupport}
+                onClose={() => setShowParameterSupport(false)}
+                title={`Parameter Support - ${(() => {
+                    const defaultModel = models.find(m => m.id === defaultModelId);
+                    const provider = providers.find(p => p.providerId === defaultModel?.providerId) ?? providers[0];
+                    return provider ? providerDisplay(provider) : 'Provider';
+                })()}`}
+            >
+                <ProviderParameterSupportInfo 
+                    providerId={models.find(m => m.id === defaultModelId)?.providerId || 'openai'} 
+                />
+            </BottomMenu>
         </div>
     );
 }

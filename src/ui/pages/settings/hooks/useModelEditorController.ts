@@ -40,6 +40,9 @@ type ControllerReturn = {
   handleTemperatureChange: (value: number) => void;
   handleTopPChange: (value: number) => void;
   handleMaxTokensChange: (value: number | null) => void;
+  handleFrequencyPenaltyChange: (value: number) => void;
+  handlePresencePenaltyChange: (value: number) => void;
+  handleTopKChange: (value: number | null) => void;
   handleSave: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleSetDefault: () => Promise<void>;
@@ -283,6 +286,47 @@ export function useModelEditorController(): ControllerReturn {
     [dispatch, state.modelAdvancedDraft],
   );
 
+  const handleFrequencyPenaltyChange = useCallback(
+    (value: number) => {
+      const rounded = Number(value.toFixed(2));
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          frequencyPenalty: rounded,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handlePresencePenaltyChange = useCallback(
+    (value: number) => {
+      const rounded = Number(value.toFixed(2));
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          presencePenalty: rounded,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleTopKChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          topK: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
   const clearError = useCallback(() => {
     dispatch({ type: "set_error", payload: null });
   }, [dispatch]);
@@ -428,6 +472,9 @@ export function useModelEditorController(): ControllerReturn {
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
+    handleFrequencyPenaltyChange,
+    handlePresencePenaltyChange,
+    handleTopKChange,
     handleSave,
     handleDelete,
     handleSetDefault,

@@ -1,4 +1,4 @@
-import { Save, Loader2, Trash2, SlidersHorizontal, FileText } from "lucide-react";
+import { Save, Loader2, Trash2, SlidersHorizontal, FileText, Info } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
@@ -7,7 +7,12 @@ import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
   ADVANCED_MAX_TOKENS_RANGE,
+  ADVANCED_FREQUENCY_PENALTY_RANGE,
+  ADVANCED_PRESENCE_PENALTY_RANGE,
+  ADVANCED_TOP_K_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
+import { BottomMenu } from "../../components/BottomMenu";
+import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate } from "../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../core/prompts/service";
@@ -15,6 +20,7 @@ import { listPromptTemplates } from "../../../core/prompts/service";
 export function EditModelPage() {
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [showParameterSupport, setShowParameterSupport] = useState(false);
 
   const {
     state: {
@@ -41,6 +47,9 @@ export function EditModelPage() {
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
+    handleFrequencyPenaltyChange,
+    handlePresencePenaltyChange,
+    handleTopKChange,
     handleSave,
     handleDelete,
     handleSetDefault,
@@ -220,7 +229,19 @@ export function EditModelPage() {
                     <SlidersHorizontal className="h-4 w-4 text-purple-400" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-white">Advanced Settings</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-white">Advanced Settings</h3>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowParameterSupport(true);
+                        }}
+                        className="group/info flex items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
+                        aria-label="View parameter support"
+                      >
+                        <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
+                      </button>
+                    </div>
                     {!overrideEnabled ? (
                       <p className="text-xs text-white/50 truncate">Using global defaults</p>
                     ) : (
@@ -372,6 +393,85 @@ export function EditModelPage() {
                   </p>
                 </div>
 
+                {/* Frequency Penalty */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-white">Frequency Penalty</label>
+                      <p className="mt-0.5 text-xs text-white/50">Reduce repetition of token sequences</p>
+                    </div>
+                    <span className="rounded-lg border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-orange-200">
+                      {modelAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
+                    max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
+                    step={0.01}
+                    value={modelAdvancedDraft.frequencyPenalty ?? 0}
+                    onChange={(e) => handleFrequencyPenaltyChange(Number(e.target.value))}
+                    className="w-full"
+                    style={{
+                      background: `linear-gradient(to right, rgb(251, 146, 60) 0%, rgb(251, 146, 60) ${((modelAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                    }}
+                  />
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-white/40">-2 - More Rep.</span>
+                    <span className="text-white/40">2 - Less Rep.</span>
+                  </div>
+                </div>
+
+                {/* Presence Penalty */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-white">Presence Penalty</label>
+                      <p className="mt-0.5 text-xs text-white/50">Encourage discussing new topics</p>
+                    </div>
+                    <span className="rounded-lg border border-pink-400/30 bg-pink-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-pink-200">
+                      {modelAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
+                    max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
+                    step={0.01}
+                    value={modelAdvancedDraft.presencePenalty ?? 0}
+                    onChange={(e) => handlePresencePenaltyChange(Number(e.target.value))}
+                    className="w-full"
+                    style={{
+                      background: `linear-gradient(to right, rgb(244, 114, 182) 0%, rgb(244, 114, 182) ${((modelAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                    }}
+                  />
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-white/40">-2 - Repeat</span>
+                    <span className="text-white/40">2 - Explore</span>
+                  </div>
+                </div>
+
+                {/* Top K */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3">
+                    <label className="text-sm font-medium text-white">Top K</label>
+                    <p className="mt-0.5 text-xs text-white/50">Limit sampling to top K tokens</p>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={ADVANCED_TOP_K_RANGE.min}
+                    max={ADVANCED_TOP_K_RANGE.max}
+                    value={modelAdvancedDraft.topK ?? ''}
+                    onChange={(e) => handleTopKChange(e.target.value === '' ? null : Number(e.target.value))}
+                    placeholder="40"
+                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                  />
+                  <p className="mt-2 text-xs text-white/40">
+                    Lower values = more focused, higher = more diverse
+                  </p>
+                </div>
+
                 {/* Presets */}
                 <div className="space-y-2">
                   <label className="text-xs font-medium uppercase tracking-wider text-white/60">Quick Presets</label>
@@ -445,6 +545,15 @@ export function EditModelPage() {
           )}
         </motion.div>
       </main>
+
+      {/* Parameter Support Bottom Menu */}
+      <BottomMenu
+        isOpen={showParameterSupport}
+        onClose={() => setShowParameterSupport(false)}
+        title={`Parameter Support - ${providerDisplay(providers.find(p => p.providerId === editorModel?.providerId) ?? providers[0]).split('(')[0]}`}
+      >
+        <ProviderParameterSupportInfo providerId={editorModel?.providerId || 'openai'} />
+      </BottomMenu>
     </div>
   );
 }

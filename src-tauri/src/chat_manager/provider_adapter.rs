@@ -32,6 +32,9 @@ pub trait ProviderAdapter {
         top_p: f64,
         max_tokens: u32,
         should_stream: bool,
+        frequency_penalty: Option<f64>,
+        presence_penalty: Option<f64>,
+        top_k: Option<u32>,
     ) -> Value;
 }
 
@@ -52,6 +55,10 @@ struct OpenAIChatRequest<'a> {
     top_p: f64,
     #[serde(rename = "max_tokens")]
     max_tokens: u32,
+    #[serde(rename = "frequency_penalty", skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f64>,
+    #[serde(rename = "presence_penalty", skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -61,6 +68,10 @@ struct MistralCompletionArgs {
     top_p: f64,
     #[serde(rename = "max_tokens")]
     max_tokens: u32,
+    #[serde(rename = "frequency_penalty", skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f64>,
+    #[serde(rename = "presence_penalty", skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -100,6 +111,8 @@ struct AnthropicMessagesRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     system: Option<String>,
+    #[serde(rename = "top_k", skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
 }
 
 impl ProviderAdapter for OpenAIAdapter {
@@ -153,6 +166,9 @@ impl ProviderAdapter for OpenAIAdapter {
         top_p: f64,
         max_tokens: u32,
         should_stream: bool,
+        frequency_penalty: Option<f64>,
+        presence_penalty: Option<f64>,
+        _top_k: Option<u32>,
     ) -> Value {
         let body = OpenAIChatRequest {
             model: model_name,
@@ -161,6 +177,8 @@ impl ProviderAdapter for OpenAIAdapter {
             temperature,
             top_p,
             max_tokens,
+            frequency_penalty,
+            presence_penalty,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
@@ -204,6 +222,9 @@ impl ProviderAdapter for GroqAdapter {
         top_p: f64,
         max_tokens: u32,
         should_stream: bool,
+        frequency_penalty: Option<f64>,
+        presence_penalty: Option<f64>,
+        top_k: Option<u32>,
     ) -> Value {
         // Groq is OpenAI-compatible for our purposes
         OpenAIAdapter.body(
@@ -214,6 +235,9 @@ impl ProviderAdapter for GroqAdapter {
             top_p,
             max_tokens,
             should_stream,
+            frequency_penalty,
+            presence_penalty,
+            top_k,
         )
     }
 }
@@ -269,6 +293,9 @@ impl ProviderAdapter for MistralAdapter {
         top_p: f64,
         max_tokens: u32,
         should_stream: bool,
+        frequency_penalty: Option<f64>,
+        presence_penalty: Option<f64>,
+        _top_k: Option<u32>,
     ) -> Value {
         // Derive instructions and inputs from messages
         let mut instructions = system_prompt;
@@ -301,7 +328,13 @@ impl ProviderAdapter for MistralAdapter {
             model: model_name,
             inputs,
             tools: Vec::new(),
-            completion_args: MistralCompletionArgs { temperature, top_p, max_tokens },
+            completion_args: MistralCompletionArgs { 
+                temperature, 
+                top_p, 
+                max_tokens,
+                frequency_penalty,
+                presence_penalty,
+            },
             stream: should_stream,
             instructions,
         };
@@ -361,6 +394,9 @@ impl ProviderAdapter for AnthropicAdapter {
         top_p: f64,
         max_tokens: u32,
         should_stream: bool,
+        _frequency_penalty: Option<f64>,
+        _presence_penalty: Option<f64>,
+        top_k: Option<u32>,
     ) -> Value {
         let mut msgs: Vec<AnthropicMessage> = Vec::new();
         for msg in messages_for_api {
@@ -391,6 +427,7 @@ impl ProviderAdapter for AnthropicAdapter {
             max_tokens,
             stream: should_stream,
             system: system_prompt.filter(|s| !s.is_empty()),
+            top_k,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }

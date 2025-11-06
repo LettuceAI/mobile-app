@@ -28,6 +28,9 @@ pub fn build_chat_request(
     max_tokens: u32,
     should_stream: bool,
     request_id: Option<String>,
+    frequency_penalty: Option<f64>,
+    presence_penalty: Option<f64>,
+    top_k: Option<u32>,
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
 
@@ -44,6 +47,9 @@ pub fn build_chat_request(
         top_p,
         max_tokens,
         should_stream,
+        frequency_penalty,
+        presence_penalty,
+        top_k,
     );
 
     BuiltRequest {

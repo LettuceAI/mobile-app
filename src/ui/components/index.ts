@@ -3,3 +3,4 @@ export * from "./Tooltip";
 export * from './CreateMenus/CreateMenu';
 export * from './AdvancedModelSettingsForm';
 export * from './PromptTemplateEditor';
+export * from './ProviderParameterSupportInfo';

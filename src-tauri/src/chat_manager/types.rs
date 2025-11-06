@@ -93,6 +93,9 @@ pub struct AdvancedModelSettings {
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
     pub max_output_tokens: Option<u32>,
+    pub frequency_penalty: Option<f64>,
+    pub presence_penalty: Option<f64>,
+    pub top_k: Option<u32>,
 }
 
 impl Default for AdvancedModelSettings {
@@ -101,6 +104,9 @@ impl Default for AdvancedModelSettings {
             temperature: Some(0.7),
             top_p: Some(1.0),
             max_output_tokens: Some(1024),
+            frequency_penalty: None,
+            presence_penalty: None,
+            top_k: None,
         }
     }
 }

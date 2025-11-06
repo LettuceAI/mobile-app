@@ -27,8 +27,105 @@ export const AdvancedModelSettingsSchema = z.object({
   temperature: z.number().min(0).max(2).nullable().optional(),
   topP: z.number().min(0).max(1).nullable().optional(),
   maxOutputTokens: z.number().int().min(1).nullable().optional(),
+  frequencyPenalty: z.number().min(-2).max(2).nullable().optional(),
+  presencePenalty: z.number().min(-2).max(2).nullable().optional(),
+  topK: z.number().int().min(1).max(500).nullable().optional(),
 });
 export type AdvancedModelSettings = z.infer<typeof AdvancedModelSettingsSchema>;
+
+/**
+ * Provider parameter support information
+ * Documents which advanced parameters are supported by each LLM provider
+ */
+export const PROVIDER_PARAMETER_SUPPORT = {
+  openai: {
+    providerId: 'openai',
+    displayName: 'OpenAI',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
+  anthropic: {
+    providerId: 'anthropic',
+    displayName: 'Anthropic',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: false,
+      presencePenalty: false,
+      topK: true,
+    },
+  },
+  groq: {
+    providerId: 'groq',
+    displayName: 'Groq',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
+  mistral: {
+    providerId: 'mistral',
+    displayName: 'Mistral',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
+  google: {
+    providerId: 'google',
+    displayName: 'Google',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: false,
+      presencePenalty: false,
+      topK: true,
+    },
+  },
+} as const;
+
+export type ProviderId = keyof typeof PROVIDER_PARAMETER_SUPPORT;
+export type ProviderParameterSupport = typeof PROVIDER_PARAMETER_SUPPORT[ProviderId];
+
+/**
+ * Helper function to check if a provider supports a specific parameter
+ */
+export function providerSupportsParameter(
+  providerId: string,
+  parameter: keyof AdvancedModelSettings
+): boolean {
+  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
+  if (!provider) return false;
+  return provider.supportedParameters[parameter] ?? false;
+}
+
+/**
+ * Helper function to get all supported parameters for a provider
+ */
+export function getSupportedParameters(providerId: string): (keyof AdvancedModelSettings)[] {
+  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
+  if (!provider) return ['temperature', 'topP', 'maxOutputTokens'];
+  
+  return Object.entries(provider.supportedParameters)
+    .filter(([_, supported]) => supported)
+    .map(([param]) => param as keyof AdvancedModelSettings);
+}
 
 export const MessageVariantSchema = z.object({
   id: z.string().uuid(),
