@@ -751,7 +751,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                       }`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${sessionOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${sessionOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
                         }`}
                     />
                   </label>
