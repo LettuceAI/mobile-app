@@ -23,6 +23,7 @@ interface CharacterFormState {
   description: string;
   selectedModelId: string | null;
   systemPromptTemplateId: string | null;
+  disableAvatarGradient: boolean;
   
   // Models
   models: Model[];
@@ -47,6 +48,7 @@ type CharacterFormAction =
   | { type: 'SET_DESCRIPTION'; payload: string }
   | { type: 'SET_SELECTED_MODEL_ID'; payload: string | null }
   | { type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID'; payload: string | null }
+  | { type: 'SET_DISABLE_AVATAR_GRADIENT'; payload: boolean }
   | { type: 'SET_MODELS'; payload: Model[] }
   | { type: 'SET_LOADING_MODELS'; payload: boolean }
   | { type: 'SET_PROMPT_TEMPLATES'; payload: SystemPromptTemplate[] }
@@ -65,6 +67,7 @@ const initialState: CharacterFormState = {
   description: '',
   selectedModelId: null,
   systemPromptTemplateId: null,
+  disableAvatarGradient: false,
   models: [],
   loadingModels: true,
   promptTemplates: [],
@@ -96,6 +99,8 @@ function characterFormReducer(
       return { ...state, selectedModelId: action.payload };
     case 'SET_SYSTEM_PROMPT_TEMPLATE_ID':
       return { ...state, systemPromptTemplateId: action.payload };
+    case 'SET_DISABLE_AVATAR_GRADIENT':
+      return { ...state, disableAvatarGradient: action.payload };
     case 'SET_MODELS':
       return { ...state, models: action.payload };
     case 'SET_LOADING_MODELS':
@@ -195,6 +200,10 @@ export function useCharacterForm() {
     dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: id });
   }, []);
 
+  const setDisableAvatarGradient = useCallback((disabled: boolean) => {
+    dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: disabled });
+  }, []);
+
   const handleAvatarUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -273,6 +282,7 @@ export function useCharacterForm() {
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
         promptTemplateId: state.systemPromptTemplateId,
+        disableAvatarGradient: state.disableAvatarGradient,
       };
       
       console.log("[CreateCharacter] Saving character data:", JSON.stringify(characterData, null, 2));
@@ -307,6 +317,7 @@ export function useCharacterForm() {
       setDescription,
       setSelectedModelId,
       setSystemPromptTemplateId,
+      setDisableAvatarGradient,
       handleAvatarUpload,
       handleBackgroundImageUpload,
       handleSave,

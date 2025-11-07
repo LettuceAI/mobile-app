@@ -12,6 +12,8 @@ interface IdentityStepProps {
   onBackgroundImageChange: (value: string) => void;
   onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onBackgroundImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  disableAvatarGradient: boolean;
+  onDisableAvatarGradientChange: (value: boolean) => void;
   onContinue: () => void;
   canContinue: boolean;
   avatarPreview: ReactNode;
@@ -26,6 +28,8 @@ export function IdentityStep({
   onBackgroundImageChange,
   onUpload,
   onBackgroundImageUpload,
+  disableAvatarGradient,
+  onDisableAvatarGradientChange,
   onContinue,
   canContinue,
   avatarPreview,
@@ -174,6 +178,47 @@ export function IdentityStep({
           This name will appear in chat conversations
         </p>
       </div>
+
+      {/* Avatar Gradient Toggle (only show if avatar exists) */}
+      <AnimatePresence>
+        {avatarPath && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className={spacing.field}
+          >
+            <label className={cn(
+              "flex cursor-pointer items-center justify-between border border-white/10 bg-black/20 px-4 py-3",
+              radius.md,
+              interactive.transition.default,
+              "active:bg-black/30"
+            )}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-emerald-400" />
+                  <span className={cn(typography.body.size, "font-medium text-white")}>
+                    Avatar Gradient
+                  </span>
+                </div>
+                <p className={cn(typography.bodySmall.size, "mt-1 text-white/40")}>
+                  Generate dynamic gradients from avatar colors
+                </p>
+              </div>
+              <div className="relative ml-3">
+                <input
+                  type="checkbox"
+                  checked={!disableAvatarGradient}
+                  onChange={(e) => onDisableAvatarGradientChange(!e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="h-6 w-11 rounded-full bg-white/20 transition peer-checked:bg-emerald-500/80"></div>
+                <div className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5"></div>
+              </div>
+            </label>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Background Image (Optional) */}
       <div className={spacing.field}>

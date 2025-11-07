@@ -62,6 +62,7 @@ pub fn run() {
             storage_manager::storage_save_avatar,
             storage_manager::storage_load_avatar,
             storage_manager::storage_delete_avatar,
+            storage_manager::generate_avatar_gradient,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,
             chat_manager::chat_continue,

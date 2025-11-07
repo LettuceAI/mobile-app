@@ -268,6 +268,7 @@ export const CharacterSchema = z.object({
   defaultModelId: z.string().uuid().nullable().optional(),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated
+  disableAvatarGradient: z.boolean().default(false).optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

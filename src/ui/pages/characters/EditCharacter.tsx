@@ -26,6 +26,7 @@ export function EditCharacterPage() {
   const [newSceneContent, setNewSceneContent] = useState("");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [systemPromptTemplateId, setSystemPromptTemplateId] = useState<string | null>(null);
+  const [disableAvatarGradient, setDisableAvatarGradient] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
@@ -94,6 +95,7 @@ export function EditCharacterPage() {
       setDefaultSceneId(character.defaultSceneId || null);
       setSelectedModelId(character.defaultModelId || null);
       setSystemPromptTemplateId(character.promptTemplateId || null);
+      setDisableAvatarGradient(character.disableAvatarGradient || false);
     } catch (err) {
       console.error("Failed to load character:", err);
       setError("Failed to load character");
@@ -165,6 +167,7 @@ export function EditCharacterPage() {
         defaultSceneId: defaultSceneId,
         defaultModelId: selectedModelId,
         promptTemplateId: systemPromptTemplateId,
+        disableAvatarGradient: disableAvatarGradient,
       });
 
       navigate("/chat");
@@ -357,6 +360,33 @@ export function EditCharacterPage() {
               </div>
             </div>
           </div>
+
+          {/* Avatar Gradient Toggle */}
+          {avatarPath && (
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 transition hover:bg-black/30">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-emerald-400" />
+                    <p className="text-sm font-medium text-white">Avatar Gradient</p>
+                  </div>
+                  <p className="mt-0.5 text-xs text-white/50">
+                    Generate colorful gradients from avatar colors
+                  </p>
+                </div>
+                <div className="relative ml-3">
+                  <input
+                    type="checkbox"
+                    checked={!disableAvatarGradient}
+                    onChange={(e) => setDisableAvatarGradient(!e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="h-6 w-11 rounded-full bg-white/20 transition peer-checked:bg-emerald-500/80"></div>
+                  <div className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5"></div>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Background Image Section */}
           <div className="space-y-3">

@@ -57,6 +57,8 @@ export function CreateCharacterPage() {
               onBackgroundImageChange={actions.setBackgroundImagePath}
               onUpload={actions.handleAvatarUpload}
               onBackgroundImageUpload={actions.handleBackgroundImageUpload}
+              disableAvatarGradient={state.disableAvatarGradient}
+              onDisableAvatarGradientChange={actions.setDisableAvatarGradient}
               onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
               avatarPreview={

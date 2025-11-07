@@ -6,6 +6,7 @@ import { BottomMenu } from "../../components";
 import { typography, radius, interactive, cn } from "../../design-tokens";
 import { useCharactersController } from "../characters/hooks/useCharactersController";
 import { useAvatar } from "../../hooks/useAvatar";
+import { useMultipleAvatarGradients } from "../../hooks/useAvatarGradient";
 
 const CharacterSkeleton = () => (
   <div className="space-y-3">
@@ -76,6 +77,16 @@ export function CharactersPage() {
     handleDelete,
   } = useCharactersController();
 
+  // Get gradients for all characters at once (follows React rules of hooks)
+  const { getGradientCss, hasGradient, getTextColor, getTextSecondary } = useMultipleAvatarGradients(
+    characters.map(c => ({ 
+      type: 'character' as const, 
+      id: c.id, 
+      avatarPath: c.avatarPath,
+      disableGradient: c.disableAvatarGradient
+    }))
+  );
+
   const handleEditCharacter = (character: Character) => {
     navigate(`/characters/${character.id}/edit`);
   };
@@ -93,6 +104,10 @@ export function CharactersPage() {
             <AnimatePresence>
               {characters.map((character) => {
                 const descriptionPreview = character.description?.trim() || "No description yet";
+                const gradientCss = getGradientCss(character.id);
+                const hasGrad = hasGradient(character.id);
+                const textColor = getTextColor(character.id);
+                const textSecondary = getTextSecondary(character.id);
                 
                 return (
                   <motion.div
@@ -100,14 +115,22 @@ export function CharactersPage() {
                     className={cn(
                       "group relative flex w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
                       radius.md,
-                      "border border-white/10 bg-[#0b0c12]/90",
+                      hasGrad ? "" : "border border-white/10 bg-[#0b0c12]/90",
                       interactive.transition.default,
                       "hover:border-white/25 hover:bg-[#0c0d13]/95",
                       interactive.active.scale
                     )}
+                    style={hasGrad ? {
+                      background: gradientCss,
+                    } : {}}
                   >
                     {/* Hover gradient effect */}
-                    <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+                    <div className={cn(
+                      "absolute inset-y-0 right-0 w-1/4 transition",
+                      hasGrad 
+                        ? "bg-gradient-to-l from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                        : "bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                    )} />
 
                     {/* Avatar */}
                     <div className={cn(
@@ -123,18 +146,23 @@ export function CharactersPage() {
 
                     {/* Content */}
                     <div className="relative min-w-0 flex-1">
-                      <h3 className={cn(
-                        "truncate",
-                        typography.body.size,
-                        typography.h3.weight,
-                        "text-white"
-                      )}>
+                      <h3 
+                        className={cn(
+                          "truncate",
+                          typography.body.size,
+                          typography.h3.weight,
+                        )}
+                        style={hasGrad ? { color: textColor } : {}}
+                      >
                         {character.name}
                       </h3>
-                      <p className={cn(
-                        typography.bodySmall.size,
-                        "line-clamp-1 text-gray-400"
-                      )}>
+                      <p 
+                        className={cn(
+                          typography.bodySmall.size,
+                          "line-clamp-1"
+                        )}
+                        style={hasGrad ? { color: textSecondary } : {}}
+                      >
                         {descriptionPreview}
                       </p>
                     </div>
@@ -146,8 +174,8 @@ export function CharactersPage() {
                         className={cn(
                           "relative flex items-center justify-center",
                           radius.full,
-                          "border border-white/10 bg-white/5 text-white/70",
-                          "transition-all hover:border-white/25 hover:text-white"
+                          "border border-white/10 bg-white/25 text-white/70",
+                          "transition-all hover:border-white/50 hover:text-white"
                         )}
                         aria-label="Edit Character"
                       >
@@ -158,8 +186,8 @@ export function CharactersPage() {
                         className={cn(
                           "relative flex items-center justify-center",
                           radius.full,
-                          "border border-red-500/30 bg-red-500/10 text-red-300",
-                          "transition-all hover:border-red-500/50 hover:bg-red-500/20"
+                          "border border-red-500/30 bg-red-500/70 text-red-300",
+                          "transition-all hover:border-red-500/90 hover:bg-red-500/20"
                         )}
                         aria-label="Delete Character"
                       >

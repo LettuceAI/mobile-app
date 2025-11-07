@@ -5,6 +5,7 @@ import type { Persona } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
 import { usePersonasController } from "../personas/hooks/usePersonasController";
 import { useAvatar } from "../../hooks/useAvatar";
+import { cn } from "../../design-tokens";
 
 const PersonaAvatar = ({ persona }: { persona: Persona }) => {
   const avatarDataUrl = useAvatar("persona", persona.id, persona.avatarPath);
@@ -115,9 +116,10 @@ export function PersonasPage() {
                       : "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
                   }`}
                 >
-                  {!persona.isDefault && (
-                    <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-                  )}
+                  <div className={cn(
+                    "absolute inset-y-0 right-0 w-1/4 transition",
+                    "bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                  )} />
 
                   <PersonaAvatar persona={persona} />
 

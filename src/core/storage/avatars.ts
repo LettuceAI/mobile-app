@@ -8,6 +8,21 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type EntityType = "character" | "persona";
 
+export interface GradientColor {
+  r: number;
+  g: number;
+  b: number;
+  hex: string;
+}
+
+export interface AvatarGradient {
+  colors: GradientColor[];
+  gradient_css: string;
+  dominant_hue: number;
+  text_color: string;
+  text_secondary: string;
+}
+
 /**
  * Creates a prefixed entity ID for avatar storage
  * @param type - Entity type (character or persona)
@@ -41,6 +56,10 @@ export async function saveAvatar(type: EntityType, entityId: string, imageData: 
       entityId: prefixedId,
       base64Data: imageData,
     });
+    
+    // Clear the gradient cache for this entity since avatar changed
+    clearEntityGradientCache(type, entityId);
+    console.log("[saveAvatar] Cleared gradient cache for entity:", prefixedId);
     
     console.log("[saveAvatar] Successfully saved avatar:", result);
     return result;
@@ -129,4 +148,100 @@ export async function preloadAvatars(
   } catch (error) {
     console.error("[preloadAvatars] Failed to preload avatars:", error);
   }
+}
+
+/**
+ * Generates beautiful gradient colors from an avatar image
+ * Uses color analysis and k-means clustering to extract dominant colors
+ * 
+ * @param type - Entity type (character or persona)
+ * @param entityId - The character or persona ID
+ * @param avatarFilename - The avatar filename (from character.avatarPath)
+ * @returns Promise with gradient colors and CSS, or undefined on failure
+ */
+export async function generateGradientFromAvatar(
+  type: EntityType,
+  entityId: string,
+  avatarFilename: string | undefined
+): Promise<AvatarGradient | undefined> {
+  if (!entityId || !avatarFilename) {
+    return undefined;
+  }
+
+  try {
+    const prefixedId = getPrefixedEntityId(type, entityId);
+    const gradient = await invoke<AvatarGradient>("generate_avatar_gradient", {
+      entityId: prefixedId,
+      filename: avatarFilename,
+    });
+
+    console.log(`[generateGradientFromAvatar] Generated gradient for ${prefixedId}:`, gradient);
+    return gradient;
+  } catch (error) {
+    console.error("[generateGradientFromAvatar] Failed to generate gradient:", error);
+    return undefined;
+  }
+}
+
+/**
+ * Cache for generated gradients to avoid recomputation
+ */
+const gradientCache = new Map<string, AvatarGradient>();
+
+/**
+ * Gets cached or generates a gradient for an avatar
+ * 
+ * @param type - Entity type (character or persona)
+ * @param entityId - The character or persona ID
+ * @param avatarFilename - The avatar filename (always "avatar.webp")
+ * @returns Promise with gradient colors
+ */
+export async function getCachedGradient(
+  type: EntityType,
+  entityId: string,
+  avatarFilename: string | undefined
+): Promise<AvatarGradient | undefined> {
+  if (!entityId) {
+    return undefined;
+  }
+
+  // Use just the entityId as cache key since filename is always "avatar.webp"
+  const cacheKey = `${type}-${entityId}`;
+  
+  // Check cache first
+  if (gradientCache.has(cacheKey)) {
+    console.log(`[getCachedGradient] Using cached gradient for ${cacheKey}`);
+    return gradientCache.get(cacheKey);
+  }
+
+  // Generate new gradient (filename doesn't matter as it's always avatar.webp)
+  const gradient = await generateGradientFromAvatar(type, entityId, "avatar.webp");
+  
+  // Cache the result
+  if (gradient) {
+    console.log(`[getCachedGradient] Cached new gradient for ${cacheKey}`);
+    gradientCache.set(cacheKey, gradient);
+  }
+  
+  // Keep avatarFilename parameter for interface compatibility, even though it's not used
+  void avatarFilename;
+  
+  return gradient;
+}
+
+/**
+ * Clears the gradient cache
+ * Call this when avatars are updated to force regeneration
+ */
+export function clearGradientCache(): void {
+  gradientCache.clear();
+}
+
+/**
+ * Clears cached gradient for a specific entity
+ * Useful when updating a single avatar
+ */
+export function clearEntityGradientCache(type: EntityType, entityId: string): void {
+  const cacheKey = `${type}-${entityId}`;
+  gradientCache.delete(cacheKey);
 }

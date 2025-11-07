@@ -7,6 +7,7 @@ import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu } from "../../components";
 import { useAvatar } from "../../hooks/useAvatar";
+import { useAvatarGradient } from "../../hooks/useAvatarGradient";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -299,6 +300,24 @@ const CharacterCard = memo(({
   onLongPress: (character: Character) => void;
 }) => {
   const descriptionPreview = character.description?.trim() || "No description yet";
+  const { gradientCss, hasGradient, textColor, textSecondary, averageBrightness } = useAvatarGradient(
+    "character", 
+    character.id, 
+    character.avatarPath,
+    character.disableAvatarGradient
+  );
+
+  const getArrowStyles = () => {
+    if (!hasGradient) {
+      return "border border-white/10 bg-white/5 text-white/50";
+    }
+
+    if (averageBrightness > 0.5) {
+      return "border border-black/30 bg-black/20 text-black/60";
+    } else {
+      return "border border-white/30 bg-white/30 text-white/70";
+    }
+  };
 
   const handleClick = () => {
     onSelect(character);
@@ -317,14 +336,22 @@ const CharacterCard = memo(({
         className={cn(
           "group relative flex h-[72px] w-full items-center gap-3 overflow-hidden px-4 py-3 text-left",
           radius.md,
-          "border border-white/10 bg-white/5",
+          hasGradient ? "" : "border border-white/15 bg-white/5",
           interactive.transition.default,
           "hover:border-white/20 hover:bg-white/[0.08]",
           interactive.active.scale
         )}
+        style={hasGradient ? {
+          background: gradientCss,
+        } : {}}
       >
         {/* Hover gradient effect */}
-        <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+        <div className={cn(
+          "absolute inset-y-0 right-0 w-1/3 transition-opacity",
+          hasGradient 
+            ? "bg-gradient-to-l from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+            : "bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+        )} />
 
         {/* Avatar */}
         <div className={cn(
@@ -341,19 +368,24 @@ const CharacterCard = memo(({
         {/* Content */}
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className={cn(
-              "truncate",
-              typography.body.size,
-              typography.h3.weight,
-              "text-white"
-            )}>
+            <h3 
+              className={cn(
+                "truncate",
+                typography.body.size,
+                typography.h3.weight,
+              )}
+              style={hasGradient ? { color: textColor } : {}}
+            >
               {character.name}
             </h3>
           </div>
-          <p className={cn(
-            typography.bodySmall.size,
-            "text-white/50 line-clamp-1"
-          )}>
+          <p 
+            className={cn(
+              typography.bodySmall.size,
+              "line-clamp-1"
+            )}
+            style={hasGradient ? { color: textSecondary } : {}}
+          >
             {descriptionPreview}
           </p>
         </div>
@@ -362,7 +394,7 @@ const CharacterCard = memo(({
         <span className={cn(
           "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center",
           radius.full,
-          "border border-white/10 bg-white/5 text-white/50",
+          getArrowStyles(),
           "transition-all group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white/80"
         )}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
