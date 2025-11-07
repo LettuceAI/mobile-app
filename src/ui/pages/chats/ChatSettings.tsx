@@ -480,11 +480,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
   return (
     <div className="min-h-screen bg-[#050505] text-gray-100">
       {/* Header */}
-      <header className={cn(
-        "relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6",
-        "pt-[calc(env(safe-area-inset-top)+32px)]"
-      )}>
-        <div className="flex items-center gap-4">
+      <header className="z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
+        <div className="flex items-center justify-between gap-3">
           <button
             onClick={handleBack}
             className={cn(
@@ -517,7 +514,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       </header>
 
       {/* Content */}
-      <main className="flex-1 px-4 py-6">
+      <main className="flex-1 overflow-y-auto px-3 pt-4">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}

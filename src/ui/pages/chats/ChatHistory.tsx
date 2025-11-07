@@ -136,11 +136,8 @@ export function ChatHistoryPage() {
     <div className="min-h-screen bg-[#050505]">
       {/* Header */}
       <div
-        className={cn(
-          "relative z-20 flex-shrink-0 border-b border-white/10 bg-[#050505]/95 px-4 pb-4 pt-6",
-          "pt-[calc(env(safe-area-inset-top)+32px)]"
-        )}>
-        <div className="flex items-center gap-3">
+        className="z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
+        <div className="flex items-center justify-between gap-3">
           <button
             onClick={() => navigate(-1)}
             className={cn(
@@ -172,7 +169,7 @@ export function ChatHistoryPage() {
       </div>
 
       {/* Content */}
-      <div className="p-4">
+      <main className="flex-1 overflow-y-auto px-3 pt-4">
         {error && (
           <div className={cn(
             "mb-4 p-4 border border-red-400/30 bg-red-400/10 text-center",
@@ -219,7 +216,7 @@ export function ChatHistoryPage() {
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
