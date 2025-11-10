@@ -12,6 +12,7 @@ mod utils;
 mod transport;
 mod serde_utils;
 mod error;
+mod persistence;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +22,10 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Initialize database (SQLite) before other services that may depend on storage.
+            if let Err(e) = persistence::db::init_db(app.handle()) {
+                eprintln!("Failed to initialize database: {e}");
+            }
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
             
@@ -90,6 +95,11 @@ pub fn run() {
             usage::usage_clear_before,
             usage::usage_export_csv,
             usage::usage_save_csv,
+            // DB: provider credentials simplified API
+            persistence::provider_credentials::db_provider_credential_get_by_provider,
+            persistence::provider_credentials::db_provider_credential_set_api_key,
+            persistence::provider_credentials::db_provider_credential_upsert,
+            persistence::provider_credentials::db_provider_credential_list,
             utils::get_app_version,
         ])
         .run(tauri::generate_context!())
