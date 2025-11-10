@@ -9,33 +9,38 @@ use super::types::{Character, Model, Persona, Session, Settings};
 pub fn default_system_prompt_template() -> String {
     let mut template = String::new();
     template.push_str("You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.\n\n");
-    
+
     template.push_str("# Scenario\n{{scene}}\n\n");
-    
+
     template.push_str("# Your Character: {{char.name}}\n");
     template.push_str("{{char.desc}}\n\n");
     template.push_str("Embody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.\n\n");
-    
+
     template.push_str("# {{persona.name}}'s Character\n");
     template.push_str("{{persona.desc}}\n\n");
-    
+
     template.push_str("# Roleplay Guidelines\n{{rules}}\n\n");
-    
+
     template.push_str("# Core Instructions\n");
     template.push_str("- Write as {{char.name}} from their perspective\n");
     template.push_str("- You may also act as and portray any other characters mentioned in the scenario or {{char.name}}'s description (friends, companions, NPCs) when they're relevant to the scene\n");
     template.push_str("- React authentically to {{persona.name}}'s actions and dialogue\n");
     template.push_str("- Keep responses concise and focused - short to medium length - so {{persona.name}} can actively participate in the roleplay\n");
-    template.push_str("- Show don't tell: Express emotions through actions, body language, and dialogue\n");
-    template.push_str("- Maintain narrative consistency with the established scenario and all character traits\n");
+    template.push_str(
+        "- Show don't tell: Express emotions through actions, body language, and dialogue\n",
+    );
+    template.push_str(
+        "- Maintain narrative consistency with the established scenario and all character traits\n",
+    );
     template.push_str("- Never break character unless {{persona.name}} explicitly asks you to step out of roleplay\n");
     template.push_str("- Never speak or act for {{persona.name}} - only describe the environment and other characters' reactions\n");
-    template.push_str("- Avoid summarizing or rushing through scenes. Let moments unfold naturally\n");
+    template
+        .push_str("- Avoid summarizing or rushing through scenes. Let moments unfold naturally\n");
     template.push_str("- If you see a [CONTINUE] instruction, pick up exactly where your last response ended and write new content forward - never restart or repeat yourself\n");
     template.push_str("- Drive the story forward with your responses while respecting {{persona.name}}'s agency and choices\n");
     template.push_str("- Use vivid, sensory details to create an immersive experience\n");
     template.push_str("- When multiple characters are present, write their interactions naturally and distinguish their unique voices\n");
-    
+
     template
 }
 
@@ -58,7 +63,8 @@ pub fn build_system_prompt(
     } else if let Some(char_template_id) = &character.prompt_template_id {
         // Resolve character prompt template
         if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
-            debug_parts.push(json!({ "source": "character_template", "template_id": char_template_id }));
+            debug_parts
+                .push(json!({ "source": "character_template", "template_id": char_template_id }));
             template.content
         } else {
             debug_parts.push(json!({ "source": "character_template_not_found", "template_id": char_template_id, "fallback": "default" }));
@@ -67,7 +73,8 @@ pub fn build_system_prompt(
     } else if let Some(model_template_id) = &model.prompt_template_id {
         // Resolve model prompt template
         if let Ok(Some(template)) = prompts::get_template(app, model_template_id) {
-            debug_parts.push(json!({ "source": "model_template", "template_id": model_template_id }));
+            debug_parts
+                .push(json!({ "source": "model_template", "template_id": model_template_id }));
             template.content
         } else {
             debug_parts.push(json!({ "source": "model_template_not_found", "template_id": model_template_id, "fallback": "default" }));
@@ -76,7 +83,8 @@ pub fn build_system_prompt(
     } else if let Some(app_template_id) = &settings.prompt_template_id {
         // Resolve app-wide prompt template
         if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
-            debug_parts.push(json!({ "source": "app_wide_template", "template_id": app_template_id }));
+            debug_parts
+                .push(json!({ "source": "app_wide_template", "template_id": app_template_id }));
             template.content
         } else {
             debug_parts.push(json!({ "source": "app_wide_template_not_found", "template_id": app_template_id, "fallback": "default" }));
@@ -94,11 +102,7 @@ pub fn build_system_prompt(
         "template_vars": build_debug_vars(character, persona, session, settings),
     }));
 
-    super::super::utils::emit_debug(
-        app,
-        "system_prompt_built",
-        json!({ "debug": debug_parts }),
-    );
+    super::super::utils::emit_debug(app, "system_prompt_built", json!({ "debug": debug_parts }));
 
     let trimmed = rendered.trim();
     if trimmed.is_empty() {
@@ -117,7 +121,14 @@ pub fn render_with_context(
     session: &Session,
     settings: &Settings,
 ) -> String {
-    render_with_context_internal(Some(app), base_template, character, persona, session, settings)
+    render_with_context_internal(
+        Some(app),
+        base_template,
+        character,
+        persona,
+        session,
+        settings,
+    )
 }
 
 /// Internal rendering function that optionally logs to backend
@@ -147,15 +158,14 @@ fn render_with_context_internal(
 
     // Build scene content from character's default scene
     // Priority: character.default_scene_id > first scene (if only one exists)
-    let scene_id_to_use = character.default_scene_id.as_ref()
-        .or_else(|| {
-            if character.scenes.len() == 1 {
-                character.scenes.first().map(|s| &s.id)
-            } else {
-                None
-            }
-        });
-    
+    let scene_id_to_use = character.default_scene_id.as_ref().or_else(|| {
+        if character.scenes.len() == 1 {
+            character.scenes.first().map(|s| &s.id)
+        } else {
+            None
+        }
+    });
+
     let scene_content = if let Some(selected_scene_id) = scene_id_to_use {
         if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
             let content = if let Some(variant_id) = &scene.selected_variant_id {
@@ -175,16 +185,29 @@ fn render_with_context_internal(
                 let mut content_processed = content_trimmed.to_string();
                 content_processed = content_processed.replace("{{char}}", char_name);
                 content_processed = content_processed.replace("{{persona}}", persona_name);
-                
+
                 if let Some(app) = app {
-                    super::super::utils::log_info(app, "prompt_engine",
-                        format!("Scene found and processed. ID: {}, length: {}", selected_scene_id, content_processed.len()));
+                    super::super::utils::log_info(
+                        app,
+                        "prompt_engine",
+                        format!(
+                            "Scene found and processed. ID: {}, length: {}",
+                            selected_scene_id,
+                            content_processed.len()
+                        ),
+                    );
                 }
                 content_processed
             } else {
                 if let Some(app) = app {
-                    super::super::utils::log_warn(app, "prompt_engine",
-                        format!("Scene found but content is empty. ID: {}", selected_scene_id));
+                    super::super::utils::log_warn(
+                        app,
+                        "prompt_engine",
+                        format!(
+                            "Scene found but content is empty. ID: {}",
+                            selected_scene_id
+                        ),
+                    );
                 }
                 String::new()
             }
@@ -224,14 +247,26 @@ fn render_with_context_internal(
 
     // Replace all template variables
     let mut result = base_template.to_string();
-    
+
     if let Some(app) = app {
-        super::super::utils::log_info(app, "prompt_engine",
-            format!("Before {{{{scene}}}} replacement - scene_content length: {}", scene_content.len()));
-        super::super::utils::log_info(app, "prompt_engine",
-            format!("Template contains {{{{scene}}}}: {}", base_template.contains("{{scene}}")));
+        super::super::utils::log_info(
+            app,
+            "prompt_engine",
+            format!(
+                "Before {{{{scene}}}} replacement - scene_content length: {}",
+                scene_content.len()
+            ),
+        );
+        super::super::utils::log_info(
+            app,
+            "prompt_engine",
+            format!(
+                "Template contains {{{{scene}}}}: {}",
+                base_template.contains("{{scene}}")
+            ),
+        );
     }
-    
+
     result = result.replace("{{scene}}", &scene_content);
     result = result.replace("{{char.name}}", char_name);
     result = result.replace("{{char.desc}}", &char_desc);
@@ -349,9 +384,9 @@ mod tests {
     #[test]
     fn renders_simple_placeholders() {
         let character = make_character();
-    let _model = make_model();
+        let _model = make_model();
         let settings = make_settings();
-    let session = make_session();
+        let session = make_session();
         let persona = Some(Persona {
             id: "p1".into(),
             title: "Bob".into(),
@@ -362,7 +397,14 @@ mod tests {
         });
 
         let base = "Hello {{char}} and {{persona}}. {{char.desc}}";
-        let rendered = render_with_context_internal(None, base, &character, persona.as_ref(), &session, &settings);
+        let rendered = render_with_context_internal(
+            None,
+            base,
+            &character,
+            persona.as_ref(),
+            &session,
+            &settings,
+        );
         assert!(rendered.contains("Hello Alice and Bob."));
         assert!(rendered.contains("I am Alice. Partner: Bob."));
 
@@ -374,12 +416,23 @@ mod tests {
             id: "scene1".into(),
             content: "Meeting {{char}} and {{persona}}".into(),
             created_at: 0,
-            variants: vec![SceneVariant { id: "v1".into(), content: "Var {{char}}".into(), created_at: 0 }],
+            variants: vec![SceneVariant {
+                id: "v1".into(),
+                content: "Var {{char}}".into(),
+                created_at: 0,
+            }],
             selected_variant_id: Some("v1".into()),
         }];
         session2.selected_scene_id = Some("scene1".into());
         let base2 = "{{scene}}";
-        let rendered2 = render_with_context_internal(None, base2, &character2, persona.as_ref(), &session2, &settings);
+        let rendered2 = render_with_context_internal(
+            None,
+            base2,
+            &character2,
+            persona.as_ref(),
+            &session2,
+            &settings,
+        );
         assert!(rendered2.contains("Var Alice"));
         assert!(!rendered2.contains("Starting Scene")); // No hardcoded formatting
     }

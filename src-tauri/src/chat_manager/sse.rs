@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::types::{UsageSummary, NormalizedEvent};
+use super::types::{NormalizedEvent, UsageSummary};
 
 pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
     let mut out = String::new();
@@ -19,7 +19,11 @@ pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
             }
         }
     }
-    if out.is_empty() { None } else { Some(out) }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 pub fn usage_from_sse(raw: &str) -> Option<UsageSummary> {
@@ -50,7 +54,11 @@ pub struct SseDecoder {
 }
 
 impl SseDecoder {
-    pub fn new() -> Self { Self { buffer: String::new() } }
+    pub fn new() -> Self {
+        Self {
+            buffer: String::new(),
+        }
+    }
 
     /// Feed a raw text chunk, returning any complete normalized events parsed from it.
     pub fn feed(&mut self, chunk: &str) -> Vec<NormalizedEvent> {
@@ -64,11 +72,15 @@ impl SseDecoder {
                 let line = &self.buffer[last_newline..idx];
                 last_newline = idx + 1; // skip the newline
                 let l = line.trim();
-                if l.is_empty() { continue; }
+                if l.is_empty() {
+                    continue;
+                }
                 // Common SSE format: data: <payload>
                 if let Some(rest) = l.strip_prefix("data:") {
                     let payload = rest.trim();
-                    if payload.is_empty() { continue; }
+                    if payload.is_empty() {
+                        continue;
+                    }
                     if payload == "[DONE]" {
                         events.push(NormalizedEvent::Done);
                         continue;
@@ -133,16 +145,38 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
 
 fn usage_from_value(v: &Value) -> Option<UsageSummary> {
     let u = v.get("usage")?;
-    let prompt_tokens = take_first(u, &["prompt_tokens", "input_tokens", "promptTokens", "inputTokens"]);
-    let completion_tokens = take_first(u, &["completion_tokens", "output_tokens", "completionTokens", "outputTokens"]);
-    let total_tokens = take_first(u, &["total_tokens", "totalTokens"]).or_else(|| match (prompt_tokens, completion_tokens) {
-        (Some(p), Some(c)) => Some(p + c),
-        _ => None,
+    let prompt_tokens = take_first(
+        u,
+        &[
+            "prompt_tokens",
+            "input_tokens",
+            "promptTokens",
+            "inputTokens",
+        ],
+    );
+    let completion_tokens = take_first(
+        u,
+        &[
+            "completion_tokens",
+            "output_tokens",
+            "completionTokens",
+            "outputTokens",
+        ],
+    );
+    let total_tokens = take_first(u, &["total_tokens", "totalTokens"]).or_else(|| {
+        match (prompt_tokens, completion_tokens) {
+            (Some(p), Some(c)) => Some(p + c),
+            _ => None,
+        }
     });
     if prompt_tokens.is_none() && completion_tokens.is_none() && total_tokens.is_none() {
         None
     } else {
-        Some(UsageSummary { prompt_tokens, completion_tokens, total_tokens })
+        Some(UsageSummary {
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        })
     }
 }
 

@@ -1,6 +1,6 @@
+use crate::models::RequestCost;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::models::RequestCost;
 
 /// Individual request/message usage tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]

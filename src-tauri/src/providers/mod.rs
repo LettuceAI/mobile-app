@@ -4,9 +4,8 @@
 //! This module should not duplicate adapter knowledge; derive from
 //! `chat_manager::provider_adapter` wherever possible.
 pub mod config;
-pub mod verify;
 mod util;
+pub mod verify;
 
 pub use config::*;
 pub use verify::*;
-

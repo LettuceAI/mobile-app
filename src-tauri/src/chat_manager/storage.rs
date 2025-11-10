@@ -2,8 +2,8 @@
 use tauri::AppHandle;
 
 use crate::storage_manager::{
-    storage_read_characters, storage_read_personas, storage_read_session, storage_read_settings,
-    storage_write_session, storage_write_settings,
+    characters_list, personas_list, session_get, session_upsert, storage_read_settings,
+    storage_write_settings,
 };
 // emit_debug no longer used here; prompt_engine handles debug emission
 
@@ -95,36 +95,26 @@ fn default_settings() -> Settings {
 }
 
 pub fn load_characters(app: &AppHandle) -> Result<Vec<Character>, String> {
-    let json = storage_read_characters(app.clone())?;
-    if let Some(data) = json {
-        serde_json::from_str(&data).map_err(|e| e.to_string())
-    } else {
-        Ok(vec![])
-    }
+    let data = characters_list(app.clone())?;
+    serde_json::from_str(&data).map_err(|e| e.to_string())
 }
 
 pub fn load_personas(app: &AppHandle) -> Result<Vec<Persona>, String> {
-    let json = storage_read_personas(app.clone())?;
-    if let Some(data) = json {
-        serde_json::from_str(&data).map_err(|e| e.to_string())
-    } else {
-        Ok(vec![])
-    }
+    let data = personas_list(app.clone())?;
+    serde_json::from_str(&data).map_err(|e| e.to_string())
 }
 
 pub fn load_session(app: &AppHandle, session_id: &str) -> Result<Option<Session>, String> {
-    let json = storage_read_session(app.clone(), session_id.to_string())?;
-    if let Some(data) = json {
-        let session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
-        Ok(Some(session))
-    } else {
-        Ok(None)
+    let json = session_get(app.clone(), session_id.to_string())?;
+    match json {
+        Some(s) => serde_json::from_str::<Session>(&s).map(Some).map_err(|e| e.to_string()),
+        None => Ok(None),
     }
 }
 
 pub fn save_session(app: &AppHandle, session: &Session) -> Result<(), String> {
     let payload = serde_json::to_string(session).map_err(|e| e.to_string())?;
-    storage_write_session(app.clone(), session.id.clone(), payload)
+    session_upsert(app.clone(), payload)
 }
 
 pub fn select_model<'a>(

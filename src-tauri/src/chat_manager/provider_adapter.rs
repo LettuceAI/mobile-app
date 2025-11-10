@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use super::types::ProviderId;
 use serde::Serialize;
 use serde_json::{json, Value};
-use super::types::ProviderId;
 
 pub trait ProviderAdapter {
     fn endpoint(&self, base_url: &str) -> String;
@@ -125,7 +125,9 @@ impl ProviderAdapter for OpenAIAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str { "developer" }
+    fn system_role(&self) -> &'static str {
+        "developer"
+    }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
         &["Authorization"]
@@ -148,7 +150,8 @@ impl ProviderAdapter for OpenAIAdapter {
         out.insert("Authorization".into(), format!("Bearer {}", api_key));
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("Accept".into(), "text/event-stream".into());
-        out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
+        out.entry("User-Agent".into())
+            .or_insert_with(|| "LettuceAI/0.1".into());
         if let Some(extra) = extra {
             for (k, v) in extra.iter() {
                 out.insert(k.clone(), v.clone());
@@ -194,7 +197,9 @@ impl ProviderAdapter for GroqAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str { "system" }
+    fn system_role(&self) -> &'static str {
+        "system"
+    }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
         &["Authorization"]
@@ -252,7 +257,9 @@ impl ProviderAdapter for MistralAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str { "system" }
+    fn system_role(&self) -> &'static str {
+        "system"
+    }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
         &["X-API-KEY", "x-api-key"]
@@ -275,7 +282,8 @@ impl ProviderAdapter for MistralAdapter {
         out.insert("X-API-KEY".into(), api_key.to_string());
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("Accept".into(), "text/event-stream".into());
-        out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
+        out.entry("User-Agent".into())
+            .or_insert_with(|| "LettuceAI/0.1".into());
         if let Some(extra) = extra {
             for (k, v) in extra.iter() {
                 out.insert(k.clone(), v.clone());
@@ -328,9 +336,9 @@ impl ProviderAdapter for MistralAdapter {
             model: model_name,
             inputs,
             tools: Vec::new(),
-            completion_args: MistralCompletionArgs { 
-                temperature, 
-                top_p, 
+            completion_args: MistralCompletionArgs {
+                temperature,
+                top_p,
                 max_tokens,
                 frequency_penalty,
                 presence_penalty,
@@ -352,7 +360,9 @@ impl ProviderAdapter for AnthropicAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str { "system" }
+    fn system_role(&self) -> &'static str {
+        "system"
+    }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
         &["x-api-key", "anthropic-version"]
@@ -376,7 +386,8 @@ impl ProviderAdapter for AnthropicAdapter {
         out.insert("x-api-key".into(), api_key.to_string());
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("Accept".into(), "text/event-stream".into());
-        out.entry("User-Agent".into()).or_insert_with(|| "LettuceAI/0.1".into());
+        out.entry("User-Agent".into())
+            .or_insert_with(|| "LettuceAI/0.1".into());
         if let Some(extra) = extra {
             for (k, v) in extra.iter() {
                 out.insert(k.clone(), v.clone());
@@ -412,10 +423,17 @@ impl ProviderAdapter for AnthropicAdapter {
             if content_text.is_empty() {
                 continue;
             }
-            let mapped_role = match role { "assistant" => "assistant", _ => "user" }.to_string();
+            let mapped_role = match role {
+                "assistant" => "assistant",
+                _ => "user",
+            }
+            .to_string();
             msgs.push(AnthropicMessage {
                 role: mapped_role,
-                content: vec![AnthropicContent { kind: "text", text: content_text }],
+                content: vec![AnthropicContent {
+                    kind: "text",
+                    text: content_text,
+                }],
             });
         }
 

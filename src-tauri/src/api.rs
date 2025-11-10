@@ -5,10 +5,16 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::abort_manager::AbortRegistry;
-use crate::utils::{log_error, log_info, log_warn};
-use crate::chat_manager::{sse, request as chat_request, types::{ErrorEnvelope, NormalizedEvent}};
+use crate::chat_manager::{
+    request as chat_request, sse,
+    types::{ErrorEnvelope, NormalizedEvent},
+};
+use crate::serde_utils::{
+    json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json,
+    truncate_for_log,
+};
 use crate::transport::{self, emit_normalized};
-use crate::serde_utils::{json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json, truncate_for_log};
+use crate::utils::{log_error, log_info, log_warn};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,11 +51,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let client = match transport::build_client(req.timeout_ms) {
         Ok(c) => c,
         Err(e) => {
-            log_error(
-                &app,
-                "api_request",
-                &format!("client build error: {}", e),
-            );
+            log_error(&app, "api_request", &format!("client build error: {}", e));
             return Err(e.to_string());
         }
     };
@@ -241,7 +243,8 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     }
 
     log_info(&app, "api_request", "[api_request] sending request...");
-    let response = match transport::send_with_retries(&app, "api_request", request_builder, 2).await {
+    let response = match transport::send_with_retries(&app, "api_request", request_builder, 2).await
+    {
         Ok(resp) => {
             log_info(
                 &app,
@@ -289,7 +292,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     }
 
     let data = if stream && request_id.is_some() {
-    let mut collected: Vec<u8> = Vec::new();
+        let mut collected: Vec<u8> = Vec::new();
         let event_name = format!("api://{}", request_id.clone().unwrap());
         let mut body_stream = response.bytes_stream();
         log_info(
@@ -300,18 +303,18 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 url_for_log, api_key_for_log, event_name
             ),
         );
-        
+
         // Register this request for abort capability
         let mut abort_rx = {
             use tauri::Manager;
             let registry = app.state::<AbortRegistry>();
             registry.register(request_id.clone().unwrap())
         };
-        
+
         let mut usage_emitted = false;
         let mut decoder = sse::SseDecoder::new();
         let mut aborted = false;
-        
+
         loop {
             tokio::select! {
                 // Check for abort signal
@@ -370,14 +373,14 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 }
             }
         }
-        
+
         // Unregister the request
         if let Some(req_id) = &request_id {
             use tauri::Manager;
             let registry = app.state::<AbortRegistry>();
             registry.unregister(req_id);
         }
-        
+
         if aborted {
             // Emit abort error event
             if let Some(req_id) = &request_id {
@@ -393,8 +396,8 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             }
             return Err("Request aborted by user".to_string());
         }
-        
-    let text = String::from_utf8_lossy(&collected).to_string();
+
+        let text = String::from_utf8_lossy(&collected).to_string();
         log_info(
             &app,
             "api_request",
@@ -495,26 +498,29 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
 }
 
 #[tauri::command]
-pub async fn abort_request(
-    app: tauri::AppHandle,
-    request_id: String,
-) -> Result<(), String> {
+pub async fn abort_request(app: tauri::AppHandle, request_id: String) -> Result<(), String> {
     use tauri::Manager;
-    
+
     log_info(
         &app,
         "abort_request",
-        &format!("[abort_request] attempting to abort request_id={}", request_id),
+        &format!(
+            "[abort_request] attempting to abort request_id={}",
+            request_id
+        ),
     );
-    
+
     let registry = app.state::<AbortRegistry>();
     registry.abort(&request_id)?;
 
     log_info(
         &app,
         "abort_request",
-        &format!("[abort_request] successfully aborted request_id={}", request_id),
+        &format!(
+            "[abort_request] successfully aborted request_id={}",
+            request_id
+        ),
     );
-    
+
     Ok(())
 }

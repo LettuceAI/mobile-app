@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { storageBridge } from "./files";
+import { invoke } from "@tauri-apps/api/core";
 import { getDefaultCharacterRules } from "./defaults";
 import {
   CharacterSchema,
@@ -87,209 +88,122 @@ export async function writeSettings(s: Settings): Promise<void> {
 }
 
 export async function addOrUpdateProviderCredential(cred: Omit<ProviderCredential, "id"> & { id?: string }): Promise<ProviderCredential> {
-  const settings = await readSettings();
-  let existing = settings.providerCredentials.find((c) => c.id === cred.id);
-  if (existing) {
-    existing = Object.assign(existing, { ...cred });
-  } else {
-    const full: ProviderCredential = { id: cred.id ?? uuidv4(), ...cred } as any;
-    settings.providerCredentials.push(full);
-    existing = full;
-    if (!settings.defaultProviderCredentialId) settings.defaultProviderCredentialId = full.id;
+  const entity: ProviderCredential = await storageBridge.providerUpsert({ id: cred.id ?? uuidv4(), ...cred });
+  // Ensure a default provider is set if missing
+  const current = await readSettings();
+  if (!current.defaultProviderCredentialId) {
+    await storageBridge.settingsSetDefaults(entity.id, current.defaultModelId ?? null);
   }
-  await writeSettings(settings);
-  return existing as ProviderCredential;
+  broadcastSettingsUpdated();
+  return entity;
 }
 
 export async function removeProviderCredential(id: string): Promise<void> {
-  const settings = await readSettings();
-  settings.providerCredentials = settings.providerCredentials.filter((c) => c.id !== id);
-  if (settings.defaultProviderCredentialId === id) settings.defaultProviderCredentialId = settings.providerCredentials[0]?.id ?? null;
-  await writeSettings(settings);
+  await storageBridge.providerDelete(id);
+  const current = await readSettings();
+  if (current.defaultProviderCredentialId === id) {
+    const nextDefault = current.providerCredentials.find((c) => c.id !== id)?.id ?? null;
+    await storageBridge.settingsSetDefaults(nextDefault, current.defaultModelId ?? null);
+  }
+  broadcastSettingsUpdated();
 }
 
 export async function addOrUpdateModel(model: Omit<Model, "id" | "createdAt"> & { id?: string }): Promise<Model> {
-  const settings = await readSettings();
-  let existing = settings.models.find((m) => m.id === model.id);
-  if (existing) {
-    existing = Object.assign(existing, { ...model });
-  } else {
-    const full: Model = { 
-      id: model.id ?? uuidv4(), 
-      ...model,
-      createdAt: now()
-    };
-    settings.models.push(full);
-    existing = full;
-    if (!settings.defaultModelId) settings.defaultModelId = full.id;
+  const entity: Model = await storageBridge.modelUpsert({ id: model.id ?? uuidv4(), ...model });
+  const current = await readSettings();
+  if (!current.defaultModelId) {
+    await storageBridge.settingsSetDefaults(current.defaultProviderCredentialId ?? null, entity.id);
   }
-  await writeSettings(settings);
-  return existing as Model;
+  broadcastSettingsUpdated();
+  return entity;
 }
 
 export async function removeModel(id: string): Promise<void> {
-  const settings = await readSettings();
-  settings.models = settings.models.filter((m) => m.id !== id);
-  if (settings.defaultModelId === id) settings.defaultModelId = settings.models[0]?.id ?? null;
-  await writeSettings(settings);
+  await storageBridge.modelDelete(id);
+  const current = await readSettings();
+  if (current.defaultModelId === id) {
+    const nextDefault = current.models.find((m) => m.id !== id)?.id ?? null;
+    await storageBridge.settingsSetDefaults(current.defaultProviderCredentialId ?? null, nextDefault);
+  }
+  broadcastSettingsUpdated();
 }
 
 export async function setDefaultModel(id: string): Promise<void> {
   const settings = await readSettings();
   if (settings.models.find((m) => m.id === id)) {
-    settings.defaultModelId = id;
-    await writeSettings(settings);
+    await storageBridge.settingsSetDefaults(settings.defaultProviderCredentialId ?? null, id);
+    broadcastSettingsUpdated();
   }
 }
 
 export async function listCharacters(): Promise<Character[]> {
-  const fallback: Character[] = [];
-  const data = await storageBridge.readCharacters<Character[]>(fallback);
-  
-  const migrated = data.map((char: any) => {
-    if (char.scenes && char.scenes.length > 0 && typeof char.scenes[0] === 'string') {
-      const timestamp = now();
-      return {
-        ...char,
-        scenes: char.scenes.map((sceneContent: string, idx: number) => ({
-          id: globalThis.crypto?.randomUUID?.() ?? `${timestamp}-${idx}`,
-          content: sceneContent,
-          createdAt: timestamp,
-        })),
-        defaultSceneId: null,
-      };
-    }
-    return char;
-  });
-  
-  const parsed = z.array(CharacterSchema).parse(migrated);
-  
-  const needsMigration = data.some((char: any) => 
-    char.scenes && char.scenes.length > 0 && typeof char.scenes[0] === 'string'
-  );
-  if (needsMigration) {
-    await storageBridge.writeCharacters(parsed);
-  }
-  
-  return parsed;
+  const data = await storageBridge.charactersList();
+  return z.array(CharacterSchema).parse(data);
 }
 
 export async function saveCharacter(c: Partial<Character>): Promise<Character> {
-  const list = await listCharacters();
-  let updated: Character[];
-  let entity: Character;
+  const settings = await readSettings();
+  const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
+  const defaultRules = c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
+  const timestamp = now();
 
-  const existingIdx = c.id ? list.findIndex((x) => x.id === c.id) : -1;
-  
-  if (existingIdx !== -1) {
-    // Update existing character
-    entity = { ...list[existingIdx], ...c, updatedAt: now() } as Character;
-    
-    // Auto-set defaultSceneId if not set and there's exactly one scene
-    if (!entity.defaultSceneId && entity.scenes.length === 1) {
-      entity.defaultSceneId = entity.scenes[0].id;
-    }
-    
-    updated = [...list.slice(0, existingIdx), entity, ...list.slice(existingIdx + 1)];
-  } else {
-    // Create new character
-    const timestamp = now();
-    const settings = await readSettings();
-    const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
-    const defaultRules = c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
-    
-    const scenes = c.scenes ?? [];
-    // Auto-set defaultSceneId: use provided, or first scene if only one exists
-    const autoDefaultSceneId = c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null);
-    
-    entity = {
-      id: c.id ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
-      name: c.name,
-      avatarPath: c.avatarPath,
-      backgroundImagePath: c.backgroundImagePath,
-      description: c.description,
-      scenes: scenes,
-      defaultSceneId: autoDefaultSceneId,
-      rules: defaultRules,
-      defaultModelId: c.defaultModelId ?? null,
-      promptTemplateId: c.promptTemplateId ?? null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    } as Character;
-    updated = [...list, entity];
-  }
+  const scenes = c.scenes ?? [];
+  const entity: Character = {
+    id: c.id ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+    name: c.name!,
+    avatarPath: c.avatarPath,
+    backgroundImagePath: c.backgroundImagePath,
+    description: c.description,
+    scenes,
+    defaultSceneId: c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null),
+    rules: defaultRules,
+    defaultModelId: c.defaultModelId ?? null,
+    promptTemplateId: c.promptTemplateId ?? null,
+    createdAt: c.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  } as Character;
 
-  await storageBridge.writeCharacters(updated);
-  return entity;
+  const stored = await storageBridge.characterUpsert(entity);
+  return CharacterSchema.parse(stored);
 }
 
 export async function deleteCharacter(id: string): Promise<void> {
-  const list = await listCharacters();
-  const out = list.filter((c) => c.id !== id);
-  await storageBridge.writeCharacters(out);
+  await storageBridge.characterDelete(id);
 }
 
 export async function listSessionIds(): Promise<string[]> {
-  const fallback: string[] = [];
-  return storageBridge.readSessionsIndex<string[]>(fallback);
+  return storageBridge.sessionsListIds();
 }
 
 export async function saveAdvancedModelSettings(settings: AdvancedModelSettings): Promise<void> {
-  const current = await readSettings();
-  current.advancedModelSettings = settings;
-  await writeSettings(current);
+  await storageBridge.settingsSetAdvancedModelSettings(settings);
+  broadcastSettingsUpdated();
 }
 
-export async function writeSessionIndex(ids: string[]): Promise<void> {
-  await storageBridge.writeSessionsIndex(ids);
-}
+// Legacy writeSessionIndex removed (DB manages session IDs)
 
 export async function getSession(id: string): Promise<Session | null> {
-  const data = await storageBridge.readSession<Session | null>(id, null);
+  const data = await storageBridge.sessionGet(id);
   return data ? SessionSchema.parse(data) : null;
 }
 
 export async function saveSession(s: Session): Promise<void> {
   SessionSchema.parse(s);
-  await storageBridge.writeSession(s.id, s);
-  const ids = await listSessionIds();
-  if (!ids.includes(s.id)) {
-    ids.push(s.id);
-    await writeSessionIndex(ids);
-  }
+  await storageBridge.sessionUpsert(s);
 }
 
 export async function archiveSession(id: string, archived = true): Promise<Session | null> {
-  const existing = await getSession(id);
-  if (!existing) return null;
-  const updated: Session = {
-    ...existing,
-    archived,
-    updatedAt: now(),
-  };
-  await saveSession(updated);
-  return updated;
+  await storageBridge.sessionArchive(id, archived);
+  return getSession(id);
 }
 
 export async function updateSessionTitle(id: string, title: string): Promise<Session | null> {
-  const existing = await getSession(id);
-  if (!existing) return null;
-  const updated: Session = {
-    ...existing,
-    title: title.trim(),
-    updatedAt: now(),
-  };
-  await saveSession(updated);
-  return updated;
+  await storageBridge.sessionUpdateTitle(id, title.trim());
+  return getSession(id);
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  await storageBridge.deleteSession(id);
-  const ids = await listSessionIds();
-  const filtered = ids.filter((entry) => entry !== id);
-  if (filtered.length !== ids.length) {
-    await writeSessionIndex(filtered);
-  }
+  await storageBridge.sessionDelete(id);
 }
 
 export async function createSession(characterId: string, title: string, systemPrompt?: string, selectedSceneId?: string): Promise<Session> {
@@ -339,32 +253,13 @@ export async function createSession(characterId: string, title: string, systemPr
 }
 
 export async function toggleMessagePin(sessionId: string, messageId: string): Promise<Session | null> {
-  const session = await getSession(sessionId);
-  if (!session) return null;
-  
-  const messageIndex = session.messages.findIndex(m => m.id === messageId);
-  if (messageIndex === -1) return null;
-  
-  const updatedMessages = [...session.messages];
-  updatedMessages[messageIndex] = {
-    ...updatedMessages[messageIndex],
-    isPinned: !updatedMessages[messageIndex].isPinned,
-  };
-  
-  const updated: Session = {
-    ...session,
-    messages: updatedMessages,
-    updatedAt: now(),
-  };
-  
-  await saveSession(updated);
-  return updated;
+  const updated = await storageBridge.messageTogglePin(sessionId, messageId);
+  return updated ? SessionSchema.parse(updated) : null;
 }
 
 // Persona management functions
 export async function listPersonas(): Promise<Persona[]> {
-  const fallback: Persona[] = [];
-  const data = await storageBridge.readPersonas<Persona[]>(fallback);
+  const data = await storageBridge.personasList();
   return z.array(PersonaSchema).parse(data);
 }
 
@@ -374,41 +269,25 @@ export async function getPersona(id: string): Promise<Persona | null> {
 }
 
 export async function savePersona(p: Partial<Persona> & { id?: string; title: string; description: string }): Promise<Persona> {
-  const list = await listPersonas();
-  const idx = p.id ? list.findIndex((x) => x.id === p.id) : -1;
-  const timestamp = now();
-  
-  const entity: Persona = idx >= 0
-    ? { ...list[idx], ...p, updatedAt: timestamp } as Persona
-    : {
-        id: (p.id as string) ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
-        title: p.title,
-        description: p.description,
-        isDefault: p.isDefault ?? false,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
+  const entity: Persona = {
+    id: p.id ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+    title: p.title,
+    description: p.description,
+    avatarPath: p.avatarPath,
+    isDefault: p.isDefault ?? false,
+    createdAt: p.createdAt ?? now(),
+    updatedAt: now(),
+  } as Persona;
 
-  if (entity.isDefault) {
-    list.forEach(persona => {
-      if (persona.id !== entity.id) {
-        persona.isDefault = false;
-      }
-    });
-  }
-
-  const out = idx >= 0 ? (list[idx] = entity, list) : list.concat([entity]);
-  await storageBridge.writePersonas(out);
-  return entity;
+  const saved = await storageBridge.personaUpsert(entity);
+  return PersonaSchema.parse(saved);
 }
 
 export async function deletePersona(id: string): Promise<void> {
-  const list = await listPersonas();
-  const out = list.filter((p) => p.id !== id);
-  await storageBridge.writePersonas(out);
+  await storageBridge.personaDelete(id);
 }
 
 export async function getDefaultPersona(): Promise<Persona | null> {
-  const personas = await listPersonas();
-  return personas.find(p => p.isDefault) || null;
+  const p = await storageBridge.personaDefaultGet();
+  return p ? PersonaSchema.parse(p) : null;
 }

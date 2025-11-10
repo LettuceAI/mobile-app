@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use crate::chat_manager::provider_adapter::adapter_for;
 use crate::chat_manager::types::ProviderId;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,7 +134,8 @@ mod tests {
 
     #[test]
     fn test_build_endpoint_url_with_v1_already_in_base() {
-        let result = build_endpoint_url(&ProviderId("openai".into()), Some("https://custom.com/v1"));
+        let result =
+            build_endpoint_url(&ProviderId("openai".into()), Some("https://custom.com/v1"));
         assert_eq!(result, "https://custom.com/v1/chat/completions");
     }
 }

@@ -22,21 +22,31 @@ impl Display for AppError {
 impl std::error::Error for AppError {}
 
 impl From<reqwest::Error> for AppError {
-    fn from(value: reqwest::Error) -> Self { AppError::Http(value) }
+    fn from(value: reqwest::Error) -> Self {
+        AppError::Http(value)
+    }
 }
 
 impl From<serde_json::Error> for AppError {
-    fn from(value: serde_json::Error) -> Self { AppError::Json(value) }
+    fn from(value: serde_json::Error) -> Self {
+        AppError::Json(value)
+    }
 }
 
 impl From<std::io::Error> for AppError {
-    fn from(value: std::io::Error) -> Self { AppError::Io(value) }
+    fn from(value: std::io::Error) -> Self {
+        AppError::Io(value)
+    }
 }
 
 impl From<String> for AppError {
-    fn from(value: String) -> Self { AppError::Other(value) }
+    fn from(value: String) -> Self {
+        AppError::Other(value)
+    }
 }
 
 impl From<&str> for AppError {
-    fn from(value: &str) -> Self { AppError::Other(value.to_string()) }
+    fn from(value: &str) -> Self {
+        AppError::Other(value.to_string())
+    }
 }

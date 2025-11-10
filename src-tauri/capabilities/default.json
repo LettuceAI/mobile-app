@@ -9,6 +9,7 @@
     "core:default",
     "opener:default",
     "app-events:default",
-    "process:default"
+    "process:default",
+    "sql:default"
   ]
 }

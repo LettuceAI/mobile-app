@@ -2,11 +2,14 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use super::types::{MessageVariant, ProviderCredential, StoredMessage, UsageSummary};
-use crate::providers;
 use crate::chat_manager::types::ProviderId;
+use crate::providers;
 
 pub fn provider_base_url(cred: &ProviderCredential) -> String {
-    providers::resolve_base_url(&ProviderId(cred.provider_id.clone()), cred.base_url.as_deref())
+    providers::resolve_base_url(
+        &ProviderId(cred.provider_id.clone()),
+        cred.base_url.as_deref(),
+    )
 }
 
 // chat_completions_endpoint removed; endpoint selection is centralized in request_builder/provider_adapter.

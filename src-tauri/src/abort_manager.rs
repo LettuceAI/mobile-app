@@ -34,11 +34,11 @@ impl AbortRegistry {
     pub fn register(&self, request_id: String) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
         let handle = AbortHandle::new(tx);
-        
+
         if let Ok(mut map) = self.inner.lock() {
             map.insert(request_id, handle);
         }
-        
+
         rx
     }
 
@@ -48,7 +48,10 @@ impl AbortRegistry {
                 handle.abort();
                 Ok(())
             } else {
-                Err(format!("Request {} not found or already completed", request_id))
+                Err(format!(
+                    "Request {} not found or already completed",
+                    request_id
+                ))
             }
         } else {
             Err("Failed to acquire lock on abort registry".to_string())

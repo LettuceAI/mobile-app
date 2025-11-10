@@ -3,20 +3,20 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
-use crate::utils::{log_error, log_warn, log_info, now_millis};
+use crate::utils::{log_error, log_info, log_warn, now_millis};
 
+use super::prompt_engine;
+use super::prompts;
 use super::request::{
     ensure_assistant_variant, extract_error_message, extract_text, extract_usage,
     new_assistant_variant,
 };
-use super::prompts;
 use super::service::{record_usage_if_available, resolve_api_key, ChatContext};
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
     Model, PromptScope, RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
-use super::prompt_engine;
 use crate::utils::emit_debug;
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
@@ -68,7 +68,11 @@ fn resolve_max_tokens(session: &Session, model: &Model, settings: &Settings) -> 
         .unwrap_or(FALLBACK_MAX_OUTPUT_TOKENS)
 }
 
-fn resolve_frequency_penalty(session: &Session, model: &Model, _settings: &Settings) -> Option<f64> {
+fn resolve_frequency_penalty(
+    session: &Session,
+    model: &Model,
+    _settings: &Settings,
+) -> Option<f64> {
     session
         .advanced_model_settings
         .as_ref()
@@ -237,7 +241,11 @@ pub async fn chat_completion(
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
-    crate::chat_manager::messages::push_system_message(&mut messages_for_api, system_role, system_prompt);
+    crate::chat_manager::messages::push_system_message(
+        &mut messages_for_api,
+        system_role,
+        system_prompt,
+    );
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -891,7 +899,11 @@ pub async fn chat_continue(
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
-    crate::chat_manager::messages::push_system_message(&mut messages_for_api, system_role, system_prompt);
+    crate::chat_manager::messages::push_system_message(
+        &mut messages_for_api,
+        system_role,
+        system_prompt,
+    );
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -1160,7 +1172,10 @@ pub fn delete_prompt_template(app: AppHandle, id: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub fn get_prompt_template(app: AppHandle, id: String) -> Result<Option<SystemPromptTemplate>, String> {
+pub fn get_prompt_template(
+    app: AppHandle,
+    id: String,
+) -> Result<Option<SystemPromptTemplate>, String> {
     prompts::get_template(&app, &id)
 }
 
@@ -1221,7 +1236,8 @@ pub fn render_prompt_preview(
 
     let persona = context.choose_persona(persona_id.as_deref());
 
-    let rendered = prompt_engine::render_with_context(&app, &content, &character, persona, &session, settings);
+    let rendered =
+        prompt_engine::render_with_context(&app, &content, &character, persona, &session, settings);
     Ok(rendered)
 }
 
@@ -1232,20 +1248,20 @@ pub fn regenerate_session_system_prompt(
     persona_id: Option<String>,
 ) -> Result<String, String> {
     let context = super::service::ChatContext::initialize(app.clone())?;
-    
+
     let mut session = context
         .load_session(&session_id)
         .and_then(|opt| opt.ok_or_else(|| "Session not found".to_string()))?;
-    
+
     if let Some(pid) = persona_id {
         session.persona_id = if pid.is_empty() { None } else { Some(pid) };
     }
-    
+
     let character = context.find_character(&session.character_id)?;
     let (model, _provider_cred) = context.select_model(&character)?;
     let persona = context.choose_persona(session.persona_id.as_deref());
-    
+
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
-    
+
     Ok(system_prompt.unwrap_or_default())
 }

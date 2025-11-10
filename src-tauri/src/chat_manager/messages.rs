@@ -2,7 +2,11 @@ use serde_json::Value;
 
 /// Pushes a system message to the API message list if present.
 /// Uses the provider-specific system role.
-pub fn push_system_message(target: &mut Vec<Value>, system_role: &str, system_prompt: Option<String>) {
+pub fn push_system_message(
+    target: &mut Vec<Value>,
+    system_role: &str,
+    system_prompt: Option<String>,
+) {
     if let Some(system) = system_prompt {
         target.push(serde_json::json!({ "role": system_role, "content": system }));
     }

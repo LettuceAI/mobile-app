@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 use std::time::Duration;
-use tokio::time::sleep;
 use tauri::Emitter;
+use tokio::time::sleep;
 
 use crate::chat_manager::types::NormalizedEvent;
 use crate::error::AppError;
@@ -72,7 +72,17 @@ pub async fn send_with_retries(
                 if resp.status().is_server_error() && attempt < max_retries {
                     attempt += 1;
                     let delay = backoff_delay_ms(attempt);
-                    log_warn(app, scope, format!("server error {} - retrying in {}ms (attempt {}/{})", resp.status(), delay, attempt, max_retries));
+                    log_warn(
+                        app,
+                        scope,
+                        format!(
+                            "server error {} - retrying in {}ms (attempt {}/{})",
+                            resp.status(),
+                            delay,
+                            attempt,
+                            max_retries
+                        ),
+                    );
                     sleep(Duration::from_millis(delay)).await;
                     // continue loop
                 } else {
@@ -83,7 +93,14 @@ pub async fn send_with_retries(
                 if (err.is_timeout() || err.is_request()) && attempt < max_retries {
                     attempt += 1;
                     let delay = backoff_delay_ms(attempt);
-                    log_warn(app, scope, format!("request error '{}' - retrying in {}ms (attempt {}/{})", err, delay, attempt, max_retries));
+                    log_warn(
+                        app,
+                        scope,
+                        format!(
+                            "request error '{}' - retrying in {}ms (attempt {}/{})",
+                            err, delay, attempt, max_retries
+                        ),
+                    );
                     sleep(Duration::from_millis(delay)).await;
                 } else {
                     return Err(AppError::from(err));

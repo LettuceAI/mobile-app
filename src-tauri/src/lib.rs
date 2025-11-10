@@ -1,37 +1,38 @@
 mod abort_manager;
 mod api;
 mod chat_manager;
+mod error;
 mod migrations;
 mod models;
 mod pricing_cache;
 mod providers;
 mod secrets;
+mod serde_utils;
 mod storage_manager;
+mod transport;
 mod usage;
 mod utils;
-mod transport;
-mod serde_utils;
-mod error;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri::Manager;
-    
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
-            
+
             if let Err(e) = migrations::run_migrations(app.handle()) {
                 eprintln!("Migration error: {}", e);
             }
-            
+
             if let Err(e) = chat_manager::prompts::ensure_app_default_template(app.handle()) {
                 eprintln!("Failed to ensure app default template: {}", e);
             }
-            
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -44,15 +45,27 @@ pub fn run() {
             providers::get_provider_configs,
             storage_manager::storage_read_settings,
             storage_manager::storage_write_settings,
-            storage_manager::storage_read_characters,
-            storage_manager::storage_write_characters,
-            storage_manager::storage_read_personas,
-            storage_manager::storage_write_personas,
-            storage_manager::storage_read_sessions_index,
-            storage_manager::storage_write_sessions_index,
-            storage_manager::storage_read_session,
-            storage_manager::storage_write_session,
-            storage_manager::storage_delete_session,
+            // Legacy file-based storage commands removed from handler
+            storage_manager::settings_set_defaults,
+            storage_manager::provider_upsert,
+            storage_manager::provider_delete,
+            storage_manager::model_upsert,
+            storage_manager::model_delete,
+            storage_manager::settings_set_advanced_model_settings,
+            storage_manager::characters_list,
+            storage_manager::character_upsert,
+            storage_manager::character_delete,
+            storage_manager::personas_list,
+            storage_manager::persona_upsert,
+            storage_manager::persona_delete,
+            storage_manager::persona_default_get,
+            storage_manager::sessions_list_ids,
+            storage_manager::session_get,
+            storage_manager::session_upsert,
+            storage_manager::session_delete,
+            storage_manager::session_archive,
+            storage_manager::session_update_title,
+            storage_manager::message_toggle_pin,
             storage_manager::storage_clear_all,
             storage_manager::storage_usage_summary,
             storage_manager::storage_write_image,

@@ -48,33 +48,32 @@ fn now() -> u64 {
 /// Load all prompt templates from storage
 pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, String> {
     let path = prompts_file_path(app)?;
-    
+
     if !path.exists() {
         return Ok(Vec::new());
     }
-    
+
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read prompts file: {}", e))?;
-    
+
     let file: PromptTemplatesFile = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse prompt templates: {}", e))?;
-    
+
     Ok(file.templates)
 }
 
 /// Save all prompt templates to storage
 fn save_templates(app: &AppHandle, templates: &[SystemPromptTemplate]) -> Result<(), String> {
     let path = prompts_file_path(app)?;
-    
+
     let file = PromptTemplatesFile {
         templates: templates.to_vec(),
     };
     let content = serde_json::to_string_pretty(&file)
         .map_err(|e| format!("Failed to serialize templates: {}", e))?;
-    
-    std::fs::write(&path, content)
-        .map_err(|e| format!("Failed to write prompts file: {}", e))?;
-    
+
+    std::fs::write(&path, content).map_err(|e| format!("Failed to write prompts file: {}", e))?;
+
     Ok(())
 }
 
@@ -87,7 +86,7 @@ pub fn create_template(
     content: String,
 ) -> Result<SystemPromptTemplate, String> {
     let mut templates = load_templates(app)?;
-    
+
     let template = SystemPromptTemplate {
         id: generate_id(),
         name,
@@ -97,10 +96,10 @@ pub fn create_template(
         created_at: now(),
         updated_at: now(),
     };
-    
+
     templates.push(template.clone());
     save_templates(app, &templates)?;
-    
+
     Ok(template)
 }
 
@@ -114,12 +113,12 @@ pub fn update_template(
     content: Option<String>,
 ) -> Result<SystemPromptTemplate, String> {
     let mut templates = load_templates(app)?;
-    
+
     let template = templates
         .iter_mut()
         .find(|t| t.id == id)
         .ok_or_else(|| format!("Template not found: {}", id))?;
-    
+
     if is_app_default_template(&id) {
         if let Some(s) = &scope {
             if *s != template.scope {
@@ -127,7 +126,7 @@ pub fn update_template(
             }
         }
     }
-    
+
     if let Some(n) = name {
         template.name = n;
     }
@@ -141,10 +140,10 @@ pub fn update_template(
         template.content = c;
     }
     template.updated_at = now();
-    
+
     let updated = template.clone();
     save_templates(app, &templates)?;
-    
+
     Ok(updated)
 }
 
@@ -154,7 +153,7 @@ pub fn delete_template(app: &AppHandle, id: String) -> Result<(), String> {
     if is_app_default_template(&id) {
         return Err("Cannot delete the App Default template".to_string());
     }
-    
+
     let mut templates = load_templates(app)?;
     templates.retain(|t| t.id != id);
     save_templates(app, &templates)?;
@@ -173,12 +172,12 @@ pub fn get_template(app: &AppHandle, id: &str) -> Result<Option<SystemPromptTemp
 /// Returns the ID of the app default template
 pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
     let mut templates = load_templates(app)?;
-    
+
     // Check if app default already exists
     if let Some(existing) = templates.iter().find(|t| t.id == APP_DEFAULT_TEMPLATE_ID) {
         return Ok(existing.id.clone());
     }
-    
+
     // Create the app default template
     let template = SystemPromptTemplate {
         id: APP_DEFAULT_TEMPLATE_ID.to_string(),
@@ -189,10 +188,10 @@ pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
         created_at: now(),
         updated_at: now(),
     };
-    
+
     templates.push(template.clone());
     save_templates(app, &templates)?;
-    
+
     Ok(template.id)
 }
 
@@ -206,9 +205,9 @@ pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplat
     update_template(
         app,
         APP_DEFAULT_TEMPLATE_ID.to_string(),
-        None, // Keep name
-        None, // Keep scope
-        None, // Keep target_ids
+        None,                            // Keep name
+        None,                            // Keep scope
+        None,                            // Keep target_ids
         Some(get_app_default_content()), // Reset content
     )
 }

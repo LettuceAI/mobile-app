@@ -1,9 +1,9 @@
+use super::util::{build_headers, build_verify_url, extract_error_message, resolve_base_url};
 use crate::{chat_manager::types::ProviderId, secrets, utils::log_info};
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
-use super::util::{build_headers, build_verify_url, resolve_base_url, extract_error_message};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,7 +15,6 @@ pub struct VerifyProviderApiKeyResult {
     pub details: Option<Value>,
 }
 
-
 #[tauri::command]
 pub async fn verify_provider_api_key(
     app: tauri::AppHandle,
@@ -24,7 +23,10 @@ pub async fn verify_provider_api_key(
     api_key: Option<String>,
     base_url: Option<String>,
 ) -> Result<VerifyProviderApiKeyResult, String> {
-    if !matches!(provider_id.as_str(), "openai" | "anthropic" | "openrouter" | "groq" | "mistral") {
+    if !matches!(
+        provider_id.as_str(),
+        "openai" | "anthropic" | "openrouter" | "groq" | "mistral"
+    ) {
         return Ok(VerifyProviderApiKeyResult {
             provider_id,
             valid: true,
@@ -81,12 +83,7 @@ pub async fn verify_provider_api_key(
     };
 
     let pid: ProviderId = provider_id.clone().into();
-    let base = match resolve_base_url(
-        &app,
-        &pid,
-        base_url.clone(),
-        credential_id.as_deref(),
-    ) {
+    let base = match resolve_base_url(&app, &pid, base_url.clone(), credential_id.as_deref()) {
         Ok(url) => url,
         Err(err) => {
             return Ok(VerifyProviderApiKeyResult {

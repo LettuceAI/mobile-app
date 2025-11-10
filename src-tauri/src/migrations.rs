@@ -44,19 +44,32 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     let mut version = current_version;
 
     if version < 1 {
-        log_info(app, "migrations", "Running migration v0 -> v1: Add custom prompt fields".to_string());
+        log_info(
+            app,
+            "migrations",
+            "Running migration v0 -> v1: Add custom prompt fields".to_string(),
+        );
         migrate_v0_to_v1(app)?;
         version = 1;
     }
 
     if version < 2 {
-        log_info(app, "migrations", "Running migration v1 -> v2: Convert prompts to template system".to_string());
+        log_info(
+            app,
+            "migrations",
+            "Running migration v1 -> v2: Convert prompts to template system".to_string(),
+        );
         migrate_v1_to_v2(app)?;
         version = 2;
     }
 
     if version < 3 {
-        log_info(app, "migrations", "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)".to_string());
+        log_info(
+            app,
+            "migrations",
+            "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)"
+                .to_string(),
+        );
         migrate_v2_to_v3(app)?;
         version = 3;
     }
@@ -73,7 +86,10 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        format!("Migrations completed successfully. Now at version {}", version),
+        format!(
+            "Migrations completed successfully. Now at version {}",
+            version
+        ),
     );
 
     Ok(())
@@ -112,7 +128,10 @@ fn set_migration_version(app: &AppHandle, version: u32) -> Result<(), String> {
                 .map_err(|e| format!("Failed to parse settings: {}", e))?;
 
             if let Some(obj) = settings.as_object_mut() {
-                obj.insert("migrationVersion".to_string(), Value::Number(version.into()));
+                obj.insert(
+                    "migrationVersion".to_string(),
+                    Value::Number(version.into()),
+                );
             }
 
             storage_write_settings(
@@ -166,7 +185,11 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
             if !obj.contains_key("systemPrompt") {
                 obj.insert("systemPrompt".to_string(), Value::Null);
                 changed = true;
-                log_info(app, "migrations", "Added systemPrompt to settings".to_string());
+                log_info(
+                    app,
+                    "migrations",
+                    "Added systemPrompt to settings".to_string(),
+                );
             }
 
             // Add systemPrompt to all models if not present
@@ -194,7 +217,11 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
                 app.clone(),
                 serde_json::to_string(&settings).map_err(|e| e.to_string())?,
             )?;
-            log_info(app, "migrations", "Settings migration completed".to_string());
+            log_info(
+                app,
+                "migrations",
+                "Settings migration completed".to_string(),
+            );
         }
     }
 
@@ -205,7 +232,8 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        "Character systemPrompt fields will be added on next save (handled by serde defaults)".to_string(),
+        "Character systemPrompt fields will be added on next save (handled by serde defaults)"
+            .to_string(),
     );
 
     Ok(())
@@ -242,8 +270,8 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
                     app,
                     t.id.clone(),
                     None,
-                    None,                 // keep scope as-is for App Default
-                    Some(Vec::new()),     // clear target ids
+                    None,             // keep scope as-is for App Default
+                    Some(Vec::new()), // clear target ids
                     None,
                 )?;
                 changed += 1;
@@ -265,14 +293,8 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
         }
 
         if need_update {
-            let _updated = prompts::update_template(
-                app,
-                t.id.clone(),
-                None,
-                new_scope,
-                new_targets,
-                None,
-            )?;
+            let _updated =
+                prompts::update_template(app, t.id.clone(), None, new_scope, new_targets, None)?;
             changed += 1;
         }
     }
@@ -280,7 +302,10 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        format!("v2->v3 migration completed. Templates normalized: {}", changed),
+        format!(
+            "v2->v3 migration completed. Templates normalized: {}",
+            changed
+        ),
     );
 
     Ok(())
@@ -293,13 +318,13 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
 /// and updates references in Settings, Models, and Characters.
 fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
     use std::collections::HashMap;
-    
+
     let mut prompt_map: HashMap<String, String> = HashMap::new(); // content -> template_id
     let mut templates_created = 0;
 
     // Ensure "App Default" template exists
     let _app_default_id = prompts::ensure_app_default_template(app)?;
-    
+
     // Migrate Settings app-wide prompt
     if let Ok(Some(settings_json)) = storage_read_settings(app.clone()) {
         let mut settings: Value = serde_json::from_str(&settings_json)
@@ -359,7 +384,10 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                                     template.id
                                 };
 
-                                model_obj.insert("promptTemplateId".to_string(), Value::String(template_id));
+                                model_obj.insert(
+                                    "promptTemplateId".to_string(),
+                                    Value::String(template_id),
+                                );
                                 model_obj.remove("systemPrompt");
                                 changed = true;
                             }
@@ -377,7 +405,10 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
             log_info(
                 app,
                 "migrations",
-                format!("Migrated settings prompts, created {} templates", templates_created),
+                format!(
+                    "Migrated settings prompts, created {} templates",
+                    templates_created
+                ),
             );
         }
     }
@@ -419,7 +450,8 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                                 template.id
                             };
 
-                            char_obj.insert("promptTemplateId".to_string(), Value::String(template_id));
+                            char_obj
+                                .insert("promptTemplateId".to_string(), Value::String(template_id));
                             char_obj.remove("systemPrompt");
                             changed = true;
                         }
@@ -435,7 +467,10 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                 log_info(
                     app,
                     "migrations",
-                    format!("Migrated character prompts, total templates created: {}", templates_created),
+                    format!(
+                        "Migrated character prompts, total templates created: {}",
+                        templates_created
+                    ),
                 );
             }
         }
@@ -444,7 +479,10 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        format!("v1->v2 migration completed. Total prompt templates created: {}", templates_created),
+        format!(
+            "v1->v2 migration completed. Total prompt templates created: {}",
+            templates_created
+        ),
     );
 
     Ok(())

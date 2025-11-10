@@ -1,6 +1,6 @@
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, ACCEPT};
+use crate::{chat_manager::types::ProviderId, storage_manager};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION};
 use serde_json::Value;
-use crate::{storage_manager, chat_manager::types::ProviderId};
 
 pub fn default_base_url(provider_id: &ProviderId) -> Option<&'static str> {
     match provider_id.0.as_str() {
@@ -21,7 +21,11 @@ pub fn resolve_base_url(
 ) -> Result<String, String> {
     if let Some(explicit) = base_override.and_then(|value| {
         let trimmed = value.trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     }) {
         return Ok(explicit);
     }
@@ -58,17 +62,29 @@ pub fn build_headers(provider_id: &ProviderId, api_key: &str) -> Result<HeaderMa
 
     match provider_id.0.as_str() {
         "anthropic" => {
-            headers.insert(HeaderName::from_static("anthropic-version"), HeaderValue::from_static("2023-06-01"));
-            headers.insert(HeaderName::from_static("x-api-key"), HeaderValue::from_str(api_key)
-                .map_err(|e| format!("invalid x-api-key header: {e}"))?);
+            headers.insert(
+                HeaderName::from_static("anthropic-version"),
+                HeaderValue::from_static("2023-06-01"),
+            );
+            headers.insert(
+                HeaderName::from_static("x-api-key"),
+                HeaderValue::from_str(api_key)
+                    .map_err(|e| format!("invalid x-api-key header: {e}"))?,
+            );
         }
         "mistral" => {
-            headers.insert(HeaderName::from_static("x-api-key"), HeaderValue::from_str(api_key)
-                .map_err(|e| format!("invalid x-api-key header: {e}"))?);
+            headers.insert(
+                HeaderName::from_static("x-api-key"),
+                HeaderValue::from_str(api_key)
+                    .map_err(|e| format!("invalid x-api-key header: {e}"))?,
+            );
         }
         _ => {
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {}", api_key))
-                .map_err(|e| format!("invalid authorization header: {e}"))?);
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| format!("invalid authorization header: {e}"))?,
+            );
         }
     }
     Ok(headers)

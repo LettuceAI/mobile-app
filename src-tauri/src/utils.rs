@@ -53,7 +53,12 @@ impl LogLevel {
 
 /// Structured backend logger that emits formatted log messages via event system.
 /// Format: [HH:MM:SS] component[/function] LEVEL message
-pub(crate) fn log_backend(app: &AppHandle, component: &str, level: LogLevel, message: impl AsRef<str>) {
+pub(crate) fn log_backend(
+    app: &AppHandle,
+    component: &str,
+    level: LogLevel,
+    message: impl AsRef<str>,
+) {
     use chrono::Local;
     let now = Local::now();
     let timestamp = now.format("%H:%M:%S");
@@ -64,7 +69,7 @@ pub(crate) fn log_backend(app: &AppHandle, component: &str, level: LogLevel, mes
         level.as_str(),
         message.as_ref()
     );
-    
+
     let event = json!({
         "state": component,
         "level": level.as_str(),

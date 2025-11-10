@@ -6,10 +6,10 @@
 pub mod cache;
 pub mod cost;
 pub mod pricing;
-pub mod verify;
 pub mod types;
+pub mod verify;
 
 pub use cache::*;
 pub use cost::*;
-pub use verify::*;
 pub use types::*;
+pub use verify::*;
