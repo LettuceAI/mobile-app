@@ -42,8 +42,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             api::api_request,
             api::abort_request,
-            models::models_cache_get,
-            models::models_cache_update,
             models::verify_model_exists,
             providers::verify_provider_api_key,
             providers::get_provider_configs,

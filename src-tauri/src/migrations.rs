@@ -105,6 +105,8 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         version = 6;
     }
 
+    // v6 -> v7 (model list cache) removed; feature dropped
+
     // Update migration version
     set_migration_version(app, version)?;
 
@@ -425,6 +427,9 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
     let _ = fs::rename(&path, path.with_extension("json.bak"));
     Ok(())
 }
+
+/// Migration v6 -> v7: move per-credential model list cache from models-cache.json to SQLite table
+// migrate_v6_to_v7 removed (feature dropped)
 
 /// Migration v2 -> v3: Normalize prompt templates to global prompts (remove reliance on scopes)
 ///
