@@ -1,0 +1,384 @@
+use rusqlite::{params, OptionalExtension};
+use serde_json::{Map as JsonMap, Value as JsonValue};
+
+use super::{db::now_ms, db::open_db, legacy::read_encrypted_file, legacy::settings_path};
+
+fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    let conn = open_db(app)?;
+
+    let exists: Option<i64> = conn
+        .query_row("SELECT COUNT(*) FROM settings", [], |r| r.get(0))
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if exists.unwrap_or(0) == 0 {
+        return Ok(None);
+    }
+
+    let row = conn
+        .query_row(
+            "SELECT default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version FROM settings WHERE id = 1",
+            [],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, Option<String>>(3)?,
+                    r.get::<_, Option<String>>(4)?,
+                    r.get::<_, Option<String>>(5)?,
+                    r.get::<_, i64>(6)? as u32,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some((
+        default_provider_credential_id,
+        default_model_id,
+        app_state_json,
+        advanced_model_settings_json,
+        prompt_template_id,
+        system_prompt,
+        migration_version,
+    )) = row
+    else {
+        return Ok(None);
+    };
+
+    // Provider credentials
+    let mut stmt = conn
+        .prepare("SELECT id, provider_id, label, api_key_ref, base_url, default_model, headers FROM provider_credentials")
+        .map_err(|e| e.to_string())?;
+    let creds_iter = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let provider_id: String = r.get(1)?;
+            let label: String = r.get(2)?;
+            let api_key_ref: Option<String> = r.get(3)?;
+            let base_url: Option<String> = r.get(4)?;
+            let default_model: Option<String> = r.get(5)?;
+            let headers: Option<String> = r.get(6)?;
+            let mut obj = JsonMap::new();
+            obj.insert("id".into(), JsonValue::String(id));
+            obj.insert("providerId".into(), JsonValue::String(provider_id));
+            obj.insert("label".into(), JsonValue::String(label));
+            if let Some(s) = api_key_ref {
+                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+                    if !v.is_null() {
+                        obj.insert("apiKeyRef".into(), v);
+                    }
+                }
+            }
+            if let Some(s) = base_url {
+                obj.insert("baseUrl".into(), JsonValue::String(s));
+            }
+            if let Some(s) = default_model {
+                obj.insert("defaultModel".into(), JsonValue::String(s));
+            }
+            if let Some(s) = headers {
+                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+                    if !v.is_null() {
+                        obj.insert("headers".into(), v);
+                    }
+                }
+            }
+            Ok(JsonValue::Object(obj))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut provider_credentials: Vec<JsonValue> = Vec::new();
+    for item in creds_iter {
+        provider_credentials.push(item.map_err(|e| e.to_string())?);
+    }
+
+    // Models
+    let mut stmt = conn
+        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, advanced_model_settings, prompt_template_id, system_prompt FROM models ORDER BY created_at ASC")
+        .map_err(|e| e.to_string())?;
+    let models_iter = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let name: String = r.get(1)?;
+            let provider_id: String = r.get(2)?;
+            let provider_label: String = r.get(3)?;
+            let display_name: String = r.get(4)?;
+            let created_at: i64 = r.get(5)?;
+            let advanced: Option<String> = r.get(6)?;
+            let prompt_template_id: Option<String> = r.get(7)?;
+            let system_prompt: Option<String> = r.get(8)?;
+            let mut obj = JsonMap::new();
+            obj.insert("id".into(), JsonValue::String(id));
+            obj.insert("name".into(), JsonValue::String(name));
+            obj.insert("providerId".into(), JsonValue::String(provider_id));
+            obj.insert("providerLabel".into(), JsonValue::String(provider_label));
+            obj.insert("displayName".into(), JsonValue::String(display_name));
+            obj.insert("createdAt".into(), JsonValue::from(created_at));
+            if let Some(s) = advanced {
+                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+                    obj.insert("advancedModelSettings".into(), v);
+                }
+            }
+            if let Some(s) = prompt_template_id {
+                obj.insert("promptTemplateId".into(), JsonValue::String(s));
+            }
+            if let Some(s) = system_prompt {
+                obj.insert("systemPrompt".into(), JsonValue::String(s));
+            }
+            Ok(JsonValue::Object(obj))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut models: Vec<JsonValue> = Vec::new();
+    for item in models_iter {
+        models.push(item.map_err(|e| e.to_string())?);
+    }
+
+    let app_state: JsonValue = serde_json::from_str(&app_state_json).unwrap_or_else(|_| serde_json::json!({
+        "onboarding": {"completed": false, "skipped": false, "providerSetupCompleted": false, "modelSetupCompleted": false},
+        "theme": "light",
+        "tooltips": {},
+        "pureModeEnabled": true
+    }));
+
+    let mut root = JsonMap::new();
+    root.insert("$version".into(), JsonValue::from(2));
+    root.insert(
+        "defaultProviderCredentialId".into(),
+        default_provider_credential_id
+            .map(JsonValue::String)
+            .unwrap_or(JsonValue::Null),
+    );
+    root.insert(
+        "defaultModelId".into(),
+        default_model_id
+            .map(JsonValue::String)
+            .unwrap_or(JsonValue::Null),
+    );
+    root.insert(
+        "providerCredentials".into(),
+        JsonValue::Array(provider_credentials),
+    );
+    root.insert("models".into(), JsonValue::Array(models));
+    root.insert("appState".into(), app_state);
+    if let Some(s) = advanced_model_settings_json {
+        if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+            if !v.is_null() {
+                root.insert("advancedModelSettings".into(), v);
+            }
+        }
+    }
+    if let Some(id) = prompt_template_id {
+        root.insert("promptTemplateId".into(), JsonValue::String(id));
+    }
+    if let Some(sp) = system_prompt {
+        root.insert("systemPrompt".into(), JsonValue::String(sp));
+    }
+    root.insert(
+        "migrationVersion".into(),
+        JsonValue::from(migration_version),
+    );
+
+    Ok(Some(
+        serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())?,
+    ))
+}
+
+fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), String> {
+    let mut conn = open_db(app)?;
+    let now = now_ms() as i64;
+    let json: JsonValue = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+
+    let default_provider_credential_id = json
+        .get("defaultProviderCredentialId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let default_model_id = json
+        .get("defaultModelId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let app_state_str = json
+        .get("appState")
+        .map(|v| serde_json::to_string(v).unwrap_or("{}".into()))
+        .unwrap_or("{}".into());
+    let adv_settings_str = json.get("advancedModelSettings").and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            Some(serde_json::to_string(v).unwrap_or("null".into()))
+        }
+    });
+    let prompt_template_id = json
+        .get("promptTemplateId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let system_prompt = json
+        .get("systemPrompt")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let migration_version = json
+        .get("migrationVersion")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as i64;
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute(
+        r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version, created_at, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              default_provider_credential_id=excluded.default_provider_credential_id,
+              default_model_id=excluded.default_model_id,
+              app_state=excluded.app_state,
+              advanced_model_settings=excluded.advanced_model_settings,
+              prompt_template_id=excluded.prompt_template_id,
+              system_prompt=excluded.system_prompt,
+              migration_version=excluded.migration_version,
+              updated_at=excluded.updated_at"#,
+        params![
+            default_provider_credential_id,
+            default_model_id,
+            app_state_str,
+            adv_settings_str,
+            prompt_template_id,
+            system_prompt,
+            migration_version,
+            now,
+            now,
+        ],
+    ).map_err(|e| e.to_string())?;
+
+    tx.execute("DELETE FROM provider_credentials", [])
+        .map_err(|e| e.to_string())?;
+    if let Some(creds) = json.get("providerCredentials").and_then(|v| v.as_array()) {
+        for c in creds {
+            let id = c.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let provider_id = c.get("providerId").and_then(|v| v.as_str()).unwrap_or("");
+            let label = c.get("label").and_then(|v| v.as_str()).unwrap_or("");
+            let api_key_ref = c
+                .get("apiKeyRef")
+                .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+            let base_url = c
+                .get("baseUrl")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let default_model = c
+                .get("defaultModel")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let headers = c
+                .get("headers")
+                .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+            tx.execute(
+                "INSERT INTO provider_credentials (id, provider_id, label, api_key_ref, base_url, default_model, headers) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                params![id, provider_id, label, api_key_ref, base_url, default_model, headers],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+
+    tx.execute("DELETE FROM models", [])
+        .map_err(|e| e.to_string())?;
+    if let Some(models) = json.get("models").and_then(|v| v.as_array()) {
+        for m in models {
+            let id = m.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let name = m.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let provider_id = m.get("providerId").and_then(|v| v.as_str()).unwrap_or("");
+            let provider_label = m
+                .get("providerLabel")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let display_name = m
+                .get("displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or(name);
+            let created_at = m.get("createdAt").and_then(|v| v.as_i64()).unwrap_or(now);
+            let adv = m
+                .get("advancedModelSettings")
+                .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+            let prompt_template_id = m
+                .get("promptTemplateId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let system_prompt = m
+                .get("systemPrompt")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            tx.execute(
+                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, advanced_model_settings, prompt_template_id, system_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![id, name, provider_id, provider_label, display_name, created_at, adv, prompt_template_id, system_prompt],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
+fn ensure_settings_row(conn: &rusqlite::Connection) -> Result<(), String> {
+    let now = now_ms() as i64;
+    conn.execute(
+        r#"INSERT INTO settings (id, app_state, created_at, updated_at)
+            VALUES (1, '{}', ?, ?)
+            ON CONFLICT(id) DO NOTHING"#,
+        params![now, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn storage_read_settings(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    if let Some(v) = db_read_settings_json(&app)? {
+        return Ok(Some(v));
+    }
+    let path = settings_path(&app)?;
+    if let Some(json) = read_encrypted_file(&path)? {
+        let _ = db_write_settings_json(&app, json.clone());
+        return db_read_settings_json(&app);
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn storage_write_settings(app: tauri::AppHandle, data: String) -> Result<(), String> {
+    db_write_settings_json(&app, data)
+}
+
+// Internal helper used by some backend modules
+pub fn internal_read_settings(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    db_read_settings_json(app)
+}
+
+#[tauri::command]
+pub fn settings_set_defaults(
+    app: tauri::AppHandle,
+    default_provider_credential_id: Option<String>,
+    default_model_id: Option<String>,
+) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET default_provider_credential_id = ?, default_model_id = ?, updated_at = ? WHERE id = 1",
+        params![default_provider_credential_id, default_model_id, now],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_advanced_model_settings(
+    app: tauri::AppHandle,
+    advanced_json: String,
+) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    let db_val: Option<String> = {
+        let s = advanced_json.trim();
+        if s.is_empty() || s == "null" {
+            None
+        } else {
+            Some(s.to_string())
+        }
+    };
+    conn.execute(
+        "UPDATE settings SET advanced_model_settings = ?, updated_at = ? WHERE id = 1",
+        params![db_val, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}

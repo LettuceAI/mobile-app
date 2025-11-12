@@ -2,8 +2,10 @@
 use tauri::AppHandle;
 
 use crate::storage_manager::{
-    characters_list, personas_list, session_get, session_upsert, storage_read_settings,
-    storage_write_settings,
+    characters::characters_list,
+    personas::personas_list,
+    sessions::{session_get, session_upsert},
+    settings::{storage_read_settings, storage_write_settings},
 };
 // emit_debug no longer used here; prompt_engine handles debug emission
 
@@ -107,7 +109,9 @@ pub fn load_personas(app: &AppHandle) -> Result<Vec<Persona>, String> {
 pub fn load_session(app: &AppHandle, session_id: &str) -> Result<Option<Session>, String> {
     let json = session_get(app.clone(), session_id.to_string())?;
     match json {
-        Some(s) => serde_json::from_str::<Session>(&s).map(Some).map_err(|e| e.to_string()),
+        Some(s) => serde_json::from_str::<Session>(&s)
+            .map(Some)
+            .map_err(|e| e.to_string()),
         None => Ok(None),
     }
 }

@@ -97,25 +97,21 @@ export function BottomMenu({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.15 }}
             onClick={onClose}
-            style={{ willChange: 'opacity' }}
           />
 
           <motion.div
-            className={`${menuClasses} z-50 mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 shadow-[0_25px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl ${className}`}
+            className={`${menuClasses} z-50 mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 ${isBottomMenu ? 'max-h-[90vh]' : 'max-h-[95vh]'} overflow-hidden flex flex-col ${className}`}
             variants={menuVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
             transition={{ 
-              type: "tween", 
-              duration: 0.25, 
-              ease: [0.25, 0.46, 0.45, 0.94]
-            }}
-            style={{ 
-              willChange: 'transform, opacity',
-              transform: 'translate3d(0,0,0)' // Force GPU acceleration
+              type: "spring", 
+              damping: 30, 
+              stiffness: 300,
+              mass: 0.8
             }}
             {...(isBottomMenu
               ? {
@@ -130,40 +126,33 @@ export function BottomMenu({
               : {})}
           >
             {isBottomMenu && (
-              <motion.div 
-                className="flex justify-center pt-4 pb-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2, delay: 0.1 }}
-              >
+              <div className="flex justify-center pt-4 pb-2">
               <button
                 type="button"
                 onPointerDown={handlePointerDown}
                 style={{ touchAction: "none" }}
-                className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none transition-opacity duration-150 hover:opacity-80 active:opacity-60"
+                className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none"
                 aria-label="Drag to close menu"
               >
-                <span className="h-1 w-20 rounded-full bg-white/40 transition-all duration-150 hover:bg-white/55 active:bg-white/60" />
+                <span className="h-1 w-20 rounded-full bg-white/40" />
               </button>
-              </motion.div>
+              </div>
             )}
 
-            <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"}`}>
+            <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"} flex-shrink-0`}>
               <h3 className="text-lg font-semibold text-white">{title}</h3>
               {includeExitIcon && (
-                <motion.button
-                  className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-all duration-150 hover:border-white/20 hover:text-white hover:bg-white/10"
-                  whileTap={{ scale: 0.9 }}
-                  transition={{ type: "tween", duration: 0.1 }}
+                <button
+                  className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white hover:bg-white/10 active:scale-95"
                   onClick={onClose}
-                  style={{ willChange: 'transform' }}
+                  aria-label="Close menu"
                 >
                   <X size={14} />
-                </motion.button>
+                </button>
               )}
             </div>
 
-            <div className={`px-6 ${isBottomMenu ? "pb-8" : "pt-2 pb-4"}`}>{children}</div>
+            <div className={`px-6 ${isBottomMenu ? "pb-8" : "pt-2 pb-4"} overflow-y-auto flex-1`}>{children}</div>
           </motion.div>
         </>
       )}
@@ -187,16 +176,13 @@ export function MenuButton({
 
   return (
     <motion.button
-      className={`group relative w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-white transition-all duration-150 ${
+      className={`group relative w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-white ${
         disabled
           ? "cursor-not-allowed opacity-50"
-          : "hover:border-white/15 hover:bg-white/[0.07]"
-      } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-black`}
-      whileTap={disabled ? {} : { scale: 0.98 }}
-      transition={{ type: "tween", duration: 0.1 }}
+          : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
+      } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}
       onClick={handleClick}
       disabled={disabled}
-      style={{ willChange: disabled ? 'auto' : 'transform' }}
     >
       <div className="flex items-center gap-2">
         <div
@@ -252,36 +238,21 @@ export function MenuDivider({ label, className = "" }: MenuDividerProps) {
 
 export function MenuButtonGroup({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <motion.div 
-      className={`space-y-3 ${className}`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-    >
+    <div className={`space-y-3 ${className}`}>
       {children}
-    </motion.div>
+    </div>
   );
 }
 
 export function MenuSection({ label, children, className = "" }: { label?: string; children: ReactNode; className?: string }) {
   return (
-    <motion.div 
-      className={`space-y-3 ${className}`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, delay: 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
-    >
+    <div className={`space-y-3 ${className}`}>
       {label && (
-        <motion.p 
-          className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/40"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.15, delay: 0.1 }}
-        >
+        <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/40">
           {label}
-        </motion.p>
+        </p>
       )}
       {children}
-    </motion.div>
+    </div>
   );
 }

@@ -6,50 +6,18 @@ use tauri::AppHandle;
 use super::tracking::{
     CharacterStats, ModelStats, ProviderStats, RequestUsage, UsageFilter, UsageStats,
 };
+use crate::storage_manager::db::open_db;
 use crate::utils::{ensure_lettuce_dir, log_info};
-
-const USAGE_LOG_FILE: &str = "usage_log.json";
 
 struct UsageRepository {
     app: AppHandle,
 }
 
 impl UsageRepository {
-    fn new(app: AppHandle) -> Self {
-        Self { app }
-    }
-
-    fn log_path(&self) -> Result<PathBuf, String> {
-        Ok(ensure_lettuce_dir(&self.app)?.join(USAGE_LOG_FILE))
-    }
-
-    fn load_all(&self) -> Result<Vec<RequestUsage>, String> {
-        let path = self.log_path()?;
-
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-
-        let content =
-            fs::read_to_string(&path).map_err(|e| format!("Failed to read usage log: {}", e))?;
-
-        if content.trim().is_empty() {
-            return Ok(Vec::new());
-        }
-
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse usage log: {}", e))
-    }
-
-    fn save_all(&self, usage_log: &[RequestUsage]) -> Result<(), String> {
-        let path = self.log_path()?;
-        let content = serde_json::to_string_pretty(usage_log)
-            .map_err(|e| format!("Failed to serialize usage log: {}", e))?;
-
-        fs::write(&path, content).map_err(|e| format!("Failed to write usage log: {}", e))
-    }
+    fn new(app: AppHandle) -> Self { Self { app } }
 
     fn add_record(&self, usage: RequestUsage) -> Result<(), String> {
-        let mut log = self.load_all()?;
+        let mut conn = open_db(&self.app)?;
 
         log_info(
             &self.app,
@@ -64,20 +32,129 @@ impl UsageRepository {
             ),
         );
 
-        log.push(usage);
-        self.save_all(&log)
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute(
+            r#"INSERT OR REPLACE INTO usage_records (
+                id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label,
+                prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            rusqlite::params![
+                usage.id,
+                usage.timestamp as i64,
+                usage.session_id,
+                usage.character_id,
+                usage.character_name,
+                usage.model_id,
+                usage.model_name,
+                usage.provider_id,
+                usage.provider_label,
+                usage.prompt_tokens.map(|v| v as i64),
+                usage.completion_tokens.map(|v| v as i64),
+                usage.total_tokens.map(|v| v as i64),
+                usage.cost.as_ref().map(|c| c.prompt_cost),
+                usage.cost.as_ref().map(|c| c.completion_cost),
+                usage.cost.as_ref().map(|c| c.total_cost),
+                if usage.success { 1 } else { 0 },
+                usage.error_message,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+        // metadata
+        tx.execute("DELETE FROM usage_metadata WHERE usage_id = ?", rusqlite::params![&usage.id])
+            .map_err(|e| e.to_string())?;
+        for (k, v) in usage.metadata.iter() {
+            tx.execute(
+                "INSERT INTO usage_metadata (usage_id, key, value) VALUES (?, ?, ?)",
+                rusqlite::params![&usage.id, k, v],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())
     }
 
     fn query_records(&self, filter: UsageFilter) -> Result<Vec<RequestUsage>, String> {
-        let log = self.load_all()?;
-        Ok(Self::filter_records(log, &filter))
-    }
+        let conn = open_db(&self.app)?;
+        let mut where_clauses: Vec<&str> = Vec::new();
+        let mut params: Vec<rusqlite::types::Value> = Vec::new();
 
-    fn filter_records(records: Vec<RequestUsage>, filter: &UsageFilter) -> Vec<RequestUsage> {
-        records
-            .into_iter()
-            .filter(|record| matches_filter(record, filter))
-            .collect()
+        if let Some(start) = filter.start_timestamp { where_clauses.push("timestamp >= ?"); params.push((start as i64).into()); }
+        if let Some(end) = filter.end_timestamp { where_clauses.push("timestamp <= ?"); params.push((end as i64).into()); }
+        if let Some(ref p) = filter.provider_id { where_clauses.push("provider_id = ?"); params.push(p.clone().into()); }
+        if let Some(ref m) = filter.model_id { where_clauses.push("model_id = ?"); params.push(m.clone().into()); }
+        if let Some(ref c) = filter.character_id { where_clauses.push("character_id = ?"); params.push(c.clone().into()); }
+        if let Some(ref s) = filter.session_id { where_clauses.push("session_id = ?"); params.push(s.clone().into()); }
+        if let Some(true) = filter.success_only { where_clauses.push("success = 1"); }
+
+        let sql = format!(
+            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
+            if where_clauses.is_empty() { String::new() } else { format!("WHERE {}", where_clauses.join(" AND ")) }
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                    r.get::<_, String>(6)?,
+                    r.get::<_, String>(7)?,
+                    r.get::<_, String>(8)?,
+                    r.get::<_, Option<i64>>(9)?,
+                    r.get::<_, Option<i64>>(10)?,
+                    r.get::<_, Option<i64>>(11)?,
+                    r.get::<_, Option<f64>>(12)?,
+                    r.get::<_, Option<f64>>(13)?,
+                    r.get::<_, Option<f64>>(14)?,
+                    r.get::<_, i64>(15)?,
+                    r.get::<_, Option<String>>(16)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut out: Vec<RequestUsage> = Vec::new();
+        let mut ids: Vec<String> = Vec::new();
+        for row in rows {
+            let (id, ts, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, pt, ct, tt, pc, cc, tc, success, err) = row.map_err(|e| e.to_string())?;
+            ids.push(id.clone());
+            let cost = match (pc, cc, tc) {
+                (Some(prompt_cost), Some(completion_cost), Some(total_cost)) => Some(crate::models::types::RequestCost { prompt_tokens: pt.unwrap_or(0) as u64, completion_tokens: ct.unwrap_or(0) as u64, total_tokens: tt.unwrap_or(0) as u64, prompt_cost, completion_cost, total_cost }),
+                _ => None,
+            };
+            out.push(RequestUsage {
+                id,
+                timestamp: ts as u64,
+                session_id,
+                character_id,
+                character_name,
+                model_id,
+                model_name,
+                provider_id,
+                provider_label,
+                prompt_tokens: pt.map(|v| v as u64),
+                completion_tokens: ct.map(|v| v as u64),
+                total_tokens: tt.map(|v| v as u64),
+                cost,
+                success: success != 0,
+                error_message: err,
+                metadata: HashMap::new(),
+            });
+        }
+
+        // fetch metadata for these ids
+        if !ids.is_empty() {
+            let placeholders = vec!["?"; ids.len()].join(",");
+            let sql = format!("SELECT usage_id, key, value FROM usage_metadata WHERE usage_id IN ({})", placeholders);
+            let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))).map_err(|e| e.to_string())?;
+            let mut meta_map: HashMap<String, HashMap<String, String>> = HashMap::new();
+            for row in rows { let (uid, k, v) = row.map_err(|e| e.to_string())?; meta_map.entry(uid).or_default().insert(k, v); }
+            for rec in &mut out { if let Some(m) = meta_map.remove(&rec.id) { rec.metadata = m; } }
+        }
+        Ok(out)
     }
 
     fn calculate_stats(&self, filter: UsageFilter) -> Result<UsageStats, String> {
@@ -93,37 +170,19 @@ impl UsageRepository {
             by_model: HashMap::new(),
             by_character: HashMap::new(),
         };
-
-        for record in records {
-            accumulate_usage_stats(&mut stats, &record);
-        }
-
-        if stats.total_requests > 0 {
-            stats.average_cost_per_request = stats.total_cost / stats.total_requests as f64;
-        }
-
+        for record in records { accumulate_usage_stats(&mut stats, &record); }
+        if stats.total_requests > 0 { stats.average_cost_per_request = stats.total_cost / stats.total_requests as f64; }
         Ok(stats)
     }
 
     fn clear_before(&self, timestamp: u64) -> Result<u64, String> {
-        let records = self.load_all()?;
-        let original_len = records.len() as u64;
-
-        let retained: Vec<_> = records
-            .into_iter()
-            .filter(|record| record.timestamp >= timestamp)
-            .collect();
-
-        let deleted = original_len - retained.len() as u64;
-        self.save_all(&retained)?;
-
-        log_info(
-            &self.app,
-            "usage_tracking",
-            format!("Cleared {} old usage records", deleted),
-        );
-
-        Ok(deleted)
+        let conn = open_db(&self.app)?;
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM usage_records WHERE timestamp < ?", rusqlite::params![timestamp as i64], |r| r.get(0))
+            .unwrap_or(0);
+        conn.execute("DELETE FROM usage_records WHERE timestamp < ?", rusqlite::params![timestamp as i64])
+            .map_err(|e| e.to_string())?;
+        Ok(count as u64)
     }
 
     fn export_csv(&self, filter: UsageFilter) -> Result<String, String> {
@@ -134,13 +193,8 @@ impl UsageRepository {
     fn save_csv(&self, csv_data: &str, filename: &str) -> Result<String, String> {
         let exports_dir = self.ensure_exports_dir()?;
         let file_path = exports_dir.join(filename);
-
         fs::write(&file_path, csv_data).map_err(|e| e.to_string())?;
-
-        file_path
-            .to_str()
-            .ok_or_else(|| "Invalid file path".to_string())
-            .map(|s| s.to_string())
+        file_path.to_str().ok_or_else(|| "Invalid file path".to_string()).map(|s| s.to_string())
     }
 
     fn ensure_exports_dir(&self) -> Result<PathBuf, String> {
@@ -151,49 +205,6 @@ impl UsageRepository {
     }
 }
 
-fn matches_filter(record: &RequestUsage, filter: &UsageFilter) -> bool {
-    if let Some(start) = filter.start_timestamp {
-        if record.timestamp < start {
-            return false;
-        }
-    }
-
-    if let Some(end) = filter.end_timestamp {
-        if record.timestamp > end {
-            return false;
-        }
-    }
-
-    if let Some(provider) = &filter.provider_id {
-        if &record.provider_id != provider {
-            return false;
-        }
-    }
-
-    if let Some(model) = &filter.model_id {
-        if &record.model_id != model {
-            return false;
-        }
-    }
-
-    if let Some(character) = &filter.character_id {
-        if &record.character_id != character {
-            return false;
-        }
-    }
-
-    if let Some(session) = &filter.session_id {
-        if &record.session_id != session {
-            return false;
-        }
-    }
-
-    if matches!(filter.success_only, Some(true)) && !record.success {
-        return false;
-    }
-
-    true
-}
 
 fn accumulate_usage_stats(stats: &mut UsageStats, record: &RequestUsage) {
     stats.total_requests += 1;

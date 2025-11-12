@@ -13,3 +13,10 @@ export function isDevelopmentMode(): boolean {
 export function getEnvironment(): string {
   return import.meta.env.MODE;
 }
+
+/**
+ * Detect if the app is running in production mode
+ */
+export function isProductionMode(): boolean {
+  return import.meta.env.PROD;
+}

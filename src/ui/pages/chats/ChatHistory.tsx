@@ -137,7 +137,7 @@ export function ChatHistoryPage() {
       {/* Header */}
       <div
         className="z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex">
           <button
             onClick={() => navigate(-1)}
             className={cn(
@@ -148,7 +148,7 @@ export function ChatHistoryPage() {
           >
             <ArrowLeft size={14} />
           </button>
-          <div className="min-w-0 text-left overflow-hidden">
+          <div className="min-w-0 overflow-hidden">
             <h1 className={cn(
               typography.h1.size,
               typography.h1.weight,

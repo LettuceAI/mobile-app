@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2 } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,11 +8,15 @@ import { createDefaultAdvancedModelSettings } from "../../../core/storage/schema
 import { useChatController } from "./hooks/useChatController";
 import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
+import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
   ADVANCED_MAX_TOKENS_RANGE,
+  ADVANCED_FREQUENCY_PENALTY_RANGE,
+  ADVANCED_PRESENCE_PENALTY_RANGE,
+  ADVANCED_TOP_K_RANGE,
   formatAdvancedModelSettingsSummary,
   sanitizeAdvancedModelSettings,
 } from "../../components/AdvancedModelSettingsForm";
@@ -224,6 +228,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [globalAdvancedSettings, setGlobalAdvancedSettings] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
   const [sessionAdvancedSettings, setSessionAdvancedSettings] = useState<AdvancedModelSettings | null>(null);
   const [showSessionAdvancedMenu, setShowSessionAdvancedMenu] = useState(false);
+  const [showParameterSupport, setShowParameterSupport] = useState(false);
   const [sessionAdvancedDraft, setSessionAdvancedDraft] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
   const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
   const [showPersonaActions, setShowPersonaActions] = useState(false);
@@ -727,11 +732,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
         <MenuSection>
           {currentSession ? (
             <div className="space-y-5">
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0c0d13]/85 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-white/10 px-4 py-3">
                 <div>
                   <p className="text-sm font-semibold text-white">Session override</p>
-                  <p className="mt-1 text-xs text-gray-400 leading-relaxed">
-                    Enable to customize temperature, top P, and token limits just for this conversation.
+                  <p className="mt-1 text-xs text-white/50 leading-relaxed">
+                    Customize parameters just for this conversation
                   </p>
                 </div>
 
@@ -745,13 +750,13 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   />
                   <label
                     htmlFor="use-as-default"
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${sessionOverrideEnabled
-                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${sessionOverrideEnabled
+                      ? 'bg-emerald-500'
                       : 'bg-white/20'
                       }`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${sessionOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                      className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${sessionOverrideEnabled ? 'translate-x-5' : 'translate-x-0.5'
                         }`}
                     />
                   </label>
@@ -762,14 +767,23 @@ function ChatSettingsContent({ character }: { character: Character }) {
               {/* Advanced Settings Controls */}
               {sessionOverrideEnabled && (
                 <div className="space-y-3">
+                  {/* Parameter Support Info Button */}
+                  <button
+                    onClick={() => setShowParameterSupport(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/30 bg-blue-400/10 px-4 py-2.5 text-sm text-blue-200 transition hover:bg-blue-400/15 active:scale-[0.99]"
+                  >
+                    <Info className="h-4 w-4" />
+                    <span>View Parameter Support</span>
+                  </button>
+
                   {/* Temperature */}
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-xl border border-white/10 p-4">
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <label className="text-sm font-medium text-white">Temperature</label>
                         <p className="mt-0.5 text-xs text-white/50">Controls randomness and creativity</p>
                       </div>
-                      <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
+                      <span className="rounded-lg bg-emerald-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
                         {sessionAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
                       </span>
                     </div>
@@ -785,20 +799,20 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         background: `linear-gradient(to right, rgb(52, 211, 153) 0%, rgb(52, 211, 153) ${((sessionAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
                       }}
                     />
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-white/40">0 - Precise</span>
-                      <span className="text-white/40">2 - Creative</span>
+                    <div className="mt-2 flex items-center justify-between text-xs text-white/40">
+                      <span>0 - Precise</span>
+                      <span>2 - Creative</span>
                     </div>
                   </div>
 
                   {/* Top P */}
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-xl border border-white/10 p-4">
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <label className="text-sm font-medium text-white">Top P</label>
                         <p className="mt-0.5 text-xs text-white/50">Nucleus sampling threshold</p>
                       </div>
-                      <span className="rounded-lg border border-blue-400/30 bg-blue-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-blue-200">
+                      <span className="rounded-lg bg-blue-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-blue-200">
                         {sessionAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
                       </span>
                     </div>
@@ -814,14 +828,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         background: `linear-gradient(to right, rgb(96, 165, 250) 0%, rgb(96, 165, 250) ${((sessionAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
                       }}
                     />
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-white/40">0 - Focused</span>
-                      <span className="text-white/40">1 - Diverse</span>
+                    <div className="mt-2 flex items-center justify-between text-xs text-white/40">
+                      <span>0 - Focused</span>
+                      <span>1 - Diverse</span>
                     </div>
                   </div>
 
                   {/* Max Tokens */}
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-xl border border-white/10 p-4">
                     <div className="mb-3">
                       <label className="text-sm font-medium text-white">Max Output Tokens</label>
                       <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
@@ -833,8 +847,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: null })}
                         className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
                           !sessionAdvancedDraft.maxOutputTokens
-                            ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                            : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                            ? 'bg-purple-400/20 text-purple-200'
+                            : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
                         }`}
                       >
                         Auto
@@ -844,8 +858,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: 1024 })}
                         className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
                           sessionAdvancedDraft.maxOutputTokens
-                            ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                            : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                            ? 'bg-purple-400/20 text-purple-200'
+                            : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
                         }`}
                       >
                         Custom
@@ -861,7 +875,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         value={sessionAdvancedDraft.maxOutputTokens ?? ''}
                         onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: Number(e.target.value) })}
                         placeholder="1024"
-                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                       />
                     )}
                     
@@ -870,6 +884,88 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         ? 'Let the model decide the response length'
                         : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
                       }
+                    </p>
+                  </div>
+
+                  {/* Frequency Penalty */}
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-white">Frequency Penalty</label>
+                        <p className="mt-0.5 text-xs text-white/50">Reduce repetition of token sequences</p>
+                      </div>
+                      <span className="rounded-lg bg-orange-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-orange-200">
+                        {sessionAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
+                      max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
+                      step={0.01}
+                      value={sessionAdvancedDraft.frequencyPenalty ?? 0}
+                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, frequencyPenalty: Number(e.target.value) })}
+                      className="w-full"
+                      style={{
+                        background: `linear-gradient(to right, rgb(251, 146, 60) 0%, rgb(251, 146, 60) ${((sessionAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                      }}
+                    />
+                    <div className="mt-2 flex items-center justify-between text-xs text-white/40">
+                      <span>-2 - More Rep.</span>
+                      <span>2 - Less Rep.</span>
+                    </div>
+                  </div>
+
+                  {/* Presence Penalty */}
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-white">Presence Penalty</label>
+                        <p className="mt-0.5 text-xs text-white/50">Encourage discussing new topics</p>
+                      </div>
+                      <span className="rounded-lg bg-pink-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-pink-200">
+                        {sessionAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
+                      max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
+                      step={0.01}
+                      value={sessionAdvancedDraft.presencePenalty ?? 0}
+                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, presencePenalty: Number(e.target.value) })}
+                      className="w-full"
+                      style={{
+                        background: `linear-gradient(to right, rgb(244, 114, 182) 0%, rgb(244, 114, 182) ${((sessionAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                      }}
+                    />
+                    <div className="mt-2 flex items-center justify-between text-xs text-white/40">
+                      <span>-2 - Repeat</span>
+                      <span>2 - Explore</span>
+                    </div>
+                  </div>
+
+                  {/* Top K */}
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="mb-3">
+                      <label className="text-sm font-medium text-white">Top K</label>
+                      <p className="mt-0.5 text-xs text-white/50">Limit sampling to top K tokens</p>
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={ADVANCED_TOP_K_RANGE.min}
+                      max={ADVANCED_TOP_K_RANGE.max}
+                      value={sessionAdvancedDraft.topK ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? null : Number(e.target.value);
+                        setSessionAdvancedDraft({ ...sessionAdvancedDraft, topK: val });
+                      }}
+                      placeholder="40"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                    <p className="mt-2 text-xs text-white/40">
+                      Lower values = more focused, higher = more diverse
                     </p>
                   </div>
                 </div>
@@ -883,7 +979,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     setSessionAdvancedDraft(globalAdvancedSettings ?? createDefaultAdvancedModelSettings());
                     handleSaveSessionAdvancedSettings(null);
                   }}
-                  className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
+                  className="flex-1 rounded-xl border border-white/10 py-3 text-sm font-medium text-white hover:bg-white/5 active:scale-[0.99]"
                 >
                   Use app defaults
                 </button>
@@ -892,7 +988,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   onClick={() =>
                     handleSaveSessionAdvancedSettings(sessionOverrideEnabled ? sessionAdvancedDraft : null)
                   }
-                  className="flex-1 rounded-xl border border-emerald-400/40 bg-emerald-400/20 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-400/30"
+                  className="flex-1 rounded-xl bg-emerald-400/20 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/25 active:scale-[0.99]"
                 >
                   Save changes
                 </button>
@@ -903,6 +999,25 @@ function ChatSettingsContent({ character }: { character: Character }) {
               Open a chat session to configure per-session settings.
             </div>
           )}
+        </MenuSection>
+      </BottomMenu>
+
+      {/* Parameter Support Info */}
+      <BottomMenu
+        isOpen={showParameterSupport}
+        onClose={() => setShowParameterSupport(false)}
+        title="Parameter Support"
+        includeExitIcon={true}
+        location="bottom"
+      >
+        <MenuSection>
+          <ProviderParameterSupportInfo 
+            providerId={(() => {
+              const effectiveModelId = getEffectiveModelId();
+              const model = models.find(m => m.id === effectiveModelId);
+              return model?.providerId || 'openai';
+            })()} 
+          />
         </MenuSection>
       </BottomMenu>
     </div>

@@ -498,35 +498,37 @@ export function ModelsPage() {
         <div className="flex h-full flex-col">
             {/* List (TopNav handles title/back) */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-                <button
-                    onClick={openAdvancedView}
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-left text-white transition hover:border-emerald-400/50 hover:bg-emerald-400/20 active:scale-[0.99]"
+                <div
+                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-white"
                 >
-                    <div className="flex items-center gap-3">
+                    <button
+                        onClick={openAdvancedView}
+                        className="flex flex-1 items-center gap-3 text-left transition active:scale-[0.99]"
+                    >
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-100">
                             <SlidersHorizontal className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 text-sm font-medium text-white">
                                 <span>Response Style</span>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowParameterSupport(true);
-                                    }}
-                                    className="group/info flex items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
-                                    aria-label="View parameter support"
-                                >
-                                    <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
-                                </button>
                             </div>
                             <div className="mt-0.5 truncate text-xs text-emerald-100/80">
                                 {advancedSummary}
                             </div>
                         </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-emerald-200" />
-                </button>
+                        <ChevronRight className="h-4 w-4 text-emerald-200" />
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowParameterSupport(true);
+                        }}
+                        className="group/info ml-2 flex items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
+                        aria-label="View parameter support"
+                    >
+                        <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
+                    </button>
+                </div>
 
                 {models.length === 0 && (
                     <EmptyState

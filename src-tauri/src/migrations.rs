@@ -4,8 +4,8 @@ use tauri::AppHandle;
 use crate::chat_manager::prompts;
 use crate::chat_manager::types::PromptScope;
 use crate::storage_manager::{
-    storage_read_characters, storage_read_settings, storage_write_characters,
-    storage_write_settings,
+    settings::storage_read_settings,
+    settings::storage_write_settings,
 };
 use crate::utils::{log_error, log_info};
 
@@ -413,68 +413,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
         }
     }
 
-    // Migrate Characters
-    if let Ok(Some(characters_json)) = storage_read_characters(app.clone()) {
-        let mut characters: Value = serde_json::from_str(&characters_json)
-            .map_err(|e| format!("Failed to parse characters: {}", e))?;
-
-        let mut changed = false;
-
-        if let Some(chars_array) = characters.as_array_mut() {
-            for (idx, character) in chars_array.iter_mut().enumerate() {
-                if let Some(char_obj) = character.as_object_mut() {
-                    if let Some(Value::String(prompt_content)) = char_obj.get("systemPrompt") {
-                        if !prompt_content.is_empty() {
-                            let char_id_default = format!("char_{}", idx);
-                            let char_id = char_obj
-                                .get("id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or(&char_id_default);
-                            let char_name = char_obj
-                                .get("name")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("Unknown");
-
-                            let template_id = if let Some(id) = prompt_map.get(prompt_content) {
-                                id.clone()
-                            } else {
-                                let template = prompts::create_template(
-                                    app,
-                                    format!("{} Prompt", char_name),
-                                    PromptScope::CharacterSpecific,
-                                    vec![char_id.to_string()],
-                                    prompt_content.clone(),
-                                )?;
-                                prompt_map.insert(prompt_content.clone(), template.id.clone());
-                                templates_created += 1;
-                                template.id
-                            };
-
-                            char_obj
-                                .insert("promptTemplateId".to_string(), Value::String(template_id));
-                            char_obj.remove("systemPrompt");
-                            changed = true;
-                        }
-                    }
-                }
-            }
-
-            if changed {
-                storage_write_characters(
-                    app.clone(),
-                    serde_json::to_string(&characters).map_err(|e| e.to_string())?,
-                )?;
-                log_info(
-                    app,
-                    "migrations",
-                    format!(
-                        "Migrated character prompts, total templates created: {}",
-                        templates_created
-                    ),
-                );
-            }
-        }
-    }
+    // Character prompt migration for legacy files skipped; characters moved to DB
 
     log_info(
         app,

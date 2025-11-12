@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Sparkles, User, MessageSquare } from "lucide-react";
 import { typography, radius, interactive, cn } from "../../design-tokens";
 import { saveCharacter, savePersona, createSession, listCharacters, listPersonas } from "../../../core/storage/repo";
@@ -118,6 +119,24 @@ export function DeveloperPage() {
     }
   };
 
+  const optimizeDb = async () => {
+    try {
+      await invoke("db_optimize");
+      showStatus("✓ Database optimized");
+    } catch (err) {
+      showError(`DB optimize failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const backupLegacy = async () => {
+    try {
+      const result = await invoke<string>("legacy_backup_and_remove");
+      showStatus(`✓ ${result}`);
+    } catch (err) {
+      showError(`Backup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-[#050505]">
       {/* Content */}
@@ -184,8 +203,26 @@ export function DeveloperPage() {
         </section>
 
         {/* Debug Info */}
-        <section className={cn("mt-8 space-y-3")}>
+        <section className={cn("mt-8 space-y-3")}> 
           <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-3")}>
+            Storage Maintenance
+          </h2>
+          <ActionButton
+            icon={<Sparkles />}
+            title="Optimize Database"
+            description="Apply PRAGMAs and run VACUUM (mobile only)"
+            onClick={optimizeDb}
+            variant="primary"
+          />
+          <ActionButton
+            icon={<Sparkles />}
+            title="Backup & Remove Legacy Files"
+            description="Moves legacy .bin storage into a backup folder"
+            onClick={backupLegacy}
+            variant="danger"
+          />
+
+          <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-3 mt-6")}>
             Environment Info
           </h2>
           

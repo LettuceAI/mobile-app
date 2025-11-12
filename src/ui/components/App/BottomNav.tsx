@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { MessageCircle, Plus, Settings } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
@@ -41,11 +40,8 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
     onCreateClick();
   };
   return (
-    <motion.nav
+    <div
       className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/8 bg-[#0b0b0d]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 text-white shadow-[0_-12px_32px_rgba(0,0,0,0.35)]"
-      initial={{ y: 90 }}
-      animate={{ y: 0 }}
-      transition={{ type: "spring", stiffness: 160, damping: 18, delay: 0.05 }}
     >
       <div className="mx-auto flex w-full max-w-md items-stretch gap-2">
         <TabItem
@@ -72,6 +68,6 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
           className="flex-1 h-10 text-sm"
         />
       </div>
-    </motion.nav>
+    </div>
   );
 }
