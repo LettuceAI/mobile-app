@@ -45,8 +45,6 @@ export async function getPromptTemplate(id: string): Promise<SystemPromptTemplat
   return await invoke<SystemPromptTemplate | null>("get_prompt_template", { id });
 }
 
-// Deprecated: getApplicablePromptsFor* removed. Use listPromptTemplates() instead.
-
 export async function getDefaultSystemPromptTemplate(): Promise<string> {
   return await invoke<string>("get_default_system_prompt_template");
 }

@@ -18,10 +18,8 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
   
   const [name, setName] = useState(template?.name || "");
   const [content, setContent] = useState(template?.content || "");
-  // Simplified: scopes and targetIds removed in UI; new templates are App-wide by default
   
   const [characters, setCharacters] = useState<Character[]>([]);
-  // loading removed from UI now that target selection is gone
   const [saving, setSaving] = useState(false);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [previewCharacterId, setPreviewCharacterId] = useState<string | null>(null);
@@ -37,7 +35,6 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
   }, []);
 
   async function loadData() {
-    // no longer showing a loading placeholder
     try {
       const chars = await listCharacters();
       setCharacters(chars);
@@ -48,9 +45,7 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
       setPreviewPersonaId(pers.find(p => p.isDefault)?.id ?? null);
     } catch (error) {
       console.error("Failed to load data:", error);
-    } finally {
-      // no-op
-    }
+    } finally {}
   }
 
   async function handleSave() {

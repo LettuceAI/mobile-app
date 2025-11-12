@@ -255,7 +255,7 @@ fn init_db(app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
     .map_err(|e| e.to_string())
     ?;
 
-    let default_content = crate::chat_manager::storage::default_system_prompt_template();
+    let default_content = crate::chat_manager::prompt_engine::default_system_prompt_template();
     let now = now_ms();
     conn
         .execute(
