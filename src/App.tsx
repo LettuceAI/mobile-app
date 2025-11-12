@@ -170,10 +170,10 @@ function AppContent() {
             onCreateClick={() => setShowCreateMenu(true)}
           />
         )}
-
+        
         <main
           ref={mainRef}
-          className={`flex-1 ${isOnboardingRoute
+          className={`flex-1 ${showGlobalChrome ? "pt-[calc(56px+env(safe-area-inset-top)+8px)]" : ""} ${isOnboardingRoute
               ? "overflow-y-auto px-4 pt-6 pb-6"
               : isChatDetailRoute
                 ? "overflow-hidden px-0 pt-0 pb-0"

@@ -59,7 +59,7 @@ export function TopNav({ currentPath }: TopNavProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 border-b border-white/5 bg-[#050505]/85 backdrop-blur-xl"
+      className="fixed top-0 left-0 right-0 z-30 border-b border-white/5 bg-[#050505]/85 backdrop-blur-xl pb-2"
       style={{ paddingTop: "calc(env(safe-area-inset-top) + 8px)" }}
     >
       <div className="relative mx-auto flex h-14 w-full items-center justify-between px-4">
