@@ -6,6 +6,7 @@ import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storag
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
+import { importCharacter, readFileAsText } from "../../../../core/storage/characterTransfer";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
@@ -232,6 +233,52 @@ export function useCharacterForm() {
       });
   }, []);
 
+  const handleImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      dispatch({ type: 'SET_ERROR', payload: null });
+      const jsonContent = await readFileAsText(file);
+      const character = await importCharacter(jsonContent);
+
+      // Populate form with imported character data
+      dispatch({ type: 'SET_NAME', payload: character.name });
+      dispatch({ type: 'SET_DESCRIPTION', payload: character.description || '' });
+      dispatch({ type: 'SET_SCENES', payload: character.scenes || [] });
+      dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: character.defaultSceneId || null });
+      dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: character.disableAvatarGradient || false });
+      dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: character.promptTemplateId || null });
+      
+      // Avatar and background will already be saved by the import command
+      // We just need to load them for display
+      if (character.avatarPath) {
+        const { loadAvatar } = await import("../../../../core/storage/avatars");
+        const avatarUrl = await loadAvatar("character", character.id, character.avatarPath);
+        if (avatarUrl) {
+          dispatch({ type: 'SET_AVATAR_PATH', payload: avatarUrl });
+        }
+      }
+
+      if (character.backgroundImagePath) {
+        const { convertToImageUrl } = await import("../../../../core/storage/images");
+        const bgUrl = await convertToImageUrl(character.backgroundImagePath);
+        if (bgUrl) {
+          dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: bgUrl });
+        }
+      }
+
+      // Move to the next step
+      dispatch({ type: 'SET_STEP', payload: Step.StartingScene });
+    } catch (error: any) {
+      console.error("Failed to import character:", error);
+      dispatch({ type: 'SET_ERROR', payload: error?.message || "Failed to import character" });
+    } finally {
+      // Clear the file input
+      event.target.value = '';
+    }
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (state.description.trim().length === 0 || state.selectedModelId === null || state.saving || state.scenes.length === 0) {
       return;
@@ -320,6 +367,7 @@ export function useCharacterForm() {
       setDisableAvatarGradient,
       handleAvatarUpload,
       handleBackgroundImageUpload,
+      handleImport,
       handleSave,
     },
     computed: {

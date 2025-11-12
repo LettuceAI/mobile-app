@@ -1,0 +1,114 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { Character } from "./schemas";
+
+/**
+ * Character export package format
+ */
+export interface CharacterExportPackage {
+  version: number;
+  exportedAt: number;
+  character: CharacterExportData;
+  avatarData?: string;
+  backgroundImageData?: string;
+}
+
+/**
+ * Character data in export (without provider/model references)
+ */
+export interface CharacterExportData {
+  originalId: string;
+  name: string;
+  description?: string;
+  rules: string[];
+  scenes: SceneExport[];
+  defaultSceneId?: string;
+  promptTemplateId?: string;
+  systemPrompt?: string;
+  disableAvatarGradient: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SceneExport {
+  id: string;
+  content: string;
+  createdAt: number;
+  selectedVariantId?: string;
+  variants: SceneVariantExport[];
+}
+
+export interface SceneVariantExport {
+  id: string;
+  content: string;
+  createdAt: number;
+}
+
+/**
+ * Export a character to a JSON package
+ * Returns JSON string with all character data and embedded images
+ */
+export async function exportCharacter(characterId: string): Promise<string> {
+  try {
+    console.log("[exportCharacter] Exporting character:", characterId);
+    const exportJson = await invoke<string>("character_export", { characterId });
+    console.log("[exportCharacter] Export successful");
+    return exportJson;
+  } catch (error) {
+    console.error("[exportCharacter] Failed to export character:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to export character");
+  }
+}
+
+/**
+ * Import a character from a JSON package
+ * Creates a new character with new IDs
+ * Returns the newly created character
+ */
+export async function importCharacter(importJson: string): Promise<Character> {
+  try {
+    console.log("[importCharacter] Importing character");
+    const characterJson = await invoke<string>("character_import", { importJson });
+    const character = JSON.parse(characterJson) as Character;
+    console.log("[importCharacter] Import successful:", character.id);
+    return character;
+  } catch (error) {
+    console.error("[importCharacter] Failed to import character:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to import character");
+  }
+}
+
+/**
+ * Download a JSON string as a file
+ */
+export function downloadJson(json: string, filename: string): void {
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Read a file as text
+ */
+export function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsText(file);
+  });
+}
+
+/**
+ * Generate a safe filename for export
+ */
+export function generateExportFilename(characterName: string): string {
+  const safeName = characterName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
+  const timestamp = new Date().toISOString().split("T")[0];
+  return `character_${safeName}_${timestamp}.json`;
+}

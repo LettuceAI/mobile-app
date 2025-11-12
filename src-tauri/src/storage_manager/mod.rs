@@ -1,4 +1,5 @@
 pub mod characters;
+pub mod character_transfer;
 pub mod db;
 mod legacy;
 pub mod media;

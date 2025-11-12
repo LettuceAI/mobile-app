@@ -8,12 +8,33 @@ pub const SERVICE: &str = "lettuceai";
 
 pub fn lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(base.join("lettuce"))
+    let lettuce_path = base.join("lettuce");
+    
+    // Debug logging
+    log_info(app, "utils::lettuce_dir", &format!("[DEBUG] App data dir: {:?}", base));
+    log_info(app, "utils::lettuce_dir", &format!("[DEBUG] Lettuce dir: {:?}", lettuce_path));
+    
+    Ok(lettuce_path)
 }
 
 pub fn ensure_lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = lettuce_dir(app)?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    
+    // Debug logging before creation
+    log_info(app, "utils::ensure_lettuce_dir", &format!("[DEBUG] Ensuring lettuce dir exists: {:?}", dir));
+    
+    fs::create_dir_all(&dir).map_err(|e| {
+        log_error(app, "utils::ensure_lettuce_dir", &format!("[ERROR] Failed to create lettuce dir: {:?}", e));
+        e.to_string()
+    })?;
+    
+    // Verify it was created
+    if dir.exists() {
+        log_info(app, "utils::ensure_lettuce_dir", "[DEBUG] Lettuce dir successfully created/verified");
+    } else {
+        log_error(app, "utils::ensure_lettuce_dir", "[ERROR] Lettuce dir does not exist after create_dir_all");
+    }
+    
     Ok(dir)
 }
 

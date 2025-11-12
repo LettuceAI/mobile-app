@@ -64,6 +64,7 @@ export function CreateCharacterPage() {
               avatarPreview={
                 <AvatarPreview avatarPath={state.avatarPath} name={state.name} />
               }
+              onImport={actions.handleImport}
             />
           ) : state.step === Step.StartingScene ? (
             <StartingSceneStep

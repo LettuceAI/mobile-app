@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, Sparkles, Image } from "lucide-react";
+import { Camera, X, Sparkles, Image, Upload } from "lucide-react";
 import type { ReactNode } from "react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 
@@ -17,6 +17,7 @@ interface IdentityStepProps {
   onContinue: () => void;
   canContinue: boolean;
   avatarPreview: ReactNode;
+  onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export function IdentityStep({
@@ -33,6 +34,7 @@ export function IdentityStep({
   onContinue,
   canContinue,
   avatarPreview,
+  onImport,
 }: IdentityStepProps) {
   return (
     <motion.div
@@ -313,6 +315,30 @@ export function IdentityStep({
           Continue to Starting Scene
         </motion.button>
       </div>
+
+      {/* Import Character Button */}
+      {onImport && (
+        <div className="pt-2">
+          <label className={cn(
+            "flex w-full cursor-pointer items-center justify-center gap-2 border border-blue-400/40 bg-blue-400/20 py-3.5 text-sm font-semibold text-blue-100",
+            radius.md,
+            interactive.transition.fast,
+            "active:scale-[0.97] active:bg-blue-400/30"
+          )}>
+            <Upload className="h-4 w-4" />
+            Import Character from File
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={onImport}
+              className="hidden"
+            />
+          </label>
+          <p className={cn(typography.bodySmall.size, "mt-2 text-center text-white/40")}>
+            Load a character from a .json export file
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 }

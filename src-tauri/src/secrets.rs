@@ -1,52 +1,10 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::io::{Read, Write};
-use std::path::PathBuf;
-use tauri::Manager;
-use zeroize::Zeroize;
+use rusqlite::{params, OptionalExtension};
 
+use crate::storage_manager::db::{now_ms, open_db};
 use crate::utils::SERVICE;
 
-#[derive(Serialize, Deserialize, Default)]
-struct SecretsFile {
-    entries: HashMap<String, String>,
-}
-
-fn secrets_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(base.join("lettuce").join("secrets.json"))
-}
-
-fn read_secrets(app: &tauri::AppHandle) -> Result<SecretsFile, String> {
-    let path = secrets_path(app)?;
-    if !path.exists() {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        return Ok(SecretsFile::default());
-    }
-    let mut f = fs::File::open(&path).map_err(|e| e.to_string())?;
-    let mut buf = String::new();
-    f.read_to_string(&mut buf).map_err(|e| e.to_string())?;
-    if buf.trim().is_empty() {
-        return Ok(SecretsFile::default());
-    }
-    serde_json::from_str(&buf).map_err(|e| e.to_string())
-}
-
-fn write_secrets(app: &tauri::AppHandle, mut s: SecretsFile) -> Result<(), String> {
-    let path = secrets_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let data = serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?;
-    for v in s.entries.values_mut() {
-        v.zeroize();
-    }
-    let mut f = fs::File::create(&path).map_err(|e| e.to_string())?;
-    f.write_all(&data).map_err(|e| e.to_string())?;
-    Ok(())
+fn compose_keys(service: &str, account: &str) -> (String, String) {
+    (service.to_string(), account.to_string())
 }
 
 #[tauri::command]
@@ -55,8 +13,17 @@ pub fn secret_get(
     service: String,
     account: String,
 ) -> Result<Option<String>, String> {
-    let s = read_secrets(&app)?;
-    Ok(s.entries.get(&format!("{}|{}", service, account)).cloned())
+    let conn = open_db(&app)?;
+    let (svc, acc) = compose_keys(&service, &account);
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM secrets WHERE service = ?1 AND account = ?2",
+            params![svc, acc],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(value)
 }
 
 #[tauri::command]
@@ -66,9 +33,17 @@ pub fn secret_set(
     account: String,
     value: String,
 ) -> Result<(), String> {
-    let mut s = read_secrets(&app)?;
-    s.entries.insert(format!("{}|{}", service, account), value);
-    write_secrets(&app, s)
+    let conn = open_db(&app)?;
+    let (svc, acc) = compose_keys(&service, &account);
+    let now = now_ms();
+    conn.execute(
+        "INSERT INTO secrets (service, account, value, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?4)
+         ON CONFLICT(service, account) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        params![svc, acc, value, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -77,9 +52,14 @@ pub fn secret_delete(
     service: String,
     account: String,
 ) -> Result<(), String> {
-    let mut s = read_secrets(&app)?;
-    s.entries.remove(&format!("{}|{}", service, account));
-    write_secrets(&app, s)
+    let conn = open_db(&app)?;
+    let (svc, acc) = compose_keys(&service, &account);
+    conn.execute(
+        "DELETE FROM secrets WHERE service = ?1 AND account = ?2",
+        params![svc, acc],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -126,8 +106,15 @@ pub(crate) fn internal_secret_for_cred_get(
     cred_id: String,
     key: String,
 ) -> Result<Option<String>, String> {
+    let conn = open_db(app)?;
     let service = format!("{}:{}", SERVICE, key);
     let account = format!("{}:{}", provider_id, cred_id);
-    let s = read_secrets(app)?;
-    Ok(s.entries.get(&format!("{}|{}", service, account)).cloned())
+    conn
+        .query_row(
+            "SELECT value FROM secrets WHERE service = ?1 AND account = ?2",
+            params![service, account],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())
 }

@@ -10,7 +10,7 @@ use crate::storage_manager::{
 use crate::utils::{log_error, log_info};
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 3;
+const CURRENT_MIGRATION_VERSION: u32 = 6;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -75,10 +75,35 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     }
 
     // Future migrations go here:
-    // if version < 2 {
-    //     migrate_v1_to_v2(app)?;
-    //     version = 2;
-    // }
+    if version < 4 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v3 -> v4: Move secrets to SQLite (from secrets.json)".to_string(),
+        );
+        migrate_v3_to_v4(app)?;
+        version = 4;
+    }
+
+    if version < 5 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v4 -> v5: Move prompt templates to SQLite (from prompt_templates.json)".to_string(),
+        );
+        migrate_v4_to_v5(app)?;
+        version = 5;
+    }
+
+    if version < 6 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v5 -> v6: Move model pricing cache to SQLite (from models_cache.json)".to_string(),
+        );
+        migrate_v5_to_v6(app)?;
+        version = 6;
+    }
 
     // Update migration version
     set_migration_version(app, version)?;
@@ -236,6 +261,168 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
             .to_string(),
     );
 
+    Ok(())
+}
+
+/// Migration v3 -> v4: move secrets from JSON file to SQLite `secrets` table
+fn migrate_v3_to_v4(app: &AppHandle) -> Result<(), String> {
+    use rusqlite::params;
+    use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
+    use std::fs;
+
+    use crate::storage_manager::db::{now_ms, open_db};
+    use crate::utils::lettuce_dir;
+
+    #[derive(Serialize, Deserialize, Default)]
+    struct SecretsFile {
+        entries: HashMap<String, String>,
+    }
+
+    // Locate old JSON file
+    let dir = lettuce_dir(app)?;
+    let old_path = dir.join("secrets.json");
+    if !old_path.exists() {
+        // Nothing to migrate
+        return Ok(());
+    }
+
+    // Read and parse JSON
+    let raw = fs::read_to_string(&old_path).map_err(|e| e.to_string())?;
+    if raw.trim().is_empty() {
+        // Empty file; safe to remove
+        let _ = fs::remove_file(&old_path);
+        return Ok(());
+    }
+    let secrets: SecretsFile = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+
+    // Upsert into DB
+    let mut conn = open_db(app)?;
+    let now = now_ms();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    for (k, v) in secrets.entries.iter() {
+        // keys are formatted as "service|account"
+        if let Some((service, account)) = k.split_once('|') {
+            tx.execute(
+                "INSERT INTO secrets (service, account, value, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?4)
+                 ON CONFLICT(service, account) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                params![service, account, v, now],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+
+    // Backup old file
+    let _ = fs::rename(&old_path, dir.join("secrets.json.bak"));
+    Ok(())
+}
+
+/// Migration v4 -> v5: move prompt templates from JSON file to SQLite table
+fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
+    use rusqlite::params;
+    use std::fs;
+
+    use crate::chat_manager::types::{PromptScope, SystemPromptTemplate};
+    use crate::storage_manager::db::open_db;
+    use crate::utils::ensure_lettuce_dir;
+
+    // JSON file path
+    let path = ensure_lettuce_dir(app)?.join("prompt_templates.json");
+    if !path.exists() {
+        return Ok(());
+    }
+
+    // The JSON file format: { templates: SystemPromptTemplate[] }
+    #[derive(serde::Deserialize)]
+    struct PromptTemplatesFile {
+        templates: Vec<SystemPromptTemplate>,
+    }
+
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let file: PromptTemplatesFile = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let mut conn = open_db(app)?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    for t in file.templates.iter() {
+        let scope_str = match t.scope {
+            PromptScope::AppWide => "AppWide",
+            PromptScope::ModelSpecific => "ModelSpecific",
+            PromptScope::CharacterSpecific => "CharacterSpecific",
+        };
+        let target_ids_json = serde_json::to_string(&t.target_ids).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                t.id,
+                t.name,
+                scope_str,
+                target_ids_json,
+                t.content,
+                t.created_at,
+                t.updated_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    // Backup the old JSON file
+    let _ = fs::rename(&path, path.with_extension("json.bak"));
+    Ok(())
+}
+
+/// Migration v5 -> v6: move pricing cache from models_cache.json to SQLite table
+fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
+    use rusqlite::params;
+    use std::collections::HashMap;
+    use std::fs;
+
+    use crate::models::ModelPricing;
+    use crate::storage_manager::db::open_db;
+    use crate::utils::ensure_lettuce_dir;
+
+    #[derive(serde::Deserialize)]
+    struct ModelsCacheEntry {
+        id: String,
+        pricing: Option<ModelPricing>,
+        cached_at: u64,
+    }
+
+    #[derive(serde::Deserialize, Default)]
+    struct ModelsCacheFile {
+        models: HashMap<String, ModelsCacheEntry>,
+        last_updated: u64,
+    }
+
+    let path = ensure_lettuce_dir(app)?.join("models_cache.json");
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    if content.trim().is_empty() {
+        let _ = fs::remove_file(&path);
+        return Ok(());
+    }
+    let file: ModelsCacheFile = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let mut conn = open_db(app)?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    for (model_id, entry) in file.models.iter() {
+        let pricing_json = match &entry.pricing {
+            Some(p) => Some(serde_json::to_string(p).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        tx.execute(
+            "INSERT OR REPLACE INTO model_pricing_cache (model_id, pricing_json, cached_at) VALUES (?1, ?2, ?3)",
+            params![model_id, pricing_json, entry.cached_at],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    let _ = fs::rename(&path, path.with_extension("json.bak"));
     Ok(())
 }
 

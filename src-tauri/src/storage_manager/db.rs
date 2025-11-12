@@ -11,10 +11,26 @@ pub fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 pub fn open_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     let path = db_path(app)?;
+    
+    // Debug logging
+    eprintln!("[DEBUG] Database path: {:?}", path);
+    
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        eprintln!("[DEBUG] Creating parent directory: {:?}", parent);
+        fs::create_dir_all(parent).map_err(|e| {
+            eprintln!("[ERROR] Failed to create parent directory: {:?}", e);
+            e.to_string()
+        })?;
     }
-    let conn = Connection::open(path).map_err(|e| e.to_string())?;
+    
+    eprintln!("[DEBUG] Opening database connection...");
+    let conn = Connection::open(&path).map_err(|e| {
+        eprintln!("[ERROR] Failed to open database: {:?}", e);
+        e.to_string()
+    })?;
+    
+    eprintln!("[DEBUG] Database opened successfully at: {:?}", path);
+    
     conn.pragma_update(None, "foreign_keys", &true)
         .map_err(|e| e.to_string())?;
     apply_pragmas(&conn);
@@ -63,6 +79,27 @@ fn init_db(conn: &Connection) -> Result<(), String> {
           advanced_model_settings TEXT,
           prompt_template_id TEXT,
           system_prompt TEXT
+        );
+
+        -- Secrets (API keys and similar), stored in DB instead of JSON
+        CREATE TABLE IF NOT EXISTS secrets (
+          service TEXT NOT NULL,
+          account TEXT NOT NULL,
+          value TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(service, account)
+        );
+
+        -- System prompt templates (migrated from JSON file)
+        CREATE TABLE IF NOT EXISTS prompt_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          scope TEXT NOT NULL,
+          target_ids TEXT NOT NULL, -- JSON array of strings
+          content TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
         );
 
         -- Characters
@@ -192,6 +229,13 @@ fn init_db(conn: &Connection) -> Result<(), String> {
           FOREIGN KEY(usage_id) REFERENCES usage_records(id) ON DELETE CASCADE
         );
 
+        -- Model pricing cache (migrated from models_cache.json)
+        CREATE TABLE IF NOT EXISTS model_pricing_cache (
+          model_id TEXT PRIMARY KEY,
+          pricing_json TEXT,
+          cached_at INTEGER NOT NULL
+        );
+
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_sessions_character ON sessions(character_id);
         CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
@@ -203,7 +247,10 @@ fn init_db(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_usage_provider ON usage_records(provider_id);
         CREATE INDEX IF NOT EXISTS idx_usage_model ON usage_records(model_id);
         CREATE INDEX IF NOT EXISTS idx_usage_character ON usage_records(character_id);
-        "#,
+        CREATE INDEX IF NOT EXISTS idx_secrets_service ON secrets(service);
+        CREATE INDEX IF NOT EXISTS idx_prompt_templates_scope ON prompt_templates(scope);
+        CREATE INDEX IF NOT EXISTS idx_model_pricing_cached_at ON model_pricing_cache(cached_at);
+      "#,
     )
     .map_err(|e| e.to_string())
 }

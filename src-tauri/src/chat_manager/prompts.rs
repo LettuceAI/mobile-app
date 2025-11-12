@@ -1,10 +1,9 @@
 use super::types::{PromptScope, SystemPromptTemplate};
-use crate::utils::ensure_lettuce_dir;
-use serde::{Deserialize, Serialize};
+use crate::storage_manager::db::open_db;
+use rusqlite::{params, OptionalExtension};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
-const PROMPTS_FILE: &str = "prompt_templates.json";
 pub const APP_DEFAULT_TEMPLATE_ID: &str = "prompt_app_default";
 const APP_DEFAULT_TEMPLATE_NAME: &str = "App Default";
 
@@ -13,31 +12,10 @@ fn get_app_default_content() -> String {
     default_system_prompt_template()
 }
 
-/// Get the path to the prompts file
-fn prompts_file_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    Ok(ensure_lettuce_dir(app)?.join(PROMPTS_FILE))
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PromptTemplatesFile {
-    templates: Vec<SystemPromptTemplate>,
-}
-
-impl Default for PromptTemplatesFile {
-    fn default() -> Self {
-        Self {
-            templates: Vec::new(),
-        }
-    }
-}
-
-/// Generate a unique ID for prompt templates
 fn generate_id() -> String {
     format!("prompt_{}", uuid::Uuid::new_v4().to_string())
 }
 
-/// Get current timestamp in milliseconds
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -45,39 +23,63 @@ fn now() -> u64 {
         .as_millis() as u64
 }
 
-/// Load all prompt templates from storage
-pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, String> {
-    let path = prompts_file_path(app)?;
-
-    if !path.exists() {
-        return Ok(Vec::new());
+fn scope_to_str(scope: &PromptScope) -> &'static str {
+    match scope {
+        PromptScope::AppWide => "AppWide",
+        PromptScope::ModelSpecific => "ModelSpecific",
+        PromptScope::CharacterSpecific => "CharacterSpecific",
     }
-
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read prompts file: {}", e))?;
-
-    let file: PromptTemplatesFile = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse prompt templates: {}", e))?;
-
-    Ok(file.templates)
 }
 
-/// Save all prompt templates to storage
-fn save_templates(app: &AppHandle, templates: &[SystemPromptTemplate]) -> Result<(), String> {
-    let path = prompts_file_path(app)?;
-
-    let file = PromptTemplatesFile {
-        templates: templates.to_vec(),
-    };
-    let content = serde_json::to_string_pretty(&file)
-        .map_err(|e| format!("Failed to serialize templates: {}", e))?;
-
-    std::fs::write(&path, content).map_err(|e| format!("Failed to write prompts file: {}", e))?;
-
-    Ok(())
+fn str_to_scope(s: &str) -> Result<PromptScope, String> {
+    match s {
+        "AppWide" => Ok(PromptScope::AppWide),
+        "ModelSpecific" => Ok(PromptScope::ModelSpecific),
+        "CharacterSpecific" => Ok(PromptScope::CharacterSpecific),
+        other => Err(format!("Unknown prompt scope: {}", other)),
+    }
 }
 
-/// Create a new prompt template
+fn row_to_template(row: &rusqlite::Row<'_>) -> Result<SystemPromptTemplate, rusqlite::Error> {
+    let id: String = row.get(0)?;
+    let name: String = row.get(1)?;
+    let scope_str: String = row.get(2)?;
+    let target_ids_json: String = row.get(3)?;
+    let content: String = row.get(4)?;
+    let created_at: u64 = row.get(5)?;
+    let updated_at: u64 = row.get(6)?;
+
+    let scope = str_to_scope(&scope_str).map_err(|_| rusqlite::Error::InvalidQuery)?;
+    let target_ids: Vec<String> = serde_json::from_str(&target_ids_json).unwrap_or_default();
+
+    Ok(SystemPromptTemplate {
+        id,
+        name,
+        scope,
+        target_ids,
+        content,
+        created_at,
+        updated_at,
+    })
+}
+
+pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, String> {
+    let conn = open_db(app)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, scope, target_ids, content, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row_to_template(row))
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
 pub fn create_template(
     app: &AppHandle,
     name: String,
@@ -85,25 +87,18 @@ pub fn create_template(
     target_ids: Vec<String>,
     content: String,
 ) -> Result<SystemPromptTemplate, String> {
-    let mut templates = load_templates(app)?;
-
-    let template = SystemPromptTemplate {
-        id: generate_id(),
-        name,
-        scope,
-        target_ids,
-        content,
-        created_at: now(),
-        updated_at: now(),
-    };
-
-    templates.push(template.clone());
-    save_templates(app, &templates)?;
-
-    Ok(template)
+    let conn = open_db(app)?;
+    let id = generate_id();
+    let now = now();
+    let target_ids_json = serde_json::to_string(&target_ids).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        params![id, name, scope_to_str(&scope), target_ids_json, content, now],
+    )
+    .map_err(|e| e.to_string())?;
+    get_template(app, &id).map(|opt| opt.expect("inserted row should exist"))
 }
 
-/// Update an existing prompt template
 pub fn update_template(
     app: &AppHandle,
     id: String,
@@ -112,102 +107,84 @@ pub fn update_template(
     target_ids: Option<Vec<String>>,
     content: Option<String>,
 ) -> Result<SystemPromptTemplate, String> {
-    let mut templates = load_templates(app)?;
-
-    let template = templates
-        .iter_mut()
-        .find(|t| t.id == id)
-        .ok_or_else(|| format!("Template not found: {}", id))?;
-
+    // Prevent changing scope of app default
     if is_app_default_template(&id) {
         if let Some(s) = &scope {
-            if *s != template.scope {
+            // Need the current template to compare, but keeping restriction consistent
+            if *s != PromptScope::AppWide {
                 return Err("Cannot change scope of App Default template".to_string());
             }
         }
     }
 
-    if let Some(n) = name {
-        template.name = n;
-    }
-    if let Some(s) = scope {
-        template.scope = s;
-    }
-    if let Some(t) = target_ids {
-        template.target_ids = t;
-    }
-    if let Some(c) = content {
-        template.content = c;
-    }
-    template.updated_at = now();
+    let conn = open_db(app)?;
+    let current = get_template(app, &id)?.ok_or_else(|| format!("Template not found: {}", id))?;
+    let new_name = name.unwrap_or(current.name);
+    let new_scope = scope.unwrap_or(current.scope);
+    let new_target_ids = target_ids.unwrap_or(current.target_ids);
+    let new_content = content.unwrap_or(current.content);
+    let updated_at = now();
+    let target_ids_json = serde_json::to_string(&new_target_ids).map_err(|e| e.to_string())?;
 
-    let updated = template.clone();
-    save_templates(app, &templates)?;
+    conn.execute(
+        "UPDATE prompt_templates SET name = ?1, scope = ?2, target_ids = ?3, content = ?4, updated_at = ?5 WHERE id = ?6",
+        params![new_name, scope_to_str(&new_scope), target_ids_json, new_content, updated_at, id],
+    )
+    .map_err(|e| e.to_string())?;
 
-    Ok(updated)
+    get_template(app, &id).map(|opt| opt.expect("updated row should exist"))
 }
 
-/// Delete a prompt template
 pub fn delete_template(app: &AppHandle, id: String) -> Result<(), String> {
-    // Prevent deletion of app default template
     if is_app_default_template(&id) {
         return Err("Cannot delete the App Default template".to_string());
     }
-
-    let mut templates = load_templates(app)?;
-    templates.retain(|t| t.id != id);
-    save_templates(app, &templates)?;
+    let conn = open_db(app)?;
+    conn.execute("DELETE FROM prompt_templates WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Get a specific template by ID
 pub fn get_template(app: &AppHandle, id: &str) -> Result<Option<SystemPromptTemplate>, String> {
-    let templates = load_templates(app)?;
-    Ok(templates.into_iter().find(|t| t.id == id))
+    let conn = open_db(app)?;
+    conn
+        .query_row(
+            "SELECT id, name, scope, target_ids, content, created_at, updated_at FROM prompt_templates WHERE id = ?1",
+            params![id],
+            |row| row_to_template(row),
+        )
+        .optional()
+        .map_err(|e| e.to_string())
 }
 
-// Deprecated: get_applicable_for_* functions removed. UI now uses global list.
-
-/// Ensure the "App Default" template exists, creating it if necessary
-/// Returns the ID of the app default template
 pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
-    let mut templates = load_templates(app)?;
-
-    // Check if app default already exists
-    if let Some(existing) = templates.iter().find(|t| t.id == APP_DEFAULT_TEMPLATE_ID) {
-        return Ok(existing.id.clone());
+    // Check existence
+    if let Some(existing) = get_template(app, APP_DEFAULT_TEMPLATE_ID)? {
+        return Ok(existing.id);
     }
-
-    // Create the app default template
-    let template = SystemPromptTemplate {
-        id: APP_DEFAULT_TEMPLATE_ID.to_string(),
-        name: APP_DEFAULT_TEMPLATE_NAME.to_string(),
-        scope: PromptScope::AppWide,
-        target_ids: vec![],
-        content: get_app_default_content(),
-        created_at: now(),
-        updated_at: now(),
-    };
-
-    templates.push(template.clone());
-    save_templates(app, &templates)?;
-
-    Ok(template.id)
+    // Insert default
+    let conn = open_db(app)?;
+    let now = now();
+    let content = get_app_default_content();
+    conn.execute(
+        "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+        params![APP_DEFAULT_TEMPLATE_ID, APP_DEFAULT_TEMPLATE_NAME, scope_to_str(&PromptScope::AppWide), content, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(APP_DEFAULT_TEMPLATE_ID.to_string())
 }
 
-/// Check if a template is the app default (protected from deletion)
 pub fn is_app_default_template(id: &str) -> bool {
     id == APP_DEFAULT_TEMPLATE_ID
 }
 
-/// Reset the App Default template to its original content
 pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
     update_template(
         app,
         APP_DEFAULT_TEMPLATE_ID.to_string(),
-        None,                            // Keep name
-        None,                            // Keep scope
-        None,                            // Keep target_ids
-        Some(get_app_default_content()), // Reset content
+        None,
+        None,
+        None,
+        Some(get_app_default_content()),
     )
 }

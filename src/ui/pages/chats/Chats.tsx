@@ -1,5 +1,5 @@
 import { useEffect, useState, memo } from "react";
-import { Edit2, Trash2 } from "lucide-react";
+import { Edit2, Trash2, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { listCharacters, createSession, listSessionIds, getSession, deleteCharacter } from "../../../core/storage/repo";
@@ -8,6 +8,7 @@ import { typography, radius, spacing, interactive, cn } from "../../design-token
 import { BottomMenu } from "../../components";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
+import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -15,6 +16,7 @@ export function ChatPage() {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -92,6 +94,22 @@ export function ChatPage() {
     }
   };
 
+  const handleExport = async () => {
+    if (!selectedCharacter) return;
+
+    try {
+      setExporting(true);
+      const exportJson = await exportCharacter(selectedCharacter.id);
+      const filename = generateExportFilename(selectedCharacter.name);
+      downloadJson(exportJson, filename);
+      setSelectedCharacter(null);
+    } catch (err) {
+      console.error("Failed to export character:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col pb-6 text-gray-200">
       <main className="flex-1 overflow-y-auto px-4 pt-4">
@@ -125,6 +143,19 @@ export function ChatPage() {
                 <Edit2 className="h-4 w-4 text-white/70" />
               </div>
               <span className="text-sm font-medium text-white">Edit Character</span>
+            </button>
+
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex w-full items-center gap-3 rounded-xl border border-blue-400/30 bg-blue-400/10 px-4 py-3 text-left transition hover:border-blue-400/50 hover:bg-blue-400/20 disabled:opacity-50"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-400/30 bg-blue-400/20">
+                <Download className="h-4 w-4 text-blue-400" />
+              </div>
+              <span className="text-sm font-medium text-blue-300">
+                {exporting ? "Exporting..." : "Export Character"}
+              </span>
             </button>
 
             <button

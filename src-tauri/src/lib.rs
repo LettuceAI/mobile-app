@@ -59,6 +59,8 @@ pub fn run() {
             storage_manager::characters::characters_list,
             storage_manager::characters::character_upsert,
             storage_manager::characters::character_delete,
+            storage_manager::character_transfer::character_export,
+            storage_manager::character_transfer::character_import,
             storage_manager::personas::personas_list,
             storage_manager::personas::persona_upsert,
             storage_manager::personas::persona_delete,

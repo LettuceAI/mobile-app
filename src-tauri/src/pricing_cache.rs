@@ -1,38 +1,9 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
-use crate::utils::ensure_lettuce_dir;
-
-const MODELS_CACHE_FILE: &str = "models_cache.json";
+use crate::storage_manager::db::open_db;
+use rusqlite::OptionalExtension;
 const CACHE_TTL_HOURS: u64 = 6;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelsCacheEntry {
-    pub id: String,
-    pub pricing: Option<crate::models::ModelPricing>,
-    pub cached_at: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelsCache {
-    pub models: HashMap<String, ModelsCacheEntry>,
-    pub last_updated: u64,
-}
-
-impl Default for ModelsCache {
-    fn default() -> Self {
-        Self {
-            models: HashMap::new(),
-            last_updated: 0,
-        }
-    }
-}
-
-fn cache_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    Ok(ensure_lettuce_dir(app)?.join(MODELS_CACHE_FILE))
-}
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -41,38 +12,31 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-pub fn load_models_cache(app: &AppHandle) -> Result<ModelsCache, String> {
-    let path = cache_path(app)?;
-
-    if !path.exists() {
-        return Ok(ModelsCache::default());
-    }
-
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read models cache: {}", e))?;
-
-    serde_json::from_str(&content).map_err(|e| format!("Failed to parse models cache: {}", e))
-}
-
-pub fn save_models_cache(app: &AppHandle, cache: &ModelsCache) -> Result<(), String> {
-    let path = cache_path(app)?;
-    let content = serde_json::to_string_pretty(cache)
-        .map_err(|e| format!("Failed to serialize models cache: {}", e))?;
-
-    std::fs::write(&path, content).map_err(|e| format!("Failed to write models cache: {}", e))
-}
-
 pub fn get_cached_pricing(
     app: &AppHandle,
     model_id: &str,
 ) -> Result<Option<crate::models::ModelPricing>, String> {
-    let cache = load_models_cache(app)?;
-    let current_time = now_secs();
+    let conn = open_db(app)?;
+    let row: Option<(Option<String>, u64)> = conn
+        .query_row(
+            "SELECT pricing_json, cached_at FROM model_pricing_cache WHERE model_id = ?1",
+            rusqlite::params![model_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
 
-    if let Some(entry) = cache.models.get(model_id) {
-        let cache_age = current_time.saturating_sub(entry.cached_at);
+    if let Some((pricing_json_opt, cached_at)) = row {
+        let current_time = now_secs();
+        let cache_age = current_time.saturating_sub(cached_at);
         if cache_age < (CACHE_TTL_HOURS * 3600) {
-            return Ok(entry.pricing.clone());
+            if let Some(pricing_json) = pricing_json_opt {
+                let pricing: crate::models::ModelPricing = serde_json::from_str(&pricing_json)
+                    .map_err(|e| e.to_string())?;
+                return Ok(Some(pricing));
+            } else {
+                return Ok(None);
+            }
         }
     }
 
@@ -84,18 +48,18 @@ pub fn cache_model_pricing(
     model_id: &str,
     pricing: Option<crate::models::ModelPricing>,
 ) -> Result<(), String> {
-    let mut cache = load_models_cache(app)?;
+    let conn = open_db(app)?;
     let now = now_secs();
-
-    cache.models.insert(
-        model_id.to_string(),
-        ModelsCacheEntry {
-            id: model_id.to_string(),
-            pricing,
-            cached_at: now,
-        },
-    );
-
-    cache.last_updated = now;
-    save_models_cache(app, &cache)
+    let pricing_json = match pricing {
+        Some(ref p) => Some(serde_json::to_string(p).map_err(|e| e.to_string())?),
+        None => None,
+    };
+    conn.execute(
+        "INSERT INTO model_pricing_cache (model_id, pricing_json, cached_at)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(model_id) DO UPDATE SET pricing_json = excluded.pricing_json, cached_at = excluded.cached_at",
+        rusqlite::params![model_id, pricing_json, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }

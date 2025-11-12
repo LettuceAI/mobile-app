@@ -1,6 +1,6 @@
 import { SetStateAction, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
 import type { Model, Scene, SystemPromptTemplate } from "../../../core/storage/schemas";
@@ -9,12 +9,14 @@ import { convertToImageRef } from "../../../core/storage/images";
 import { saveAvatar, loadAvatar } from "../../../core/storage/avatars";
 import { listPromptTemplates } from "../../../core/prompts/service";
 import { invalidateAvatarCache } from "../../hooks/useAvatar";
+import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
 
 export function EditCharacterPage() {
   const navigate = useNavigate();
   const { characterId } = useParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [name, setName] = useState("");
@@ -176,6 +178,24 @@ export function EditCharacterPage() {
       setError(err?.message || "Failed to save character");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!characterId) return;
+
+    try {
+      setExporting(true);
+      setError(null);
+
+      const exportJson = await exportCharacter(characterId);
+      const filename = generateExportFilename(name || "character");
+      downloadJson(exportJson, filename);
+    } catch (err: any) {
+      console.error("Failed to export character:", err);
+      setError(err?.message || "Failed to export character");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -721,6 +741,26 @@ export function EditCharacterPage() {
               <span className="flex items-center justify-center gap-2">
                 <Save className="h-4 w-4" />
                 Save Changes
+              </span>
+            )}
+          </motion.button>
+
+          {/* Export Button */}
+          <motion.button
+            onClick={handleExport}
+            disabled={exporting}
+            whileTap={{ scale: exporting ? 1 : 0.98 }}
+            className="w-full rounded-xl border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50"
+          >
+            {exporting ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Exporting...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Download className="h-4 w-4" />
+                Export Character
               </span>
             )}
           </motion.button>
