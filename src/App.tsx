@@ -77,7 +77,12 @@ function App() {
 
   return (
     <ThemeProvider>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <div className="min-h-screen bg-[#050505] text-gray-100 antialiased">
           <AppContent />
         </div>

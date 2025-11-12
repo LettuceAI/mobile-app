@@ -10,7 +10,6 @@ interface TopNavProps {
 
 export function TopNav({ currentPath }: TopNavProps) {
   const navigate = useNavigate();
-  console.log("Current Path:", currentPath);
   const title = useMemo(() => {
     if (currentPath === "/settings/providers") return "Providers";
     if (currentPath.includes("view=advanced")) return "Response Style";
