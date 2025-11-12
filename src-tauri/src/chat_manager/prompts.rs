@@ -77,6 +77,23 @@ pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, Stri
     for r in rows {
         out.push(r.map_err(|e| e.to_string())?);
     }
+    if out.is_empty() {
+        // Guarantee existence of App Default template even if setup call was skipped
+        let _ = ensure_app_default_template(app)?;
+        // Reload
+        let mut stmt2 = conn
+            .prepare(
+                "SELECT id, name, scope, target_ids, content, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows2 = stmt2
+            .query_map([], |row| row_to_template(row))
+            .map_err(|e| e.to_string())?;
+        out.clear();
+        for r in rows2 {
+            out.push(r.map_err(|e| e.to_string())?);
+        }
+    }
     Ok(out)
 }
 

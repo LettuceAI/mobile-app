@@ -119,7 +119,27 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         ),
     );
 
+    // Best-effort cleanup of residual legacy files that should no longer exist
+    cleanup_legacy_files(app);
+
     Ok(())
+}
+
+/// Remove legacy JSON files if they still exist (post-migration safety)
+fn cleanup_legacy_files(app: &AppHandle) {
+    use std::fs;
+    if let Ok(dir) = crate::utils::ensure_lettuce_dir(app) {
+        let candidates = [
+            "secrets.json",
+            "prompt_templates.json",
+        ];
+        for name in candidates.iter() {
+            let path = dir.join(name);
+            if path.exists() {
+                let _ = fs::remove_file(&path);
+            }
+        }
+    }
 }
 
 /// Get the current migration version

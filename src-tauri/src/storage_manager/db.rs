@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 use crate::utils::now_millis;
 use super::legacy::storage_root;
@@ -34,11 +34,11 @@ pub fn open_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     conn.pragma_update(None, "foreign_keys", &true)
         .map_err(|e| e.to_string())?;
     apply_pragmas(&conn);
-    init_db(&conn)?;
+    init_db(app, &conn)?;
     Ok(conn)
 }
 
-fn init_db(conn: &Connection) -> Result<(), String> {
+fn init_db(app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS meta (
@@ -253,6 +253,25 @@ fn init_db(conn: &Connection) -> Result<(), String> {
       "#,
     )
     .map_err(|e| e.to_string())
+    ?;
+
+    let default_content = crate::chat_manager::storage::default_system_prompt_template();
+    let now = now_ms();
+    conn
+        .execute(
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at)
+             VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            params![
+                "prompt_app_default",
+                "App Default",
+                "AppWide",
+                default_content,
+                now
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 pub fn now_ms() -> u64 {
