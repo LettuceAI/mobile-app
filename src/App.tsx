@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
 import { WelcomePage, ProviderSetupPage, ModelSetupPage } from "./ui/pages/onboarding";
@@ -88,6 +88,7 @@ function App() {
 
 function AppContent() {
   const location = useLocation();
+  const mainRef = useRef<HTMLDivElement | null>(null);
   const isChatRoute = location.pathname === "/chat" || location.pathname === "/";
   const isChatDetailRoute = location.pathname.startsWith("/chat/");
   const isSearchRoute = location.pathname === "/search";
@@ -137,6 +138,26 @@ function AppContent() {
     }
   }, [location.search, location.pathname, isChatRoute]);
 
+  useEffect(() => {
+    if (!location.pathname.startsWith("/settings")) return;
+
+    const id = window.setTimeout(() => {
+      const main = mainRef.current;
+      if (main) {
+        main.scrollTop = 0;
+
+        const inner = main.querySelector('[data-settings-scroll], .settings-scroll') as HTMLElement | null;
+        if (inner) {
+          inner.scrollTop = 0;
+        }
+      }
+
+      window.scrollTo(0, 0);
+    }, 0);
+
+    return () => window.clearTimeout(id);
+  }, [location.pathname]);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
@@ -151,6 +172,7 @@ function AppContent() {
         )}
 
         <main
+          ref={mainRef}
           className={`flex-1 ${isOnboardingRoute
               ? "overflow-y-auto px-4 pt-6 pb-6"
               : isChatDetailRoute
@@ -163,7 +185,7 @@ function AppContent() {
             }`}
         >
           <motion.div
-            key={location.pathname}
+            key={location.pathname.startsWith("/settings") ? location.pathname : location.key}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}

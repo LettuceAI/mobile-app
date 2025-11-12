@@ -27,10 +27,8 @@ export function ResetPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
-      {/* Content */}
-      <main className="flex-1 px-4 pb-20 pt-8">
-        <motion.div
+    <div className="px-0 pt-4 pb-4 text-gray-100" data-settings-scroll>
+      <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
@@ -128,7 +126,6 @@ export function ResetPage() {
             </button>
           </motion.div>
         </motion.div>
-      </main>
 
       {/* Confirmation Modal */}
       <AnimatePresence>
