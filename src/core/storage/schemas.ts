@@ -50,6 +50,18 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       topK: false,
     },
   },
+  openrouter: {
+    providerId: 'openrouter',
+    displayName: 'OpenRouter',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: true,
+    },
+  },
   anthropic: {
     providerId: 'anthropic',
     displayName: 'Anthropic',
