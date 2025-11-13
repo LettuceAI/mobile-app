@@ -190,7 +190,7 @@ export function EditCharacterPage() {
 
       const exportJson = await exportCharacter(characterId);
       const filename = generateExportFilename(name || "character");
-      downloadJson(exportJson, filename);
+      await downloadJson(exportJson, filename);
     } catch (err: any) {
       console.error("Failed to export character:", err);
       setError(err?.message || "Failed to export character");

@@ -3,33 +3,25 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::fs;
+use tauri::Manager;
 
 use super::db::{now_ms, open_db};
 use super::legacy::storage_root;
 use crate::utils::log_info;
 
-/// Represents a character export package with all data and embedded media
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterExportPackage {
-    /// Export format version for future compatibility
     pub version: u32,
-    /// Export timestamp
     pub exported_at: i64,
-    /// Character data (without provider/model references)
     pub character: CharacterExportData,
-    /// Embedded avatar image as base64 (if exists)
-    pub avatar_data: Option<String>,
-    /// Embedded background image as base64 (if exists)
-    pub background_image_data: Option<String>,
+    pub avatar_data: Option<String>, // base64 data URL
+    pub background_image_data: Option<String>, // base64 data URL
 }
 
-/// Character data for export (sanitized - no provider/model info)
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterExportData {
-    /// Original character ID (will be regenerated on import)
-    pub original_id: String,
     pub name: String,
     pub description: Option<String>,
     pub rules: Vec<String>,
@@ -38,8 +30,6 @@ pub struct CharacterExportData {
     pub prompt_template_id: Option<String>,
     pub system_prompt: Option<String>,
     pub disable_avatar_gradient: bool,
-    pub created_at: i64,
-    pub updated_at: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,7 +37,6 @@ pub struct CharacterExportData {
 pub struct SceneExport {
     pub id: String,
     pub content: String,
-    pub created_at: i64,
     pub selected_variant_id: Option<String>,
     pub variants: Vec<SceneVariantExport>,
 }
@@ -57,10 +46,8 @@ pub struct SceneExport {
 pub struct SceneVariantExport {
     pub id: String,
     pub content: String,
-    pub created_at: i64,
 }
 
-/// Export a character to a portable JSON package
 #[tauri::command]
 pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<String, String> {
     log_info(
@@ -131,18 +118,16 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
             .map_err(|e| e.to_string())?;
 
         for v in var_rows {
-            let (vid, vcontent, vcreated) = v.map_err(|e| e.to_string())?;
+            let (vid, vcontent, _vcreated) = v.map_err(|e| e.to_string())?;
             variants.push(SceneVariantExport {
                 id: vid,
                 content: vcontent,
-                created_at: vcreated,
             });
         }
 
         scenes.push(SceneExport {
             id: scene_id,
             content,
-            created_at: scene_created_at,
             selected_variant_id,
             variants,
         });
@@ -167,7 +152,6 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         version: 1,
         exported_at: now_ms() as i64,
         character: CharacterExportData {
-            original_id: character_id.clone(),
             name,
             description,
             rules,
@@ -176,8 +160,6 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
             prompt_template_id,
             system_prompt,
             disable_avatar_gradient: disable_avatar_gradient != 0,
-            created_at,
-            updated_at,
         },
         avatar_data,
         background_image_data,
@@ -307,7 +289,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 
             tx.execute(
                 "INSERT INTO scene_variants (id, scene_id, content, created_at) VALUES (?, ?, ?, ?)",
-                params![new_variant_id, &new_scene_id, &variant.content, variant.created_at],
+                params![new_variant_id, &new_scene_id, &variant.content, now],
             )
             .map_err(|e| e.to_string())?;
         }
@@ -324,7 +306,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
                 &new_scene_id,
                 &new_character_id,
                 &scene.content,
-                scene.created_at,
+                now,
                 new_selected_variant_id
             ],
         )
@@ -622,4 +604,52 @@ fn read_imported_character(
     root.insert("updatedAt".into(), JsonValue::from(updated_at));
 
     serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_json_to_downloads(
+    app: tauri::AppHandle,
+    filename: String,
+    json_content: String,
+) -> Result<String, String> {
+    log_info(
+        &app,
+        "save_json_to_downloads",
+        format!("Saving file to downloads: {}", filename),
+    );
+
+    #[cfg(target_os = "android")]
+    let download_dir = {
+        use std::path::PathBuf;
+        PathBuf::from("/storage/emulated/0/Download")
+    };
+
+    #[cfg(not(target_os = "android"))]
+    let download_dir = app
+        .path()
+        .download_dir()
+        .map_err(|e| format!("Failed to get downloads directory: {}", e))?;
+
+    if !download_dir.exists() {
+        fs::create_dir_all(&download_dir)
+            .map_err(|e| format!("Failed to create downloads directory: {}", e))?;
+    }
+
+    let file_path = download_dir.join(&filename);
+
+    fs::write(&file_path, json_content.as_bytes())
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let path_str = file_path
+        .to_str()
+        .ok_or_else(|| "Invalid path".to_string())?
+        .to_string();
+
+    log_info(
+        &app,
+        "save_json_to_downloads",
+        format!("Successfully saved file to: {}", path_str),
+    );
+
+    Ok(path_str)
 }

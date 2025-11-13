@@ -79,17 +79,30 @@ export async function importCharacter(importJson: string): Promise<Character> {
 
 /**
  * Download a JSON string as a file
+ * On mobile (Android/iOS), saves to the Downloads folder
+ * On web/desktop, triggers a browser download
  */
-export function downloadJson(json: string, filename: string): void {
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+export async function downloadJson(json: string, filename: string): Promise<void> {
+  try {
+    console.log("[downloadJson] Attempting to save via Tauri command");
+    const savedPath = await invoke<string>("save_json_to_downloads", {
+      filename,
+      jsonContent: json,
+    });
+    console.log(`[downloadJson] File saved to: ${savedPath}`);
+    alert(`File saved to: ${savedPath}`);
+    return;
+  } catch (error) {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 }
 
 /**

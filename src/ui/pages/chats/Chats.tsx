@@ -101,7 +101,7 @@ export function ChatPage() {
       setExporting(true);
       const exportJson = await exportCharacter(selectedCharacter.id);
       const filename = generateExportFilename(selectedCharacter.name);
-      downloadJson(exportJson, filename);
+      await downloadJson(exportJson, filename);
       setSelectedCharacter(null);
     } catch (err) {
       console.error("Failed to export character:", err);

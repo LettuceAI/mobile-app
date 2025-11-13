@@ -6,7 +6,7 @@ import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storag
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
-import { importCharacter, readFileAsText } from "../../../../core/storage/characterTransfer";
+import { readFileAsText } from "../../../../core/storage/characterTransfer";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
@@ -240,36 +240,68 @@ export function useCharacterForm() {
     try {
       dispatch({ type: 'SET_ERROR', payload: null });
       const jsonContent = await readFileAsText(file);
-      const character = await importCharacter(jsonContent);
-
-      // Populate form with imported character data
-      dispatch({ type: 'SET_NAME', payload: character.name });
-      dispatch({ type: 'SET_DESCRIPTION', payload: character.description || '' });
-      dispatch({ type: 'SET_SCENES', payload: character.scenes || [] });
-      dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: character.defaultSceneId || null });
-      dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: character.disableAvatarGradient || false });
-      dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: character.promptTemplateId || null });
       
-      // Avatar and background will already be saved by the import command
-      // We just need to load them for display
-      if (character.avatarPath) {
-        const { loadAvatar } = await import("../../../../core/storage/avatars");
-        const avatarUrl = await loadAvatar("character", character.id, character.avatarPath);
-        if (avatarUrl) {
-          dispatch({ type: 'SET_AVATAR_PATH', payload: avatarUrl });
-        }
+      const exportPackage = JSON.parse(jsonContent);
+      
+      if (!exportPackage.character) {
+        throw new Error("Invalid character export file");
+      }
+      
+      const characterData = exportPackage.character;
+      
+      const sceneIdMap = new Map<string, string>();
+      
+      const newScenes = characterData.scenes.map((scene: any) => {
+        const newSceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+        sceneIdMap.set(scene.id, newSceneId);
+        
+        const variantIdMap = new Map<string, string>();
+        
+        const newVariants = scene.variants?.map((variant: any) => {
+          const newVariantId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+          variantIdMap.set(variant.id, newVariantId);
+          
+          return {
+            id: newVariantId,
+            content: variant.content,
+            createdAt: Date.now(),
+          };
+        }) || [];
+        
+        const newSelectedVariantId = scene.selectedVariantId 
+          ? variantIdMap.get(scene.selectedVariantId) || null
+          : null;
+        
+        return {
+          id: newSceneId,
+          content: scene.content,
+          createdAt: Date.now(),
+          selectedVariantId: newSelectedVariantId,
+          variants: newVariants,
+        };
+      });
+
+      const newDefaultSceneId = characterData.defaultSceneId 
+        ? sceneIdMap.get(characterData.defaultSceneId) || newScenes[0]?.id || null
+        : newScenes[0]?.id || null;
+
+      dispatch({ type: 'SET_NAME', payload: characterData.name });
+      dispatch({ type: 'SET_DESCRIPTION', payload: characterData.description || '' });
+      dispatch({ type: 'SET_SCENES', payload: newScenes });
+      dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: newDefaultSceneId });
+      dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: characterData.disableAvatarGradient || false });
+      dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: characterData.promptTemplateId || null });
+      
+      if (exportPackage.avatarData) {
+        dispatch({ type: 'SET_AVATAR_PATH', payload: exportPackage.avatarData });
       }
 
-      if (character.backgroundImagePath) {
-        const { convertToImageUrl } = await import("../../../../core/storage/images");
-        const bgUrl = await convertToImageUrl(character.backgroundImagePath);
-        if (bgUrl) {
-          dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: bgUrl });
-        }
+      if (exportPackage.backgroundImageData) {
+        dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: exportPackage.backgroundImageData });
       }
-
-      // Move to the next step
-      dispatch({ type: 'SET_STEP', payload: Step.StartingScene });
+            
+      console.log("[handleImport] Character data loaded into form, ready to save");
+      
     } catch (error: any) {
       console.error("Failed to import character:", error);
       dispatch({ type: 'SET_ERROR', payload: error?.message || "Failed to import character" });
