@@ -418,7 +418,7 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
 
     #[derive(serde::Deserialize)]
     struct ModelsCacheEntry {
-        id: String,
+        _id: String,
         pricing: Option<ModelPricing>,
         cached_at: u64,
     }
@@ -426,7 +426,7 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
     #[derive(serde::Deserialize, Default)]
     struct ModelsCacheFile {
         models: HashMap<String, ModelsCacheEntry>,
-        last_updated: u64,
+        _last_updated: u64,
     }
 
     let path = ensure_lettuce_dir(app)?.join("models_cache.json");

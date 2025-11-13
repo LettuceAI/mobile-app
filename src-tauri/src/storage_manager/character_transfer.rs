@@ -11,6 +11,16 @@ use crate::utils::log_info;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum ExportPackage {
+    #[serde(rename = "character")]
+    Character(CharacterExportPackage),
+    #[serde(rename = "persona")]
+    Persona(PersonaExportPackage),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CharacterExportPackage {
     pub version: u32,
     pub exported_at: i64,
@@ -48,6 +58,22 @@ pub struct SceneVariantExport {
     pub content: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonaExportPackage {
+    pub version: u32,
+    pub exported_at: i64,
+    pub persona: PersonaExportData,
+    pub avatar_data: Option<String>, // base64 data URL
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonaExportData {
+    pub title: String,
+    pub description: String,
+}
+
 #[tauri::command]
 pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<String, String> {
     log_info(
@@ -59,7 +85,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     let conn = open_db(&app)?;
 
     // Read character data
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at): 
+    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, _created_at, _updated_at): 
         (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
         conn.query_row(
             "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
@@ -99,7 +125,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         .map_err(|e| e.to_string())?;
 
     for row in scene_rows {
-        let (scene_id, content, scene_created_at, selected_variant_id) =
+        let (scene_id, content, _scene_created_at, selected_variant_id) =
             row.map_err(|e| e.to_string())?;
 
         // Read scene variants
@@ -135,7 +161,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
 
     // Read avatar image if exists
     let avatar_data = if let Some(ref avatar_filename) = avatar_path {
-        read_avatar_as_base64(&app, &character_id, avatar_filename).ok()
+        read_avatar_as_base64(&app, &format!("character-{}", character_id), avatar_filename).ok()
     } else {
         None
     };
@@ -148,7 +174,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     };
 
     // Create export package
-    let export_package = CharacterExportPackage {
+    let char_export = CharacterExportPackage {
         version: 1,
         exported_at: now_ms() as i64,
         character: CharacterExportData {
@@ -164,6 +190,9 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         avatar_data,
         background_image_data,
     };
+
+    // Wrap in ExportPackage enum for type detection
+    let export_package = ExportPackage::Character(char_export);
 
     let json = serde_json::to_string_pretty(&export_package)
         .map_err(|e| format!("Failed to serialize export: {}", e))?;
@@ -208,7 +237,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 
     // Save avatar if provided
     let avatar_path = if let Some(ref avatar_base64) = package.avatar_data {
-        match save_avatar_from_base64(&app, &new_character_id, avatar_base64) {
+        match save_avatar_from_base64(&app, &format!("character-{}", new_character_id), avatar_base64) {
             Ok(filename) => Some(filename),
             Err(e) => {
                 log_info(
@@ -351,13 +380,12 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 /// Helper: Read avatar as base64 data URL
 fn read_avatar_as_base64(
     app: &tauri::AppHandle,
-    character_id: &str,
+    entity_id: &str,
     filename: &str,
 ) -> Result<String, String> {
-    let entity_id = format!("character-{}", character_id);
     let avatar_path = storage_root(app)?
         .join("avatars")
-        .join(&entity_id)
+        .join(entity_id)
         .join(filename);
 
     if !avatar_path.exists() {
@@ -408,13 +436,12 @@ fn read_background_image_as_base64(
 }
 
 /// Helper: Save avatar from base64 data URL
+/// entity_id should be "character-{id}" or "persona-{id}"
 fn save_avatar_from_base64(
     app: &tauri::AppHandle,
-    character_id: &str,
+    entity_id: &str,
     base64_data: &str,
 ) -> Result<String, String> {
-    let entity_id = format!("character-{}", character_id);
-
     // Strip data URL prefix if present
     let data = if let Some(comma_idx) = base64_data.find(',') {
         &base64_data[comma_idx + 1..]
@@ -426,7 +453,7 @@ fn save_avatar_from_base64(
         .decode(data)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
 
-    let avatars_dir = storage_root(app)?.join("avatars").join(&entity_id);
+    let avatars_dir = storage_root(app)?.join("avatars").join(entity_id);
     
     eprintln!("[DEBUG] Creating avatar directory: {:?}", avatars_dir);
     fs::create_dir_all(&avatars_dir).map_err(|e| {
@@ -604,6 +631,201 @@ fn read_imported_character(
     root.insert("updatedAt".into(), JsonValue::from(updated_at));
 
     serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn persona_export(app: tauri::AppHandle, persona_id: String) -> Result<String, String> {
+    log_info(
+        &app,
+        "persona_export",
+        format!("Exporting persona: {}", persona_id),
+    );
+
+    let conn = open_db(&app)?;
+
+    // Read persona data
+    let (title, description, avatar_path): (String, String, Option<String>) = conn
+        .query_row(
+            "SELECT title, description, avatar_path FROM personas WHERE id = ?",
+            params![&persona_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| format!("Persona not found: {}", e))?;
+
+    // Read avatar image if exists
+    let avatar_data = if let Some(ref avatar_filename) = avatar_path {
+        read_avatar_as_base64(&app, &format!("persona-{}", persona_id), avatar_filename).ok()
+    } else {
+        None
+    };
+
+    // Create export package
+    let persona_export = PersonaExportPackage {
+        version: 1,
+        exported_at: now_ms() as i64,
+        persona: PersonaExportData {
+            title,
+            description,
+        },
+        avatar_data,
+    };
+
+    // Wrap in ExportPackage enum for type detection
+    let export_package = ExportPackage::Persona(persona_export);
+
+    let json = serde_json::to_string_pretty(&export_package)
+        .map_err(|e| format!("Failed to serialize export: {}", e))?;
+
+    log_info(
+        &app,
+        "persona_export",
+        format!("Successfully exported persona: {}", persona_id),
+    );
+
+    Ok(json)
+}
+
+/// Import a persona from a JSON package
+#[tauri::command]
+pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<String, String> {
+    log_info(&app, "persona_import", "Starting persona import");
+
+    let package: PersonaExportPackage = serde_json::from_str(&import_json)
+        .map_err(|e| format!("Invalid import data: {}", e))?;
+
+    // Validate version
+    if package.version > 1 {
+        return Err(format!(
+            "Unsupported export version: {}. Please update your app.",
+            package.version
+        ));
+    }
+
+    let mut conn = open_db(&app)?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    // Generate new ID for imported persona
+    let new_persona_id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms() as i64;
+
+    log_info(
+        &app,
+        "persona_import",
+        format!("Importing as new persona: {}", new_persona_id),
+    );
+
+    // Save avatar if provided
+    let avatar_path = if let Some(ref avatar_base64) = package.avatar_data {
+        match save_avatar_from_base64(&app, &format!("persona-{}", new_persona_id), avatar_base64) {
+            Ok(filename) => Some(filename),
+            Err(e) => {
+                log_info(
+                    &app,
+                    "persona_import",
+                    format!("Warning: Failed to import avatar: {}", e),
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    tx.execute(
+        r#"INSERT INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 0, ?, ?)"#,
+        params![
+            &new_persona_id,
+            &package.persona.title,
+            &package.persona.description,
+            avatar_path,
+            now,
+            now
+        ],
+    )
+    .map_err(|e| format!("Failed to insert persona: {}", e))?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+
+    log_info(
+        &app,
+        "persona_import",
+        format!("Successfully imported persona: {}", new_persona_id),
+    );
+
+    // Return the new persona as JSON
+    let conn2 = open_db(&app)?;
+    read_imported_persona(&conn2, &new_persona_id)
+}
+
+/// Helper: Read imported persona and return as JSON
+fn read_imported_persona(
+    conn: &rusqlite::Connection,
+    persona_id: &str,
+) -> Result<String, String> {
+    let (title, description, avatar_path, is_default, created_at, updated_at): 
+        (String, String, Option<String>, i64, i64, i64) = 
+        conn.query_row(
+            "SELECT title, description, avatar_path, is_default, created_at, updated_at FROM personas WHERE id = ?",
+            params![persona_id],
+            |r| Ok((
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, i64>(3)?, r.get(4)?, r.get(5)?
+            )),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut root = JsonMap::new();
+    root.insert("id".into(), JsonValue::String(persona_id.to_string()));
+    root.insert("title".into(), JsonValue::String(title));
+    root.insert("description".into(), JsonValue::String(description));
+    if let Some(a) = avatar_path {
+        root.insert("avatarPath".into(), JsonValue::String(a));
+    }
+    root.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
+    root.insert("createdAt".into(), JsonValue::from(created_at));
+    root.insert("updatedAt".into(), JsonValue::from(updated_at));
+
+    serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())
+}
+
+/// Generic import that auto-detects whether it's a character or persona export
+/// Returns a JSON object with "type" field indicating what was imported
+#[tauri::command]
+pub fn import_package(app: tauri::AppHandle, import_json: String) -> Result<String, String> {
+    log_info(&app, "import_package", "Auto-detecting import type");
+
+    // Try to parse as ExportPackage to auto-detect type
+    let package: ExportPackage = serde_json::from_str(&import_json)
+        .map_err(|e| format!("Invalid import data: {}", e))?;
+
+    match package {
+        ExportPackage::Character(char_package) => {
+            log_info(&app, "import_package", "Detected character export");
+            // Re-serialize and use existing character_import logic
+            let char_json = serde_json::to_string(&char_package)
+                .map_err(|e| format!("Failed to serialize character: {}", e))?;
+            let result = character_import(app, char_json)?;
+            
+            // Wrap result with type indicator
+            let mut result_obj = serde_json::from_str::<JsonMap<String, JsonValue>>(&result)
+                .map_err(|e| e.to_string())?;
+            result_obj.insert("importType".into(), JsonValue::String("character".to_string()));
+            serde_json::to_string(&JsonValue::Object(result_obj)).map_err(|e| e.to_string())
+        }
+        ExportPackage::Persona(persona_package) => {
+            log_info(&app, "import_package", "Detected persona export");
+            // Re-serialize and use existing persona_import logic
+            let persona_json = serde_json::to_string(&persona_package)
+                .map_err(|e| format!("Failed to serialize persona: {}", e))?;
+            let result = persona_import(app, persona_json)?;
+            
+            // Wrap result with type indicator
+            let mut result_obj = serde_json::from_str::<JsonMap<String, JsonValue>>(&result)
+                .map_err(|e| e.to_string())?;
+            result_obj.insert("importType".into(), JsonValue::String("persona".to_string()));
+            serde_json::to_string(&JsonValue::Object(result_obj)).map_err(|e| e.to_string())
+        }
+    }
 }
 
 #[tauri::command]

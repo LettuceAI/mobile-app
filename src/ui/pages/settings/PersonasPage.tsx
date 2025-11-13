@@ -1,11 +1,13 @@
 import { useNavigate } from "react-router-dom";
-import { User, Trash2, Edit2, Star, ChevronRight } from "lucide-react";
+import { User, Trash2, Edit2, Star, ChevronRight, Download, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Persona } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
 import { usePersonasController } from "../personas/hooks/usePersonasController";
 import { useAvatar } from "../../hooks/useAvatar";
 import { cn } from "../../design-tokens";
+import { exportPersona, downloadJson, generateExportFilename } from "../../../core/storage/personaTransfer";
+import { useState } from "react";
 
 const PersonaAvatar = ({ persona }: { persona: Persona }) => {
   const avatarDataUrl = useAvatar("persona", persona.id, persona.avatarPath);
@@ -76,8 +78,26 @@ export function PersonasPage() {
     handleSetDefault,
   } = usePersonasController();
 
+  const [exporting, setExporting] = useState(false);
+
   const handleEditPersona = (persona: Persona) => {
     navigate(`/settings/personas/${persona.id}/edit`);
+  };
+
+  const handleExport = async () => {
+    if (!selectedPersona) return;
+
+    try {
+      setExporting(true);
+      const exportJson = await exportPersona(selectedPersona.id);
+      const filename = generateExportFilename(selectedPersona.title);
+      await downloadJson(exportJson, filename);
+      setSelectedPersona(null);
+    } catch (err) {
+      console.error("Failed to export persona:", err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const defaultPersona = personas.find((p) => p.isDefault);
@@ -190,6 +210,23 @@ export function PersonasPage() {
                     : "Use this for all new chats"}
                 </p>
               </div>
+            </button>
+
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex w-full items-center gap-3 rounded-xl border border-blue-400/30 bg-blue-400/10 px-4 py-3 text-left transition hover:border-blue-400/50 hover:bg-blue-400/20 disabled:opacity-50"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-400/30 bg-blue-400/20">
+                {exporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                ) : (
+                  <Download className="h-4 w-4 text-blue-400" />
+                )}
+              </div>
+              <span className="text-sm font-medium text-blue-300">
+                {exporting ? "Exporting..." : "Export Persona"}
+              </span>
             </button>
 
             <button

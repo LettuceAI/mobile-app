@@ -1,0 +1,57 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { Character, Persona } from "./schemas";
+
+/**
+ * Result from generic import that includes type detection
+ */
+export interface GenericImportResult {
+  importType: "character" | "persona";
+  data: Character | Persona;
+}
+
+/**
+ * Import either a character or persona from a JSON package
+ * Automatically detects the type based on the "type" field in the JSON
+ * Returns the imported entity with type information
+ */
+export async function importPackage(importJson: string): Promise<GenericImportResult> {
+  try {
+    console.log("[importPackage] Importing package with auto-detection");
+    const resultJson = await invoke<string>("import_package", { importJson });
+    const result = JSON.parse(resultJson);
+    
+    console.log("[importPackage] Import successful, type:", result.importType);
+    
+    return {
+      importType: result.importType,
+      data: result,
+    };
+  } catch (error) {
+    console.error("[importPackage] Failed to import package:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to import package");
+  }
+}
+
+/**
+ * Helper to check if import JSON is a character export
+ */
+export function isCharacterExport(importJson: string): boolean {
+  try {
+    const parsed = JSON.parse(importJson);
+    return parsed.type === "character";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Helper to check if import JSON is a persona export
+ */
+export function isPersonaExport(importJson: string): boolean {
+  try {
+    const parsed = JSON.parse(importJson);
+    return parsed.type === "persona";
+  } catch {
+    return false;
+  }
+}

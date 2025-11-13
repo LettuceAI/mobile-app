@@ -243,6 +243,10 @@ export function useCharacterForm() {
       
       const exportPackage = JSON.parse(jsonContent);
       
+      if (exportPackage.type && exportPackage.type !== "character") {
+        throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a character export`);
+      }
+      
       if (!exportPackage.character) {
         throw new Error("Invalid character export file");
       }
@@ -299,7 +303,7 @@ export function useCharacterForm() {
       if (exportPackage.backgroundImageData) {
         dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: exportPackage.backgroundImageData });
       }
-            
+
       console.log("[handleImport] Character data loaded into form, ready to save");
       
     } catch (error: any) {

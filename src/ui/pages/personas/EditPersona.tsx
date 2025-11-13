@@ -1,7 +1,9 @@
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Camera, X } from "lucide-react";
+import { Save, Loader2, Camera, X, Download, Upload } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePersonaFormController } from "./hooks/usePersonaFormController";
+import { exportPersona, downloadJson, generateExportFilename, readFileAsText, importPersona } from "../../../core/storage/personaTransfer";
+import { useState } from "react";
 
 export function EditPersonaPage() {
   const { personaId } = useParams();
@@ -14,7 +16,64 @@ export function EditPersonaPage() {
     handleSave,
   } = usePersonaFormController(personaId);
 
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+
   const canSave = title.trim().length > 0 && description.trim().length > 0 && !saving;
+
+  const handleExport = async () => {
+    if (!personaId) return;
+
+    try {
+      setExporting(true);
+      const exportJson = await exportPersona(personaId);
+      const filename = generateExportFilename(title || "persona");
+      await downloadJson(exportJson, filename);
+    } catch (err: any) {
+      console.error("Failed to export persona:", err);
+      alert(err?.message || "Failed to export persona");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        setImporting(true);
+        const jsonContent = await readFileAsText(file);
+        
+        const exportPackage = JSON.parse(jsonContent);
+        if (exportPackage.type && exportPackage.type !== "persona") {
+          throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a persona export`);
+        }
+        
+        const importedPersona = await importPersona(jsonContent);
+        
+        setTitle(importedPersona.title);
+        setDescription(importedPersona.description);
+        setIsDefault(false); 
+        
+        if (importedPersona.avatarPath) {
+          setAvatarPath(importedPersona.avatarPath);
+        }
+        
+        alert("Persona imported successfully! Review and save when ready.");
+      } catch (err: any) {
+        console.error("Failed to import persona:", err);
+        alert(err?.message || "Failed to import persona");
+      } finally {
+        setImporting(false);
+      }
+    };
+    input.click();
+  };
 
   const handleAvatarUpload = () => {
     const input = document.createElement("input");
@@ -166,6 +225,45 @@ export function EditPersonaPage() {
                 </label>
               </div>
             </div>
+          </div>
+
+          {/* Import/Export Buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99] disabled:opacity-50"
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  Import
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleExport}
+              disabled={!personaId || exporting}
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99] disabled:opacity-50"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Export
+                </>
+              )}
+            </button>
           </div>
 
           {/* Save Button */}

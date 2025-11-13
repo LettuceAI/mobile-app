@@ -38,7 +38,7 @@ pub fn open_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     Ok(conn)
 }
 
-fn init_db(app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
+fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS meta (

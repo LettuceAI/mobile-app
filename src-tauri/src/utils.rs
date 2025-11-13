@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
-pub const SERVICE: &str = "lettuceai";
+pub const _SERVICE: &str = "lettuceai";
 
 pub fn lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -118,7 +118,7 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
 }
 
 pub(crate) fn app_version() -> String {
-    "1.0-beta_3.2".to_string()
+    "1.0-beta_4".to_string()
 }
 
 #[tauri::command]
