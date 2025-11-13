@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText, Wrench } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText, Wrench, MessageCircle, ScrollText } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -190,6 +190,28 @@ export function SettingsPage() {
       }
     },
     {
+      key: 'discord',
+      icon: <MessageCircle />,
+      title: 'Join Discord',
+      subtitle: 'Community support & discussions',
+      onClick: async () => {
+        try {
+          const { openUrl } = await import('@tauri-apps/plugin-opener');
+          await openUrl('https://discord.gg/745bEttw2r');
+        } catch (error) {
+          console.error('Failed to open URL:', error);
+          window.open('https://discord.gg/745bEttw2r', '_blank');
+        }
+      }
+    },
+    {
+      key: 'changelog',
+      icon: <ScrollText />,
+      title: 'Changelog',
+      subtitle: `Release notes & version history`,
+      onClick: () => navigate('/settings/changelog')
+    },
+    {
       key: 'reset',
       icon: <RotateCcw />,
       title: 'Reset',
@@ -261,7 +283,7 @@ export function SettingsPage() {
               Info
             </h2>
             <div className={spacing.field}>
-              {items.filter(i => ['github'].includes(i.key)).map(item => (
+              {items.filter(i => ['github','discord','changelog'].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} />
               ))}
             </div>

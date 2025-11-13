@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { storageBridge } from "./files";
-import { invoke } from "@tauri-apps/api/core";
 import { getDefaultCharacterRules } from "./defaults";
 import {
   CharacterSchema,

@@ -17,6 +17,7 @@ export function TopNav({ currentPath }: TopNavProps) {
     if (currentPath === "/settings/security") return "Security";
     if (currentPath === "/settings/reset") return "Reset";
     if (currentPath === "/settings/usage") return "Usage Analytics";
+    if (currentPath === "/settings/changelog") return "Changelog";
     if (currentPath === "/settings/prompts/new") return "Create Template";
     if (currentPath.startsWith("/settings/prompts/")) return "Edit Template";
     if (currentPath === "/settings/prompts") return "Prompt Templates";
@@ -34,7 +35,7 @@ export function TopNav({ currentPath }: TopNavProps) {
   }, [currentPath]);
 
   const showFilterButton = useMemo(() => {
-    return currentPath === "/settings/usage";
+    return currentPath === "/settings/usage" || currentPath === "/settings/changelog";
   }, [currentPath]);
 
   const showSearchButton = useMemo(() => {
@@ -46,7 +47,10 @@ export function TopNav({ currentPath }: TopNavProps) {
   };
 
   const handleFilterClick = () => {
-    if (typeof window !== "undefined") {
+    if (currentPath === "/settings/changelog") {
+      // Dispatch event for changelog version selector
+      window.dispatchEvent(new CustomEvent("changelog:openVersionSelector"));
+    } else if (typeof window !== "undefined") {
       const globalWindow = window as any;
       if (typeof globalWindow.__openUsageFilters === "function") {
         globalWindow.__openUsageFilters();

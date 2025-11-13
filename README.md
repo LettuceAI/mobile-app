@@ -18,6 +18,12 @@
 
 **Our focus:** privacy, customization, and creative freedom so your stories stay yours.
 
+## Community
+
+Join our Discord for support, updates, and discussion:  
+[![Discord](https://img.shields.io/badge/Discord-745bEttw2r-blue?logo=discord)](https://discord.gg/745bEttw2r)
+
+
 ## Technology Stack
 
 * **Frontend:** React 18, TypeScript 5, Tailwind CSS v4, Framer Motion, Lucide React, Zod
@@ -126,13 +132,14 @@ npm run build       # Production build
 
 * [x] Enhanced chat controls
 * [x] Character and persona library
+* [x] Custom system prompts
+* [x] Extensive parameter support
 * [ ] Built-in guides for character creation
 * [x] Fully customizable defaults
 * [ ] Multi-character conversations
-* [ ] Import chats and characters from SillyTavern and similar platforms
-* [ ] Export/Import data
+* [x] Import chats and characters from SillyTavern and similar platforms
+* [x] Export/Import data
 * [ ] iOS support
-* [ ] Plugin ecosystem
 
 ---
 
@@ -153,9 +160,8 @@ We welcome contributions!
 
 GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
----
 
-<div align="center">
+</div>
   <p>Made with ❤️ for the AI community</p>
   <p><strong>Privacy-first • Local-first • Open Source</strong></p>
 </div>
