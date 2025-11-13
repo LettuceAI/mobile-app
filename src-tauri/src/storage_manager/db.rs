@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use rusqlite::{params, Connection};
 
-use crate::utils::now_millis;
+use crate::utils::{log_warn, log_info, now_millis};
 use super::legacy::storage_root;
 
 pub fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -13,23 +13,22 @@ pub fn open_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     let path = db_path(app)?;
     
     // Debug logging
-    eprintln!("[DEBUG] Database path: {:?}", path);
-    
+    log_info(app, "database", format!("Database path: {:?}", path));    
     if let Some(parent) = path.parent() {
-        eprintln!("[DEBUG] Creating parent directory: {:?}", parent);
+        log_info(app, "database", format!("Creating parent directory: {:?}", parent));
         fs::create_dir_all(parent).map_err(|e| {
-            eprintln!("[ERROR] Failed to create parent directory: {:?}", e);
+            log_warn(app, "database", format!("Failed to create parent directory: {:?}", e));
             e.to_string()
         })?;
     }
     
-    eprintln!("[DEBUG] Opening database connection...");
+    log_info(app, "database", "[DEBUG] Opening database connection...");
     let conn = Connection::open(&path).map_err(|e| {
-        eprintln!("[ERROR] Failed to open database: {:?}", e);
+        log_warn(app, "database", format!("[ERROR] Failed to open database: {:?}", e));
         e.to_string()
     })?;
     
-    eprintln!("[DEBUG] Database opened successfully at: {:?}", path);
+    log_info(app, "database", format!("[DEBUG] Database opened successfully at: {:?}", path));
     
     conn.pragma_update(None, "foreign_keys", &true)
         .map_err(|e| e.to_string())?;
