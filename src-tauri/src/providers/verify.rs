@@ -1,5 +1,5 @@
 use super::util::{build_headers, build_verify_url, extract_error_message, resolve_base_url};
-use crate::{chat_manager::types::ProviderId, secrets, utils::log_info};
+use crate::{chat_manager::types::ProviderId, utils::log_info};
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
@@ -56,22 +56,6 @@ pub async fn verify_provider_api_key(
 
     let resolved_key = if let Some(key) = provided_key {
         key
-    } else if let Some(ref cred_id) = credential_id {
-        secrets::internal_secret_for_cred_get(
-            &app,
-            provider_id.clone(),
-            cred_id.clone(),
-            "apiKey".into(),
-        )?
-        .and_then(|value| {
-            let trimmed = value.trim().to_string();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        })
-        .ok_or_else(|| "Missing API key".to_string())?
     } else {
         return Ok(VerifyProviderApiKeyResult {
             provider_id,

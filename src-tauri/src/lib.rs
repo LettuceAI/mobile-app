@@ -6,7 +6,6 @@ mod migrations;
 mod models;
 mod pricing_cache;
 mod providers;
-mod secrets;
 mod serde_utils;
 mod storage_manager;
 mod transport;
@@ -98,12 +97,6 @@ pub fn run() {
             chat_manager::reset_app_default_template,
             chat_manager::render_prompt_preview,
             chat_manager::regenerate_session_system_prompt,
-            secrets::secret_get,
-            secrets::secret_set,
-            secrets::secret_delete,
-            secrets::secret_for_cred_get,
-            secrets::secret_for_cred_set,
-            secrets::secret_for_cred_delete,
             usage::usage_add_record,
             usage::usage_query_records,
             usage::usage_get_stats,

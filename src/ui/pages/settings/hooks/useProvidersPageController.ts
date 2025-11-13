@@ -8,7 +8,6 @@ import {
   SETTINGS_UPDATED_EVENT,
 } from "../../../../core/storage/repo";
 import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
-import { getSecret, setSecret } from "../../../../core/secrets";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
 import {
   initialProvidersPageState,
@@ -89,21 +88,12 @@ export function useProvidersPageController(): ControllerReturn {
       const newId = provider?.id ?? crypto.randomUUID();
       const firstCap: ProviderCapabilitiesCamel | undefined = state.capabilities[0];
       const baseProvider: ProviderCredential = provider
-        ? {
-            ...provider,
-            apiKeyRef: provider.apiKeyRef
-              ? { ...provider.apiKeyRef }
-              : undefined,
-          }
+        ? { ...provider }
         : ({
             id: newId,
             providerId: firstCap?.id || "openai",
             label: "",
-            apiKeyRef: {
-              providerId: firstCap?.id || "openai",
-              key: "apiKey",
-              credId: newId,
-            },
+            apiKey: "",
           } as ProviderCredential);
 
       console.log("[ProvidersPage] Opening editor with provider:", {
@@ -119,14 +109,7 @@ export function useProvidersPageController(): ControllerReturn {
         payload: { provider: baseProvider, apiKey: "" },
       });
 
-      if (provider?.apiKeyRef) {
-        const ref = { ...provider.apiKeyRef, credId: provider.id };
-        getSecret(ref).then((key) =>
-          dispatch({ type: "set_api_key", payload: key || "" }),
-        );
-      } else {
-        dispatch({ type: "set_api_key", payload: "" });
-      }
+      dispatch({ type: "set_api_key", payload: provider?.apiKey || "" });
     },
     [],
   );
@@ -207,16 +190,10 @@ export function useProvidersPageController(): ControllerReturn {
 
       const providerToSave: ProviderCredential = {
         ...editorProvider,
-        apiKeyRef: editorProvider.apiKeyRef
-          ? { ...editorProvider.apiKeyRef, credId: editorProvider.id }
-          : undefined,
-      };
+        apiKey: trimmedKey || undefined,
+      } as ProviderCredential;
 
       await addOrUpdateProviderCredential(providerToSave);
-
-      if (providerToSave.apiKeyRef && trimmedKey) {
-        await setSecret(providerToSave.apiKeyRef, trimmedKey);
-      }
 
       await reload();
       dispatch({ type: "close_editor" });

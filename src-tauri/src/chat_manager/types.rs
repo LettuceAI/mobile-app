@@ -26,19 +26,12 @@ pub struct SystemPromptTemplate {
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct SecretRef {
-    pub provider_id: String,
-    pub key: String,
-    pub cred_id: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderCredential {
     pub id: String,
     pub provider_id: String,
     pub label: String,
-    pub api_key_ref: Option<SecretRef>,
+    #[serde(default)]
+    pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub default_model: Option<String>,
     pub headers: Option<HashMap<String, String>>,

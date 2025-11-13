@@ -10,7 +10,7 @@ use crate::storage_manager::{
 use crate::utils::{log_error, log_info};
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 6;
+const CURRENT_MIGRATION_VERSION: u32 = 7;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -103,6 +103,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v5_to_v6(app)?;
         version = 6;
+    }
+
+    if version < 7 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v6 -> v7: Add api_key column to provider_credentials and backfill".to_string(),
+        );
+        migrate_v6_to_v7(app)?;
+        version = 7;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -445,6 +455,47 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
     }
     tx.commit().map_err(|e| e.to_string())?;
     let _ = fs::rename(&path, path.with_extension("json.bak"));
+    Ok(())
+}
+
+/// Migration v6 -> v7: add provider_credentials.api_key and backfill from secrets
+fn migrate_v6_to_v7(app: &AppHandle) -> Result<(), String> {
+    use rusqlite::{params, OptionalExtension};
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+    // Add column if it doesn't exist
+    let _ = conn.execute("ALTER TABLE provider_credentials ADD COLUMN api_key TEXT", []);
+
+    // Backfill using secrets table convention: service = 'lettuceai:apiKey', account = '{provider_id}:{cred_id}'
+    // For each credential row, attempt to set api_key from secrets if missing
+    let mut stmt = conn
+        .prepare("SELECT id, provider_id FROM provider_credentials WHERE api_key IS NULL OR api_key = ''")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let (cred_id, provider_id) = row.map_err(|e| e.to_string())?;
+        let account = format!("{}:{}", provider_id, cred_id);
+        let key_opt: Option<String> = conn
+            .query_row(
+                "SELECT value FROM secrets WHERE service = 'lettuceai:apiKey' AND account = ?1",
+                params![account],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        if let Some(key) = key_opt {
+            conn.execute(
+                "UPDATE provider_credentials SET api_key = ?1 WHERE id = ?2",
+                params![key, cred_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
     Ok(())
 }
 

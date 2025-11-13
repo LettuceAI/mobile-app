@@ -4,7 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { addOrUpdateProviderCredential } from "../../../../core/storage/repo";
 import { setProviderSetupCompleted } from "../../../../core/storage/appState";
-import { setSecret } from "../../../../core/secrets";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
 
 import {
@@ -174,11 +173,7 @@ export function useProviderController(): ControllerReturn {
                 id: credentialId,
                 providerId: selectedProviderId,
                 label: label.trim(),
-                apiKeyRef: {
-                    providerId: selectedProviderId,
-                    key: "apiKey",
-                    credId: credentialId,
-                },
+                apiKey: trimmedKey,
                 baseUrl: baseUrl || undefined,
             };
 
@@ -188,9 +183,7 @@ export function useProviderController(): ControllerReturn {
                 throw new Error("Failed to save provider credential");
             }
 
-            if (credential.apiKeyRef && trimmedKey) {
-                await setSecret(credential.apiKeyRef, trimmedKey);
-            }
+            // No secrets store: apiKey is saved inline now
 
             await setProviderSetupCompleted(true);
             navigate("/onboarding/models");

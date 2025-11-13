@@ -64,6 +64,7 @@ fn init_db(app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
           provider_id TEXT NOT NULL,
           label TEXT NOT NULL,
           api_key_ref TEXT,
+          api_key TEXT,
           base_url TEXT,
           default_model TEXT,
           headers TEXT

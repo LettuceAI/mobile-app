@@ -490,7 +490,7 @@ export function ModelsPage() {
         );
     }
 
-    function providerDisplay(provider: { id: string; providerId: string; label: string; apiKeyRef?: { providerId: string; key: string; credId?: string | undefined; } | undefined; baseUrl?: string | undefined; defaultModel?: string | undefined; headers?: Record<string, string> | undefined; }) {
+    function providerDisplay(provider: { id: string; providerId: string; label: string; apiKey?: string | undefined; baseUrl?: string | undefined; defaultModel?: string | undefined; headers?: Record<string, string> | undefined; }) {
         // Prefer label, fallback to providerId, then id
         return provider.label || provider.providerId || provider.id;
     }

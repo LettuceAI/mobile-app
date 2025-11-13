@@ -1,4 +1,4 @@
-use crate::{secrets, storage_manager};
+use crate::storage_manager;
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
@@ -52,15 +52,20 @@ pub async fn verify_model_exists(
         }
     }
 
-    // Retrieve API key value.
-    let api_key = match secrets::internal_secret_for_cred_get(
-        &app,
-        provider_id.clone(),
-        credential_id.clone(),
-        "apiKey".to_string(),
-    )? {
-        Some(k) => k,
-        None => {
+    // Retrieve API key inline from settings providerCredentials
+    let mut api_key: Option<String> = None;
+    if let Some(creds) = settings_json.get("providerCredentials").and_then(|v| v.as_array()) {
+        for cred in creds {
+            let cid = cred.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            if cid == credential_id.as_str() {
+                api_key = cred.get("apiKey").and_then(|v| v.as_str()).map(|s| s.to_string());
+                break;
+            }
+        }
+    }
+    let api_key = match api_key {
+        Some(k) if !k.is_empty() => k,
+        _ => {
             return Ok(VerifyModelResponse {
                 provider_id,
                 credential_id,

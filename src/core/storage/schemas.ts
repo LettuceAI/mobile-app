@@ -175,14 +175,12 @@ export const SceneSchema = z.object({
 });
 export type Scene = z.infer<typeof SceneSchema>;
 
-export const SecretRefSchema = z.object({ providerId: z.string(), key: z.string(), credId: z.string().uuid().optional() });
-export type SecretRef = z.infer<typeof SecretRefSchema>;
 
 export const ProviderCredentialSchema = z.object({
   id: z.string().uuid(),
   providerId: z.string(),
   label: z.string().min(1),
-  apiKeyRef: SecretRefSchema.optional(),
+  apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
   defaultModel: z.string().optional(),
   headers: z.record(z.string()).optional(),

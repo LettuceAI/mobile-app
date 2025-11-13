@@ -2,7 +2,6 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::models::{calculate_request_cost, get_model_pricing};
-use crate::secrets::secret_for_cred_get;
 use crate::usage::{add_usage_record, RequestUsage};
 use crate::utils::{log_error, log_info, log_warn, now_millis};
 
@@ -90,45 +89,21 @@ pub fn resolve_api_key(
     provider_cred: &ProviderCredential,
     log_scope: &str,
 ) -> Result<String, String> {
-    if let Some(ref api_ref) = provider_cred.api_key_ref {
-        match secret_for_cred_get(
-            app.clone(),
-            api_ref.provider_id.clone(),
-            api_ref
-                .cred_id
-                .clone()
-                .unwrap_or_else(|| provider_cred.id.clone()),
-            api_ref.key.clone(),
-        ) {
-            Ok(Some(value)) => Ok(value),
-            Ok(None) => {
-                log_error(
-                    app,
-                    log_scope,
-                    format!(
-                        "missing API key for provider {} credential {}",
-                        provider_cred.provider_id.as_str(),
-                        provider_cred.id.as_str()
-                    ),
-                );
-                Err("Missing API key".into())
-            }
-            Err(err) => {
-                log_error(app, log_scope, format!("failed to read API key: {}", err));
-                Err(err)
-            }
+    // Prefer inline api_key on the credential
+    if let Some(ref key) = provider_cred.api_key {
+        if !key.is_empty() {
+            return Ok(key.clone());
         }
-    } else {
-        log_error(
-            app,
-            log_scope,
-            format!(
-                "provider credential {} missing API key reference",
-                provider_cred.id.as_str()
-            ),
-        );
-        Err("Provider credential missing API key reference".into())
     }
+    log_error(
+        app,
+        log_scope,
+        format!(
+            "provider credential {} missing API key",
+            provider_cred.id.as_str()
+        ),
+    );
+    Err("Provider credential missing API key".into())
 }
 
 pub async fn record_usage_if_available(

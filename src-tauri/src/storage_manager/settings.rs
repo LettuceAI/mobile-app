@@ -47,14 +47,14 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 
     // Provider credentials
     let mut stmt = conn
-        .prepare("SELECT id, provider_id, label, api_key_ref, base_url, default_model, headers FROM provider_credentials")
+        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials")
         .map_err(|e| e.to_string())?;
     let creds_iter = stmt
         .query_map([], |r| {
             let id: String = r.get(0)?;
             let provider_id: String = r.get(1)?;
             let label: String = r.get(2)?;
-            let api_key_ref: Option<String> = r.get(3)?;
+            let api_key: Option<String> = r.get(3)?;
             let base_url: Option<String> = r.get(4)?;
             let default_model: Option<String> = r.get(5)?;
             let headers: Option<String> = r.get(6)?;
@@ -62,13 +62,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             obj.insert("id".into(), JsonValue::String(id));
             obj.insert("providerId".into(), JsonValue::String(provider_id));
             obj.insert("label".into(), JsonValue::String(label));
-            if let Some(s) = api_key_ref {
-                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
-                    if !v.is_null() {
-                        obj.insert("apiKeyRef".into(), v);
-                    }
-                }
-            }
+            if let Some(k) = api_key { obj.insert("apiKey".into(), JsonValue::String(k)); }
             if let Some(s) = base_url {
                 obj.insert("baseUrl".into(), JsonValue::String(s));
             }
@@ -251,9 +245,7 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             let id = c.get("id").and_then(|v| v.as_str()).unwrap_or("");
             let provider_id = c.get("providerId").and_then(|v| v.as_str()).unwrap_or("");
             let label = c.get("label").and_then(|v| v.as_str()).unwrap_or("");
-            let api_key_ref = c
-                .get("apiKeyRef")
-                .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+            let api_key = c.get("apiKey").and_then(|v| v.as_str()).map(|s| s.to_string());
             let base_url = c
                 .get("baseUrl")
                 .and_then(|v| v.as_str())
@@ -266,8 +258,8 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
                 .get("headers")
                 .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
             tx.execute(
-                "INSERT INTO provider_credentials (id, provider_id, label, api_key_ref, base_url, default_model, headers) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                params![id, provider_id, label, api_key_ref, base_url, default_model, headers],
+                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                params![id, provider_id, label, api_key, base_url, default_model, headers],
             ).map_err(|e| e.to_string())?;
         }
     }
