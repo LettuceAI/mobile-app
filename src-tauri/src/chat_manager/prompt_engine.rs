@@ -98,13 +98,27 @@ pub fn build_system_prompt(
     // Render with context
     let rendered = render_with_context(app, &base_template, character, persona, session, settings);
 
+    // Inject memories if present
+    let final_prompt = if !session.memories.is_empty() {
+        let mut result = rendered;
+        result.push_str("\n\n# Key Memories\n");
+        result.push_str("Important facts to remember in this conversation:\n");
+        for memory in &session.memories {
+            result.push_str(&format!("- {}\n", memory));
+        }
+        result
+    } else {
+        rendered
+    };
+
     debug_parts.push(json!({
         "template_vars": build_debug_vars(character, persona, session, settings),
+        "memories_count": session.memories.len(),
     }));
 
     super::super::utils::emit_debug(app, "system_prompt_built", json!({ "debug": debug_parts }));
 
-    let trimmed = rendered.trim();
+    let trimmed = final_prompt.trim();
     if trimmed.is_empty() {
         None
     } else {
@@ -374,6 +388,7 @@ mod tests {
             selected_scene_id: None,
             persona_id: None,
             advanced_model_settings: None,
+            memories: vec![],
             messages: vec![],
             archived: false,
             created_at: 0,

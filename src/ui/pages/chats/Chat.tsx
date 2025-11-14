@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
+import { getSession } from "../../../core/storage";
 
 import { useChatController } from "./hooks/useChatController";
 import { replacePlaceholders } from "../../../core/utils/placeholders";
@@ -26,6 +27,19 @@ export function ChatConversationPage() {
   const chatController = useChatController(characterId, { sessionId });
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
+  const [sessionForHeader, setSessionForHeader] = useState(chatController.session);
+
+  // Reload session data when memories change
+  const handleSessionUpdate = useCallback(async () => {
+    if (sessionId) {
+      const updatedSession = await getSession(sessionId);
+      setSessionForHeader(updatedSession);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    setSessionForHeader(chatController.session);
+  }, [chatController.session]);
 
   const {
     character,
@@ -219,7 +233,13 @@ export function ChatConversationPage() {
         {backgroundImageData && (
           <div className={`pointer-events-none absolute inset-0 -z-10 ${theme.headerOverlay}`} />
         )}
-        <ChatHeader character={character} sessionId={sessionId} hasBackgroundImage={!!backgroundImageData} />
+        <ChatHeader 
+          character={character} 
+          sessionId={sessionId} 
+          session={sessionForHeader}
+          hasBackgroundImage={!!backgroundImageData}
+          onSessionUpdate={handleSessionUpdate}
+        />
       </div>
 
       {/* Main content area */}
@@ -277,7 +297,7 @@ export function ChatConversationPage() {
       </main>
 
       {/* Footer with blurred overlay when background present */}
-      <div className="relative z-20">
+      <div className="relative z-10">
         {backgroundImageData && (
           <div className={`pointer-events-none absolute inset-0 -z-10 ${theme.footerOverlay}`} />
         )}

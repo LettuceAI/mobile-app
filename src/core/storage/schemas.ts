@@ -297,6 +297,7 @@ export const SessionSchema = z.object({
     z.undefined()
   ]).optional(),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
+  memories: z.array(z.string()).default([]),
   messages: z.array(MessageSchema),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),

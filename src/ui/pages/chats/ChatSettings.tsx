@@ -1,15 +1,16 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info, Brain } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
-import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona, addMemory, removeMemory, updateMemory } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
+import { MemoryManager } from "./components/MemoryManager";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
@@ -233,6 +234,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
   const [showPersonaActions, setShowPersonaActions] = useState(false);
   const [selectedPersonaForActions, setSelectedPersonaForActions] = useState<Persona | null>(null);
+  const [showMemoryMenu, setShowMemoryMenu] = useState(false);
 
   const loadModels = useCallback(async () => {
     try {
@@ -482,6 +484,36 @@ function ChatSettingsContent({ character }: { character: Character }) {
     return currentModel.displayName + (!currentCharacter?.defaultModelId ? " (app default)" : "");
   };
 
+  const handleAddMemory = async (text: string) => {
+    if (!currentSession) return;
+    try {
+      await addMemory(currentSession.id, text);
+      await loadSession();
+    } catch (error) {
+      console.error('Error adding memory:', error);
+    }
+  };
+
+  const handleRemoveMemory = async (index: number) => {
+    if (!currentSession) return;
+    try {
+      await removeMemory(currentSession.id, index);
+      await loadSession();
+    } catch (error) {
+      console.error('Error removing memory:', error);
+    }
+  };
+
+  const handleUpdateMemory = async (index: number, text: string) => {
+    if (!currentSession) return;
+    try {
+      await updateMemory(currentSession.id, index, text);
+      await loadSession();
+    } catch (error) {
+      console.error('Error updating memory:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-gray-100">
       {/* Header */}
@@ -588,6 +620,18 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 setSessionOverrideEnabled(Boolean(sessionAdvancedSettings));
                 setShowSessionAdvancedMenu(true);
               }}
+              disabled={!currentSession}
+            />
+
+            <SettingsButton
+              icon={<Brain className="h-4 w-4" />}
+              title="Manage Memories"
+              subtitle={
+                currentSession?.memories && currentSession.memories.length > 0
+                  ? `${currentSession.memories.length} ${currentSession.memories.length === 1 ? 'memory' : 'memories'} stored`
+                  : 'No memories'
+              }
+              onClick={() => setShowMemoryMenu(true)}
               disabled={!currentSession}
             />
           </section>
@@ -1003,6 +1047,25 @@ function ChatSettingsContent({ character }: { character: Character }) {
       </BottomMenu>
 
       {/* Parameter Support Info */}
+      {/* Memory Manager */}
+      <BottomMenu
+        isOpen={showMemoryMenu}
+        onClose={() => setShowMemoryMenu(false)}
+        title="Conversation Memories"
+        includeExitIcon={true}
+        location="bottom"
+      >
+        <MenuSection>
+          <MemoryManager
+            memories={currentSession?.memories ?? []}
+            onAdd={handleAddMemory}
+            onRemove={handleRemoveMemory}
+            onUpdate={handleUpdateMemory}
+          />
+        </MenuSection>
+      </BottomMenu>
+
+      {/* Parameter Support */}
       <BottomMenu
         isOpen={showParameterSupport}
         onClose={() => setShowParameterSupport(false)}

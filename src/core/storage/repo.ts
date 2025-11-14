@@ -242,6 +242,7 @@ export async function createSession(characterId: string, title: string, systemPr
     title,
     systemPrompt,
     selectedSceneId: selectedSceneId || character?.defaultSceneId || character?.scenes[0]?.id,
+    memories: [],
     messages,
     archived: false,
     createdAt: timestamp,
@@ -253,6 +254,22 @@ export async function createSession(characterId: string, title: string, systemPr
 
 export async function toggleMessagePin(sessionId: string, messageId: string): Promise<Session | null> {
   const updated = await storageBridge.messageTogglePin(sessionId, messageId);
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
+// Memory management functions
+export async function addMemory(sessionId: string, memory: string): Promise<Session | null> {
+  const updated = await storageBridge.sessionAddMemory(sessionId, memory);
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
+export async function removeMemory(sessionId: string, memoryIndex: number): Promise<Session | null> {
+  const updated = await storageBridge.sessionRemoveMemory(sessionId, memoryIndex);
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
+export async function updateMemory(sessionId: string, memoryIndex: number, newMemory: string): Promise<Session | null> {
+  const updated = await storageBridge.sessionUpdateMemory(sessionId, memoryIndex, newMemory);
   return updated ? SessionSchema.parse(updated) : null;
 }
 

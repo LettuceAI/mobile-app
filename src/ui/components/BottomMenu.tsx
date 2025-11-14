@@ -93,7 +93,7 @@ export function BottomMenu({
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -102,7 +102,7 @@ export function BottomMenu({
           />
 
           <motion.div
-            className={`${menuClasses} z-50 mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 ${isBottomMenu ? 'max-h-[90vh]' : 'max-h-[95vh]'} overflow-hidden flex flex-col ${className}`}
+            className={`${menuClasses} z-[110] mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 ${isBottomMenu ? 'max-h-[90vh]' : 'max-h-[95vh]'} overflow-hidden flex flex-col ${className}`}
             variants={menuVariants}
             initial="hidden"
             animate="visible"

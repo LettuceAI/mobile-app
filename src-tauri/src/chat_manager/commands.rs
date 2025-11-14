@@ -1231,6 +1231,7 @@ pub fn render_prompt_preview(
             archived: false,
             created_at: now,
             updated_at: now,
+            memories: vec![],
         }
     };
 

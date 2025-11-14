@@ -168,6 +168,7 @@ fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
           frequency_penalty REAL,
           presence_penalty REAL,
           top_k INTEGER,
+          memories TEXT NOT NULL DEFAULT '[]',
           archived INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,

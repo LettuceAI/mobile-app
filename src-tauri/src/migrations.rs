@@ -10,7 +10,7 @@ use crate::storage_manager::{
 use crate::utils::{log_error, log_info};
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 7;
+const CURRENT_MIGRATION_VERSION: u32 = 8;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -113,6 +113,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v6_to_v7(app)?;
         version = 7;
+    }
+
+    if version < 8 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v7 -> v8: Add memories column to sessions table".to_string(),
+        );
+        migrate_v7_to_v8(app)?;
+        version = 8;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -495,6 +505,17 @@ fn migrate_v6_to_v7(app: &AppHandle) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         }
     }
+
+    Ok(())
+}
+
+/// Migration v7 -> v8: add memories column to sessions table
+fn migrate_v7_to_v8(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+    // Add column with default empty JSON array if it doesn't exist
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN memories TEXT NOT NULL DEFAULT '[]'", []);
 
     Ok(())
 }

@@ -164,6 +164,8 @@ pub struct Session {
     #[serde(default)]
     pub advanced_model_settings: Option<AdvancedModelSettings>,
     #[serde(default)]
+    pub memories: Vec<String>,
+    #[serde(default)]
     pub messages: Vec<StoredMessage>,
     #[serde(default)]
     pub archived: bool,
