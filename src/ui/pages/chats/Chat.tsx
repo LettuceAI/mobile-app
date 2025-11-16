@@ -228,11 +228,8 @@ export function ChatConversationPage() {
         />
       )}
 
-      {/* Header with blurred overlay when background present */}
+      {/* Header */}
       <div className="relative z-20">
-        {backgroundImageData && (
-          <div className={`pointer-events-none absolute inset-0 -z-10 ${theme.headerOverlay}`} />
-        )}
         <ChatHeader 
           character={character} 
           sessionId={sessionId} 
@@ -296,11 +293,8 @@ export function ChatConversationPage() {
         </div>
       </main>
 
-      {/* Footer with blurred overlay when background present */}
+      {/* Footer */}
       <div className="relative z-10">
-        {backgroundImageData && (
-          <div className={`pointer-events-none absolute inset-0 -z-10 ${theme.footerOverlay}`} />
-        )}
         <ChatFooter
           draft={draft}
           setDraft={setDraft}

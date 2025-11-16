@@ -26,7 +26,7 @@ export function ChatFooter({
   const hasDraft = draft.trim().length > 0;
   
   return (
-    <footer className={`z-20 flex-shrink-0 border-t border-white/10 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
+    <footer className={`z-20 flex-shrink-0 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
       {error && (
         <div className={cn(
           "mb-3 px-4 py-2.5",
@@ -40,8 +40,8 @@ export function ChatFooter({
       )}
       <div className={cn(
         "flex items-end gap-2.5 p-2.5",
-        radius.lg,
-        "border border-white/15 bg-white/5",
+        radius.full,
+        "border border-white/15 bg-white/5 backdrop-blur-md",
         shadows.md
       )}>
         <textarea
@@ -50,7 +50,7 @@ export function ChatFooter({
           placeholder={`Message ${character.name}...`}
           rows={1}
           className={cn(
-            "max-h-32 flex-1 resize-none bg-transparent",
+            "max-h-32 flex-1 resize-none bg-transparent py-3",
             typography.body.size,
             "text-white placeholder:text-white/40",
             "focus:outline-none"
@@ -85,13 +85,13 @@ export function ChatFooter({
           aria-label={sending && onAbort ? "Stop generation" : hasDraft ? "Send message" : "Continue conversation"}
         >
             {sending && onAbort ? (
-            <Square size={16} fill="currentColor" />
+            <Square size={18} fill="currentColor" />
             ) : sending ? (
             <span className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : hasDraft ? (
-            <SendHorizonal size={16} />
+            <SendHorizonal size={18} />
             ) : (
-            <ChevronsRight size={16} />
+            <ChevronsRight size={18} />
             )}
         </button>
       </div>
