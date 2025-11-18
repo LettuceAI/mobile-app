@@ -1,0 +1,143 @@
+use std::collections::HashMap;
+
+use serde::Serialize;
+use serde_json::{json, Value};
+
+use super::ProviderAdapter;
+
+pub struct AnthropicAdapter;
+
+#[derive(Serialize)]
+struct AnthropicContent {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    text: String,
+}
+
+#[derive(Serialize)]
+struct AnthropicMessage {
+    role: String,
+    content: Vec<AnthropicContent>,
+}
+
+#[derive(Serialize)]
+struct AnthropicMessagesRequest {
+    model: String,
+    messages: Vec<AnthropicMessage>,
+    temperature: f64,
+    #[serde(rename = "top_p")]
+    top_p: f64,
+    #[serde(rename = "max_tokens")]
+    max_tokens: u32,
+    stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+    #[serde(rename = "top_k", skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
+}
+
+impl ProviderAdapter for AnthropicAdapter {
+    fn endpoint(&self, base_url: &str) -> String {
+        let trimmed = base_url.trim_end_matches('/');
+        if trimmed.ends_with("/v1") {
+            format!("{}/messages", trimmed)
+        } else {
+            format!("{}/v1/messages", trimmed)
+        }
+    }
+
+    fn system_role(&self) -> &'static str {
+        "system"
+    }
+
+    fn supports_stream(&self) -> bool {
+        true
+    }
+
+    fn required_auth_headers(&self) -> &'static [&'static str] {
+        &["x-api-key", "X-API-Key"]
+    }
+
+    fn default_headers_template(&self) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        out.insert("x-api-key".into(), "<apiKey>".into());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out
+    }
+
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String> {
+        let mut out: HashMap<String, String> = HashMap::new();
+        out.insert("x-api-key".into(), api_key.to_string());
+        out.insert("Content-Type".into(), "application/json".into());
+        out.insert("Accept".into(), "text/event-stream".into());
+        out.insert("anthropic-version".into(), "2023-06-01".into());
+        out.entry("User-Agent".into())
+            .or_insert_with(|| "LettuceAI/0.1".into());
+        if let Some(extra) = extra {
+            for (k, v) in extra.iter() {
+                out.insert(k.clone(), v.clone());
+            }
+        }
+        out
+    }
+
+    fn body(
+        &self,
+        model_name: &str,
+        messages_for_api: &Vec<Value>,
+        system_prompt: Option<String>,
+        temperature: f64,
+        top_p: f64,
+        max_tokens: u32,
+        should_stream: bool,
+        _frequency_penalty: Option<f64>,
+        _presence_penalty: Option<f64>,
+        top_k: Option<u32>,
+    ) -> Value {
+        let mut msgs: Vec<AnthropicMessage> = Vec::new();
+        for msg in messages_for_api {
+            let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
+            if role == "system" || role == "developer" {
+                continue;
+            }
+            let content_text = msg
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if content_text.is_empty() {
+                continue;
+            }
+            let mapped_role = match role {
+                "assistant" => "assistant",
+                _ => "user",
+            }
+            .to_string();
+            msgs.push(AnthropicMessage {
+                role: mapped_role,
+                content: vec![AnthropicContent {
+                    kind: "text",
+                    text: content_text,
+                }],
+            });
+        }
+
+        let body = AnthropicMessagesRequest {
+            model: model_name.to_string(),
+            messages: msgs,
+            temperature,
+            top_p,
+            max_tokens,
+            stream: should_stream,
+            system: system_prompt.filter(|s| !s.is_empty()),
+            top_k,
+        };
+        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
+    }
+}
+

@@ -1,0 +1,67 @@
+use std::collections::HashMap;
+
+use serde_json::Value;
+
+use super::{deepseek::DeepSeekAdapter, ProviderAdapter};
+
+pub struct NanoGPTAdapter;
+
+impl ProviderAdapter for NanoGPTAdapter {
+    fn endpoint(&self, base_url: &str) -> String {
+        // NanoGPT usually uses BASE = https://nano-gpt.com/api/v1
+        let trimmed = base_url.trim_end_matches('/');
+        if trimmed.ends_with("/v1") {
+            format!("{}/chat/completions", trimmed)
+        } else {
+            format!("{}/v1/chat/completions", trimmed)
+        }
+    }
+
+    fn system_role(&self) -> &'static str {
+        "system"
+    }
+
+    fn required_auth_headers(&self) -> &'static [&'static str] {
+        &["Authorization"]
+    }
+
+    fn default_headers_template(&self) -> HashMap<String, String> {
+        DeepSeekAdapter.default_headers_template()
+    }
+
+    fn headers(
+        &self,
+        api_key: &str,
+        extra: Option<&HashMap<String, String>>,
+    ) -> HashMap<String, String> {
+        DeepSeekAdapter.headers(api_key, extra)
+    }
+
+    fn body(
+        &self,
+        model_name: &str,
+        messages_for_api: &Vec<Value>,
+        system_prompt: Option<String>,
+        temperature: f64,
+        top_p: f64,
+        max_tokens: u32,
+        should_stream: bool,
+        frequency_penalty: Option<f64>,
+        presence_penalty: Option<f64>,
+        top_k: Option<u32>,
+    ) -> Value {
+        DeepSeekAdapter.body(
+            model_name,
+            messages_for_api,
+            system_prompt,
+            temperature,
+            top_p,
+            max_tokens,
+            should_stream,
+            frequency_penalty,
+            presence_penalty,
+            top_k,
+        )
+    }
+}
+
