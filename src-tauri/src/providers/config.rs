@@ -39,6 +39,15 @@ fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
         ("anthropic", "Anthropic", "https://api.anthropic.com"),
         ("openrouter", "OpenRouter", "https://openrouter.ai/api"),
         ("mistral", "Mistral AI", "https://api.mistral.ai"),
+        ("deepseek", "DeepSeek", "https://api.deepseek.com"),
+        ("nanogpt", "NanoGPT", "https://nano-gpt.com/api"),
+        ("xai", "xAI (Grok)", "https://api.x.ai"),
+        ("gemini", "Google (Gemini)", "https://generativelanguage.googleapis.com/v1beta"),
+        ("zai", "zAI (GLM)", "https://api.z.ai/api/coding/paas/v4"),
+        ("moonshot", "Moonshot AI (Kimi)", "https://api.moonshot.ai/v1"),
+        ("featherless", "Featherless AI", "https://api.featherless.ai/v1"),
+        ("qwen", "Qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        ("anannas", "Anannas AI", "https://api.anannas.ai/v1"),
         ("groq", "Groq", "https://api.groq.com"),
     ];
 

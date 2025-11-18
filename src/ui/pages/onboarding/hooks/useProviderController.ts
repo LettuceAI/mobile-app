@@ -32,19 +32,21 @@ export function useProviderController(): ControllerReturn {
     const { selectedProviderId, apiKey, label, baseUrl, showForm } = state;
 
     useEffect(() => {
-        if (!showForm) {
-            return;
-        }
+        if (!showForm) return;
 
         const timeout = window.setTimeout(() => {
-            const formSection = document.querySelector(".config-form-section");
-            if (formSection) {
-                formSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            const formElement = document.getElementById("provider-config-form");
+            if (formElement) {
+                formElement.scrollIntoView({
+                    behavior: "smooth",
+                    block: "end",
+                    inline: "nearest",
+                });
             }
-        }, 200);
+        }, 350); 
 
         return () => window.clearTimeout(timeout);
-    }, [showForm, selectedProviderId]);
+    }, [showForm]);
 
     const handleSelectProvider = useCallback((provider: { id: string; name: string; defaultBaseUrl?: string }) => {
         dispatch({

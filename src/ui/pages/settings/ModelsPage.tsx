@@ -143,8 +143,8 @@ export function ModelsPage() {
                                         }
                                     }}
                                     className={`w-full rounded-2xl border p-4 text-left transition ${isSelected
-                                            ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-400/20 to-emerald-500/10'
-                                            : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.99]'
+                                        ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-400/20 to-emerald-500/10'
+                                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.99]'
                                         } ${isCustom && !isSelected ? 'cursor-pointer' : ''}`}
                                 >
                                     <div className="flex items-start gap-3">
@@ -263,7 +263,7 @@ export function ModelsPage() {
                                             <label className="text-sm font-medium text-white">Max Output Tokens</label>
                                             <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
                                         </div>
-                                        
+
                                         <div className="flex gap-2 mb-3">
                                             <button
                                                 type="button"
@@ -271,11 +271,10 @@ export function ModelsPage() {
                                                     updateAdvancedDraft({ maxOutputTokens: null });
                                                     setForceCustomMode(true);
                                                 }}
-                                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                                                    !advancedDraft.maxOutputTokens
+                                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!advancedDraft.maxOutputTokens
                                                         ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
                                                         : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
-                                                }`}
+                                                    }`}
                                             >
                                                 Auto
                                             </button>
@@ -285,16 +284,15 @@ export function ModelsPage() {
                                                     updateAdvancedDraft({ maxOutputTokens: 1024 });
                                                     setForceCustomMode(true);
                                                 }}
-                                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                                                    advancedDraft.maxOutputTokens
+                                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${advancedDraft.maxOutputTokens
                                                         ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
                                                         : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
-                                                }`}
+                                                    }`}
                                             >
                                                 Custom
                                             </button>
                                         </div>
-                                        
+
                                         {advancedDraft.maxOutputTokens !== null && advancedDraft.maxOutputTokens !== undefined && (
                                             <input
                                                 type="number"
@@ -311,9 +309,9 @@ export function ModelsPage() {
                                                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
                                             />
                                         )}
-                                        
+
                                         <p className="mt-2 text-xs text-white/40">
-                                            {!advancedDraft.maxOutputTokens 
+                                            {!advancedDraft.maxOutputTokens
                                                 ? 'Let the model decide the response length'
                                                 : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
                                             }
@@ -497,15 +495,15 @@ export function ModelsPage() {
     return (
         <div className="flex h-full flex-col">
             {/* List (TopNav handles title/back) */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+            <div className="flex-1 overflow-y-auto mx-2 py-3 space-y-2">
                 <div
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-white"
+                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 py-3 text-white"
                 >
                     <button
                         onClick={openAdvancedView}
                         className="flex flex-1 items-center gap-3 text-left transition active:scale-[0.99]"
                     >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-100">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-100">
                             <SlidersHorizontal className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -516,18 +514,19 @@ export function ModelsPage() {
                                 {advancedSummary}
                             </div>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-emerald-200" />
+
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowParameterSupport(true);
+                            }}
+                            className="group/info flex flex-shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
+                            aria-label="View parameter support"
+                        >
+                            <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
+                        </button>
                     </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setShowParameterSupport(true);
-                        }}
-                        className="group/info ml-2 flex items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
-                        aria-label="View parameter support"
-                    >
-                        <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
-                    </button>
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-emerald-200" />
                 </div>
 
                 {models.length === 0 && (
@@ -578,8 +577,8 @@ export function ModelsPage() {
                     return provider ? providerDisplay(provider) : 'Provider';
                 })()}`}
             >
-                <ProviderParameterSupportInfo 
-                    providerId={models.find(m => m.id === defaultModelId)?.providerId || 'openai'} 
+                <ProviderParameterSupportInfo
+                    providerId={models.find(m => m.id === defaultModelId)?.providerId || 'openai'}
                 />
             </BottomMenu>
         </div>

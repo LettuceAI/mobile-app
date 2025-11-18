@@ -110,6 +110,83 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       topK: true,
     },
   },
+  deepseek: {
+    providerId: 'deepseek',
+    displayName: 'DeepSeek',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
+
+  nanogpt: {
+    providerId: 'nanogpt',
+    displayName: 'NanoGPT',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
+
+  xai: {
+    providerId: 'xai',
+    displayName: 'xAI (Grok)',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false, // not supported in OpenAI-compatible API
+    },
+  },
+
+  anannas: {
+    providerId: 'anannas',
+    displayName: 'Anannas AI',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
+
+  zai: {
+    providerId: 'zai',
+    displayName: 'ZAI (Zhipu / GLM)',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: false, // not documented
+      presencePenalty: false,  // not documented
+      topK: false, // GLM API uses top_p but not top_k exposed
+    },
+  },
+
+  moonshot: {
+    providerId: 'moonshot',
+    displayName: 'Moonshot AI (Kimi)',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false, 
+    },
+  },
 } as const;
 
 export type ProviderId = keyof typeof PROVIDER_PARAMETER_SUPPORT;
@@ -133,7 +210,7 @@ export function providerSupportsParameter(
 export function getSupportedParameters(providerId: string): (keyof AdvancedModelSettings)[] {
   const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
   if (!provider) return ['temperature', 'topP', 'maxOutputTokens'];
-  
+
   return Object.entries(provider.supportedParameters)
     .filter(([_, supported]) => supported)
     .map(([param]) => param as keyof AdvancedModelSettings);

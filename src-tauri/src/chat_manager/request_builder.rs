@@ -35,7 +35,7 @@ pub fn build_chat_request(
     let base_url = provider_base_url(provider_cred);
 
     let adapter = adapter_for(&ProviderId(provider_cred.provider_id.clone()));
-    let endpoint = adapter.endpoint(&base_url);
+    let url = adapter.build_url(&base_url, model_name, api_key);
     let headers = adapter.headers(api_key, provider_cred.headers.as_ref());
     let effective_stream = should_stream && adapter.supports_stream();
 
@@ -53,7 +53,7 @@ pub fn build_chat_request(
     );
 
     BuiltRequest {
-        url: endpoint,
+        url,
         headers,
         body,
         stream: effective_stream,

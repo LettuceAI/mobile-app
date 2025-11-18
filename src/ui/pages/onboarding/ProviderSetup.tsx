@@ -4,17 +4,47 @@ import {
   ArrowLeft,
   Check,
   Loader,
-  Settings,
-  Wrench,
 } from "lucide-react";
 
 import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
 import { useProviderController } from "./hooks/useProviderController";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 
-import OpenAIIcon from "../../../assets/openai_dark.svg";
-import AnthropicIcon from "../../../assets/anthropic_dark.svg";
-import OpenRouterIcon from "../../../assets/openrouter_dark.svg";
-import MistralAIIcon from "../../../assets/mistralai_dark.svg";
+interface ProviderCardProps {
+  provider: ProviderCapabilitiesCamel;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+function ProviderCard({ provider, isActive, onClick }: ProviderCardProps) {
+  return (
+    <button
+      className={`relative group min-h-[88px] rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${isActive
+          ? "border-white/25 bg-white/15 shadow-lg"
+          : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
+        }`}
+      onClick={onClick}
+    >
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/8">
+            {getProviderIcon(provider.id)}
+          </div>
+          <div className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${isActive
+              ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-300"
+              : "border-white/20 text-transparent"
+            }`}>
+            <Check size={10} />
+          </div>
+        </div>
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-semibold text-white leading-tight">{provider.name}</h3>
+          <p className="text-[11px] text-gray-400 leading-snug line-clamp-2">{getProviderDescription(provider.id)}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export function ProviderSetupPage() {
   const {
@@ -40,6 +70,7 @@ export function ProviderSetupPage() {
   } = useProviderController();
 
   const [capabilities, setCapabilities] = React.useState<ProviderCapabilitiesCamel[]>([]);
+
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -56,13 +87,13 @@ export function ProviderSetupPage() {
   const selectedProvider = capabilities.find((p) => p.id === selectedProviderId);
 
   return (
-    <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8 pb-16 overflow-y-auto">
+    <div className="flex min-h-screen flex-col text-gray-200 px-4 pt-8 overflow-y-auto">
       <div className="flex flex-col items-center pb-8">
         {/* Header */}
         <div className="flex w-full max-w-sm items-center justify-between mb-8">
           <button
             onClick={goToWelcome}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/8 text-white transition-all duration-200 hover:border-white/30 hover:bg-white/15 active:scale-[0.98]"
+            className="flex items-center justify-center rounded-full border border-white/15 bg-white/8 text-white transition-all duration-200 hover:border-white/30 hover:bg-white/15 active:scale-[0.98]"
           >
             <ArrowLeft size={16} />
           </button>
@@ -77,47 +108,28 @@ export function ProviderSetupPage() {
         <div className="text-center space-y-2 mb-8">
           <h1 className="text-2xl font-bold text-white">Choose your AI provider</h1>
           <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
-            Connect an API provider. Your keys are encrypted locally—no external accounts required.
+            Select an AI provider to get started. Your API keys are securely encrypted on your device. No account signup needed.
           </p>
         </div>
 
         {/* Provider Selection */}
-        <div className="w-full max-w-sm space-y-3 mb-8">
-          {capabilities.map((provider) => {
-            const isActive = selectedProviderId === provider.id;
-            return (
-              <button
+        <div className="w-full max-w-2xl mb-8">
+          <div className="grid grid-cols-2 gap-3">
+            {capabilities.map((provider) => (
+              <ProviderCard
                 key={provider.id}
-                className={`w-full min-h-[60px] rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
-                  isActive
-                    ? "border-white/25 bg-white/15 shadow-lg"
-                    : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
-                }`}
+                provider={provider}
+                isActive={selectedProviderId === provider.id}
                 onClick={() => handleSelectProvider({ id: provider.id, name: provider.name, defaultBaseUrl: provider.defaultBaseUrl })}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/8">
-                    {getProviderIcon(provider.id)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-white">{provider.name}</h3>
-                    <p className="text-xs text-gray-400 truncate">{getProviderDescription(provider.id)}</p>
-                  </div>
-                  <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
-                    isActive
-                      ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-300"
-                      : "border-white/20 text-transparent"
-                  }`}>
-                    <Check size={12} />
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Configuration Form */}
-        <div className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-[2000px]" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}>
+
+        <div
+          className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-[2000px]" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}>
           <div className="text-center space-y-2 mb-6">
             <h2 className="text-lg font-semibold text-white">Connect {selectedProvider?.name}</h2>
             <p className="text-xs text-gray-400 leading-relaxed">
@@ -182,11 +194,10 @@ export function ProviderSetupPage() {
           </div>
 
           {testResult && (
-            <div className={`rounded-2xl border my-2 px-4 py-3 text-sm ${
-              testResult.success
+            <div className={`rounded-2xl border my-2 px-4 py-3 text-sm ${testResult.success
                 ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
                 : "border-amber-400/40 bg-amber-400/10 text-amber-200"
-            }`}>
+              }`}>
               {testResult.message}
             </div>
           )}
@@ -227,6 +238,7 @@ export function ProviderSetupPage() {
           </div>
         </div>
       </div>
+      <div id="provider-config-form"></div> { /* scroll target */}
     </div>
   );
 }
@@ -243,37 +255,35 @@ function getProviderWebsite(providerId: string): string {
       return "#";
   }
 }
-
 function getProviderDescription(providerId: string): string {
   switch (providerId) {
     case "openai":
-      return "GPT-4, GPT-3.5-turbo, and GPT-4o models";
+      return "GPT-5, GPT-4.1, and GPT-4o models for expressive RP";
     case "anthropic":
-      return "Claude models with advanced reasoning";
+      return "Claude 4.5 Sonnet & Haiku for deep, emotional dialogue";
+    case "nanogpt":
+    case "featherless":
     case "openrouter":
-      return "Gateway to multiple frontier models";
+      return "Access models like GPT-5, Claude 4.5, Grok-3, Mixtral, and more";
     case "openai-compatible":
-      return "Bring your own OpenAI-compatible service";
-    case "custom":
-      return "Point LettuceAI to any custom endpoint";
-    default:
-      return "AI language model provider";
-  }
-}
-
-function getProviderIcon(providerId: string) {
-  switch (providerId) {
-    case "openai":
-      return <img src={OpenAIIcon} alt="OpenAI" className="h-6 w-6" />;
-    case "anthropic":
-      return <img src={AnthropicIcon} alt="Anthropic" className="h-6 w-6" />;
-    case "openrouter":
-      return <img src={OpenRouterIcon} alt="OpenRouter" className="h-6 w-6" />;
+      return "Use any OpenAI-style API endpoint";
     case "mistral":
-      return <img src={MistralAIIcon} alt="MistralAI" className="h-6 w-6" />;
+      return "Mistral Small 3.2, Mixtral 8x22B, and other Mistral models";
+    case "deepseek":
+      return "DeepSeek-V3.2-Exp, DeepSeek-R1, and other high-efficiency models";
+    case "xai":
+      return "Grok-1.5, Grok-3, and newer xAI models";
+    case "zai":
+      return "GLM-4.5, GLM-4.6, and Air variants";
+    case "moonshot":
+      return "Kimi-K2 Thinking and Kimi-K1 models";
+    case "gemini":
+      return "Gemini 2.5 Flash, 2.5 Pro, and more";
+    case "qwen":
+      return "Qwen3-VL and newer Qwen models";
     case "custom":
-      return <Settings className="h-6 w-6 text-gray-400" />;
+      return "Point LettuceAI to any custom model endpoint";
     default:
-      return <Wrench className="h-6 w-6 text-gray-500" />;
+      return "AI model provider";
   }
 }

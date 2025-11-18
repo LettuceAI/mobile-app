@@ -1,13 +1,12 @@
+import { Trash2, ChevronRight, Edit3, EthernetPort } from "lucide-react";
 import { useEffect } from "react";
-import { Trash2, ChevronRight, Edit3, EthernetPort, Wrench, Settings } from "lucide-react";
-import type { ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
-import { BottomMenu, MenuButton } from "../../components/BottomMenu";
+
 import { useProvidersPageController } from "./hooks/useProvidersPageController";
 
-import OpenAIIcon from "../../../assets/openai_light.svg";
-import AnthropicIcon from "../../../assets/anthropic_light.svg";
-import OpenRouterIcon from "../../../assets/openrouter_light.svg";
-import MistralAIIcon from "../../../assets/mistralai_light.svg";
+import type { ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
+
+import { BottomMenu, MenuButton } from "../../components/BottomMenu";
 
 export function ProvidersPage() {
   const {
@@ -210,19 +209,3 @@ export function ProvidersPage() {
   );
 }
 
-function getProviderIcon(providerId: string) {
-  switch (providerId) {
-    case "openai":
-      return <img src={OpenAIIcon} alt="OpenAI" className="h-6 w-6" />;
-    case "anthropic":
-      return <img src={AnthropicIcon} alt="Anthropic" className="h-6 w-6" />;
-    case "openrouter":
-      return <img src={OpenRouterIcon} alt="OpenRouter" className="h-6 w-6" />;
-    case "mistral":
-      return <img src={MistralAIIcon} alt="MistralAI" className="h-6 w-6" />;
-    case "custom":
-      return <Settings className="h-6 w-6 text-gray-400" />;
-    default:
-      return <Wrench className="h-6 w-6 text-gray-500" />;
-  }
-}
