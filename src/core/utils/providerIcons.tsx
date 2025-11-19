@@ -1,17 +1,17 @@
 import { Settings, Wrench } from "lucide-react";
 
-import OpenAIIcon from "../assets/openai_light.svg";
-import AnthropicIcon from "../assets/anthropic_light.svg";
-import OpenRouterIcon from "../assets/openrouter_light.svg";
-import MistralAIIcon from "../assets/mistralai_light.svg";
-import DeepseekIcon from "../assets/deepseek.svg";
-import NanoGPTIcon from "../assets/nanogpt.png";
-import XAIIcon from "../assets/xai_light.svg";
-import ZAIIcon from "../assets/zai_light.svg";
-import MoonShotAIIcon from "../assets/moonshot_light.svg";
-import GeminiIcon from "../assets/gemini.svg";
-import QwenIcon from "../assets/qwen.svg";
-import FeatherlessIcon from "../assets/featherless.svg";
+import OpenAIIcon from "../../assets/openai_light.svg";
+import AnthropicIcon from "../../assets/anthropic_light.svg";
+import OpenRouterIcon from "../../assets/openrouter_light.svg";
+import MistralAIIcon from "../../assets/mistralai_light.svg";
+import DeepseekIcon from "../../assets/deepseek.svg";
+import NanoGPTIcon from "../../assets/nanogpt.png";
+import XAIIcon from "../../assets/xai_light.svg";
+import ZAIIcon from "../../assets/zai_light.svg";
+import MoonShotAIIcon from "../../assets/moonshot_light.svg";
+import GeminiIcon from "../../assets/gemini.svg";
+import QwenIcon from "../../assets/qwen.svg";
+import FeatherlessIcon from "../../assets/featherless.svg";
 
 const ICON_MAP: Record<string, JSX.Element> = {
     openai: <img src={OpenAIIcon} alt="OpenAI" className="h-6 w-6" />,

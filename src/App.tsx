@@ -20,6 +20,7 @@ import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
 import { SearchPage } from "./ui/pages/search";
+import { LibraryPage } from "./ui/pages/library/LibraryPage";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { isOnboardingCompleted } from "./core/storage/appState";
@@ -47,7 +48,7 @@ function App() {
               payload?: unknown;
               message?: string;
             };
-            
+
             // Backend logs come pre-formatted with timestamp
             if (message !== undefined) {
               if (isLoggingEnabled()) {
@@ -84,7 +85,7 @@ function App() {
           v7_relativeSplatPath: true,
         }}
       >
-        <div className="min-h-screen bg-[#050505] text-gray-100 antialiased">
+        <div className="min-h-screen bg-[#000000] text-gray-100 antialiased">
           <AppContent />
         </div>
       </BrowserRouter>
@@ -108,7 +109,14 @@ function AppContent() {
     () => location.pathname.startsWith("/create/"),
     [location.pathname]
   );
-  const showGlobalChrome = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute;
+
+  const isSettingRoute = useMemo(
+    () => location.pathname.startsWith("/settings"),
+    [location.pathname]
+  );
+
+  const showTopNav = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute;
+  const showBottomNav = !isSettingRoute && !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute;
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } = useFirstTimeTooltip("create_button");
@@ -120,7 +128,7 @@ function AppContent() {
     if (isOnboardingRoute || isCreateRoute) {
       setShowCreateMenu(false);
     }
-  }, [isOnboardingRoute, isCreateRoute]); 
+  }, [isOnboardingRoute, isCreateRoute]);
 
 
 
@@ -168,26 +176,26 @@ function AppContent() {
     <div className="relative min-h-screen overflow-hidden">
       <div
         className={`relative z-10 mx-auto flex min-h-screen w-full ${isChatDetailRoute ? "max-w-full" : "max-w-md"
-          } flex-col ${showGlobalChrome ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
+          } flex-col ${showBottomNav ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
       >
-        {showGlobalChrome && (
+        {showTopNav && (
           <TopNav
             currentPath={location.pathname + location.search}
             onCreateClick={() => setShowCreateMenu(true)}
           />
         )}
-        
+
         <main
           ref={mainRef}
-          className={`flex-1 ${showGlobalChrome ? "pt-[calc(56px+env(safe-area-inset-top)+8px)]" : ""} ${isOnboardingRoute
-              ? "overflow-y-auto px-4 pt-6 pb-6"
-              : isChatDetailRoute
+          className={`flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${isOnboardingRoute
+            ? "overflow-y-auto px-4 pt-6 pb-6"
+            : isChatDetailRoute
+              ? "overflow-hidden px-0 pt-0 pb-0"
+              : isCreateRoute
                 ? "overflow-hidden px-0 pt-0 pb-0"
-                : isCreateRoute
+                : isSearchRoute
                   ? "overflow-hidden px-0 pt-0 pb-0"
-                  : isSearchRoute
-                    ? "overflow-hidden px-0 pt-0 pb-0"
-                    : "overflow-y-auto px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))]"
+                  : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
             }`}
         >
           <motion.div
@@ -204,6 +212,7 @@ function AppContent() {
               <Route path="/onboarding/provider" element={<ProviderSetupPage />} />
               <Route path="/onboarding/models" element={<ModelSetupPage />} />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/library" element={<LibraryPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/providers" element={<ProvidersPage />} />
               <Route path="/settings/models" element={<ModelsPage />} />
@@ -232,16 +241,16 @@ function AppContent() {
           </motion.div>
         </main>
 
-        {showGlobalChrome && (
+        {showBottomNav && (
           <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
         )}
       </div>
 
-      {showGlobalChrome && (
+      {showBottomNav && (
         <CreateMenu isOpen={showCreateMenu} onClose={() => setShowCreateMenu(false)} />
       )}
 
-      {isChatRoute && showGlobalChrome && (showDelayedTooltip || showCreateTooltip) && (
+      {isChatRoute && showBottomNav && (showDelayedTooltip || showCreateTooltip) && (
         <Tooltip
           isVisible={true}
           message="Create custom AI characters and personas here!"

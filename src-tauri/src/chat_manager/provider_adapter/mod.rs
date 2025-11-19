@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use super::types::ProviderId;
 

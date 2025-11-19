@@ -1,18 +1,21 @@
 export const typography = {
     display: {
         size: 'text-2xl',        // 24px
-        weight: 'font-bold',
+        weight: 'font-extrabold',
         lineHeight: 'leading-tight',
+        tracking: 'tracking-tight',
     },
     h1: {
         size: 'text-xl',         // 20px
-        weight: 'font-semibold',
+        weight: 'font-bold',
         lineHeight: 'leading-snug',
+        tracking: 'tracking-tight',
     },
     h2: {
         size: 'text-lg',         // 18px
-        weight: 'font-semibold',
+        weight: 'font-bold',
         lineHeight: 'leading-snug',
+        tracking: 'tracking-tight',
     },
     h3: {
         size: 'text-base',       // 16px
@@ -42,7 +45,7 @@ export const typography = {
     },
     overline: {
         size: 'text-[10px]',    // 10px
-        weight: 'font-semibold',
+        weight: 'font-bold',
         lineHeight: 'leading-none',
         tracking: 'tracking-wider', // 0.05em
         transform: 'uppercase',
@@ -51,19 +54,19 @@ export const typography = {
 
 export const colors = {
     surface: {
-        base: 'bg-[#050505]',         
-        elevated: 'bg-[#0b0b0d]',       
-        overlay: 'bg-black/45',          
+        base: 'bg-[#000000]',
+        elevated: 'bg-[#0A0A0A]',
+        overlay: 'bg-black/60',
     },
     border: {
-        subtle: 'border-white/10',
-        default: 'border-white/15',
-        strong: 'border-white/25',
-        interactive: 'border-white/30',
+        subtle: 'border-white/15',
+        default: 'border-white/20',
+        strong: 'border-white/30',
+        interactive: 'border-white/40',
     },
     text: {
         primary: 'text-white',
-        secondary: 'text-white/70',
+        secondary: 'text-white/80',
         tertiary: 'text-white/50',
         disabled: 'text-white/30',
     },
@@ -82,6 +85,19 @@ export const colors = {
             default: 'bg-red-400/15 border-red-400/40 text-red-100',
         },
     },
+    glass: {
+        subtle: 'bg-white/5 backdrop-blur-lg border border-white/10',
+        default: 'bg-white/10 backdrop-blur-xl border border-white/15',
+        strong: 'bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/10',
+    },
+    effects: {
+        glow: 'shadow-[0_0_20px_-5px_rgba(52,211,153,0.3)]',
+        gradient: {
+            brand: 'bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-emerald-500/20',
+            surface: 'bg-gradient-to-b from-[#050505] to-[#000000]',
+            text: 'bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-transparent',
+        }
+    }
 } as const;
 
 export const spacing = {
@@ -95,9 +111,9 @@ export const spacing = {
 } as const;
 
 export const radius = {
-    sm: 'rounded-lg',
-    md: 'rounded-xl',
-    lg: 'rounded-2xl',
+    sm: 'rounded-sm',
+    md: 'rounded-md',
+    lg: 'rounded-lg',
     full: 'rounded-full',
 } as const;
 

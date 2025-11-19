@@ -129,22 +129,22 @@ export function SettingsPage() {
       count: modelCount,
       onClick: () => navigate('/settings/models')
     },
-    {
+    /*{
       key: 'characters',
       icon: <Sparkles />,
       title: 'Characters',
       subtitle: 'Manage AI characters',
       count: characterCount,
       onClick: () => navigate('/settings/characters')
-    },
-    {
+    },*/
+    /*{
       key: 'personas',
       icon: <User />,
       title: 'Personas',
       subtitle: 'Manage user personas',
       count: personaCount,
       onClick: () => navigate('/settings/personas')
-    },
+    },*/
     {
       key: 'prompts',
       icon: <FileText />,
@@ -231,7 +231,7 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
-      <section className={cn("flex-1 overflow-y-auto px-4 pt-4", spacing.section)}>
+      <section className={cn("flex-1 overflow-y-auto px-1 pt-4", spacing.section)}>
           {/* Section: Core */}
           <div>
             <h2 className={cn(

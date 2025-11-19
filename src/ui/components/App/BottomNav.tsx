@@ -1,4 +1,4 @@
-import { MessageCircle, Plus, Settings } from "lucide-react";
+import { MessageCircle, Plus, Library } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 import { TabItem } from "./NavItem";
@@ -61,10 +61,10 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
         </button>
 
         <TabItem
-          to="/settings"
-          icon={Settings}
-          label="Settings"
-          active={pathname.startsWith("/settings")}
+          to="/library"
+          icon={Library}
+          label="Library"
+          active={pathname.startsWith("/library")}
           className="flex-1 h-10 text-sm"
         />
       </div>
