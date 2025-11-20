@@ -23,6 +23,11 @@ export function TopNav({ currentPath }: TopNavProps) {
     if (currentPath === "/settings/prompts/new") return "Create Template";
     if (currentPath.startsWith("/settings/prompts/")) return "Edit Template";
     if (currentPath === "/settings/prompts") return "Prompt Templates";
+    if (currentPath === "/settings/developer") return "Developer";
+    if (currentPath === "/settings/advanced") return "Advanced";
+    if (currentPath === "/settings/characters") return "Characters";
+    if (currentPath === "/settings/personas") return "Personas";
+    if (currentPath === "/settings/advanced/memory") return "Dynamic Memory";
     if (currentPath.startsWith("/settings")) return "Settings";
     if (currentPath.startsWith("/create")) return "Create";
     if (currentPath.startsWith("/onboarding")) return "Setup";

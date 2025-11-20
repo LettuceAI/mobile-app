@@ -89,6 +89,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           advanced_model_settings TEXT,
           prompt_template_id TEXT,
           system_prompt TEXT,
+          advanced_settings TEXT,
           migration_version INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL

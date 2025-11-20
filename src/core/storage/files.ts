@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 async function readJsonCommand<T>(command: string, args?: Record<string, unknown>, fallback?: T): Promise<T | null> {
   try {
@@ -24,8 +25,38 @@ export const storageBridge = {
   // New granular commands (phase 1): providers/models/defaults/advanced settings
   settingsSetDefaults: (defaultProviderCredentialId: string | null, defaultModelId: string | null) =>
     invoke("settings_set_defaults", { defaultProviderCredentialId, defaultModelId }) as Promise<void>,
+  settingsSetDefaultProvider: (id: string | null) => invoke("settings_set_default_provider", { id }) as Promise<void>,
+  settingsSetDefaultModel: (id: string | null) => invoke("settings_set_default_model", { id }) as Promise<void>,
+  settingsSetAppState: (state: unknown) => invoke("settings_set_app_state", { stateJson: JSON.stringify(state) }) as Promise<void>,
+  settingsSetPromptTemplate: (id: string | null) => invoke("settings_set_prompt_template", { id }) as Promise<void>,
+  settingsSetSystemPrompt: (prompt: string | null) => invoke("settings_set_system_prompt", { prompt }) as Promise<void>,
+  settingsSetMigrationVersion: (version: number) => invoke("settings_set_migration_version", { version }) as Promise<void>,
   settingsSetAdvancedModelSettings: (advanced: unknown | null) =>
     invoke("settings_set_advanced_model_settings", { advancedJson: advanced == null ? "null" : JSON.stringify(advanced) }) as Promise<void>,
+  settingsSetAdvanced: (advanced: unknown | null) =>
+    invoke("settings_set_advanced", { advancedJson: advanced == null ? "null" : JSON.stringify(advanced) }) as Promise<void>,
+
+  // Embedding model download
+  checkEmbeddingModel: () => invoke<boolean>("check_embedding_model"),
+  startEmbeddingDownload: () => invoke("start_embedding_download") as Promise<void>,
+  getEmbeddingDownloadProgress: () => invoke<{ downloaded: number; total: number; status: string; currentFileIndex: number; totalFiles: number; currentFileName: string }>("get_embedding_download_progress"),
+  listenToEmbeddingDownloadProgress: (callback: (progress: { downloaded: number; total: number; status: string; currentFileIndex: number; totalFiles: number; currentFileName: string }) => void) =>
+    listen<{ downloaded: number; total: number; status: string; currentFileIndex: number; totalFiles: number; currentFileName: string }>("embedding_download_progress", (event) => callback(event.payload)),
+  cancelEmbeddingDownload: () => invoke("cancel_embedding_download") as Promise<void>,
+  computeEmbedding: (text: string) => invoke<number[]>("compute_embedding", { text }),
+  initializeEmbeddingModel: () => invoke("initialize_embedding_model") as Promise<void>,
+  runEmbeddingTest: () => invoke<{
+    success: boolean;
+    message: string;
+    scores: Array<{
+      pairName: string;
+      textA: string;
+      textB: string;
+      similarityScore: number;
+      expected: string;
+    }>;
+  }>("run_embedding_test"),
+  deleteEmbeddingModel: () => invoke("delete_embedding_model") as Promise<void>,
 
   providerUpsert: (cred: unknown) =>
     invoke<string>("provider_upsert", { credentialJson: JSON.stringify(cred) }).then((s) => JSON.parse(s)),
@@ -61,6 +92,7 @@ export const storageBridge = {
   // Legacy file-based bridges removed: characters/personas/sessions
 
   clearAll: () => invoke("storage_clear_all"),
+  resetDatabase: () => invoke("storage_reset_database") as Promise<void>,
   usageSummary: () => invoke("storage_usage_summary") as Promise<{
     fileCount: number;
     estimatedSessions: number;

@@ -3,14 +3,11 @@ use tauri::AppHandle;
 
 use crate::chat_manager::prompts;
 use crate::chat_manager::types::PromptScope;
-use crate::storage_manager::{
-    settings::storage_read_settings,
-    settings::storage_write_settings,
-};
-use crate::utils::{log_error, log_info};
+use crate::storage_manager::{settings::storage_read_settings, settings::storage_write_settings};
+use crate::utils::log_info;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 8;
+const CURRENT_MIGRATION_VERSION: u32 = 9;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -109,7 +106,8 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v6 -> v7: Add api_key column to provider_credentials and backfill".to_string(),
+            "Running migration v6 -> v7: Add api_key column to provider_credentials and backfill"
+                .to_string(),
         );
         migrate_v6_to_v7(app)?;
         version = 7;
@@ -123,6 +121,17 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v7_to_v8(app)?;
         version = 8;
+    }
+
+    if version < 9 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v8 -> v9: Add advanced_settings column to settings table"
+                .to_string(),
+        );
+        migrate_v8_to_v9(app)?;
+        version = 9;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -149,10 +158,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
 fn cleanup_legacy_files(app: &AppHandle) {
     use std::fs;
     if let Ok(dir) = crate::utils::ensure_lettuce_dir(app) {
-        let candidates = [
-            "secrets.json",
-            "prompt_templates.json",
-        ];
+        let candidates = ["secrets.json", "prompt_templates.json"];
         for name in candidates.iter() {
             let path = dir.join(name);
             if path.exists() {
@@ -164,73 +170,50 @@ fn cleanup_legacy_files(app: &AppHandle) {
 
 /// Get the current migration version
 fn get_migration_version(app: &AppHandle) -> Result<u32, String> {
-    match storage_read_settings(app.clone()) {
-        Ok(Some(settings_json)) => {
-            let settings: Value = serde_json::from_str(&settings_json)
-                .map_err(|e| format!("Failed to parse settings: {}", e))?;
+    use crate::storage_manager::db::open_db;
 
-            Ok(settings
-                .get("migrationVersion")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32)
-                .unwrap_or(0))
-        }
-        Ok(None) => Ok(0), // No settings file means version 0
-        Err(e) => {
-            log_error(
-                app,
-                "migrations",
-                format!("Error reading settings for migration version: {}", e),
-            );
-            Ok(0) // Assume version 0 on error
-        }
+    let conn = open_db(app)?;
+
+    // Check if settings table exists first (it should if init_db ran)
+    let count: i32 = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='settings'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if count == 0 {
+        return Ok(0);
     }
+
+    let version: u32 = conn
+        .query_row(
+            "SELECT migration_version FROM settings WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    Ok(version)
 }
 
 /// Set the migration version
 fn set_migration_version(app: &AppHandle, version: u32) -> Result<(), String> {
-    match storage_read_settings(app.clone()) {
-        Ok(Some(settings_json)) => {
-            let mut settings: Value = serde_json::from_str(&settings_json)
-                .map_err(|e| format!("Failed to parse settings: {}", e))?;
+    use crate::storage_manager::db::{now_ms, open_db};
+    use rusqlite::params;
 
-            if let Some(obj) = settings.as_object_mut() {
-                obj.insert(
-                    "migrationVersion".to_string(),
-                    Value::Number(version.into()),
-                );
-            }
+    let conn = open_db(app)?;
+    let now = now_ms();
 
-            storage_write_settings(
-                app.clone(),
-                serde_json::to_string(&settings).map_err(|e| e.to_string())?,
-            )?;
+    // Ensure row exists (it should)
+    conn.execute(
+        "UPDATE settings SET migration_version = ?1, updated_at = ?2 WHERE id = 1",
+        params![version, now],
+    )
+    .map_err(|e| e.to_string())?;
 
-            Ok(())
-        }
-        Ok(None) => {
-            // Create minimal settings with migration version
-            let settings = serde_json::json!({
-                "migrationVersion": version,
-                "providerCredentials": [],
-                "models": [],
-                "appState": null,
-                "advancedModelSettings": {
-                    "temperature": 0.7,
-                    "topP": 1.0,
-                    "maxOutputTokens": 1024
-                }
-            });
-
-            storage_write_settings(
-                app.clone(),
-                serde_json::to_string(&settings).map_err(|e| e.to_string())?,
-            )?;
-
-            Ok(())
-        }
-        Err(e) => Err(format!("Failed to read settings: {}", e)),
-    }
+    Ok(())
 }
 
 /// Migration v0 -> v1: Add system_prompt field to Settings, Model, and Character
@@ -470,12 +453,15 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
 
 /// Migration v6 -> v7: add provider_credentials.api_key and backfill from secrets
 fn migrate_v6_to_v7(app: &AppHandle) -> Result<(), String> {
-    use rusqlite::{params, OptionalExtension};
     use crate::storage_manager::db::open_db;
+    use rusqlite::{params, OptionalExtension};
 
     let conn = open_db(app)?;
     // Add column if it doesn't exist
-    let _ = conn.execute("ALTER TABLE provider_credentials ADD COLUMN api_key TEXT", []);
+    let _ = conn.execute(
+        "ALTER TABLE provider_credentials ADD COLUMN api_key TEXT",
+        [],
+    );
 
     // Backfill using secrets table convention: service = 'lettuceai:apiKey', account = '{provider_id}:{cred_id}'
     // For each credential row, attempt to set api_key from secrets if missing
@@ -515,7 +501,21 @@ fn migrate_v7_to_v8(app: &AppHandle) -> Result<(), String> {
 
     let conn = open_db(app)?;
     // Add column with default empty JSON array if it doesn't exist
-    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN memories TEXT NOT NULL DEFAULT '[]'", []);
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN memories TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
+
+    Ok(())
+}
+
+/// Migration v8 -> v9: add advanced_settings column to settings table
+fn migrate_v8_to_v9(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+    // Add column with default null if it doesn't exist
+    let _ = conn.execute("ALTER TABLE settings ADD COLUMN advanced_settings TEXT", []);
 
     Ok(())
 }

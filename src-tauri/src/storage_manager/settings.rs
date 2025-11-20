@@ -16,7 +16,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 
     let row = conn
         .query_row(
-            "SELECT default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version FROM settings WHERE id = 1",
+            "SELECT default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version, advanced_settings FROM settings WHERE id = 1",
             [],
             |r| {
                 Ok((
@@ -27,6 +27,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
                     r.get::<_, Option<String>>(4)?,
                     r.get::<_, Option<String>>(5)?,
                     r.get::<_, i64>(6)? as u32,
+                    r.get::<_, Option<String>>(7)?,
                 ))
             },
         )
@@ -40,6 +41,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         prompt_template_id,
         system_prompt,
         migration_version,
+        advanced_settings_json,
     )) = row
     else {
         return Ok(None);
@@ -62,7 +64,9 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             obj.insert("id".into(), JsonValue::String(id));
             obj.insert("providerId".into(), JsonValue::String(provider_id));
             obj.insert("label".into(), JsonValue::String(label));
-            if let Some(k) = api_key { obj.insert("apiKey".into(), JsonValue::String(k)); }
+            if let Some(k) = api_key {
+                obj.insert("apiKey".into(), JsonValue::String(k));
+            }
             if let Some(s) = base_url {
                 obj.insert("baseUrl".into(), JsonValue::String(s));
             }
@@ -169,6 +173,13 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         "migrationVersion".into(),
         JsonValue::from(migration_version),
     );
+    if let Some(s) = advanced_settings_json {
+        if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+            if !v.is_null() {
+                root.insert("advancedSettings".into(), v);
+            }
+        }
+    }
 
     Ok(Some(
         serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())?,
@@ -211,11 +222,18 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
         .get("migrationVersion")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as i64;
+    let adv_settings = json.get("advancedSettings").and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            Some(serde_json::to_string(v).unwrap_or("null".into()))
+        }
+    });
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
-        r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version, created_at, updated_at)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version, advanced_settings, created_at, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               default_provider_credential_id=excluded.default_provider_credential_id,
               default_model_id=excluded.default_model_id,
@@ -224,6 +242,7 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt,
               migration_version=excluded.migration_version,
+              advanced_settings=excluded.advanced_settings,
               updated_at=excluded.updated_at"#,
         params![
             default_provider_credential_id,
@@ -233,6 +252,7 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             prompt_template_id,
             system_prompt,
             migration_version,
+            adv_settings,
             now,
             now,
         ],
@@ -245,7 +265,10 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             let id = c.get("id").and_then(|v| v.as_str()).unwrap_or("");
             let provider_id = c.get("providerId").and_then(|v| v.as_str()).unwrap_or("");
             let label = c.get("label").and_then(|v| v.as_str()).unwrap_or("");
-            let api_key = c.get("apiKey").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let api_key = c
+                .get("apiKey")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             let base_url = c
                 .get("baseUrl")
                 .and_then(|v| v.as_str())
@@ -370,6 +393,114 @@ pub fn settings_set_advanced_model_settings(
     conn.execute(
         "UPDATE settings SET advanced_model_settings = ?, updated_at = ? WHERE id = 1",
         params![db_val, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_advanced(app: tauri::AppHandle, advanced_json: String) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    let db_val: Option<String> = {
+        let s = advanced_json.trim();
+        if s.is_empty() || s == "null" {
+            None
+        } else {
+            Some(s.to_string())
+        }
+    };
+    conn.execute(
+        "UPDATE settings SET advanced_settings = ?, updated_at = ? WHERE id = 1",
+        params![db_val, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_default_provider(
+    app: tauri::AppHandle,
+    id: Option<String>,
+) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET default_provider_credential_id = ?, updated_at = ? WHERE id = 1",
+        params![id, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_default_model(app: tauri::AppHandle, id: Option<String>) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET default_model_id = ?, updated_at = ? WHERE id = 1",
+        params![id, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_app_state(app: tauri::AppHandle, state_json: String) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET app_state = ?, updated_at = ? WHERE id = 1",
+        params![state_json, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_prompt_template(
+    app: tauri::AppHandle,
+    id: Option<String>,
+) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET prompt_template_id = ?, updated_at = ? WHERE id = 1",
+        params![id, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_system_prompt(
+    app: tauri::AppHandle,
+    prompt: Option<String>,
+) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET system_prompt = ?, updated_at = ? WHERE id = 1",
+        params![prompt, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_set_migration_version(app: tauri::AppHandle, version: i64) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    ensure_settings_row(&conn)?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE settings SET migration_version = ?, updated_at = ? WHERE id = 1",
+        params![version, now],
     )
     .map_err(|e| e.to_string())?;
     Ok(())

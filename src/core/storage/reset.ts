@@ -24,10 +24,12 @@ export class ResetManager {
 
   static async resetAllData(): Promise<void> {
     try {
-      await this.clearAppFiles();
+      // Reset the database - this will delete and recreate app.db
+      await storageBridge.resetDatabase();
 
+      // Reset app state to defaults
       await this.clearAppState();
-      
+
       console.log("All app data reset successfully");
     } catch (error) {
       console.error("Failed to reset all data:", error);

@@ -14,6 +14,7 @@ import {
   type ProviderCredential,
   type Model,
   type AdvancedModelSettings,
+  type AppState,
   createDefaultSettings,
   createDefaultAdvancedModelSettings,
 } from "./schemas";
@@ -71,18 +72,60 @@ export async function readSettings(): Promise<Settings> {
       needsUpdate = true;
     }
     if (needsUpdate) {
-      await writeSettings(settings);
+      console.log("[repo] readSettings: Updating settings with defaults (granular)", {
+        missingProviderLabel: settings.models.some(m => !m.providerLabel),
+        missingAdvancedSettings: !settings.advancedModelSettings
+      });
+      if (!settings.advancedModelSettings) {
+        await saveAdvancedModelSettings(createDefaultAdvancedModelSettings());
+      }
+      // Provider labels are transient/derived, we don't need to persist them back to DB immediately 
+      // unless we want to cache them. For now, we just return the patched object.
     }
     return settings;
   }
 
-  await writeSettings(fallback);
+  // If settings don't exist, we still need to initialize the row
+  await storageBridge.settingsSetDefaults(null, null);
   return fallback;
 }
 
-export async function writeSettings(s: Settings): Promise<void> {
+export async function writeSettings(s: Settings, suppressBroadcast = false): Promise<void> {
   SettingsSchema.parse(s);
   await storageBridge.writeSettings(s);
+  if (!suppressBroadcast) {
+    broadcastSettingsUpdated();
+  }
+}
+
+// Granular update functions
+export async function setDefaultProvider(id: string | null): Promise<void> {
+  await storageBridge.settingsSetDefaultProvider(id);
+  broadcastSettingsUpdated();
+}
+
+export async function setDefaultModel(id: string | null): Promise<void> {
+  await storageBridge.settingsSetDefaultModel(id);
+  broadcastSettingsUpdated();
+}
+
+export async function setAppState(state: AppState): Promise<void> {
+  await storageBridge.settingsSetAppState(state);
+  broadcastSettingsUpdated();
+}
+
+export async function setPromptTemplate(id: string | null): Promise<void> {
+  await storageBridge.settingsSetPromptTemplate(id);
+  broadcastSettingsUpdated();
+}
+
+export async function setSystemPrompt(prompt: string | null): Promise<void> {
+  await storageBridge.settingsSetSystemPrompt(prompt);
+  broadcastSettingsUpdated();
+}
+
+export async function setMigrationVersion(version: number): Promise<void> {
+  await storageBridge.settingsSetMigrationVersion(version);
   broadcastSettingsUpdated();
 }
 
@@ -91,7 +134,7 @@ export async function addOrUpdateProviderCredential(cred: Omit<ProviderCredentia
   // Ensure a default provider is set if missing
   const current = await readSettings();
   if (!current.defaultProviderCredentialId) {
-    await storageBridge.settingsSetDefaults(entity.id, current.defaultModelId ?? null);
+    await setDefaultProvider(entity.id);
   }
   broadcastSettingsUpdated();
   return entity;
@@ -102,7 +145,7 @@ export async function removeProviderCredential(id: string): Promise<void> {
   const current = await readSettings();
   if (current.defaultProviderCredentialId === id) {
     const nextDefault = current.providerCredentials.find((c) => c.id !== id)?.id ?? null;
-    await storageBridge.settingsSetDefaults(nextDefault, current.defaultModelId ?? null);
+    await setDefaultProvider(nextDefault);
   }
   broadcastSettingsUpdated();
 }
@@ -111,7 +154,7 @@ export async function addOrUpdateModel(model: Omit<Model, "id" | "createdAt"> & 
   const entity: Model = await storageBridge.modelUpsert({ id: model.id ?? uuidv4(), ...model });
   const current = await readSettings();
   if (!current.defaultModelId) {
-    await storageBridge.settingsSetDefaults(current.defaultProviderCredentialId ?? null, entity.id);
+    await setDefaultModel(entity.id);
   }
   broadcastSettingsUpdated();
   return entity;
@@ -122,16 +165,15 @@ export async function removeModel(id: string): Promise<void> {
   const current = await readSettings();
   if (current.defaultModelId === id) {
     const nextDefault = current.models.find((m) => m.id !== id)?.id ?? null;
-    await storageBridge.settingsSetDefaults(current.defaultProviderCredentialId ?? null, nextDefault);
+    await setDefaultModel(nextDefault);
   }
   broadcastSettingsUpdated();
 }
 
-export async function setDefaultModel(id: string): Promise<void> {
+export async function setDefaultModelId(id: string): Promise<void> {
   const settings = await readSettings();
   if (settings.models.find((m) => m.id === id)) {
-    await storageBridge.settingsSetDefaults(settings.defaultProviderCredentialId ?? null, id);
-    broadcastSettingsUpdated();
+    await setDefaultModel(id);
   }
 }
 
@@ -179,6 +221,11 @@ export async function saveAdvancedModelSettings(settings: AdvancedModelSettings)
   broadcastSettingsUpdated();
 }
 
+export async function saveAdvancedSettings(settings: Settings["advancedSettings"]): Promise<void> {
+  await storageBridge.settingsSetAdvanced(settings);
+  broadcastSettingsUpdated();
+}
+
 // Legacy writeSessionIndex removed (DB manages session IDs)
 
 export async function getSession(id: string): Promise<Session | null> {
@@ -208,22 +255,22 @@ export async function deleteSession(id: string): Promise<void> {
 export async function createSession(characterId: string, title: string, systemPrompt?: string, selectedSceneId?: string): Promise<Session> {
   const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
   const timestamp = now();
-  
+
   const messages: StoredMessage[] = [];
-  
+
   const characters = await listCharacters();
   const character = characters.find(c => c.id === characterId);
-  
+
   if (character) {
     const sceneId = selectedSceneId || character.defaultSceneId || character.scenes[0]?.id;
-    
+
     if (sceneId) {
       const scene = character.scenes.find(s => s.id === sceneId);
       if (scene) {
-        const sceneContent = scene.selectedVariantId 
+        const sceneContent = scene.selectedVariantId
           ? scene.variants?.find(v => v.id === scene.selectedVariantId)?.content ?? scene.content
           : scene.content;
-        
+
         if (sceneContent.trim()) {
           messages.push({
             id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
@@ -235,7 +282,7 @@ export async function createSession(characterId: string, title: string, systemPr
       }
     }
   }
-  
+
   const s: Session = {
     id,
     characterId,
@@ -306,4 +353,8 @@ export async function deletePersona(id: string): Promise<void> {
 export async function getDefaultPersona(): Promise<Persona | null> {
   const p = await storageBridge.personaDefaultGet();
   return p ? PersonaSchema.parse(p) : null;
+}
+
+export async function checkEmbeddingModel(): Promise<boolean> {
+  return storageBridge.checkEmbeddingModel();
 }

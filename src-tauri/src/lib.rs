@@ -1,6 +1,7 @@
 mod abort_manager;
 mod api;
 mod chat_manager;
+mod embedding_model;
 mod error;
 mod migrations;
 mod models;
@@ -23,6 +24,13 @@ pub fn run() {
         .setup(|app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
+
+            match storage_manager::db::init_pool(app.handle()) {
+                Ok(pool) => {
+                    app.manage(pool);
+                }
+                Err(e) => panic!("Failed to initialize database pool: {}", e),
+            }
 
             if let Err(e) = storage_manager::importer::run_legacy_import(app.handle()) {
                 eprintln!("Legacy import error: {}", e);
@@ -53,6 +61,13 @@ pub fn run() {
             storage_manager::models::model_upsert,
             storage_manager::models::model_delete,
             storage_manager::settings::settings_set_advanced_model_settings,
+            storage_manager::settings::settings_set_advanced,
+            storage_manager::settings::settings_set_default_provider,
+            storage_manager::settings::settings_set_default_model,
+            storage_manager::settings::settings_set_app_state,
+            storage_manager::settings::settings_set_prompt_template,
+            storage_manager::settings::settings_set_system_prompt,
+            storage_manager::settings::settings_set_migration_version,
             storage_manager::characters::characters_list,
             storage_manager::characters::character_upsert,
             storage_manager::characters::character_delete,
@@ -77,6 +92,7 @@ pub fn run() {
             storage_manager::sessions::session_remove_memory,
             storage_manager::sessions::session_update_memory,
             storage_manager::usage::storage_clear_all,
+            storage_manager::usage::storage_reset_database,
             storage_manager::usage::storage_usage_summary,
             storage_manager::media::storage_write_image,
             storage_manager::media::storage_get_image_path,
@@ -88,7 +104,6 @@ pub fn run() {
             storage_manager::media::generate_avatar_gradient,
             storage_manager::db::db_optimize,
             storage_manager::importer::legacy_backup_and_remove,
-            storage_manager::db::db_optimize,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,
             chat_manager::chat_continue,
@@ -111,6 +126,14 @@ pub fn run() {
             usage::usage_export_csv,
             usage::usage_save_csv,
             utils::get_app_version,
+            embedding_model::check_embedding_model,
+            embedding_model::start_embedding_download,
+            embedding_model::get_embedding_download_progress,
+            embedding_model::cancel_embedding_download,
+            embedding_model::compute_embedding,
+            embedding_model::initialize_embedding_model,
+            embedding_model::run_embedding_test,
+            embedding_model::delete_embedding_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -15,6 +15,10 @@ import { UsagePage } from "./ui/pages/settings/UsagePage";
 import { CharactersPage } from "./ui/pages/settings/CharactersPage";
 import { DeveloperPage } from "./ui/pages/settings/DeveloperPage";
 import { ChangelogPage } from "./ui/pages/settings/ChangelogPage";
+import { AdvancedPage } from "./ui/pages/settings/AdvancedPage";
+import { DynamicMemoryPage } from "./ui/pages/settings/DynamicMemoryPage";
+import { EmbeddingDownloadPage } from "./ui/pages/settings/EmbeddingDownloadPage";
+import { EmbeddingTestPage } from "./ui/pages/settings/EmbeddingTestPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
@@ -95,6 +99,7 @@ function App() {
 
 function AppContent() {
   const location = useLocation();
+  console.log("AppContent render:", location.pathname, location.key);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const isChatRoute = location.pathname === "/chat" || location.pathname === "/";
   const isChatDetailRoute = location.pathname.startsWith("/chat/");
@@ -224,6 +229,10 @@ function AppContent() {
               <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/security" element={<SecurityPage />} />
               <Route path="/settings/usage" element={<UsagePage />} />
+              <Route path="/settings/advanced" element={<AdvancedPage />} />
+              <Route path="/settings/advanced/memory" element={<DynamicMemoryPage />} />
+              <Route path="/settings/embedding-download" element={<EmbeddingDownloadPage />} />
+              <Route path="/settings/embedding-test" element={<EmbeddingTestPage />} />
               <Route path="/settings/changelog" element={<ChangelogPage />} />
               <Route path="/settings/developer" element={<DeveloperPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />

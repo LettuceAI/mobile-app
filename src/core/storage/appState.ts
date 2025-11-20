@@ -1,4 +1,4 @@
-import { readSettings, writeSettings } from "./repo";
+import { readSettings, setAppState } from "./repo";
 import { createDefaultAppState, type AppState } from "./schemas";
 
 type Theme = AppState["theme"];
@@ -14,9 +14,8 @@ function cloneAppState(state?: AppState): AppState {
 }
 
 async function saveAppState(nextState: AppState): Promise<AppState> {
-  const settings = await readSettings();
   const updated = cloneAppState(nextState);
-  await writeSettings({ ...settings, appState: updated });
+  await setAppState(updated);
   return cloneAppState(updated);
 }
 
@@ -24,7 +23,7 @@ async function withAppState(mutator: (draft: AppState) => void): Promise<AppStat
   const settings = await readSettings();
   const draft = cloneAppState(settings.appState);
   mutator(draft);
-  await writeSettings({ ...settings, appState: draft });
+  await setAppState(draft);
   return cloneAppState(draft);
 }
 
@@ -103,6 +102,12 @@ export async function getTheme(): Promise<Theme> {
 export async function setTheme(theme: Theme): Promise<void> {
   await withAppState((state) => {
     state.theme = theme;
+  });
+}
+
+export async function setPureModeEnabled(enabled: boolean): Promise<void> {
+  await withAppState((state) => {
+    state.pureModeEnabled = enabled;
   });
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Shield, Lock, Database } from "lucide-react";
-import { readSettings, writeSettings } from "../../../core/storage/repo";
+import { readSettings } from "../../../core/storage/repo";
+import { setPureModeEnabled } from "../../../core/storage/appState";
 
 export function SecurityPage() {
     const [isPureModeEnabled, setIsPureModeEnabled] = useState(true);
@@ -21,11 +22,9 @@ export function SecurityPage() {
     const handleToggle = async () => {
         const newValue = !isPureModeEnabled;
         setIsPureModeEnabled(newValue);
-        
+
         try {
-            const settings = await readSettings();
-            settings.appState.pureModeEnabled = newValue;
-            await writeSettings(settings);
+            await setPureModeEnabled(newValue);
         } catch (err) {
             console.error("Failed to save pure mode setting:", err);
             // Revert on error
@@ -43,30 +42,27 @@ export function SecurityPage() {
                 {/* Section: Content Filtering */}
                 <div>
                     <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Content Filtering</h2>
-                    <div className={`relative overflow-hidden rounded-xl border px-4 py-3 transition-all duration-300 ${
-                        isPureModeEnabled 
-                            ? 'border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-white/5 to-white/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+                    <div className={`relative overflow-hidden rounded-xl border px-4 py-3 transition-all duration-300 ${isPureModeEnabled
+                            ? 'border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-white/5 to-white/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
                             : 'border-white/10 bg-white/5'
-                    }`}>
+                        }`}>
                         {/* Subtle inner glow when enabled */}
                         {isPureModeEnabled && (
-                            <div 
+                            <div
                                 className="pointer-events-none absolute inset-0 opacity-60"
                                 style={{
                                     background: 'radial-gradient(circle at 20% 20%, rgba(16,185,129,0.08) 0%, transparent 50%)'
                                 }}
                             />
                         )}
-                        
+
                         <div className="relative flex items-start gap-3">
-                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                              isPureModeEnabled
-                                    ? 'border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/25' 
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${isPureModeEnabled
+                                    ? 'border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/25'
                                     : 'border-white/10 bg-white/10'
-                            }`}>
-                                <Shield className={`h-4 w-4 transition-colors duration-300 ${
-                                    isPureModeEnabled ? 'text-emerald-200' : 'text-white/70'
-                                }`} />
+                                }`}>
+                                <Shield className={`h-4 w-4 transition-colors duration-300 ${isPureModeEnabled ? 'text-emerald-200' : 'text-white/70'
+                                    }`} />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-3">
@@ -94,16 +90,14 @@ export function SecurityPage() {
                                         />
                                         <label
                                             htmlFor="pure-mode"
-                                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${
-                                                isPureModeEnabled 
-                                                    ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30' 
+                                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${isPureModeEnabled
+                                                    ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
                                                     : 'bg-white/20'
-                                            }`}
+                                                }`}
                                         >
                                             <span
-                                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                    isPureModeEnabled ? 'translate-x-5' : 'translate-x-0'
-                                                }`}
+                                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isPureModeEnabled ? 'translate-x-5' : 'translate-x-0'
+                                                    }`}
                                             />
                                         </label>
                                     </div>

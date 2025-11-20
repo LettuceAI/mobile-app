@@ -184,7 +184,7 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
-      topK: false, 
+      topK: false,
     },
   },
 } as const;
@@ -322,6 +322,16 @@ export const SettingsSchema = z.object({
   models: z.array(ModelSchema),
   appState: AppStateSchema,
   advancedModelSettings: AdvancedModelSettingsSchema.optional(),
+  advancedSettings: z.object({
+    summarisationModelId: z.string().optional(),
+    creationHelperEnabled: z.boolean().default(false),
+    creationHelperModelId: z.string().optional(),
+    dynamicMemory: z.object({
+      enabled: z.boolean().default(false),
+      summaryMessageInterval: z.number().int().min(1).default(20),
+      maxEntries: z.number().int().min(1).default(50),
+    }).optional(),
+  }).optional(),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated
   migrationVersion: z.number().int().default(0),

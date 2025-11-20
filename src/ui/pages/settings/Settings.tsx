@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText, Wrench, MessageCircle, ScrollText } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, User, Sparkles, Github, BarChart3, FileText, Wrench, MessageCircle, ScrollText, Sliders } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -167,6 +167,13 @@ export function SettingsPage() {
       onClick: () => navigate('/settings/usage')
     },
     {
+      key: 'advanced',
+      icon: <Sliders />,
+      title: 'Advanced',
+      subtitle: 'AI features & memory settings',
+      onClick: () => navigate('/settings/advanced')
+    },
+    {
       key: 'guide',
       icon: <BookOpen />,
       title: 'Setup Guide',
@@ -232,114 +239,114 @@ export function SettingsPage() {
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
       <section className={cn("flex-1 overflow-y-auto px-1 pt-4", spacing.section)}>
-          {/* Section: Core */}
-          <div>
-            <h2 className={cn(
-              "mb-2 px-1",
-              typography.overline.size,
-              typography.overline.weight,
-              typography.overline.tracking,
-              typography.overline.transform,
-              "text-white/35"
-            )}>
-              Core
-            </h2>
-            <div className={spacing.field}>
-              {items.filter(i => ['providers','models','characters','personas','prompts','security','usage'].includes(i.key)).map(item => (
-                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
-              ))}
-            </div>
+        {/* Section: Core */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Core
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => ['providers', 'models', 'characters', 'personas', 'prompts', 'security', 'usage', 'advanced'].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
+            ))}
           </div>
-          
-          {/* Section: Assistance */}
-          <div>
-            <h2 className={cn(
-              "mb-2 px-1",
-              typography.overline.size,
-              typography.overline.weight,
-              typography.overline.tracking,
-              typography.overline.transform,
-              "text-white/35"
-            )}>
-              Assistance
-            </h2>
-            <div className={spacing.field}>
-              {items.filter(i => ['guide'].includes(i.key)).map(item => (
-                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
-              ))}
-            </div>
-          </div>
-          
-          {/* Section: Info */}
-          <div>
-            <h2 className={cn(
-              "mb-2 px-1",
-              typography.overline.size,
-              typography.overline.weight,
-              typography.overline.tracking,
-              typography.overline.transform,
-              "text-white/35"
-            )}>
-              Info
-            </h2>
-            <div className={spacing.field}>
-              {items.filter(i => ['github','discord','changelog'].includes(i.key)).map(item => (
-                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} />
-              ))}
-            </div>
-          </div>
-          
-          {/* Section: Danger */}
-          <div>
-            <h2 className={cn(
-              "mb-2 px-1",
-              typography.overline.size,
-              typography.overline.weight,
-              typography.overline.tracking,
-              typography.overline.transform,
-              "text-white/35"
-            )}>
-              Danger Zone
-            </h2>
-            <div className={spacing.field}>
-              {items.filter(i => ['reset'].includes(i.key)).map(item => (
-                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
-              ))}
-            </div>
-          </div>
+        </div>
 
-          {/* Section: Developer (only in dev mode) */}
-          {isDevelopmentMode() && (
-            <div>
-              <h2 className={cn(
-                "mb-2 px-1",
-                typography.overline.size,
-                typography.overline.weight,
-                typography.overline.tracking,
-                typography.overline.transform,
-                "text-white/35"
-              )}>
-                Developer
-              </h2>
-              <div className={spacing.field}>
-                {items.filter(i => ['developer'].includes(i.key)).map(item => (
-                  <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
-                ))}
-              </div>
+        {/* Section: Assistance */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Assistance
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => ['guide'].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Info */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Info
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => ['github', 'discord', 'changelog'].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} />
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Danger */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Danger Zone
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => ['reset'].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Developer (only in dev mode) */}
+        {isDevelopmentMode() && (
+          <div>
+            <h2 className={cn(
+              "mb-2 px-1",
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/35"
+            )}>
+              Developer
+            </h2>
+            <div className={spacing.field}>
+              {items.filter(i => ['developer'].includes(i.key)).map(item => (
+                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
+              ))}
             </div>
-          )}
-          
-          {/* Loading overlay */}
-          {isLoading && (
-            <div className="pointer-events-none absolute inset-x-0 top-0 px-4 pt-4">
-              <div className={spacing.field}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className={cn("h-[52px] w-full animate-pulse", radius.md, "bg-white/5")} />
-                ))}
-              </div>
+          </div>
+        )}
+
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 px-4 pt-4">
+            <div className={spacing.field}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className={cn("h-[52px] w-full animate-pulse", radius.md, "bg-white/5")} />
+              ))}
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
