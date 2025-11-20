@@ -1,43 +1,79 @@
+use rusqlite::{params, Connection};
 use std::fs;
 use std::path::PathBuf;
-use rusqlite::{params, Connection};
 
-use crate::utils::{log_warn, log_info, now_millis};
 use super::legacy::storage_root;
+use crate::utils::{log_info, log_warn, now_millis};
 
 pub fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(storage_root(app)?.join("app.db"))
 }
 
-pub fn open_db(app: &tauri::AppHandle) -> Result<Connection, String> {
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use tauri::Manager;
+
+pub type DbPool = Pool<SqliteConnectionManager>;
+pub type DbConnection = r2d2::PooledConnection<SqliteConnectionManager>;
+
+pub fn init_pool(app: &tauri::AppHandle) -> Result<DbPool, String> {
     let path = db_path(app)?;
-    
+
     // Debug logging
-    log_info(app, "database", format!("Database path: {:?}", path));    
+    log_info(app, "database", format!("Database path: {:?}", path));
     if let Some(parent) = path.parent() {
-        log_info(app, "database", format!("Creating parent directory: {:?}", parent));
-        fs::create_dir_all(parent).map_err(|e| {
-            log_warn(app, "database", format!("Failed to create parent directory: {:?}", e));
-            e.to_string()
-        })?;
+        if !parent.exists() {
+            log_info(
+                app,
+                "database",
+                format!("Creating parent directory: {:?}", parent),
+            );
+            fs::create_dir_all(parent).map_err(|e| {
+                log_warn(
+                    app,
+                    "database",
+                    format!("Failed to create parent directory: {:?}", e),
+                );
+                e.to_string()
+            })?;
+        }
     }
-    
-    log_info(app, "database", "[DEBUG] Opening database connection...");
-    let conn = Connection::open(&path).map_err(|e| {
-        log_warn(app, "database", format!("[ERROR] Failed to open database: {:?}", e));
-        e.to_string()
-    })?;
-    
-    log_info(app, "database", format!("[DEBUG] Database opened successfully at: {:?}", path));
-    
-    conn.pragma_update(None, "foreign_keys", &true)
-        .map_err(|e| e.to_string())?;
-    apply_pragmas(&conn);
+
+    let manager = SqliteConnectionManager::file(&path).with_init(|c| {
+        c.execute_batch(
+            r#"
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA temp_store=MEMORY;
+                PRAGMA cache_size=-8000;
+                PRAGMA wal_autocheckpoint=1000;
+                PRAGMA mmap_size=268435456;
+                PRAGMA foreign_keys=ON;
+                "#,
+        )
+    });
+
+    let pool = Pool::builder()
+        .max_size(10)
+        .build(manager)
+        .map_err(|e| format!("Failed to create pool: {}", e))?;
+
+    // Initialize the database schema on the first connection
+    let conn = pool
+        .get()
+        .map_err(|e| format!("Failed to get connection from pool for init: {}", e))?;
     init_db(app, &conn)?;
-    Ok(conn)
+
+    Ok(pool)
 }
 
-fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
+pub fn open_db(app: &tauri::AppHandle) -> Result<DbConnection, String> {
+    let pool = app.state::<DbPool>();
+    pool.get()
+        .map_err(|e| format!("Failed to get connection from pool: {}", e))
+}
+
+pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS meta (
@@ -253,8 +289,7 @@ fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_model_pricing_cached_at ON model_pricing_cache(cached_at);
       "#,
     )
-    .map_err(|e| e.to_string())
-    ?;
+    .map_err(|e| e.to_string())?;
 
     let default_content = crate::chat_manager::prompt_engine::default_system_prompt_template();
     let now = now_ms();
