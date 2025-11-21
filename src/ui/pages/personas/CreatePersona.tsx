@@ -7,6 +7,12 @@ import { savePersona } from "../../../core/storage/repo";
 import { saveAvatar } from "../../../core/storage/avatars";
 import { invalidateAvatarCache } from "../../hooks/useAvatar";
 
+const wordCount = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).length;
+};
+
 export function CreatePersonaPage() {
     const navigate = useNavigate();
 
@@ -242,6 +248,9 @@ function PersonaStep({
                     placeholder="Write in a professional, clear, and concise style. Use formal language and focus on delivering information effectively..."
                     className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
                 />
+                <div className="flex justify-end text-[11px] text-white/40">
+                    {wordCount(description)} words
+                </div>
                 <p className="text-xs text-white/40">
                     Describe the writing style or personality traits
                 </p>

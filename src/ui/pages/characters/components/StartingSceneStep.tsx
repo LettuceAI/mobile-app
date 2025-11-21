@@ -197,6 +197,9 @@ export function StartingSceneStep({
                           className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
                           autoFocus
                         />
+                        <div className="flex justify-end text-[11px] text-white/40">
+                          {wordCount(editingSceneContent)} words
+                        </div>
                         <div className="flex gap-2">
                           <button
                             onClick={cancelEditingScene}
@@ -237,6 +240,9 @@ export function StartingSceneStep({
           placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
           className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
         />
+        <div className="flex justify-end text-[11px] text-white/40">
+          {wordCount(newSceneContent)} words
+        </div>
         <motion.button
           onClick={addScene}
           disabled={!newSceneContent.trim()}
@@ -281,3 +287,8 @@ export function StartingSceneStep({
     </motion.div>
   );
 }
+const wordCount = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+};

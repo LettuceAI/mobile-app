@@ -5,6 +5,12 @@ import { usePersonaFormController } from "./hooks/usePersonaFormController";
 import { exportPersona, downloadJson, generateExportFilename, readFileAsText, importPersona } from "../../../core/storage/personaTransfer";
 import { useState } from "react";
 
+const wordCount = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+};
+
 export function EditPersonaPage() {
   const { personaId } = useParams();
   const {
@@ -187,6 +193,9 @@ export function EditPersonaPage() {
               placeholder="Describe how the AI should address you, your preferences, background, or communication style..."
               className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
             />
+            <div className="flex justify-end text-[11px] text-white/40">
+              {wordCount(description)} words
+            </div>
             <p className="text-xs text-white/50">
               Be specific about how you want to be addressed
             </p>

@@ -11,6 +11,12 @@ import { listPromptTemplates } from "../../../core/prompts/service";
 import { invalidateAvatarCache } from "../../hooks/useAvatar";
 import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
 
+const wordCount = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+};
+
 export function EditCharacterPage() {
   const navigate = useNavigate();
   const { characterId } = useParams();
@@ -476,6 +482,9 @@ export function EditCharacterPage() {
               placeholder="Describe who this character is, their personality, background, speaking style, and how they should interact..."
               className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
             />
+            <div className="flex justify-end text-[11px] text-white/40">
+              {wordCount(description)} words
+            </div>
             <p className="text-xs text-white/50">
               Be detailed to create a unique personality
             </p>
@@ -587,6 +596,9 @@ export function EditCharacterPage() {
                                 className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
                                 autoFocus
                               />
+                              <div className="flex justify-end text-[11px] text-white/40">
+                                {wordCount(editingSceneContent)} words
+                              </div>
                               <div className="flex gap-2">
                                 <button
                                   onClick={cancelEditingScene}
@@ -621,17 +633,20 @@ export function EditCharacterPage() {
             {/* Add New Scene */}
             <motion.div layout className="space-y-2">
               <textarea
-                value={newSceneContent}
-                onChange={(e) => setNewSceneContent(e.target.value)}
-                rows={3}
-                placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
-                className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
-              />
-              <motion.button
-                onClick={addScene}
-                disabled={!newSceneContent.trim()}
-                whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-                className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+              value={newSceneContent}
+              onChange={(e) => setNewSceneContent(e.target.value)}
+              rows={3}
+              placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+            />
+            <div className="flex justify-end text-[11px] text-white/40">
+              {wordCount(newSceneContent)} words
+            </div>
+            <motion.button
+              onClick={addScene}
+              disabled={!newSceneContent.trim()}
+              whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
                   newSceneContent.trim()
                     ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
                     : "border border-white/10 bg-white/5 text-white/40"
