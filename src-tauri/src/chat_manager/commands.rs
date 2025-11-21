@@ -293,6 +293,7 @@ pub async fn chat_completion(
         frequency_penalty,
         presence_penalty,
         top_k,
+        None,
     );
 
     log_info(
@@ -651,6 +652,7 @@ pub async fn chat_regenerate(
         frequency_penalty,
         presence_penalty,
         top_k,
+        None,
     );
 
     emit_debug(
@@ -954,6 +956,7 @@ pub async fn chat_continue(
         frequency_penalty,
         presence_penalty,
         top_k,
+        None,
     );
 
     emit_debug(

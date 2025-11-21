@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use super::{deepseek::DeepSeekAdapter, ProviderAdapter};
+use crate::chat_manager::tooling::ToolConfig;
 
 pub struct NanoGPTAdapter;
 
@@ -49,6 +50,7 @@ impl ProviderAdapter for NanoGPTAdapter {
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
         top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
         DeepSeekAdapter.body(
             model_name,
@@ -61,7 +63,7 @@ impl ProviderAdapter for NanoGPTAdapter {
             frequency_penalty,
             presence_penalty,
             top_k,
+            tool_config,
         )
     }
 }
-

@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::ProviderAdapter;
+use crate::chat_manager::tooling::{anthropic_tool_choice, anthropic_tools, ToolConfig};
 
 pub struct AnthropicAdapter;
 
@@ -34,6 +35,10 @@ struct AnthropicMessagesRequest {
     system: Option<String>,
     #[serde(rename = "top_k", skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Value>>,
+    #[serde(rename = "tool_choice", skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<Value>,
 }
 
 impl ProviderAdapter for AnthropicAdapter {
@@ -98,6 +103,7 @@ impl ProviderAdapter for AnthropicAdapter {
         _frequency_penalty: Option<f64>,
         _presence_penalty: Option<f64>,
         top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
         let mut msgs: Vec<AnthropicMessage> = Vec::new();
         for msg in messages_for_api {
@@ -127,6 +133,10 @@ impl ProviderAdapter for AnthropicAdapter {
             });
         }
 
+        let tools = tool_config.and_then(anthropic_tools);
+        let tool_choice = tool_config
+            .and_then(|cfg| anthropic_tool_choice(cfg.choice.as_ref()));
+
         let body = AnthropicMessagesRequest {
             model: model_name.to_string(),
             messages: msgs,
@@ -136,8 +146,9 @@ impl ProviderAdapter for AnthropicAdapter {
             stream: should_stream,
             system: system_prompt.filter(|s| !s.is_empty()),
             top_k,
+            tools,
+            tool_choice,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
-

@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
+use super::tooling::ToolCall;
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum PromptScope {
@@ -315,6 +317,8 @@ pub enum NormalizedEvent {
     Delta { text: String },
     #[serde(rename = "usage")]
     Usage { usage: UsageSummary },
+    #[serde(rename = "toolCall")]
+    ToolCall { calls: Vec<ToolCall> },
     #[serde(rename = "done")]
     Done,
     #[serde(rename = "error")]

@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::ProviderAdapter;
+use crate::chat_manager::tooling::{mistral_tool_choice, openai_tools, ToolConfig};
 
 pub struct MistralAdapter;
 
@@ -25,6 +26,8 @@ struct MistralConversationRequest<'a> {
     model: &'a str,
     inputs: Vec<Value>,
     tools: Vec<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<Value>,
     #[serde(rename = "completion_args")]
     completion_args: MistralCompletionArgs,
     stream: bool,
@@ -89,6 +92,7 @@ impl ProviderAdapter for MistralAdapter {
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
         _top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
         // Derive instructions and inputs from messages
         let mut instructions = system_prompt;
@@ -122,10 +126,23 @@ impl ProviderAdapter for MistralAdapter {
             inputs.push(cloned);
         }
 
+        let (tools, tool_choice) = if let Some(cfg) = tool_config {
+            let tools = openai_tools(cfg).unwrap_or_else(Vec::new);
+            let choice = if tools.is_empty() {
+                None
+            } else {
+                mistral_tool_choice(cfg.choice.as_ref())
+            };
+            (tools, choice)
+        } else {
+            (Vec::new(), None)
+        };
+
         let body = MistralConversationRequest {
             model: model_name,
             inputs,
-            tools: vec![],
+            tools,
+            tool_choice,
             completion_args: MistralCompletionArgs {
                 temperature,
                 top_p,
@@ -140,4 +157,3 @@ impl ProviderAdapter for MistralAdapter {
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
-

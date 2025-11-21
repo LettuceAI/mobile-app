@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::types::ProviderId;
+use crate::chat_manager::tooling::ToolConfig;
 
 pub trait ProviderAdapter {
     fn endpoint(&self, base_url: &str) -> String;
@@ -43,6 +44,7 @@ pub trait ProviderAdapter {
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
         top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value;
 }
 
@@ -67,6 +69,10 @@ pub(crate) struct OpenAIChatRequest<'a> {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) presence_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) tools: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) tool_choice: Option<Value>,
 }
 
 mod openai;
@@ -102,4 +108,3 @@ pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send +
         _ => Box::new(openai::OpenAIAdapter),
     }
 }
-

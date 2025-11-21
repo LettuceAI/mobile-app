@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::ProviderAdapter;
+use crate::chat_manager::tooling::{gemini_tool_config, gemini_tools, ToolConfig};
 
 pub struct GoogleGeminiAdapter;
 
@@ -43,15 +44,6 @@ struct GeminiThinkingConfig {
 }
 
 #[derive(Serialize)]
-struct GeminiGoogleSearch {}
-
-#[derive(Serialize)]
-struct GeminiTool {
-    #[serde(rename = "googleSearch", skip_serializing_if = "Option::is_none")]
-    google_search: Option<GeminiGoogleSearch>,
-}
-
-#[derive(Serialize)]
 struct GeminiChatRequest {
     contents: Vec<GeminiContent>,
     #[serde(
@@ -62,7 +54,9 @@ struct GeminiChatRequest {
     #[serde(rename = "generationConfig")]
     generation_config: GeminiGenerationConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<GeminiTool>>,
+    tools: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_config: Option<Value>,
 }
 
 impl ProviderAdapter for GoogleGeminiAdapter {
@@ -123,6 +117,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         _frequency_penalty: Option<f64>,
         _presence_penalty: Option<f64>,
         top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
         // Convert OpenAI-style messages -> Gemini contents
         let mut contents: Vec<GeminiContent> = Vec::new();
@@ -163,20 +158,21 @@ impl ProviderAdapter for GoogleGeminiAdapter {
             top_k,
         };
 
-        // Optional: Enable Google Search tool
-        // For now, we'll leave tools as None. You can enable it by uncommenting below:
-        // let tools = Some(vec![GeminiTool {
-        //     google_search: Some(GeminiGoogleSearch {}),
-        // }]);
+        let tools = tool_config.and_then(gemini_tools);
+        let tool_config = if tools.is_some() {
+            tool_config.and_then(|cfg| gemini_tool_config(cfg.choice.as_ref()))
+        } else {
+            None
+        };
 
         let body = GeminiChatRequest {
             contents,
             system_instruction,
             generation_config,
-            tools: None, // Set to Some(...) to enable Google Search
+            tools,
+            tool_config,
         };
 
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
-

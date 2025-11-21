@@ -6,7 +6,9 @@ use std::collections::HashMap;
 
 use crate::abort_manager::AbortRegistry;
 use crate::chat_manager::{
-    request as chat_request, sse,
+    request as chat_request,
+    sse,
+    tooling::parse_tool_calls,
     types::{ErrorEnvelope, NormalizedEvent},
 };
 use crate::serde_utils::{
@@ -344,7 +346,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                             );
                             // Buffered SSE decoding to normalized events
                             if let Some(req_id) = &request_id {
-                                for event in decoder.feed(&text) {
+                                for event in decoder.feed(&text, req.provider_id.as_deref()) {
                                     if let NormalizedEvent::Usage { .. } = event { usage_emitted = true; }
                                     emit_normalized(&app, req_id, event);
                                 }
@@ -406,20 +408,26 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 collected.len()
             ),
         );
+        let value = parse_body_to_value(&text);
         // Emit a final usage event if not already emitted and we can extract it
         if let Some(req_id) = &request_id {
             if !usage_emitted {
-                let value = crate::serde_utils::parse_body_to_value(&text);
                 if let Some(usage) = chat_request::extract_usage(&value) {
                     emit_normalized(&app, req_id, NormalizedEvent::Usage { usage });
                 }
+            }
+            let calls = parse_tool_calls(
+                req.provider_id.as_deref().unwrap_or_default(),
+                &value,
+            );
+            if !calls.is_empty() {
+                emit_normalized(&app, req_id, NormalizedEvent::ToolCall { calls });
             }
         }
 
         // If HTTP status was not OK, emit a normalized error event as well
         if !ok {
             if let Some(req_id) = &request_id {
-                let value = crate::serde_utils::parse_body_to_value(&text);
                 let message = chat_request::extract_error_message(&value)
                     .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
                 let envelope = ErrorEnvelope {
@@ -433,7 +441,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 emit_normalized(&app, req_id, NormalizedEvent::Error { envelope });
             }
         }
-        parse_body_to_value(&text)
+        value
     } else {
         match response.bytes().await {
             Ok(bytes) => {
@@ -452,6 +460,15 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                     ),
                 );
                 let value = parse_body_to_value(&text);
+                if let Some(req_id) = &request_id {
+                    let calls = parse_tool_calls(
+                        req.provider_id.as_deref().unwrap_or_default(),
+                        &value,
+                    );
+                    if !calls.is_empty() {
+                        emit_normalized(&app, req_id, NormalizedEvent::ToolCall { calls });
+                    }
+                }
                 if !ok {
                     if let Some(req_id) = &request_id {
                         let message = chat_request::extract_error_message(&value)

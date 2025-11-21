@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use super::{openai::OpenAIAdapter, ProviderAdapter};
+use crate::chat_manager::tooling::ToolConfig;
 
 pub struct GroqAdapter;
 
@@ -49,6 +50,7 @@ impl ProviderAdapter for GroqAdapter {
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
         top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
         // Groq is OpenAI-compatible for our purposes
         OpenAIAdapter.body(
@@ -62,7 +64,7 @@ impl ProviderAdapter for GroqAdapter {
             frequency_penalty,
             presence_penalty,
             top_k,
+            tool_config,
         )
     }
 }
-

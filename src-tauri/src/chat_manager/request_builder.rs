@@ -5,6 +5,7 @@ use serde_json::Value;
 use super::provider_adapter::adapter_for;
 use super::request::provider_base_url;
 use super::types::{ProviderCredential, ProviderId};
+use super::tooling::ToolConfig;
 
 pub struct BuiltRequest {
     pub url: String,
@@ -31,6 +32,7 @@ pub fn build_chat_request(
     frequency_penalty: Option<f64>,
     presence_penalty: Option<f64>,
     top_k: Option<u32>,
+    tool_config: Option<&ToolConfig>,
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
 
@@ -50,6 +52,7 @@ pub fn build_chat_request(
         frequency_penalty,
         presence_penalty,
         top_k,
+        tool_config,
     );
 
     BuiltRequest {

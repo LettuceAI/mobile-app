@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use super::tooling::parse_tool_calls;
 use super::types::{NormalizedEvent, UsageSummary};
 
 pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
@@ -61,7 +62,7 @@ impl SseDecoder {
     }
 
     /// Feed a raw text chunk, returning any complete normalized events parsed from it.
-    pub fn feed(&mut self, chunk: &str) -> Vec<NormalizedEvent> {
+    pub fn feed(&mut self, chunk: &str, provider_id: Option<&str>) -> Vec<NormalizedEvent> {
         self.buffer.push_str(chunk);
         let mut events: Vec<NormalizedEvent> = Vec::new();
 
@@ -93,6 +94,12 @@ impl SseDecoder {
                         }
                         if let Some(usage) = usage_from_value(&v) {
                             events.push(NormalizedEvent::Usage { usage });
+                        }
+                        if let Some(provider) = provider_id {
+                            let calls = parse_tool_calls(provider, &v);
+                            if !calls.is_empty() {
+                                events.push(NormalizedEvent::ToolCall { calls });
+                            }
                         }
                     }
                 }

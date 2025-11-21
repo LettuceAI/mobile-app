@@ -33,6 +33,11 @@ pub fn emit_normalized(app: &tauri::AppHandle, request_id: &str, event: Normaliz
             "type": "done",
             "data": Value::Null,
         }),
+        NormalizedEvent::ToolCall { calls } => json!({
+            "requestId": request_id,
+            "type": "toolCall",
+            "data": calls,
+        }),
         NormalizedEvent::Error { envelope } => json!({
             "requestId": request_id,
             "type": "error",

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json::{json, Value};
 
 use super::{OpenAIChatRequest, ProviderAdapter};
+use crate::chat_manager::tooling::{openai_tool_choice, openai_tools, ToolConfig};
 
 pub struct OpenAIAdapter;
 
@@ -63,7 +64,20 @@ impl ProviderAdapter for OpenAIAdapter {
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
         _top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
+        let (tools, tool_choice) = if let Some(cfg) = tool_config {
+            let tools = openai_tools(cfg);
+            let choice = if tools.is_some() {
+                openai_tool_choice(cfg.choice.as_ref())
+            } else {
+                None
+            };
+            (tools, choice)
+        } else {
+            (None, None)
+        };
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -73,8 +87,9 @@ impl ProviderAdapter for OpenAIAdapter {
             max_tokens,
             frequency_penalty,
             presence_penalty,
+            tools,
+            tool_choice,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
-

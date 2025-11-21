@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::ProviderAdapter;
+use crate::chat_manager::tooling::{openai_tools, zai_tool_choice, ToolConfig};
 
 pub struct ZAIAdapter;
 
@@ -19,6 +20,10 @@ struct ZAIChatRequest<'a> {
     // ZAI supports streaming via SSE, so we expose this directly.
     stream: bool,
     // You can add more ZAI-specific fields here later (e.g. do_sample, tools, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<Value>,
 }
 
 impl ProviderAdapter for ZAIAdapter {
@@ -77,7 +82,20 @@ impl ProviderAdapter for ZAIAdapter {
         _frequency_penalty: Option<f64>,
         _presence_penalty: Option<f64>,
         _top_k: Option<u32>,
+        tool_config: Option<&ToolConfig>,
     ) -> Value {
+        let (tools, tool_choice) = if let Some(cfg) = tool_config {
+            let tools = openai_tools(cfg);
+            let choice = if tools.is_some() {
+                zai_tool_choice(cfg.choice.as_ref())
+            } else {
+                None
+            };
+            (tools, choice)
+        } else {
+            (None, None)
+        };
+
         let body = ZAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -85,8 +103,9 @@ impl ProviderAdapter for ZAIAdapter {
             top_p,
             max_tokens,
             stream: should_stream,
+            tools,
+            tool_choice,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }
-
