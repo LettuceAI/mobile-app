@@ -250,28 +250,28 @@ function AppContent() {
           </motion.div>
         </main>
 
+          {showBottomNav && (
+            <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
+          )}
+        </div>
+
         {showBottomNav && (
-          <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
+          <CreateMenu isOpen={showCreateMenu} onClose={() => setShowCreateMenu(false)} />
+        )}
+
+        {isChatRoute && showBottomNav && (showDelayedTooltip || showCreateTooltip) && (
+          <Tooltip
+            isVisible={true}
+            message="Create custom AI characters and personas here!"
+            onClose={() => {
+              dismissCreateTooltip();
+              setShowDelayedTooltip(false);
+            }}
+            position="bottom"
+            className="bottom-[88px] right-4"
+          />
         )}
       </div>
-
-      {showBottomNav && (
-        <CreateMenu isOpen={showCreateMenu} onClose={() => setShowCreateMenu(false)} />
-      )}
-
-      {isChatRoute && showBottomNav && (showDelayedTooltip || showCreateTooltip) && (
-        <Tooltip
-          isVisible={true}
-          message="Create custom AI characters and personas here!"
-          onClose={() => {
-            dismissCreateTooltip();
-            setShowDelayedTooltip(false);
-          }}
-          position="bottom"
-          className="bottom-[88px] right-4"
-        />
-      )}
-    </div>
   );
 }
 
