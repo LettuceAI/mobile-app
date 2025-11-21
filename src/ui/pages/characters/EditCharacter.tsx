@@ -1,15 +1,7 @@
-import { SetStateAction, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { listCharacters, saveCharacter, readSettings } from "../../../core/storage/repo";
-import type { Model, Scene, SystemPromptTemplate } from "../../../core/storage/schemas";
-import { processBackgroundImage } from "../../../core/utils/image";
-import { convertToImageRef } from "../../../core/storage/images";
-import { saveAvatar, loadAvatar } from "../../../core/storage/avatars";
-import { listPromptTemplates } from "../../../core/prompts/service";
-import { invalidateAvatarCache } from "../../hooks/useAvatar";
-import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
+import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 
 const wordCount = (text: string) => {
   const trimmed = text.trim();
@@ -18,250 +10,46 @@ const wordCount = (text: string) => {
 };
 
 export function EditCharacterPage() {
-  const navigate = useNavigate();
   const { characterId } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [avatarPath, setAvatarPath] = useState("");
-  const [backgroundImagePath, setBackgroundImagePath] = useState("");
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [defaultSceneId, setDefaultSceneId] = useState<string | null>(null);
-  const [newSceneContent, setNewSceneContent] = useState("");
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [systemPromptTemplateId, setSystemPromptTemplateId] = useState<string | null>(null);
-  const [disableAvatarGradient, setDisableAvatarGradient] = useState(false);
-  const [models, setModels] = useState<Model[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
-  const [editingSceneContent, setEditingSceneContent] = useState("");
+  const { state, actions, computed } = useEditCharacterForm(characterId);
 
-  useEffect(() => {
-    if (!characterId) {
-      navigate("/chat");
-      return;
-    }
+  const {
+    loading,
+    saving,
+    exporting,
+    error,
+    name,
+    description,
+    avatarPath,
+    backgroundImagePath,
+    scenes,
+    defaultSceneId,
+    newSceneContent,
+    selectedModelId,
+    systemPromptTemplateId,
+    disableAvatarGradient,
+    models,
+    loadingModels,
+    promptTemplates,
+    loadingTemplates,
+    editingSceneId,
+    editingSceneContent,
+  } = state;
 
-    loadCharacter();
-    loadModels();
-    loadPromptTemplates();
-  }, [characterId]);
+  const {
+    setFields,
+    handleSave,
+    handleExport,
+    addScene,
+    deleteScene,
+    startEditingScene,
+    saveEditedScene,
+    cancelEditingScene,
+    handleBackgroundImageUpload,
+    handleAvatarUpload,
+  } = actions;
 
-  // Auto-set default scene if there's only one scene
-  useEffect(() => {
-    if (scenes.length === 1 && !defaultSceneId) {
-      setDefaultSceneId(scenes[0].id);
-    }
-  }, [scenes, defaultSceneId]);
-
-  const loadCharacter = async () => {
-    if (!characterId) return;
-
-    try {
-      const allCharacters = await listCharacters();
-      const character = allCharacters.find(c => c.id === characterId);
-      if (!character) {
-        navigate("/chat");
-        return;
-      }
-
-      setName(character.name);
-      setDescription(character.description || "");
-      
-      // Load avatar if it exists
-      if (character.avatarPath) {
-        try {
-          const avatarUrl = await loadAvatar("character", character.id, character.avatarPath);
-          setAvatarPath(avatarUrl || "");
-        } catch (err) {
-          console.warn("Failed to load avatar:", err);
-          setAvatarPath("");
-        }
-      } else {
-        setAvatarPath("");
-      }
-      
-      let backgroundImage = character.backgroundImagePath || "";
-      if (backgroundImage && !backgroundImage.startsWith("data:") && backgroundImage.length === 36) {
-        try {
-          const { convertToImageUrl } = await import("../../../core/storage/images");
-          const assetUrl = await convertToImageUrl(backgroundImage);
-          backgroundImage = assetUrl || backgroundImage;
-        } catch (err) {
-          console.warn("Failed to convert background image ID to URL:", err);
-        }
-      }
-      
-      setBackgroundImagePath(backgroundImage);
-      setScenes(character.scenes || []);
-      setDefaultSceneId(character.defaultSceneId || null);
-      setSelectedModelId(character.defaultModelId || null);
-      setSystemPromptTemplateId(character.promptTemplateId || null);
-      setDisableAvatarGradient(character.disableAvatarGradient || false);
-    } catch (err) {
-      console.error("Failed to load character:", err);
-      setError("Failed to load character");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadModels = async () => {
-    try {
-      setLoadingModels(true);
-      const settings = await readSettings();
-      setModels(settings.models);
-    } catch (err) {
-      console.error("Failed to load models:", err);
-    } finally {
-      setLoadingModels(false);
-    }
-  };
-
-  const loadPromptTemplates = async () => {
-    try {
-      setLoadingTemplates(true);
-      // Global list (scopes removed)
-      const templates = await listPromptTemplates();
-      setPromptTemplates(templates);
-    } catch (err) {
-      console.error("Failed to load prompt templates:", err);
-    } finally {
-      setLoadingTemplates(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!characterId || !name.trim() || !description.trim()) return;
-
-    try {
-      setSaving(true);
-      setError(null);
-
-      // Save avatar using new centralized system if it's a new upload (data URL)
-      let avatarFilename: string | undefined = undefined;
-      if (avatarPath) {
-        if (avatarPath.startsWith("data:")) {
-          avatarFilename = await saveAvatar("character", characterId, avatarPath);
-          if (!avatarFilename) {
-            console.error("[EditCharacter] Failed to save avatar image");
-          } else {
-            invalidateAvatarCache("character", characterId);
-          }
-        } else {
-          avatarFilename = avatarPath;
-        }
-      } else {
-        invalidateAvatarCache("character", characterId);
-      }
-
-      const backgroundImageId = backgroundImagePath 
-        ? (backgroundImagePath.startsWith("data:") ? await convertToImageRef(backgroundImagePath) : backgroundImagePath)
-        : undefined;
-
-      await saveCharacter({
-        id: characterId,
-        name: name.trim(),
-        description: description.trim(),
-        avatarPath: avatarFilename,
-        backgroundImagePath: backgroundImageId,
-        scenes: scenes,
-        defaultSceneId: defaultSceneId,
-        defaultModelId: selectedModelId,
-        promptTemplateId: systemPromptTemplateId,
-        disableAvatarGradient: disableAvatarGradient,
-      });
-
-      navigate("/chat");
-    } catch (err: any) {
-      console.error("Failed to save character:", err);
-      setError(err?.message || "Failed to save character");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleExport = async () => {
-    if (!characterId) return;
-
-    try {
-      setExporting(true);
-      setError(null);
-
-      const exportJson = await exportCharacter(characterId);
-      const filename = generateExportFilename(name || "character");
-      await downloadJson(exportJson, filename);
-    } catch (err: any) {
-      console.error("Failed to export character:", err);
-      setError(err?.message || "Failed to export character");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const addScene = () => {
-    if (!newSceneContent.trim()) return;
-    
-    const sceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-    const timestamp = Date.now();
-    
-    const newScenes = [...scenes, {
-      id: sceneId,
-      content: newSceneContent.trim(),
-      createdAt: timestamp,
-    }];
-    
-    setScenes(newScenes);
-    
-    // Auto-set as default if it's the only scene
-    if (newScenes.length === 1) {
-      setDefaultSceneId(sceneId);
-    }
-    
-    setNewSceneContent("");
-  };
-
-  const deleteScene = (sceneId: string) => {
-    const newScenes = scenes.filter(s => s.id !== sceneId);
-    setScenes(newScenes);
-    
-    // Clear default if we're deleting the default scene
-    if (defaultSceneId === sceneId) {
-      // Auto-set to the only remaining scene if there's exactly one left
-      setDefaultSceneId(newScenes.length === 1 ? newScenes[0].id : null);
-    }
-  };
-
-  const startEditingScene = (scene: Scene) => {
-    setEditingSceneId(scene.id);
-    setEditingSceneContent(scene.content);
-  };
-
-  const saveEditedScene = () => {
-    if (!editingSceneId || !editingSceneContent.trim()) return;
-
-    setScenes(scenes.map(scene => 
-      scene.id === editingSceneId 
-        ? { ...scene, content: editingSceneContent.trim() }
-        : scene
-    ));
-
-    setEditingSceneId(null);
-    setEditingSceneContent("");
-  };
-
-  const cancelEditingScene = () => {
-    setEditingSceneId(null);
-    setEditingSceneContent("");
-  };
-
-  const canSave = name.trim().length > 0 && description.trim().length > 0 && !saving;
+  const { avatarInitial, canSave } = computed;
 
   if (loading) {
     return (
@@ -274,47 +62,13 @@ export function EditCharacterPage() {
   // Get avatar preview for header
   const getAvatarPreview = () => {
     if (!avatarPath) {
-      const initial = name.trim().charAt(0) || "?";
       return (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-500/20 to-blue-500/20">
-          <span className="text-lg font-bold text-white">{initial.toUpperCase()}</span>
+          <span className="text-lg font-bold text-white">{avatarInitial}</span>
         </div>
       );
     }
     return <img src={avatarPath} alt="Avatar" className="h-full w-full object-cover" />;
-  };
-
-  // Handle background image upload
-  const handleBackgroundImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const input = event.target;
-    void processBackgroundImage(file)
-      .then((dataUrl: SetStateAction<string>) => {
-        setBackgroundImagePath(dataUrl);
-      })
-      .catch((error: any) => {
-        console.warn("EditCharacter: failed to process background image", error);
-      })
-      .finally(() => {
-        input.value = "";
-      });
-  };
-
-  // Handle avatar upload
-  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarPath(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-    
-    // Clear input so same file can be selected again
-    event.target.value = "";
   };
 
   return (
@@ -363,7 +117,7 @@ export function EditCharacterPage() {
                 {/* Remove avatar button */}
                 {avatarPath && (
                   <button
-                    onClick={() => setAvatarPath("")}
+                    onClick={() => setFields({ avatarPath: "" })}
                     className="absolute -top-2 -right-2 rounded-full border border-white/20 bg-red-500/90 p-1 text-white transition hover:bg-red-600 active:scale-95"
                     title="Remove avatar"
                   >
@@ -379,7 +133,7 @@ export function EditCharacterPage() {
                 </label>
                 <input
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setFields({ name: e.target.value })}
                   placeholder="Character name..."
                   className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-base text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
                 />
@@ -404,7 +158,7 @@ export function EditCharacterPage() {
                   <input
                     type="checkbox"
                     checked={!disableAvatarGradient}
-                    onChange={(e) => setDisableAvatarGradient(!e.target.checked)}
+                    onChange={(e) => setFields({ disableAvatarGradient: !e.target.checked })}
                     className="peer sr-only"
                   />
                   <div className="h-6 w-11 rounded-full bg-white/20 transition peer-checked:bg-emerald-500/80"></div>
@@ -438,7 +192,7 @@ export function EditCharacterPage() {
                     </span>
                   </div>
                   <button
-                    onClick={() => setBackgroundImagePath("")}
+                    onClick={() => setFields({ backgroundImagePath: "" })}
                     className="absolute top-2 right-2 rounded-full border border-white/20 bg-black/50 p-1 text-white/70 transition hover:bg-black/70 active:scale-95"
                   >
                     <X size={14} />
@@ -477,7 +231,7 @@ export function EditCharacterPage() {
             </div>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => setFields({ description: e.target.value })}
               rows={8}
               placeholder="Describe who this character is, their personality, background, speaking style, and how they should interact..."
               className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
@@ -560,7 +314,7 @@ export function EditCharacterPage() {
                           <div className="ml-auto flex items-center gap-1.5">
                             {!isEditing && !isDefault && (
                               <button
-                                onClick={() => setDefaultSceneId(scene.id)}
+                                onClick={() => setFields({ defaultSceneId: scene.id })}
                                 className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-white/60 transition active:scale-95 active:bg-white/10"
                               >
                                 Set Default
@@ -591,7 +345,7 @@ export function EditCharacterPage() {
                             <div className="space-y-2">
                               <textarea
                                 value={editingSceneContent}
-                                onChange={(e) => setEditingSceneContent(e.target.value)}
+                                onChange={(e) => setFields({ editingSceneContent: e.target.value })}
                                 rows={4}
                                 className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
                                 autoFocus
@@ -634,7 +388,7 @@ export function EditCharacterPage() {
             <motion.div layout className="space-y-2">
               <textarea
               value={newSceneContent}
-              onChange={(e) => setNewSceneContent(e.target.value)}
+              onChange={(e) => setFields({ newSceneContent: e.target.value })}
               rows={3}
               placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
               className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
@@ -680,7 +434,7 @@ export function EditCharacterPage() {
             ) : models.length > 0 ? (
               <select
                 value={selectedModelId || ""}
-                onChange={(e) => setSelectedModelId(e.target.value || null)}
+                onChange={(e) => setFields({ selectedModelId: e.target.value || null })}
                 className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
               >
                 <option value="">Use global default model</option>
@@ -718,7 +472,7 @@ export function EditCharacterPage() {
             ) : (
               <select
                 value={systemPromptTemplateId || ""}
-                onChange={(e) => setSystemPromptTemplateId(e.target.value || null)}
+                onChange={(e) => setFields({ systemPromptTemplateId: e.target.value || null })}
                 className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
               >
                 <option value="">Use app default</option>
