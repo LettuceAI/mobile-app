@@ -24,7 +24,6 @@ struct MistralCompletionArgs {
 #[derive(Serialize)]
 struct MistralConversationRequest<'a> {
     model: &'a str,
-    #[serde(rename = "messages")]
     inputs: Vec<Value>,
     tools: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
