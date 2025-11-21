@@ -226,7 +226,6 @@ function AppContent() {
               <Route path="/settings/prompts" element={<SystemPromptsPage />} />
               <Route path="/settings/prompts/new" element={<EditPromptTemplate />} />
               <Route path="/settings/prompts/:id" element={<EditPromptTemplate />} />
-              <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/security" element={<SecurityPage />} />
               <Route path="/settings/usage" element={<UsagePage />} />
               <Route path="/settings/advanced" element={<AdvancedPage />} />
@@ -241,7 +240,8 @@ function AppContent() {
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />
               <Route path="/chat/:characterId/history" element={<ChatHistoryPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
-              <Route path="/characters/:characterId/edit" element={<EditCharacterPage />} />
+              <Route path="/settings/characters" element={<CharactersPage />} />
+              <Route path="/settings/characters/:characterId/edit" element={<EditCharacterPage />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
               <Route path="/personas" element={<PersonasPage />} />
               <Route path="/settings/personas" element={<PersonasPage />} />

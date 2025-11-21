@@ -88,7 +88,7 @@ export function CharactersPage() {
   );
 
   const handleEditCharacter = (character: Character) => {
-    navigate(`/characters/${character.id}/edit`);
+    navigate(`/settings/characters/${character.id}/edit`);
   };
 
   return (

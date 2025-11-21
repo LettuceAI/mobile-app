@@ -59,7 +59,7 @@ export function LibraryPage() {
     const handleEdit = () => {
         if (selectedItem) {
             if (selectedItem.itemType === "character") {
-                navigate(`/characters/${selectedItem.id}/edit`);
+                navigate(`/settings/characters/${selectedItem.id}/edit`);
             } else {
                 navigate(`/settings/personas/${selectedItem.id}/edit`);
             }
