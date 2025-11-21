@@ -24,6 +24,7 @@ struct MistralCompletionArgs {
 #[derive(Serialize)]
 struct MistralConversationRequest<'a> {
     model: &'a str,
+    #[serde(rename = "messages")]
     inputs: Vec<Value>,
     tools: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -94,7 +95,7 @@ impl ProviderAdapter for MistralAdapter {
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
     ) -> Value {
-        // Derive instructions and inputs from messages
+        // Derive instructions and messages from OpenAI-style messages
         let mut instructions = system_prompt;
         let mut inputs: Vec<Value> = Vec::new();
 
@@ -119,11 +120,7 @@ impl ProviderAdapter for MistralAdapter {
                 }
             }
 
-            let mut cloned = msg.clone();
-            if let Some(obj) = cloned.as_object_mut() {
-                obj.remove("role");
-            }
-            inputs.push(cloned);
+            inputs.push(msg.clone());
         }
 
         let (tools, tool_choice) = if let Some(cfg) = tool_config {

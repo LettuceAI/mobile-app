@@ -54,11 +54,17 @@ pub async fn verify_model_exists(
 
     // Retrieve API key inline from settings providerCredentials
     let mut api_key: Option<String> = None;
-    if let Some(creds) = settings_json.get("providerCredentials").and_then(|v| v.as_array()) {
+    if let Some(creds) = settings_json
+        .get("providerCredentials")
+        .and_then(|v| v.as_array())
+    {
         for cred in creds {
             let cid = cred.get("id").and_then(|v| v.as_str()).unwrap_or("");
             if cid == credential_id.as_str() {
-                api_key = cred.get("apiKey").and_then(|v| v.as_str()).map(|s| s.to_string());
+                api_key = cred
+                    .get("apiKey")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 break;
             }
         }

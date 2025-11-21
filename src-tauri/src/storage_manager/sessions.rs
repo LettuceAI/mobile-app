@@ -121,7 +121,8 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
     };
 
     // Parse memories JSON array
-    let memories: JsonValue = serde_json::from_str(&memories_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
+    let memories: JsonValue =
+        serde_json::from_str(&memories_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
 
     let session = serde_json::json!({
         "id": id,
@@ -198,13 +199,13 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
         .and_then(|v| v.as_i64())
         .unwrap_or(now_ms() as i64);
     let updated_at = now_ms() as i64;
-    
+
     // Handle memories - serialize to JSON string
     let memories_json = match s.get("memories") {
         Some(v) => serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string()),
         None => "[]".to_string(),
     };
-    
+
     let adv = s.get("advancedModelSettings");
     let temperature = adv
         .and_then(|v| v.get("temperature"))
@@ -384,7 +385,7 @@ pub fn session_add_memory(
     memory: String,
 ) -> Result<Option<String>, String> {
     let conn = open_db(&app)?;
-    
+
     // Read current memories
     let current_memories_json: String = conn
         .query_row(
@@ -395,23 +396,23 @@ pub fn session_add_memory(
         .optional()
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| "[]".to_string());
-    
-    let mut memories: Vec<String> = serde_json::from_str(&current_memories_json)
-        .unwrap_or_else(|_| vec![]);
-    
+
+    let mut memories: Vec<String> =
+        serde_json::from_str(&current_memories_json).unwrap_or_else(|_| vec![]);
+
     // Add new memory
     memories.push(memory);
-    
+
     // Save back
     let new_memories_json = serde_json::to_string(&memories).map_err(|e| e.to_string())?;
     let now = now_ms() as i64;
-    
+
     conn.execute(
         "UPDATE sessions SET memories = ?, updated_at = ? WHERE id = ?",
         params![new_memories_json, now, &session_id],
     )
     .map_err(|e| e.to_string())?;
-    
+
     // Return updated session
     if let Some(json) = read_session(&conn, &session_id)? {
         return Ok(Some(
@@ -428,7 +429,7 @@ pub fn session_remove_memory(
     memory_index: usize,
 ) -> Result<Option<String>, String> {
     let conn = open_db(&app)?;
-    
+
     // Read current memories
     let current_memories_json: String = conn
         .query_row(
@@ -439,25 +440,25 @@ pub fn session_remove_memory(
         .optional()
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| "[]".to_string());
-    
-    let mut memories: Vec<String> = serde_json::from_str(&current_memories_json)
-        .unwrap_or_else(|_| vec![]);
-    
+
+    let mut memories: Vec<String> =
+        serde_json::from_str(&current_memories_json).unwrap_or_else(|_| vec![]);
+
     // Remove memory at index
     if memory_index < memories.len() {
         memories.remove(memory_index);
-        
+
         // Save back
         let new_memories_json = serde_json::to_string(&memories).map_err(|e| e.to_string())?;
         let now = now_ms() as i64;
-        
+
         conn.execute(
             "UPDATE sessions SET memories = ?, updated_at = ? WHERE id = ?",
             params![new_memories_json, now, &session_id],
         )
         .map_err(|e| e.to_string())?;
     }
-    
+
     // Return updated session
     if let Some(json) = read_session(&conn, &session_id)? {
         return Ok(Some(
@@ -475,7 +476,7 @@ pub fn session_update_memory(
     new_memory: String,
 ) -> Result<Option<String>, String> {
     let conn = open_db(&app)?;
-    
+
     // Read current memories
     let current_memories_json: String = conn
         .query_row(
@@ -486,25 +487,25 @@ pub fn session_update_memory(
         .optional()
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| "[]".to_string());
-    
-    let mut memories: Vec<String> = serde_json::from_str(&current_memories_json)
-        .unwrap_or_else(|_| vec![]);
-    
+
+    let mut memories: Vec<String> =
+        serde_json::from_str(&current_memories_json).unwrap_or_else(|_| vec![]);
+
     // Update memory at index
     if memory_index < memories.len() {
         memories[memory_index] = new_memory;
-        
+
         // Save back
         let new_memories_json = serde_json::to_string(&memories).map_err(|e| e.to_string())?;
         let now = now_ms() as i64;
-        
+
         conn.execute(
             "UPDATE sessions SET memories = ?, updated_at = ? WHERE id = ?",
             params![new_memories_json, now, &session_id],
         )
         .map_err(|e| e.to_string())?;
     }
-    
+
     // Return updated session
     if let Some(json) = read_session(&conn, &session_id)? {
         return Ok(Some(

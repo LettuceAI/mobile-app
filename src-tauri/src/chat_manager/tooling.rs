@@ -264,7 +264,10 @@ pub fn parse_tool_calls(provider_id: &str, payload: &Value) -> Vec<ToolCall> {
                                 if let Some(name) =
                                     function_call.get("name").and_then(|v| v.as_str())
                                 {
-                                    let args = function_call.get("args").cloned().unwrap_or_else(|| Value::Object(Default::default()));
+                                    let args = function_call
+                                        .get("args")
+                                        .cloned()
+                                        .unwrap_or_else(|| Value::Object(Default::default()));
                                     calls.push(ToolCall {
                                         id: format!("func_call_{}", calls.len() + 1),
                                         name: name.to_string(),

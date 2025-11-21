@@ -59,15 +59,9 @@ pub(crate) struct OpenAIChatRequest<'a> {
     pub(crate) top_p: f64,
     #[serde(rename = "max_tokens")]
     pub(crate) max_tokens: u32,
-    #[serde(
-        rename = "frequency_penalty",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "frequency_penalty", skip_serializing_if = "Option::is_none")]
     pub(crate) frequency_penalty: Option<f64>,
-    #[serde(
-        rename = "presence_penalty",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "presence_penalty", skip_serializing_if = "Option::is_none")]
     pub(crate) presence_penalty: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tools: Option<Vec<Value>>,
@@ -75,19 +69,19 @@ pub(crate) struct OpenAIChatRequest<'a> {
     pub(crate) tool_choice: Option<Value>,
 }
 
-mod openai;
-mod groq;
-mod mistral;
+mod anannas;
 mod anthropic;
 mod deepseek;
-mod nanogpt;
-mod xai;
-mod anannas;
-mod google_gemini;
-mod zai;
-mod moonshot;
 mod featherless;
+mod google_gemini;
+mod groq;
+mod mistral;
+mod moonshot;
+mod nanogpt;
+mod openai;
 mod qwen;
+mod xai;
+mod zai;
 
 pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send + Sync> {
     match provider_id.0.as_str() {
@@ -98,9 +92,7 @@ pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send +
         "nanogpt" => Box::new(nanogpt::NanoGPTAdapter),
         "xai" => Box::new(xai::XAIAdapter),
         "anannas" => Box::new(anannas::AnannasAdapter),
-        "google" | "google-gemini" | "gemini" => {
-            Box::new(google_gemini::GoogleGeminiAdapter)
-        }
+        "google" | "google-gemini" | "gemini" => Box::new(google_gemini::GoogleGeminiAdapter),
         "zai" | "z.ai" => Box::new(zai::ZAIAdapter),
         "moonshot" | "moonshot-ai" => Box::new(moonshot::MoonshotAdapter),
         "featherless" => Box::new(featherless::FeatherlessAdapter),

@@ -4,8 +4,8 @@ use serde_json::Value;
 
 use super::provider_adapter::adapter_for;
 use super::request::provider_base_url;
-use super::types::{ProviderCredential, ProviderId};
 use super::tooling::ToolConfig;
+use super::types::{ProviderCredential, ProviderId};
 
 pub struct BuiltRequest {
     pub url: String,

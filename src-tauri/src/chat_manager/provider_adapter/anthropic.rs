@@ -134,8 +134,7 @@ impl ProviderAdapter for AnthropicAdapter {
         }
 
         let tools = tool_config.and_then(anthropic_tools);
-        let tool_choice = tool_config
-            .and_then(|cfg| anthropic_tool_choice(cfg.choice.as_ref()));
+        let tool_choice = tool_config.and_then(|cfg| anthropic_tool_choice(cfg.choice.as_ref()));
 
         let body = AnthropicMessagesRequest {
             model: model_name.to_string(),

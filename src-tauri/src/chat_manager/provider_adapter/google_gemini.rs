@@ -46,10 +46,7 @@ struct GeminiThinkingConfig {
 #[derive(Serialize)]
 struct GeminiChatRequest {
     contents: Vec<GeminiContent>,
-    #[serde(
-        rename = "systemInstruction",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
     system_instruction: Option<GeminiSystemInstruction>,
     #[serde(rename = "generationConfig")]
     generation_config: GeminiGenerationConfig,
@@ -67,7 +64,10 @@ impl ProviderAdapter for GoogleGeminiAdapter {
     fn build_url(&self, base_url: &str, model_name: &str, api_key: &str) -> String {
         // Gemini uses URL pattern: /v1beta/models/{model}:generateContent?key={api_key}
         let base = base_url.trim_end_matches('/').replace("/v1", "/v1beta");
-        format!("{}/models/{}:generateContent?key={}", base, model_name, api_key)
+        format!(
+            "{}/models/{}:generateContent?key={}",
+            base, model_name, api_key
+        )
     }
 
     fn system_role(&self) -> &'static str {
@@ -123,10 +123,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         let mut contents: Vec<GeminiContent> = Vec::new();
 
         for msg in messages_for_api {
-            let role = msg
-                .get("role")
-                .and_then(|v| v.as_str())
-                .unwrap_or("user");
+            let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("user");
 
             // Gemini only knows "user" and "model" in contents.
             let gem_role = match role {
@@ -139,7 +136,11 @@ impl ProviderAdapter for GoogleGeminiAdapter {
                 .get("content")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| msg.get("content").map(|v| v.to_string()).unwrap_or_default());
+                .unwrap_or_else(|| {
+                    msg.get("content")
+                        .map(|v| v.to_string())
+                        .unwrap_or_default()
+                });
 
             contents.push(GeminiContent {
                 role: gem_role,

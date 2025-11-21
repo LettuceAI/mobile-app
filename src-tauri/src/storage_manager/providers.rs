@@ -7,13 +7,34 @@ use super::db::open_db;
 pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result<String, String> {
     let conn = open_db(&app)?;
     let cred: JsonValue = serde_json::from_str(&credential_json).map_err(|e| e.to_string())?;
-    let id = cred.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let provider_id = cred.get("providerId").and_then(|v| v.as_str()).ok_or_else(|| "providerId is required".to_string())?;
-    let label = cred.get("label").and_then(|v| v.as_str()).ok_or_else(|| "label is required".to_string())?;
-    let api_key = cred.get("apiKey").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let base_url = cred.get("baseUrl").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let default_model = cred.get("defaultModel").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let headers = cred.get("headers").map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+    let id = cred
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let provider_id = cred
+        .get("providerId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "providerId is required".to_string())?;
+    let label = cred
+        .get("label")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "label is required".to_string())?;
+    let api_key = cred
+        .get("apiKey")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let base_url = cred
+        .get("baseUrl")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let default_model = cred
+        .get("defaultModel")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let headers = cred
+        .get("headers")
+        .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
     conn.execute(
         r#"INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -29,12 +50,33 @@ pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result
 
     let mut out = JsonMap::new();
     out.insert("id".into(), JsonValue::String(id));
-    out.insert("providerId".into(), JsonValue::String(provider_id.to_string()));
+    out.insert(
+        "providerId".into(),
+        JsonValue::String(provider_id.to_string()),
+    );
     out.insert("label".into(), JsonValue::String(label.to_string()));
-    if let Some(v) = cred.get("apiKey").and_then(|v| v.as_str()) { out.insert("apiKey".into(), JsonValue::String(v.to_string())); }
-    if let Some(v) = cred.get("baseUrl").and_then(|v| v.as_str()).map(|s| JsonValue::String(s.to_string())) { out.insert("baseUrl".into(), v); }
-    if let Some(v) = cred.get("defaultModel").and_then(|v| v.as_str()).map(|s| JsonValue::String(s.to_string())) { out.insert("defaultModel".into(), v); }
-    if let Some(v) = cred.get("headers").cloned() { if !v.is_null() { out.insert("headers".into(), v); } }
+    if let Some(v) = cred.get("apiKey").and_then(|v| v.as_str()) {
+        out.insert("apiKey".into(), JsonValue::String(v.to_string()));
+    }
+    if let Some(v) = cred
+        .get("baseUrl")
+        .and_then(|v| v.as_str())
+        .map(|s| JsonValue::String(s.to_string()))
+    {
+        out.insert("baseUrl".into(), v);
+    }
+    if let Some(v) = cred
+        .get("defaultModel")
+        .and_then(|v| v.as_str())
+        .map(|s| JsonValue::String(s.to_string()))
+    {
+        out.insert("defaultModel".into(), v);
+    }
+    if let Some(v) = cred.get("headers").cloned() {
+        if !v.is_null() {
+            out.insert("headers".into(), v);
+        }
+    }
     Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| e.to_string())?)
 }
 

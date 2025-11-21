@@ -31,8 +31,8 @@ pub fn get_cached_pricing(
         let cache_age = current_time.saturating_sub(cached_at);
         if cache_age < (CACHE_TTL_HOURS * 3600) {
             if let Some(pricing_json) = pricing_json_opt {
-                let pricing: crate::models::ModelPricing = serde_json::from_str(&pricing_json)
-                    .map_err(|e| e.to_string())?;
+                let pricing: crate::models::ModelPricing =
+                    serde_json::from_str(&pricing_json).map_err(|e| e.to_string())?;
                 return Ok(Some(pricing));
             } else {
                 return Ok(None);

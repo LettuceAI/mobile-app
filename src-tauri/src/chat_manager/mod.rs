@@ -7,8 +7,8 @@ pub mod request;
 mod request_builder;
 mod service;
 pub mod sse;
-pub mod tooling;
 mod storage;
+pub mod tooling;
 pub mod types;
 
 pub use commands::{

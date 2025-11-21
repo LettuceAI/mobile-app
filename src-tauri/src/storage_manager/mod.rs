@@ -1,6 +1,7 @@
-pub mod characters;
 pub mod character_transfer;
+pub mod characters;
 pub mod db;
+pub mod importer;
 mod legacy;
 pub mod media;
 pub mod models;
@@ -9,7 +10,5 @@ pub mod providers;
 pub mod sessions;
 pub mod settings;
 pub mod usage;
-pub mod importer;
 
 pub use settings::internal_read_settings;
-
