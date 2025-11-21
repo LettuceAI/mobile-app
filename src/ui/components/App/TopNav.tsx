@@ -1,7 +1,7 @@
 
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Filter, Search, Settings } from "lucide-react";
+import { ArrowLeft, Filter, Search, Settings, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { typography, interactive, cn } from "../../design-tokens";
 
@@ -54,12 +54,34 @@ export function TopNav({ currentPath }: TopNavProps) {
     return currentPath === "/chat" || currentPath === "/" || currentPath === "/library";
   }, [currentPath]);
 
+  const showAddButton = useMemo(() => {
+    if (currentPath.startsWith("/settings/providers")) return true;
+    if (currentPath.startsWith("/settings/models") && !currentPath.includes("view=advanced")) return true;
+    if (currentPath === "/settings/prompts") return true;
+    return false;
+  }, [currentPath]);
+
   const isCenteredTitle = useMemo(() => {
     return currentPath.startsWith("/settings");
   }, [currentPath]);
 
   const handleBack = () => {
     navigate(-1);
+  };
+
+  const handleAddClick = () => {
+    if (currentPath.startsWith("/settings/providers")) {
+      window.dispatchEvent(new CustomEvent("providers:add"));
+      return;
+    }
+    if (currentPath.startsWith("/settings/models") && !currentPath.includes("view=advanced")) {
+      window.dispatchEvent(new CustomEvent("models:add"));
+      return;
+    }
+    if (currentPath === "/settings/prompts") {
+      window.dispatchEvent(new CustomEvent("prompts:add"));
+      return;
+    }
   };
 
   const handleFilterClick = () => {
@@ -152,6 +174,20 @@ export function TopNav({ currentPath }: TopNavProps) {
               aria-label="Settings"
             >
               <Settings size={20} strokeWidth={2.5} className="text-white" />
+            </button>
+          )}
+          {showAddButton && (
+            <button
+              onClick={handleAddClick}
+              className={cn(
+                "flex items-center justify-center rounded-full",
+                "text-white/70 hover:text-white hover:bg-white/10",
+                interactive.transition.fast,
+                interactive.active.scale
+              )}
+              aria-label="Add"
+            >
+              <Plus size={20} strokeWidth={2.5} className="text-white" />
             </button>
           )}
           {showFilterButton && (
