@@ -117,7 +117,7 @@ export function LibraryPage() {
     });
 
     return (
-        <div className="flex h-full flex-col pb-6 text-gray-200 bg-gradient-to-b from-[#0a0a0a] to-[#050505]">
+        <div className="flex h-full flex-col pb-6 text-gray-200">
             <main className="flex-1 overflow-y-auto px-4 pt-4">
                 <div className="grid grid-cols-2 gap-3 pb-24">
                     {filteredItems.map((item) => (
@@ -289,13 +289,18 @@ const LibraryCard = memo(({
         getItemDisableGradient(item)
     );
 
+    const badge =
+        item.itemType === "character"
+            ? { label: "Character", dotClass: "bg-sky-300" }
+            : { label: "Persona", dotClass: "bg-violet-300" };
+
     return (
         <motion.button
             layoutId={`library-${item.itemType}-${item.id}`}
             onClick={() => onSelect(item)}
             className={cn(
                 "group relative flex aspect-[3/4] w-full flex-col justify-end overflow-hidden rounded-2xl text-left",
-                "border border-white/10 bg-white/5",
+                "border border-white/10",
                 interactive.active.scale
             )}
             style={hasGradient ? { background: gradientCss } : {}}
@@ -307,6 +312,14 @@ const LibraryCard = memo(({
 
             {/* Gradient Overlay */}
             <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+
+            {/* Type Badge */}
+            <div className="absolute left-2 top-2 z-30">
+                <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/80 backdrop-blur-md shadow-sm shadow-black/30">
+                    <span className={cn("h-2 w-2 rounded-full", badge.dotClass)} />
+                    {badge.label}
+                </span>
+            </div>
 
             {/* Glass Content Area */}
             <div className="relative z-20 flex w-full flex-col gap-1 p-3">
