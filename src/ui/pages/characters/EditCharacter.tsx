@@ -346,8 +346,8 @@ export function EditCharacterPage() {
                               <textarea
                                 value={editingSceneContent}
                                 onChange={(e) => setFields({ editingSceneContent: e.target.value })}
-                                rows={4}
-                                className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                                rows={6}
+                                className="w-full resize-y rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none min-h-[140px] max-h-[320px] overflow-auto"
                                 autoFocus
                               />
                               <div className="flex justify-end text-[11px] text-white/40">
@@ -389,9 +389,9 @@ export function EditCharacterPage() {
               <textarea
               value={newSceneContent}
               onChange={(e) => setFields({ newSceneContent: e.target.value })}
-              rows={3}
+              rows={5}
               placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
-              className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+              className="w-full resize-y rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none min-h-[140px] max-h-[320px] overflow-auto"
             />
             <div className="flex justify-end text-[11px] text-white/40">
               {wordCount(newSceneContent)} words
