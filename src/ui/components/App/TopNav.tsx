@@ -12,82 +12,85 @@ interface TopNavProps {
 
 export function TopNav({ currentPath }: TopNavProps) {
   const navigate = useNavigate();
+  const basePath = useMemo(() => currentPath.split("?")[0], [currentPath]);
+  const hasAdvancedView = useMemo(() => currentPath.includes("view=advanced"), [currentPath]);
+
   const title = useMemo(() => {
-    if (currentPath === "/settings/providers") return "Providers";
-    if (currentPath.includes("view=advanced")) return "Response Style";
-    if (currentPath === "/settings/models" || currentPath.startsWith("/settings/models/")) return "Models";
-    if (currentPath === "/settings/security") return "Security";
-    if (currentPath === "/settings/reset") return "Reset";
-    if (currentPath === "/settings/usage") return "Usage Analytics";
-    if (currentPath === "/settings/changelog") return "Changelog";
-    if (currentPath === "/settings/prompts/new") return "Create Template";
-    if (currentPath.startsWith("/settings/prompts/")) return "Edit Template";
-    if (currentPath === "/settings/prompts") return "Prompt Templates";
-    if (currentPath === "/settings/developer") return "Developer";
-    if (currentPath === "/settings/advanced") return "Advanced";
-    if (currentPath === "/settings/characters") return "Characters";
-    if (currentPath === "/settings/personas") return "Personas";
-    if (currentPath === "/settings/advanced/memory") return "Dynamic Memory";
-    if (currentPath.startsWith("/settings")) return "Settings";
-    if (currentPath.startsWith("/create")) return "Create";
-    if (currentPath.startsWith("/onboarding")) return "Setup";
-    if (currentPath.startsWith("/welcome")) return "Welcome";
-    if (currentPath.startsWith("/chat/")) return "Conversation";
-    if (currentPath === "/library") return "Library";
+    if (basePath === "/settings/providers") return "Providers";
+    if (hasAdvancedView) return "Response Style";
+    if (basePath === "/settings/models" || basePath.startsWith("/settings/models/")) return "Models";
+    if (basePath === "/settings/security") return "Security";
+    if (basePath === "/settings/reset") return "Reset";
+    if (basePath === "/settings/usage") return "Usage Analytics";
+    if (basePath === "/settings/changelog") return "Changelog";
+    if (basePath === "/settings/prompts/new") return "Create Template";
+    if (basePath.startsWith("/settings/prompts/")) return "Edit Template";
+    if (basePath === "/settings/prompts") return "Prompt Templates";
+    if (basePath === "/settings/developer") return "Developer";
+    if (basePath === "/settings/advanced") return "Advanced";
+    if (basePath === "/settings/characters") return "Characters";
+    if (basePath === "/settings/personas") return "Personas";
+    if (basePath === "/settings/advanced/memory") return "Dynamic Memory";
+    if (basePath.startsWith("/settings")) return "Settings";
+    if (basePath.startsWith("/create")) return "Create";
+    if (basePath.startsWith("/onboarding")) return "Setup";
+    if (basePath.startsWith("/welcome")) return "Welcome";
+    if (basePath.startsWith("/chat/")) return "Conversation";
+    if (basePath === "/library") return "Library";
     return "Chats";
-  }, [currentPath]);
+  }, [basePath, hasAdvancedView]);
 
   const showBackButton = useMemo(() => {
-    if (currentPath.startsWith("/settings/") || currentPath === "/settings") return true;
+    if (basePath.startsWith("/settings/") || basePath === "/settings") return true;
     return false;
-  }, [currentPath]);
+  }, [basePath]);
 
   const showFilterButton = useMemo(() => {
-    return currentPath === "/settings/usage" || currentPath === "/settings/changelog" || currentPath === "/library";
-  }, [currentPath]);
+    return basePath === "/settings/usage" || basePath === "/settings/changelog" || basePath === "/library";
+  }, [basePath]);
 
   const showSearchButton = useMemo(() => {
-    return currentPath === "/chat" || currentPath === "/" || currentPath === "/library";
-  }, [currentPath]);
+    return basePath === "/chat" || basePath === "/" || basePath === "/library";
+  }, [basePath]);
 
   const showSettingsButton = useMemo(() => {
-    return currentPath === "/chat" || currentPath === "/" || currentPath === "/library";
-  }, [currentPath]);
+    return basePath === "/chat" || basePath === "/" || basePath === "/library";
+  }, [basePath]);
 
   const showAddButton = useMemo(() => {
-    if (currentPath.startsWith("/settings/providers")) return true;
-    if (currentPath.startsWith("/settings/models") && !currentPath.includes("view=advanced")) return true;
-    if (currentPath === "/settings/prompts") return true;
+    if (basePath.startsWith("/settings/providers")) return true;
+    if (basePath.startsWith("/settings/models") && !hasAdvancedView) return true;
+    if (basePath === "/settings/prompts") return true;
     return false;
-  }, [currentPath]);
+  }, [basePath, hasAdvancedView]);
 
   const isCenteredTitle = useMemo(() => {
-    return currentPath.startsWith("/settings");
-  }, [currentPath]);
+    return basePath.startsWith("/settings");
+  }, [basePath]);
 
   const handleBack = () => {
     navigate(-1);
   };
 
   const handleAddClick = () => {
-    if (currentPath.startsWith("/settings/providers")) {
+    if (basePath.startsWith("/settings/providers")) {
       window.dispatchEvent(new CustomEvent("providers:add"));
       return;
     }
-    if (currentPath.startsWith("/settings/models") && !currentPath.includes("view=advanced")) {
+    if (basePath.startsWith("/settings/models") && !hasAdvancedView) {
       window.dispatchEvent(new CustomEvent("models:add"));
       return;
     }
-    if (currentPath === "/settings/prompts") {
+    if (basePath === "/settings/prompts") {
       window.dispatchEvent(new CustomEvent("prompts:add"));
       return;
     }
   };
 
   const handleFilterClick = () => {
-    if (currentPath === "/settings/changelog") {
+    if (basePath === "/settings/changelog") {
       window.dispatchEvent(new CustomEvent("changelog:openVersionSelector"));
-    } else if (currentPath === "/library") {
+    } else if (basePath === "/library") {
       window.dispatchEvent(new CustomEvent("library:openFilter"));
     } else if (typeof window !== "undefined") {
       const globalWindow = window as any;
