@@ -37,120 +37,122 @@ export function CreatePersonaForm({
       className="space-y-6"
     >
       {/* Title */}
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 text-center">
         <h2 className="text-xl font-semibold text-white">Create Persona</h2>
         <p className="text-sm text-white/50">Define a reusable writing style</p>
       </div>
 
-      {/* Avatar Section */}
-      <div className="space-y-3">
-        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
-          Avatar
-        </label>
-        <div className="flex items-center gap-4">
-          {/* Avatar Preview with Upload Button */}
-          <button
-            onClick={onAvatarUpload}
-            className="group relative h-32 w-32 overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl transition hover:border-white/30 active:scale-95"
-          >
-            {avatarPath ? (
-              <img
-                src={avatarPath}
-                alt="Persona avatar"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Camera className="text-white/30" size={32} />
+      <div className="space-y-5 rounded-2xl p-4">
+        {/* Avatar Section */}
+        <div className="space-y-3">
+          <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
+            Avatar
+          </label>
+          <div className="flex items-center gap-4">
+            {/* Avatar Preview with Upload Button */}
+            <button
+              onClick={onAvatarUpload}
+              className="group relative h-32 w-32 overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl transition hover:border-white/30 active:scale-95"
+            >
+              {avatarPath ? (
+                <img
+                  src={avatarPath}
+                  alt="Persona avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Camera className="text-white/30" size={32} />
+                </div>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
+                <Camera className="text-white" size={24} />
               </div>
+            </button>
+
+            {/* Remove Button */}
+            {avatarPath && (
+              <button
+                onClick={() => dispatch({ type: "set_avatar_path", value: null })}
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 backdrop-blur-xl transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 active:scale-95"
+              >
+                <X size={20} strokeWidth={3} />
+              </button>
             )}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-              <Camera className="text-white" size={24} />
+          </div>
+          <p className="text-xs text-white/40">
+            Optional: Add a visual identity for this persona
+          </p>
+        </div>
+
+        {/* Title Input */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
+            Title
+          </label>
+          <input
+            value={title}
+            onChange={(e) => dispatch({ type: "set_title", value: e.target.value })}
+            placeholder="Professional Writer"
+            className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-white placeholder-white/40 transition focus:border-white/30 focus:bg-black/40 focus:outline-none"
+            autoFocus
+          />
+          <p className="text-xs text-white/40">
+            A short name for this persona
+          </p>
+        </div>
+
+        {/* Description Textarea */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
+            Description
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => dispatch({ type: "set_description", value: e.target.value })}
+            rows={7}
+            placeholder="Write in a professional, clear, and concise style. Use formal language and focus on delivering information effectively..."
+            className="w-full resize-y rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/30 focus:bg-black/40 focus:outline-none min-h-[140px] max-h-[320px]"
+          />
+          <div className="flex justify-end text-[11px] text-white/40">
+            {wordCount(description)} words
+          </div>
+          <p className="text-xs text-white/40">
+            Describe the writing style or personality traits
+          </p>
+        </div>
+
+        {/* Default Option */}
+        <div className="space-y-2">
+          <button
+            onClick={() => dispatch({ type: "set_default", value: !isDefault })}
+            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl transition hover:border-white/25 hover:bg-white/5 active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`rounded-lg p-2 transition ${isDefault ? "bg-emerald-400/20 text-emerald-300" : "bg-white/10 text-white/50"}`}>
+                <Bookmark size={16} />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-medium text-white">
+                  Set as default persona
+                </h3>
+                <p className="text-xs text-white/40">
+                  Auto-apply to new chats
+                </p>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div
+                className={`h-6 w-11 rounded-full transition-colors ${isDefault ? "bg-emerald-400/40" : "bg-white/20"}`}
+              >
+                <div
+                  className={`absolute top-0.5 h-5 w-5 rounded-full transition-transform ${isDefault ? "translate-x-5 bg-emerald-300" : "translate-x-0.5 bg-white"}`}
+                />
+              </div>
             </div>
           </button>
-
-          {/* Remove Button */}
-          {avatarPath && (
-            <button
-              onClick={() => dispatch({ type: "set_avatar_path", value: null })}
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 backdrop-blur-xl transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 active:scale-95"
-            >
-              <X size={20} strokeWidth={3} />
-            </button>
-          )}
         </div>
-        <p className="text-xs text-white/40">
-          Optional: Add a visual identity for this persona
-        </p>
-      </div>
-
-      {/* Title Input */}
-      <div className="space-y-2">
-        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
-          Title
-        </label>
-        <input
-          value={title}
-          onChange={(e) => dispatch({ type: "set_title", value: e.target.value })}
-          placeholder="Professional Writer"
-          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder-white/40 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
-          autoFocus
-        />
-        <p className="text-xs text-white/40">
-          A short name for this persona
-        </p>
-      </div>
-
-      {/* Description Textarea */}
-      <div className="space-y-2">
-        <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
-          Description
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => dispatch({ type: "set_description", value: e.target.value })}
-          rows={7}
-          placeholder="Write in a professional, clear, and concise style. Use formal language and focus on delivering information effectively..."
-          className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/30 focus:outline-none"
-        />
-        <div className="flex justify-end text-[11px] text-white/40">
-          {wordCount(description)} words
-        </div>
-        <p className="text-xs text-white/40">
-          Describe the writing style or personality traits
-        </p>
-      </div>
-
-      {/* Default Option */}
-      <div className="space-y-2">
-        <button
-          onClick={() => dispatch({ type: "set_default", value: !isDefault })}
-          className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl transition hover:border-white/25 hover:bg-white/5 active:scale-[0.99]"
-        >
-          <div className="flex items-center gap-3">
-            <div className={`rounded-lg p-2 transition ${isDefault ? "bg-emerald-400/20 text-emerald-300" : "bg-white/10 text-white/50"}`}>
-              <Bookmark size={16} />
-            </div>
-            <div className="text-left">
-              <h3 className="text-sm font-medium text-white">
-                Set as default persona
-              </h3>
-              <p className="text-xs text-white/40">
-                Auto-apply to new chats
-              </p>
-            </div>
-          </div>
-
-          <div className="relative">
-            <div
-              className={`h-6 w-11 rounded-full transition-colors ${isDefault ? "bg-emerald-400/40" : "bg-white/20"}`}
-            >
-              <div
-                className={`absolute top-0.5 h-5 w-5 rounded-full transition-transform ${isDefault ? "translate-x-5 bg-emerald-300" : "translate-x-0.5 bg-white"}`}
-              />
-            </div>
-          </div>
-        </button>
       </div>
 
       {/* Error Display */}
