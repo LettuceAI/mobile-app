@@ -1,8 +1,8 @@
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Camera, X, Download, Upload } from "lucide-react";
+import { Save, Loader2, Camera, X, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePersonaFormController } from "./hooks/usePersonaFormController";
-import { exportPersona, downloadJson, generateExportFilename, readFileAsText, importPersona } from "../../../core/storage/personaTransfer";
+import { exportPersona, downloadJson, generateExportFilename } from "../../../core/storage/personaTransfer";
 import { useState } from "react";
 
 const wordCount = (text: string) => {
@@ -23,7 +23,6 @@ export function EditPersonaPage() {
   } = usePersonaFormController(personaId);
 
   const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
 
   const canSave = title.trim().length > 0 && description.trim().length > 0 && !saving;
 
@@ -41,44 +40,6 @@ export function EditPersonaPage() {
     } finally {
       setExporting(false);
     }
-  };
-
-  const handleImport = async () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async (event) => {
-      const file = (event.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      try {
-        setImporting(true);
-        const jsonContent = await readFileAsText(file);
-        
-        const exportPackage = JSON.parse(jsonContent);
-        if (exportPackage.type && exportPackage.type !== "persona") {
-          throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a persona export`);
-        }
-        
-        const importedPersona = await importPersona(jsonContent);
-        
-        setTitle(importedPersona.title);
-        setDescription(importedPersona.description);
-        setIsDefault(false); 
-        
-        if (importedPersona.avatarPath) {
-          setAvatarPath(importedPersona.avatarPath);
-        }
-        
-        alert("Persona imported successfully! Review and save when ready.");
-      } catch (err: any) {
-        console.error("Failed to import persona:", err);
-        alert(err?.message || "Failed to import persona");
-      } finally {
-        setImporting(false);
-      }
-    };
-    input.click();
   };
 
   const handleAvatarUpload = () => {
@@ -236,44 +197,25 @@ export function EditPersonaPage() {
             </div>
           </div>
 
-          {/* Import/Export Buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99] disabled:opacity-50"
-            >
-              {importing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4" />
-                  Import
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={handleExport}
-              disabled={!personaId || exporting}
-              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99] disabled:opacity-50"
-            >
-              {exporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  Export
-                </>
-              )}
-            </button>
-          </div>
+          {/* Export Button */}
+          <motion.button
+            onClick={handleExport}
+            disabled={!personaId || exporting}
+            whileTap={{ scale: exporting ? 1 : 0.98 }}
+            className="w-full rounded-xl border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50"
+          >
+            {exporting ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Exporting...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Download className="h-4 w-4" />
+                Export Persona
+              </span>
+            )}
+          </motion.button>
 
           {/* Save Button */}
           <button

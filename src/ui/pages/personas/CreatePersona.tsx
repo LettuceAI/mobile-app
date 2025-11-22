@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bookmark, Camera, X } from "lucide-react";
+import { Bookmark, Camera, X, Upload, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { savePersona } from "../../../core/storage/repo";
 import { saveAvatar } from "../../../core/storage/avatars";
 import { invalidateAvatarCache } from "../../hooks/useAvatar";
+import { importPersona, readFileAsText } from "../../../core/storage/personaTransfer";
 
 const wordCount = (text: string) => {
     const trimmed = text.trim();
@@ -22,6 +23,7 @@ export function CreatePersonaPage() {
     const [isDefault, setIsDefault] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [importing, setImporting] = useState(false);
 
     const canSave = title.trim().length > 0 && description.trim().length > 0 && !saving;
 
@@ -39,6 +41,43 @@ export function CreatePersonaPage() {
             };
             reader.readAsDataURL(file);
         };
+        input.click();
+    };
+
+    const handleImport = async () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".json";
+        input.onchange = async (event) => {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            try {
+                setImporting(true);
+                const jsonContent = await readFileAsText(file);
+                const exportPackage = JSON.parse(jsonContent);
+
+                if (exportPackage.type && exportPackage.type !== "persona") {
+                    throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a persona export`);
+                }
+
+                const importedPersona = await importPersona(jsonContent);
+
+                setTitle(importedPersona.title);
+                setDescription(importedPersona.description);
+                setIsDefault(false);
+                setAvatarPath(importedPersona.avatarPath || null);
+
+                alert("Persona imported successfully! Opening it for review.");
+                navigate(`/settings/personas/${importedPersona.id}/edit`);
+            } catch (err: any) {
+                console.error("Failed to import persona:", err);
+                alert(err?.message || "Failed to import persona");
+            } finally {
+                setImporting(false);
+            }
+        };
+
         input.click();
     };
 
@@ -127,6 +166,8 @@ export function CreatePersonaPage() {
                     onSave={handleSave}
                     canSave={canSave}
                     saving={saving}
+                    onImport={handleImport}
+                    importing={importing}
                     error={error}
                 />
             </main>
@@ -147,6 +188,8 @@ function PersonaStep({
     onSave,
     canSave,
     saving,
+    onImport,
+    importing,
     error,
 }: {
     title: string;
@@ -161,6 +204,8 @@ function PersonaStep({
     onSave: () => void;
     canSave: boolean;
     saving: boolean;
+    onImport: () => void;
+    importing: boolean;
     error: string | null;
 }) {
     return (
@@ -303,6 +348,26 @@ function PersonaStep({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Import Persona */}
+            <motion.button
+                onClick={onImport}
+                disabled={importing}
+                whileTap={{ scale: importing ? 1 : 0.98 }}
+                className="w-full rounded-xl border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50"
+            >
+                {importing ? (
+                    <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Importing...
+                    </span>
+                ) : (
+                    <span className="flex items-center justify-center gap-2">
+                        <Upload className="h-4 w-4" />
+                        Import Persona
+                    </span>
+                )}
+            </motion.button>
 
             {/* Create Button */}
             <div className="pt-4">
