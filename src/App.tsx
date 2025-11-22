@@ -2,7 +2,8 @@ import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-route
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { WelcomePage, ProviderSetupPage, ModelSetupPage } from "./ui/pages/onboarding";
+import { WelcomePage, ProviderSetupPage, ModelSetupPage, ModelRecommendationsPage } from "./ui/pages/onboarding";
+import { WhereToFindPage } from "./ui/pages/onboarding/WhereToFind";
 import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
 import { ModelsPage } from "./ui/pages/settings/ModelsPage";
@@ -107,7 +108,8 @@ function AppContent() {
   const isOnboardingRoute = useMemo(
     () =>
       location.pathname.startsWith("/welcome") ||
-      location.pathname.startsWith("/onboarding"),
+      location.pathname.startsWith("/onboarding") ||
+      location.pathname.startsWith("/wheretofind"),
     [location.pathname]
   );
   const isCreateRoute = useMemo(
@@ -215,6 +217,8 @@ function AppContent() {
               <Route path="/welcome" element={<WelcomePage />} />
               <Route path="/onboarding/provider" element={<ProviderSetupPage />} />
               <Route path="/onboarding/models" element={<ModelSetupPage />} />
+              <Route path="/onboarding/model-recommendations" element={<ModelRecommendationsPage />} />
+              <Route path="/wheretofind" element={<WhereToFindPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/library" element={<LibraryPage />} />
               <Route path="/settings" element={<SettingsPage />} />

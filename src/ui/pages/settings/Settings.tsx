@@ -5,6 +5,7 @@ import { typography, radius, spacing, interactive, cn } from "../../design-token
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
 import { invoke } from "@tauri-apps/api/core";
+import { DISCORD_SERVER_LINK, GITHUB_REPO_LINK } from "../../../core/utils/links";
 
 interface RowProps {
   icon: React.ReactNode;
@@ -189,10 +190,10 @@ export function SettingsPage() {
       onClick: async () => {
         try {
           const { openUrl } = await import('@tauri-apps/plugin-opener');
-          await openUrl('https://github.com/LettuceAI/mobile-app');
+          await openUrl(`${GITHUB_REPO_LINK}/issues`);
         } catch (error) {
           console.error('Failed to open URL:', error);
-          window.open('https://github.com/LettuceAI/mobile-app', '_blank');
+          window.open(`${GITHUB_REPO_LINK}/issues`, '_blank');
         }
       }
     },
@@ -204,10 +205,10 @@ export function SettingsPage() {
       onClick: async () => {
         try {
           const { openUrl } = await import('@tauri-apps/plugin-opener');
-          await openUrl('https://discord.gg/745bEttw2r');
+          await openUrl(DISCORD_SERVER_LINK);
         } catch (error) {
           console.error('Failed to open URL:', error);
-          window.open('https://discord.gg/745bEttw2r', '_blank');
+          window.open(DISCORD_SERVER_LINK, '_blank');
         }
       }
     },

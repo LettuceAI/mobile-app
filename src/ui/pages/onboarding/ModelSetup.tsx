@@ -1,8 +1,10 @@
-import { ArrowLeft, Check, Loader, Settings } from "lucide-react";
+import { ArrowLeft, Check, Loader, Settings, HelpCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { useModelController } from "./hooks/useModelController";
 
 export function ModelSetupPage() {
+  const navigate = useNavigate();
   const {
     state: {
       providers,
@@ -74,11 +76,18 @@ export function ModelSetupPage() {
         </div>
 
         {/* Title */}
-        <div className="text-center space-y-2 mb-8">
+        <div className="text-center space-y-2 mb-6">
           <h1 className="text-2xl font-bold text-white">Set your default model</h1>
           <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
             Choose which provider and model name LettuceAI should use by default. You'll be able to add more later.
           </p>
+          <button
+            onClick={() => navigate("/onboarding/model-recommendations")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-400/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:border-indigo-400/50 hover:bg-indigo-400/20 active:scale-95"
+          >
+            <HelpCircle size={14} />
+            Which model should I use?
+          </button>
         </div>
 
         {/* Provider Selection */}

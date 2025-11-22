@@ -5,6 +5,7 @@ import {
   Check,
   Loader,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
 import { useProviderController } from "./hooks/useProviderController";
@@ -47,6 +48,7 @@ function ProviderCard({ provider, isActive, onClick }: ProviderCardProps) {
 }
 
 export function ProviderSetupPage() {
+  const navigate = useNavigate();
   const {
     state: {
       selectedProviderId,
@@ -159,7 +161,7 @@ export function ProviderSetupPage() {
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-white/70">API Key</label>
                 <button
-                  onClick={() => window.open(getProviderWebsite(selectedProviderId), "_blank")}
+                  onClick={() => navigate(`/wheretofind${selectedProviderId ? `?provider=${selectedProviderId}` : ""}`)}
                   className="text-xs text-gray-400 hover:text-white transition-colors"
                 >
                   Where to find it
@@ -243,18 +245,6 @@ export function ProviderSetupPage() {
   );
 }
 
-function getProviderWebsite(providerId: string): string {
-  switch (providerId) {
-    case "openai":
-      return "https://platform.openai.com/api-keys";
-    case "anthropic":
-      return "https://console.anthropic.com/";
-    case "openrouter":
-      return "https://openrouter.ai/keys";
-    default:
-      return "#";
-  }
-}
 function getProviderDescription(providerId: string): string {
   switch (providerId) {
     case "openai":
