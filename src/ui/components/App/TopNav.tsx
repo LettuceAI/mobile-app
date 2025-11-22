@@ -7,10 +7,10 @@ import { typography, interactive, cn } from "../../design-tokens";
 
 interface TopNavProps {
   currentPath: string;
-  onCreateClick: () => void;
+  onBackOverride?: () => void;
 }
 
-export function TopNav({ currentPath }: TopNavProps) {
+export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
   const navigate = useNavigate();
   const basePath = useMemo(() => currentPath.split("?")[0], [currentPath]);
   const hasAdvancedView = useMemo(() => currentPath.includes("view=advanced"), [currentPath]);
@@ -42,6 +42,7 @@ export function TopNav({ currentPath }: TopNavProps) {
 
   const showBackButton = useMemo(() => {
     if (basePath.startsWith("/settings/") || basePath === "/settings") return true;
+    if (basePath.startsWith("/create/")) return true;
     return false;
   }, [basePath]);
 
@@ -69,6 +70,10 @@ export function TopNav({ currentPath }: TopNavProps) {
   }, [basePath]);
 
   const handleBack = () => {
+    if (onBackOverride) {
+      onBackOverride();
+      return;
+    }
     navigate(-1);
   };
 

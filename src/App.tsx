@@ -186,7 +186,6 @@ function AppContent() {
         {showTopNav && (
           <TopNav
             currentPath={location.pathname + location.search}
-            onCreateClick={() => setShowCreateMenu(true)}
           />
         )}
 

@@ -1,16 +1,17 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 
 import { useCharacterForm, Step } from "./hooks/useCharacterForm";
-import { CreateCharacterHeader } from "./components/CreateCharacterHeader";
 //import { ProgressIndicator } from "./components/ProgressIndicator";
 import { IdentityStep } from "./components/IdentityStep";
 import { StartingSceneStep } from "./components/StartingSceneStep";
 import { DescriptionStep } from "./components/DescriptionStep";
 import { AvatarPreview } from "./components/AvatarPreview";
+import { TopNav } from "../../components/App";
 
 export function CreateCharacterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state, actions, computed } = useCharacterForm();
 
   const handleBack = () => {
@@ -37,14 +38,14 @@ export function CreateCharacterPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
-      <CreateCharacterHeader onBack={handleBack} />
+      <TopNav currentPath={location.pathname + location.search} onBackOverride={handleBack} />
 
       {/*<ProgressIndicator
         currentStep={state.step}
         stepLabel={stepLabel}
       />*/}
 
-      <main className="flex-1 overflow-y-auto px-4 pb-20 pt-4">
+      <main className="flex-1 overflow-y-auto px-4 pb-20 pt-[calc(72px+env(safe-area-inset-top))]">
         <AnimatePresence mode="wait">
           {state.step === Step.Identity ? (
             <IdentityStep
