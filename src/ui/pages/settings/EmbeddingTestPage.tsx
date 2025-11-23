@@ -1,12 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
 import { storageBridge } from "../../../core/storage/files";
-import { useNavigate } from "react-router-dom";
 import { cn } from "../../design-tokens";
 
 export function EmbeddingTestPage() {
-    const navigate = useNavigate();
     const [testStatus, setTestStatus] = useState<"idle" | "testing" | "passed" | "failed">("idle");
     const [testResults, setTestResults] = useState<{
         success: boolean;
