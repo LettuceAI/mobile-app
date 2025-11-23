@@ -146,6 +146,8 @@ pub struct StoredMessage {
     pub selected_variant_id: Option<String>,
     #[serde(default)]
     pub memory_refs: Vec<String>,
+    #[serde(default)]
+    pub is_pinned: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

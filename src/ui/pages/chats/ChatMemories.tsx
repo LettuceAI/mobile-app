@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus } from "lucide-react";
+import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare } from "lucide-react";
 import type { Character, Session } from "../../../core/storage/schemas";
-import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession } from "../../../core/storage/repo";
+import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
 
 type MemoryToolEvent = NonNullable<Session["memoryToolEvents"]>[number];
@@ -297,7 +297,7 @@ export function ChatMemoriesPage() {
   const sessionId = searchParams.get("sessionId");
   const { session, setSession, character, loading, error, reload } = useSessionData(characterId, sessionId);
   const { handleAdd, handleRemove, handleUpdate, handleSaveSummary } = useMemoryActions(session, reload, (s) => setSession(s));
-  const [activeTab, setActiveTab] = useState<"memories" | "tools">("memories");
+  const [activeTab, setActiveTab] = useState<"memories" | "tools" | "pinned">("memories");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -337,6 +337,29 @@ export function ChatMemoriesPage() {
     const user = total - ai;
     return { total, ai, user };
   }, [memoryItems]);
+
+  const pinnedMessages = useMemo(() => {
+    return session?.messages.filter(m => m.isPinned) || [];
+  }, [session?.messages]);
+
+  const handleUnpin = useCallback(async (messageId: string) => {
+    if (!session) return;
+    try {
+      await toggleMessagePin(session.id, messageId);
+      await reload();
+    } catch (err) {
+      console.error("Failed to unpin message:", err);
+    }
+  }, [session, reload]);
+
+  const handleScrollToMessage = useCallback((messageId: string) => {
+    // Navigate back to chat with a message ID parameter
+    const params = new URLSearchParams({ sessionId: session?.id || "" });
+    if (messageId) {
+      params.set("highlightMessage", messageId);
+    }
+    navigate(`/chats/${characterId}?${params.toString()}`);
+  }, [navigate, characterId, session?.id]);
 
   const handleAddNew = async () => {
     const trimmed = newMemory.trim();
@@ -739,7 +762,7 @@ export function ChatMemoriesPage() {
             </div>
 
           </div>
-        ) : (
+        ) : activeTab === "tools" ? (
           <div className={cn("px-3 py-4", spacing.section)}>
             <div>
               <h2 className={cn(
@@ -758,6 +781,128 @@ export function ChatMemoriesPage() {
             </div>
             <ToolLog events={(session.memoryToolEvents as MemoryToolEvent[]) || []} />
           </div>
+        ) : (
+          <div className={cn("px-3 py-4", spacing.section)}>
+            <div>
+              <h2 className={cn(
+                "mb-2 px-1",
+                typography.overline.size,
+                typography.overline.weight,
+                typography.overline.tracking,
+                typography.overline.transform,
+                "text-white/35"
+              )}>
+                Pinned Messages
+              </h2>
+              <p className={cn(typography.caption.size, colors.text.tertiary, "mb-3 px-1")}>
+                Messages that are always included in context
+              </p>
+            </div>
+            {pinnedMessages.length === 0 ? (
+              <div className={cn(
+                components.card.base,
+                "px-6 py-8 text-center"
+              )}>
+                <Pin className="mx-auto mb-3 h-12 w-12 text-white/20" />
+                <h3 className="mb-1 text-lg font-medium text-white">
+                  No pinned messages
+                </h3>
+                <p className="text-center text-sm text-white/50">
+                  Pin important messages from the chat to always include them in the AI's context
+                </p>
+              </div>
+            ) : (
+              <div className={cn(spacing.field)}>
+                {pinnedMessages.map((msg) => {
+                  const isUser = msg.role === "user";
+                  const isAssistant = msg.role === "assistant";
+                  const timestamp = new Date(msg.createdAt).toLocaleString();
+                  
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "w-full px-4 py-3",
+                        radius.md,
+                        "border bg-white/5",
+                        isUser ? "border-emerald-400/30" : isAssistant ? "border-blue-400/30" : "border-white/10",
+                        interactive.transition.default
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center",
+                          radius.full,
+                          "border text-white/70",
+                          interactive.transition.default,
+                          isUser
+                            ? "border-emerald-400/30 bg-emerald-400/10"
+                            : isAssistant
+                              ? "border-blue-400/30 bg-blue-400/10"
+                              : "border-white/10 bg-white/5"
+                        )}>
+                          {isUser ? (
+                            <User className="h-4 w-4 text-emerald-400" />
+                          ) : isAssistant ? (
+                            <Bot className="h-4 w-4 text-blue-400" />
+                          ) : (
+                            <MessageSquare className="h-4 w-4 text-white/60" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={cn(
+                              typography.caption.size,
+                              "font-semibold uppercase tracking-wide",
+                              isUser ? "text-emerald-400" : isAssistant ? "text-blue-400" : colors.text.tertiary
+                            )}>
+                              {isUser ? "User" : isAssistant ? "Assistant" : msg.role}
+                            </span>
+                            <span className={cn(typography.caption.size, colors.text.disabled)}>
+                              {timestamp}
+                            </span>
+                          </div>
+                          <p className={cn(
+                            typography.bodySmall.size,
+                            colors.text.secondary,
+                            "leading-relaxed break-words whitespace-pre-wrap"
+                          )}>
+                            {msg.content}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 mt-3 pl-11">
+                        <button
+                          onClick={() => handleScrollToMessage(msg.id)}
+                          className={cn(
+                            typography.caption.size,
+                            "font-medium flex items-center gap-1.5",
+                            colors.text.tertiary,
+                            "hover:text-white transition-colors"
+                          )}
+                        >
+                          <MessageSquare size={12} />
+                          Scroll to message
+                        </button>
+                        <button
+                          onClick={() => handleUnpin(msg.id)}
+                          className={cn(
+                            typography.caption.size,
+                            "font-medium flex items-center gap-1.5",
+                            colors.text.tertiary,
+                            "hover:text-amber-400 transition-colors"
+                          )}
+                        >
+                          <Pin size={12} />
+                          Unpin
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </main>
 
@@ -768,11 +913,12 @@ export function ChatMemoriesPage() {
       )}>
         <div className={cn(
           radius.lg,
-          "grid grid-cols-2 gap-2 p-1",
+          "grid grid-cols-3 gap-2 p-1",
           colors.surface.elevated
         )}>
           {[
         { id: "memories" as const, icon: Bot, label: "Memories" },
+        { id: "pinned" as const, icon: Pin, label: "Pinned" },
         { id: "tools" as const, icon: Clock, label: "Activity" }
           ].map(({ id, icon: Icon, label }) => (
         <button

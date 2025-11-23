@@ -31,6 +31,13 @@ const FALLBACK_DYNAMIC_WINDOW: u32 = 20;
 const FALLBACK_DYNAMIC_MAX_ENTRIES: u32 = 50;
 const MEMORY_ID_SPACE: u64 = 1_000_000;
 
+/// Determines if dynamic memory is currently active for this character.
+/// Returns true ONLY if BOTH conditions are met:
+/// 1. Global dynamic memory setting is enabled in advanced settings
+/// 2. Character's memory_type is set to "dynamic"
+///
+/// If either condition is false, the system falls back to manual memory mode
+/// (using session.memories) without modifying the character's memory_type setting.
 fn is_dynamic_memory_active(settings: &Settings, session_character: &super::types::Character) -> bool {
     settings
         .advanced_settings
@@ -69,6 +76,38 @@ fn conversation_window(messages: &[StoredMessage], limit: usize) -> Vec<StoredMe
         convo.drain(0..(convo.len() - limit));
     }
     convo
+}
+
+/// Extract pinned and unpinned conversation messages separately.
+/// Pinned messages are always included but don't count against the window limit.
+/// Returns (pinned_messages, recent_unpinned_messages_within_limit)
+fn conversation_window_with_pinned(
+    messages: &[StoredMessage],
+    limit: usize,
+) -> (Vec<StoredMessage>, Vec<StoredMessage>) {
+    let convo: Vec<StoredMessage> = messages
+        .iter()
+        .filter(|m| m.role == "user" || m.role == "assistant")
+        .cloned()
+        .collect();
+
+    let mut pinned = Vec::new();
+    let mut unpinned = Vec::new();
+
+    for msg in convo {
+        if msg.is_pinned {
+            pinned.push(msg);
+        } else {
+            unpinned.push(msg);
+        }
+    }
+
+    // Apply sliding window to unpinned messages only
+    if unpinned.len() > limit {
+        unpinned.drain(0..(unpinned.len() - limit));
+    }
+
+    (pinned, unpinned)
 }
 
 fn conversation_count(messages: &[StoredMessage]) -> usize {
@@ -352,6 +391,7 @@ pub async fn chat_completion(
         variants: Vec::new(),
         selected_variant_id: None,
         memory_refs: Vec::new(),
+        is_pinned: false,
     };
     session.messages.push(user_msg.clone());
     session.updated_at = now;
@@ -369,13 +409,20 @@ pub async fn chat_completion(
     );
 
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
-    let recent_msgs = if dynamic_memory_enabled {
-        conversation_window(&session.messages, dynamic_window)
+    
+    // Determine message window: use conversation_window for dynamic memory (limited context),
+    // or recent_messages for manual memory (includes all recent non-scene messages)
+    // For dynamic memory with pinned messages: pinned messages are always included but don't count in the limit
+    let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
+        let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
+        (pinned, unpinned)
     } else {
-        recent_messages(&session)
+        (Vec::new(), recent_messages(&session))
     };
 
     // Retrieve top-k relevant memories for this turn.
+    // - Dynamic memory: use semantic search over memory embeddings
+    // - Manual memory: memories are injected via system prompt (see below)
     let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
         select_relevant_memories(&app, &session, &user_message, 5).await
     } else {
@@ -389,7 +436,11 @@ pub async fn chat_completion(
         system_role,
         system_prompt,
     );
+    
     // Inject memory context when available
+    // - Dynamic memory: inject semantically relevant memories as context
+    // - Manual memory: session.memories are already included in system prompt
+    //   (see build_system_prompt in prompt_engine.rs)
     let memory_block = if dynamic_memory_enabled {
         if relevant_memories.is_empty() {
             None
@@ -421,9 +472,23 @@ pub async fn chat_completion(
             Some(format!("Relevant memories:\n{}", block)),
         );
     }
+    
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    
+    // Include pinned messages first (if dynamic memory is enabled)
+    // Pinned messages are always included but don't count against the sliding window limit
+    for msg in &pinned_msgs {
+        crate::chat_manager::messages::push_user_or_assistant_message_with_context(
+            &mut messages_for_api,
+            msg,
+            char_name,
+            persona_name,
+        );
+    }
+    
+    // Then include recent unpinned messages from sliding window
     for msg in &recent_msgs {
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
@@ -592,6 +657,7 @@ pub async fn chat_completion(
         } else {
             Vec::new()
         },
+        is_pinned: false,
     };
 
     session.messages.push(assistant_message.clone());
@@ -776,28 +842,66 @@ pub async fn chat_regenerate(
 
     let api_key = resolve_api_key(&app, provider_cred, "chat_regenerate")?;
 
+    let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
+    let dynamic_window = dynamic_window_size(settings);
+
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
         crate::chat_manager::messages::push_system_message(&mut out, system_role, system_prompt);
+        
         // Dynamic placeholder values
         let char_name = &character.name;
         let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
-        for (idx, msg) in session.messages.iter().enumerate() {
-            if idx > target_index {
-                break;
+        
+        // Messages up to (but not including) the target message being regenerated
+        let messages_before_target: Vec<StoredMessage> = session.messages.iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx < target_index)
+            .map(|(_, msg)| msg.clone())
+            .collect();
+        
+        // Use dynamic memory's pinned message system when enabled
+        if dynamic_memory_enabled {
+            let (pinned_msgs, recent_msgs) = conversation_window_with_pinned(&messages_before_target, dynamic_window);
+            
+            // Include pinned messages first
+            for msg in &pinned_msgs {
+                crate::chat_manager::messages::push_user_or_assistant_message_with_context(
+                    &mut out,
+                    msg,
+                    char_name,
+                    persona_name,
+                );
             }
-            if idx == target_index {
-                continue;
+            
+            // Then include recent unpinned messages
+            for msg in &recent_msgs {
+                crate::chat_manager::messages::push_user_or_assistant_message_with_context(
+                    &mut out,
+                    msg,
+                    char_name,
+                    persona_name,
+                );
             }
-            crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-                &mut out,
-                msg,
-                char_name,
-                persona_name,
-            );
+        } else {
+            // Manual memory: include all messages before target
+            for (idx, msg) in session.messages.iter().enumerate() {
+                if idx > target_index {
+                    break;
+                }
+                if idx == target_index {
+                    continue;
+                }
+                crate::chat_manager::messages::push_user_or_assistant_message_with_context(
+                    &mut out,
+                    msg,
+                    char_name,
+                    persona_name,
+                );
+            }
         }
         // Final guard for system + built messages
         crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
@@ -1088,8 +1192,18 @@ pub async fn chat_continue(
 
     let api_key = resolve_api_key(&app, provider_cred, "chat_continue")?;
 
+    let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
+    let dynamic_window = dynamic_window_size(settings);
+
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
-    let recent_msgs = recent_messages(&session);
+    
+    // Use dynamic memory's pinned message system when enabled
+    let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
+        let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
+        (pinned, unpinned)
+    } else {
+        (Vec::new(), recent_messages(&session))
+    };
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
@@ -1098,9 +1212,22 @@ pub async fn chat_continue(
         system_role,
         system_prompt,
     );
+    
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    
+    // Include pinned messages first (if dynamic memory is enabled)
+    for msg in &pinned_msgs {
+        crate::chat_manager::messages::push_user_or_assistant_message_with_context(
+            &mut messages_for_api,
+            msg,
+            char_name,
+            persona_name,
+        );
+    }
+    
+    // Then include recent unpinned messages from sliding window
     for msg in &recent_msgs {
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
@@ -1274,6 +1401,7 @@ pub async fn chat_continue(
         variants: vec![variant],
         selected_variant_id: Some(variant_id),
         memory_refs: Vec::new(),
+        is_pinned: false,
     };
 
     session.messages.push(assistant_message.clone());
