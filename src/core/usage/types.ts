@@ -21,6 +21,7 @@ export interface RequestUsage {
   modelName: string;
   providerId: string;
   providerLabel: string;
+  operationType: string; // Type of operation (chat, regenerate, continue, summary, memory_manager, etc.)
   
   promptTokens?: number;
   completionTokens?: number;

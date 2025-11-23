@@ -15,6 +15,7 @@ pub struct RequestUsage {
     pub model_name: String,     // Model name for display
     pub provider_id: String,    // Which provider (openai, anthropic, openrouter, etc)
     pub provider_label: String, // Provider label for display
+    pub operation_type: String, // Type of operation (chat, regenerate, continue, summary, memory_manager, etc)
 
     pub prompt_tokens: Option<u64>,
     pub completion_tokens: Option<u64>,

@@ -115,6 +115,7 @@ pub async fn record_usage_if_available(
     provider_cred: &ProviderCredential,
     api_key: &str,
     created_at: u64,
+    operation_type: &str,
     log_scope: &str,
 ) {
     let Some(usage_info) = usage else {
@@ -131,6 +132,7 @@ pub async fn record_usage_if_available(
         model_name: model.name.clone(),
         provider_id: provider_cred.provider_id.clone(),
         provider_label: provider_cred.provider_id.clone(),
+        operation_type: operation_type.to_string(),
         prompt_tokens: usage_info.prompt_tokens,
         completion_tokens: usage_info.completion_tokens,
         total_tokens: usage_info.total_tokens,

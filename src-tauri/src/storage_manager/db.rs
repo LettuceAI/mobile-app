@@ -254,6 +254,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           model_name TEXT NOT NULL,
           provider_id TEXT NOT NULL,
           provider_label TEXT NOT NULL,
+          operation_type TEXT DEFAULT 'chat',
           prompt_tokens INTEGER,
           completion_tokens INTEGER,
           total_tokens INTEGER,

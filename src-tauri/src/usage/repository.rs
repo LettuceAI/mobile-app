@@ -38,8 +38,8 @@ impl UsageRepository {
         tx.execute(
             r#"INSERT OR REPLACE INTO usage_records (
                 id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label,
-                prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                operation_type, prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             rusqlite::params![
                 usage.id,
                 usage.timestamp as i64,
@@ -50,6 +50,7 @@ impl UsageRepository {
                 usage.model_name,
                 usage.provider_id,
                 usage.provider_label,
+                usage.operation_type,
                 usage.prompt_tokens.map(|v| v as i64),
                 usage.completion_tokens.map(|v| v as i64),
                 usage.total_tokens.map(|v| v as i64),
@@ -112,7 +113,7 @@ impl UsageRepository {
         }
 
         let sql = format!(
-            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
+            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
             if where_clauses.is_empty() { String::new() } else { format!("WHERE {}", where_clauses.join(" AND ")) }
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -128,14 +129,15 @@ impl UsageRepository {
                     r.get::<_, String>(6)?,
                     r.get::<_, String>(7)?,
                     r.get::<_, String>(8)?,
-                    r.get::<_, Option<i64>>(9)?,
+                    r.get::<_, String>(9)?,
                     r.get::<_, Option<i64>>(10)?,
                     r.get::<_, Option<i64>>(11)?,
-                    r.get::<_, Option<f64>>(12)?,
+                    r.get::<_, Option<i64>>(12)?,
                     r.get::<_, Option<f64>>(13)?,
                     r.get::<_, Option<f64>>(14)?,
-                    r.get::<_, i64>(15)?,
-                    r.get::<_, Option<String>>(16)?,
+                    r.get::<_, Option<f64>>(15)?,
+                    r.get::<_, i64>(16)?,
+                    r.get::<_, Option<String>>(17)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -153,6 +155,7 @@ impl UsageRepository {
                 model_name,
                 provider_id,
                 provider_label,
+                operation_type,
                 pt,
                 ct,
                 tt,
@@ -186,6 +189,7 @@ impl UsageRepository {
                 model_name,
                 provider_id,
                 provider_label,
+                operation_type,
                 prompt_tokens: pt.map(|v| v as u64),
                 completion_tokens: ct.map(|v| v as u64),
                 total_tokens: tt.map(|v| v as u64),

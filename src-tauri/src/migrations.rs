@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 12;
+const CURRENT_MIGRATION_VERSION: u32 = 13;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -162,6 +162,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v11_to_v12(app)?;
         version = 12;
+    }
+
+    if version < 13 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v12 -> v13: Add operation_type to usage_records".to_string(),
+        );
+        migrate_v12_to_v13(app)?;
+        version = 13;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -861,6 +871,45 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
             "v1->v2 migration completed. Total prompt templates created: {}",
             templates_created
         ),
+    );
+
+    Ok(())
+}
+
+/// Migration v12 -> v13: add operation_type column to usage_records
+fn migrate_v12_to_v13(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if column already exists
+    let mut has_column = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(usage_records)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "operation_type" {
+            has_column = true;
+            break;
+        }
+    }
+
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE usage_records ADD COLUMN operation_type TEXT DEFAULT 'chat'",
+            [],
+        );
+    }
+
+    // Ensure all existing rows have a value
+    let _ = conn.execute(
+        "UPDATE usage_records SET operation_type = 'chat' WHERE operation_type IS NULL",
+        [],
     );
 
     Ok(())

@@ -695,6 +695,7 @@ pub async fn chat_completion(
         provider_cred,
         &api_key,
         assistant_created_at,
+        "chat",
         "chat_completion",
     )
     .await;
@@ -1093,6 +1094,7 @@ pub async fn chat_regenerate(
         provider_cred,
         &api_key,
         created_at,
+        "regenerate",
         "chat_regenerate",
     )
     .await;
@@ -1438,6 +1440,7 @@ pub async fn chat_continue(
         provider_cred,
         &api_key,
         assistant_created_at,
+        "continue",
         "chat_continue",
     )
     .await;
@@ -1837,6 +1840,24 @@ async fn run_memory_tool_update(
     };
 
     let api_response = api_request(app.clone(), api_request_payload).await?;
+    
+    // Extract and record usage for memory manager operation
+    let usage = extract_usage(api_response.data());
+    let context = ChatContext::initialize(app.clone())?;
+    record_usage_if_available(
+        &context,
+        &usage,
+        session,
+        character,
+        model,
+        provider_cred,
+        api_key,
+        now_millis().unwrap_or_default(),
+        "memory_manager",
+        "run_memory_tool_update",
+    )
+    .await;
+    
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
@@ -2084,6 +2105,24 @@ async fn summarize_messages(
     };
 
     let api_response = api_request(app.clone(), api_request_payload).await?;
+    
+    // Extract and record usage for summary operation
+    let usage = extract_usage(api_response.data());
+    let context = ChatContext::initialize(app.clone())?;
+    record_usage_if_available(
+        &context,
+        &usage,
+        session,
+        character,
+        model,
+        provider_cred,
+        api_key,
+        now_millis().unwrap_or_default(),
+        "summary",
+        "summarize_messages",
+    )
+    .await;
+    
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());

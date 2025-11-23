@@ -33,6 +33,28 @@ function formatNumber(value: number): string {
 }
 
 /**
+ * Get operation type display info with colors
+ */
+function getOperationTypeInfo(operationType: string): { label: string; color: string } {
+  const normalized = operationType.toLowerCase();
+  
+  switch (normalized) {
+    case 'chat':
+      return { label: 'Chat', color: 'bg-blue-500/15 border-blue-400/30 text-blue-100' };
+    case 'regenerate':
+      return { label: 'Regenerate', color: 'bg-purple-500/15 border-purple-400/30 text-purple-100' };
+    case 'continue':
+      return { label: 'Continue', color: 'bg-cyan-500/15 border-cyan-400/30 text-cyan-100' };
+    case 'summary':
+      return { label: 'Summary', color: 'bg-amber-500/15 border-amber-400/30 text-amber-100' };
+    case 'memory_manager':
+      return { label: 'Memory', color: 'bg-emerald-500/15 border-emerald-400/30 text-emerald-100' };
+    default:
+      return { label: operationType, color: 'bg-white/10 border-white/15 text-white/80' };
+  }
+}
+
+/**
  * Mobile-friendly date picker component
  */
 function DateRangePicker({
@@ -122,6 +144,15 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
         <div className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-2 min-w-0">
             <p className="text-sm font-medium text-white truncate">{request.characterName}</p>
+            {/* Operation type badge */}
+            {request.operationType && (() => {
+              const opInfo = getOperationTypeInfo(request.operationType);
+              return (
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${opInfo.color}`}>
+                  {opInfo.label}
+                </span>
+              );
+            })()}
             {/* Provider/Model badge next to title */}
             {(request.providerLabel || request.modelName) && (
               <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] text-white/80">
@@ -162,6 +193,13 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
             className="overflow-hidden border-t border-white/10 bg-black/20"
           >
             <div className="px-4 py-3 space-y-2.5">
+              {request.operationType && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-white/40">Operation</span>
+                  <span className="text-white/60">{getOperationTypeInfo(request.operationType).label}</span>
+                </div>
+              )}
+              
               <div className="flex justify-between text-xs">
                 <span className="text-white/40">Time</span>
                 <span className="text-white/60">
@@ -250,8 +288,10 @@ export function UsagePage() {
   // Filters for recent requests
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const [selectedOperationType, setSelectedOperationType] = useState<string | null>(null);
   const [showModelFilter, setShowModelFilter] = useState(false);
   const [showCharacterFilter, setShowCharacterFilter] = useState(false);
+  const [showOperationTypeFilter, setShowOperationTypeFilter] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
@@ -323,7 +363,7 @@ export function UsagePage() {
   // Reset pagination when filters change
   useEffect(() => {
     setVisibleCount(RECORDS_PER_PAGE);
-  }, [selectedModelId, selectedCharacterId]);
+  }, [selectedModelId, selectedCharacterId, selectedOperationType]);
 
   // Derived lists for filters
   const modelOptions = useMemo(() => {
@@ -342,12 +382,23 @@ export function UsagePage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [records]);
 
+  const operationTypeOptions = useMemo(() => {
+    const map = new Map<string, { label: string; color: string }>();
+    for (const r of records) {
+      if (r.operationType && !map.has(r.operationType)) {
+        map.set(r.operationType, getOperationTypeInfo(r.operationType));
+      }
+    }
+    return Array.from(map.entries()).map(([id, info]) => ({ id, label: info.label, color: info.color }));
+  }, [records]);
+
   const filteredRecords = useMemo(() => {
     let list = records.slice();
     if (selectedModelId) list = list.filter(r => r.modelId === selectedModelId);
     if (selectedCharacterId) list = list.filter(r => r.characterId === selectedCharacterId);
+    if (selectedOperationType) list = list.filter(r => r.operationType === selectedOperationType);
     return list;
-  }, [records, selectedModelId, selectedCharacterId]);
+  }, [records, selectedModelId, selectedCharacterId, selectedOperationType]);
 
   // Derived stats based on current filter (All / By Model / By Character)
   const displayStats = useMemo(() => {
@@ -516,8 +567,8 @@ export function UsagePage() {
             {/* Filter Chips */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
               <motion.button
-                onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); }}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${!selectedModelId && !selectedCharacterId ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
+                onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); setSelectedOperationType(null); }}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${!selectedModelId && !selectedCharacterId && !selectedOperationType ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
                 whileTap={{ scale: 0.98 }}
               >
                 All
@@ -535,6 +586,13 @@ export function UsagePage() {
                 whileTap={{ scale: 0.98 }}
               >
                 {selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Character') : 'By Character'}
+              </motion.button>
+              <motion.button
+                onClick={() => setShowOperationTypeFilter((v) => !v)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${selectedOperationType ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
+                whileTap={{ scale: 0.98 }}
+              >
+                {selectedOperationType ? (operationTypeOptions.find(o => o.id === selectedOperationType)?.label || 'Type') : 'By Type'}
               </motion.button>
             </div>
 
@@ -610,6 +668,46 @@ export function UsagePage() {
                   <div className="flex justify-end">
                     <motion.button
                       onClick={() => { setSelectedCharacterId(null); setShowCharacterFilter(false); }}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Clear
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Operation Type Filter Inline Menu */}
+            <AnimatePresence>
+              {showOperationTypeFilter && operationTypeOptions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
+                >
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {operationTypeOptions.map(opt => {
+                      const selected = selectedOperationType === opt.id;
+                      return (
+                        <motion.button
+                          key={opt.id}
+                          onClick={() => { setSelectedOperationType(opt.id); setShowOperationTypeFilter(false); }}
+                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs transition border ${selected ? opt.color : 'text-white/80 hover:bg-white/10/60 border-transparent'}`}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="truncate pr-2">{opt.label}</span>
+                          {selected && <Check className="h-4 w-4" />}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                  <div className="h-px bg-white/10 my-2" />
+                  <div className="flex justify-end">
+                    <motion.button
+                      onClick={() => { setSelectedOperationType(null); setShowOperationTypeFilter(false); }}
                       className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
                       whileTap={{ scale: 0.98 }}
                     >
