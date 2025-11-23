@@ -68,3 +68,14 @@ export async function resetDynamicSummaryTemplate(): Promise<SystemPromptTemplat
 export async function resetDynamicMemoryTemplate(): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("reset_dynamic_memory_template");
 }
+
+export async function getRequiredTemplateVariables(templateId: string): Promise<string[]> {
+  return await invoke<string[]>("get_required_template_variables", { templateId });
+}
+
+export async function validateTemplateVariables(
+  templateId: string,
+  content: string
+): Promise<void> {
+  await invoke("validate_template_variables", { templateId, content });
+}

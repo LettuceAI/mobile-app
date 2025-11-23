@@ -1399,6 +1399,17 @@ pub fn reset_dynamic_memory_template(app: AppHandle) -> Result<SystemPromptTempl
     prompts::reset_dynamic_memory_template(&app)
 }
 
+#[tauri::command]
+pub fn get_required_template_variables(template_id: String) -> Vec<String> {
+    prompts::get_required_variables(&template_id)
+}
+
+#[tauri::command]
+pub fn validate_template_variables(template_id: String, content: String) -> Result<(), String> {
+    prompts::validate_required_variables(&template_id, &content)
+        .map_err(|missing| format!("Missing required variables: {}", missing.join(", ")))
+}
+
 // Deprecated: get_applicable_prompts_for_* commands removed in favor of global list on client
 
 // ==================== Prompt Preview Command ====================

@@ -119,6 +119,8 @@ pub fn run() {
             chat_manager::reset_app_default_template,
             chat_manager::reset_dynamic_summary_template,
             chat_manager::reset_dynamic_memory_template,
+            chat_manager::get_required_template_variables,
+            chat_manager::validate_template_variables,
             chat_manager::render_prompt_preview,
             chat_manager::regenerate_session_system_prompt,
             usage::usage_add_record,

@@ -14,6 +14,43 @@ const APP_DEFAULT_TEMPLATE_NAME: &str = "App Default";
 const APP_DYNAMIC_SUMMARY_TEMPLATE_NAME: &str = "Dynamic Memory: Summarizer";
 const APP_DYNAMIC_MEMORY_TEMPLATE_NAME: &str = "Dynamic Memory: Memory Manager";
 
+/// Get required variables for a specific template ID
+pub fn get_required_variables(template_id: &str) -> Vec<String> {
+    match template_id {
+        APP_DEFAULT_TEMPLATE_ID => vec![
+            "{{scene}}".to_string(),
+            "{{char.name}}".to_string(),
+            "{{char.desc}}".to_string(),
+        ],
+        APP_DYNAMIC_SUMMARY_TEMPLATE_ID => vec![
+            "{{prev_summary}}".to_string(),
+        ],
+        APP_DYNAMIC_MEMORY_TEMPLATE_ID => vec![
+            "{{max_entries}}".to_string(),
+        ],
+        _ => vec![],
+    }
+}
+
+/// Validate that all required variables exist in the content
+pub fn validate_required_variables(template_id: &str, content: &str) -> Result<(), Vec<String>> {
+    let required = get_required_variables(template_id);
+    if required.is_empty() {
+        return Ok(());
+    }
+
+    let missing: Vec<String> = required
+        .into_iter()
+        .filter(|var| !content.contains(var))
+        .collect();
+
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(missing)
+    }
+}
+
 fn generate_id() -> String {
     format!("prompt_{}", uuid::Uuid::new_v4().to_string())
 }
@@ -142,6 +179,16 @@ pub fn update_template(
     let new_scope = scope.unwrap_or(current.scope);
     let new_target_ids = target_ids.unwrap_or(current.target_ids);
     let new_content = content.unwrap_or(current.content);
+
+    // Validate required variables for protected templates
+    if is_app_default_template(&id) {
+        if let Err(missing) = validate_required_variables(&id, &new_content) {
+            return Err(format!(
+                "Protected template must contain required variables: {}",
+                missing.join(", ")
+            ));
+        }
+    }
     let updated_at = now();
     let target_ids_json = serde_json::to_string(&new_target_ids).map_err(|e| e.to_string())?;
 

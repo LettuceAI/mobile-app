@@ -14,6 +14,7 @@ import {
   resetDynamicMemoryTemplate,
   getDefaultSystemPromptTemplate,
   renderPromptPreview,
+  getRequiredTemplateVariables,
 } from "../../../core/prompts/service";
 import { listCharacters, listPersonas } from "../../../core/storage";
 import type { Character, Persona } from "../../../core/storage/schemas";
@@ -40,6 +41,8 @@ export function EditPromptTemplate() {
   const [isAppDefault, setIsAppDefault] = useState(false);
   const [promptType, setPromptType] = useState<"system" | "summary" | "memory" | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [requiredVariables, setRequiredVariables] = useState<string[]>([]);
+  const [missingVariables, setMissingVariables] = useState<string[]>([]);
   const [previewMode, setPreviewMode] = useState<"rendered" | "raw">("rendered");
   const [showVariables, setShowVariables] = useState(false);
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
@@ -47,6 +50,13 @@ export function EditPromptTemplate() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (isAppDefault && requiredVariables.length > 0) {
+      const missing = requiredVariables.filter(v => !content.includes(v));
+      setMissingVariables(missing);
+    }
+  }, [content, requiredVariables, isAppDefault]);
 
   async function loadData() {
     try {
@@ -78,6 +88,12 @@ export function EditPromptTemplate() {
           } else if (template.id === DYNAMIC_MEMORY_TEMPLATE_ID) {
             setPromptType("memory");
           }
+
+          // Load required variables for protected templates
+          if (isProtected) {
+            const required = await getRequiredTemplateVariables(template.id);
+            setRequiredVariables(required);
+          }
         }
       } else {
         const def = await getDefaultSystemPromptTemplate();
@@ -95,6 +111,12 @@ export function EditPromptTemplate() {
       return;
     }
 
+    // Validate required variables for protected templates
+    if (isAppDefault && id && missingVariables.length > 0) {
+      alert(`Cannot save: Missing required variables: ${missingVariables.join(", ")}`);
+      return;
+    }
+
     setSaving(true);
     try {
       if (isEditing && id) {
@@ -108,7 +130,7 @@ export function EditPromptTemplate() {
       navigate("/settings/prompts");
     } catch (error) {
       console.error("Failed to save template:", error);
-      alert("Failed to save template");
+      alert("Failed to save template: " + String(error));
     } finally {
       setSaving(false);
     }
@@ -255,6 +277,25 @@ export function EditPromptTemplate() {
                   )}
                 </div>
               </div>
+
+              {/* Missing Variables Warning */}
+              {isAppDefault && missingVariables.length > 0 && (
+                <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-3">
+                  <div className="flex items-start gap-2">
+                    <div className="rounded-full bg-red-400/20 p-1 mt-0.5">
+                      <svg className="h-3.5 w-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-red-200">Missing Required Variables</p>
+                      <p className="mt-1 text-xs text-red-300/80">
+                        This protected template must include: {missingVariables.join(", ")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <textarea
                 value={content}
@@ -411,17 +452,40 @@ export function EditPromptTemplate() {
         title="Template Variables"
       >
         <p className="mb-4 text-xs text-white/50">Tap to copy variable to clipboard</p>
+        {isAppDefault && requiredVariables.length > 0 && (
+          <div className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-2.5">
+            <p className="text-xs text-amber-200">
+              <span className="font-semibold">Required:</span> Variables marked with ★ must be included in this protected template
+            </p>
+          </div>
+        )}
         <div className="max-h-[50vh] space-y-2 overflow-y-auto">
-          {variables.map((item) => (
+          {variables.map((item) => {
+            const isRequired = requiredVariables.includes(item.var);
+            const isMissing = missingVariables.includes(item.var);
+            return (
             <button
               key={item.var}
               onClick={() => copyVariable(item.var)}
-              className="w-full rounded-xl border border-purple-400/20 bg-purple-400/5 p-4 text-left transition-colors active:bg-purple-400/10"
+              className={cn(
+                "w-full rounded-xl border p-4 text-left transition-colors",
+                isMissing 
+                  ? "border-red-400/40 bg-red-400/10 active:bg-red-400/20"
+                  : isRequired
+                  ? "border-amber-400/30 bg-amber-400/10 active:bg-amber-400/15"
+                  : "border-purple-400/20 bg-purple-400/5 active:bg-purple-400/10"
+              )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <code className="text-sm font-semibold text-emerald-300">{item.var}</code>
+                    {isRequired && (
+                      <span className={cn("text-sm", isMissing ? "text-red-400" : "text-amber-400")}>★</span>
+                    )}
+                    <code className={cn(
+                      "text-sm font-semibold",
+                      isMissing ? "text-red-300" : "text-emerald-300"
+                    )}>{item.var}</code>
                     {copiedVar === item.var && (
                       <span className="flex items-center gap-1 text-xs text-emerald-400">
                         <Check className="h-3 w-3" />
@@ -434,7 +498,8 @@ export function EditPromptTemplate() {
                 </div>
               </div>
             </button>
-          ))}
+          );
+          })}
         </div>
       </BottomMenu>
     </div>

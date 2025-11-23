@@ -14,6 +14,8 @@ export {
   resetAppDefaultTemplate,
   resetDynamicSummaryTemplate,
   resetDynamicMemoryTemplate,
+  getRequiredTemplateVariables,
+  validateTemplateVariables,
 } from "./index";
 
 import { invoke } from "@tauri-apps/api/core";
