@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use super::tracking::{
     CharacterStats, ModelStats, ProviderStats, RequestUsage, UsageFilter, UsageStats,
 };
 use crate::storage_manager::db::open_db;
-use crate::utils::{ensure_lettuce_dir, log_info};
+use crate::utils::log_info;
 
 struct UsageRepository {
     app: AppHandle,
@@ -271,25 +270,67 @@ impl UsageRepository {
     }
 
     fn export_csv(&self, filter: UsageFilter) -> Result<String, String> {
+        log_info(
+            &self.app,
+            "export_csv",
+            format!("Exporting CSV with filter: start={:?}, end={:?}", filter.start_timestamp, filter.end_timestamp),
+        );
         let records = self.query_records(filter)?;
-        Ok(build_csv(&records))
+        log_info(
+            &self.app,
+            "export_csv",
+            format!("Found {} records to export", records.len()),
+        );
+        let csv = build_csv(&records);
+        log_info(
+            &self.app,
+            "export_csv",
+            format!("Generated CSV with {} bytes", csv.len()),
+        );
+        Ok(csv)
     }
 
     fn save_csv(&self, csv_data: &str, filename: &str) -> Result<String, String> {
-        let exports_dir = self.ensure_exports_dir()?;
-        let file_path = exports_dir.join(filename);
-        fs::write(&file_path, csv_data).map_err(|e| e.to_string())?;
-        file_path
-            .to_str()
-            .ok_or_else(|| "Invalid file path".to_string())
-            .map(|s| s.to_string())
-    }
+        log_info(
+            &self.app,
+            "save_csv",
+            format!("Saving CSV to downloads: {} ({} bytes)", filename, csv_data.len()),
+        );
 
-    fn ensure_exports_dir(&self) -> Result<PathBuf, String> {
-        let dir = ensure_lettuce_dir(&self.app)?;
-        let exports_dir = dir.join("exports");
-        fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
-        Ok(exports_dir)
+        #[cfg(target_os = "android")]
+        let download_dir = {
+            use std::path::PathBuf;
+            PathBuf::from("/storage/emulated/0/Download")
+        };
+
+        #[cfg(not(target_os = "android"))]
+        let download_dir = self.app
+            .path()
+            .download_dir()
+            .map_err(|e| format!("Failed to get downloads directory: {}", e))?;
+
+        if !download_dir.exists() {
+            fs::create_dir_all(&download_dir)
+                .map_err(|e| format!("Failed to create downloads directory: {}", e))?;
+        }
+
+        let file_path = download_dir.join(filename);
+
+        fs::write(&file_path, csv_data.as_bytes())
+            .map_err(|e| format!("Failed to write file: {}", e))?;
+
+        let path_str = file_path
+            .to_str()
+            .ok_or_else(|| "Invalid path".to_string())?
+            .to_string();
+
+        log_info(
+            &self.app,
+            "save_csv",
+            format!("Successfully saved CSV to: {}", path_str),
+        );
+
+        Ok(path_str)
     }
 }
 
@@ -357,16 +398,17 @@ fn accumulate_usage_stats(stats: &mut UsageStats, record: &RequestUsage) {
 }
 
 fn build_csv(records: &[RequestUsage]) -> String {
-    let mut csv = String::from("timestamp,session_id,character_name,model_name,provider_label,prompt_tokens,completion_tokens,total_tokens,total_cost,success,error_message\n");
+    let mut csv = String::from("timestamp,session_id,character_name,model_name,provider_label,operation_type,prompt_tokens,completion_tokens,total_tokens,total_cost,success,error_message\n");
 
     for record in records {
         let line = format!(
-            "{},{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
             record.timestamp,
             record.session_id,
             record.character_name,
             record.model_name,
             record.provider_label,
+            record.operation_type,
             record.prompt_tokens.unwrap_or(0),
             record.completion_tokens.unwrap_or(0),
             record.total_tokens.unwrap_or(0),

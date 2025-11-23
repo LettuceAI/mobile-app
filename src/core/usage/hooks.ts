@@ -74,13 +74,17 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
       setLoading(true);
       setError(null);
       try {
+        console.log('[useUsageTracking] Calling usage_save_csv with:', { filename, dataLength: csvData.length });
         const filePath = await invoke<string>('usage_save_csv', { 
-          csv_data: csvData,
+          csvData: csvData,
           filename 
         });
+        console.log('[useUsageTracking] usage_save_csv returned:', filePath);
         return filePath;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error('[useUsageTracking] saveCSV error:', err);
+        console.error('[useUsageTracking] error message:', message);
         setError(message);
         options?.onError?.(message);
         return null;

@@ -295,6 +295,7 @@ export function UsagePage() {
 
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(RECORDS_PER_PAGE);
 
   const loadData = async () => {
@@ -333,6 +334,7 @@ export function UsagePage() {
   const handleExportCSV = async () => {
     setExporting(true);
     setExportSuccess(null);
+    setExportError(null);
     try {
       const filter: UsageFilter = {
         startTimestamp: startDate.getTime(),
@@ -340,21 +342,53 @@ export function UsagePage() {
         successOnly: successOnly || undefined,
       };
 
+      console.log('[UsagePage] Exporting CSV with filter:', filter);
+      console.log('[UsagePage] Current records count:', records.length);
+      
       const csv = await exportCSV(filter);
-      if (csv && csv.length > 0) {
-        const fileName = `usage-${new Date().toISOString().split('T')[0]}.csv`;
-
-        const filePath = await saveCSV(csv, fileName);
-
-        if (filePath) {
-          setExportSuccess(filePath);
-          setTimeout(() => setExportSuccess(null), 4000);
-        }
-      } else {
-        console.error('No CSV data generated');
+      console.log('[UsagePage] CSV generated, length:', csv?.length);
+      console.log('[UsagePage] CSV preview:', csv?.substring(0, 200));
+      
+      if (!csv) {
+        const errorMsg = 'exportCSV returned null - check console for errors';
+        console.error('[UsagePage]', errorMsg);
+        setExportError(errorMsg);
+        alert(errorMsg);
+        return;
       }
+      
+      if (csv.length === 0) {
+        const errorMsg = 'No CSV data generated - check if there are records in the selected date range';
+        console.error('[UsagePage]', errorMsg);
+        setExportError(errorMsg);
+        alert(errorMsg);
+        return;
+      }
+
+      const fileName = `usage-${new Date().toISOString().split('T')[0]}.csv`;
+      console.log('[UsagePage] Saving CSV as:', fileName);
+      console.log('[UsagePage] CSV size:', csv.length, 'bytes');
+
+      const filePath = await saveCSV(csv, fileName);
+      console.log('[UsagePage] saveCSV returned:', filePath);
+
+      if (!filePath) {
+        // Check if there was an error in the hook
+        const errorMsg = 'saveCSV returned null - check browser console for the actual error from Rust backend';
+        console.error('[UsagePage]', errorMsg);
+        setExportError(errorMsg);
+        alert(errorMsg);
+        return;
+      }
+
+      setExportSuccess(filePath);
+      setTimeout(() => setExportSuccess(null), 4000);
+      alert(`CSV exported successfully!\n\nSaved to:\n${filePath}`);
     } catch (err) {
-      console.error('Export failed:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[UsagePage] Export failed:', errorMsg);
+      setExportError(errorMsg);
+      alert(`Export failed: ${errorMsg}`);
     } finally {
       setExporting(false);
     }
@@ -483,7 +517,7 @@ export function UsagePage() {
 
   {/* Content */}
       <div className="space-y-4 px-4 py-4">
-        {/* Export Success Toast */}
+        {/* Export Success/Error Toast */}
         <AnimatePresence>
           {exportSuccess && (
             <motion.div
@@ -497,6 +531,21 @@ export function UsagePage() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-emerald-100">CSV exported successfully</p>
                 <p className="text-[10px] text-emerald-200/70 truncate">{exportSuccess}</p>
+              </div>
+            </motion.div>
+          )}
+          {exportError && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="rounded-xl border border-red-500/30 bg-red-500/15 px-4 py-3 flex items-center gap-2"
+              onClick={() => setExportError(null)}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-red-100">Export failed</p>
+                <p className="text-[10px] text-red-200/70">{exportError}</p>
               </div>
             </motion.div>
           )}
