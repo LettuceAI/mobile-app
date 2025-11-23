@@ -60,3 +60,11 @@ export async function isAppDefaultTemplate(id: string): Promise<boolean> {
 export async function resetAppDefaultTemplate(): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("reset_app_default_template");
 }
+
+export async function resetDynamicSummaryTemplate(): Promise<SystemPromptTemplate> {
+  return await invoke<SystemPromptTemplate>("reset_dynamic_summary_template");
+}
+
+export async function resetDynamicMemoryTemplate(): Promise<SystemPromptTemplate> {
+  return await invoke<SystemPromptTemplate>("reset_dynamic_memory_template");
+}

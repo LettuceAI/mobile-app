@@ -47,8 +47,20 @@ use super::types::{
 
 /// Default system prompt template when no custom prompt is set
 /// Delegates to the centralized prompt engine.
-pub fn default_system_prompt_template() -> String {
-    prompt_engine::default_system_prompt_template()
+
+#[derive(Debug, Clone, Copy)]
+pub enum PromptType {
+    SystemPrompt,
+    DynamicMemoryPrompt,
+    DynamicSummaryPrompt,
+}
+
+pub fn get_base_prompt(prompt_type: PromptType) -> String {
+    match prompt_type {
+        PromptType::SystemPrompt => prompt_engine::default_system_prompt_template(),
+        PromptType::DynamicMemoryPrompt => prompt_engine::default_dynamic_memory_prompt(),
+        PromptType::DynamicSummaryPrompt => prompt_engine::default_dynamic_summary_prompt(),
+    }
 }
 
 pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {

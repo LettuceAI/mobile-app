@@ -7,6 +7,9 @@ use tauri::AppHandle;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
+use crate::chat_manager::prompts;
+use crate::utils::log_warn;
+
 const MODEL_FILES: [&str; 3] = [
     "lettuce-emb-512d-kd-v1.onnx",
     "lettuce-emb-512d-kd-v1.onnx.data",
@@ -248,6 +251,14 @@ pub async fn start_embedding_download(app: AppHandle) -> Result<(), String> {
         state_lock.is_downloading = false;
         state_lock.progress.status = "completed".to_string();
         let _ = app.emit("embedding_download_progress", &state_lock.progress);
+    }
+
+    if let Err(err) = prompts::ensure_dynamic_memory_templates(&app) {
+        log_warn(
+            &app,
+            "embedding_download",
+            format!("Failed to ensure dynamic memory prompts: {}", err),
+        );
     }
 
     Ok(())

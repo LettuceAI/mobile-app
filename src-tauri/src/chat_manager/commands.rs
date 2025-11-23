@@ -3,11 +3,13 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
+use crate::chat_manager::storage::{PromptType, get_base_prompt};
 use crate::embedding_model;
 use crate::utils::{log_error, log_info, log_warn, now_millis};
 
 use super::prompt_engine;
 use super::prompts;
+use super::prompts::{APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID};
 use super::request::{
     ensure_assistant_variant, extract_error_message, extract_text, extract_usage,
     new_assistant_variant,
@@ -310,6 +312,9 @@ pub async fn chat_completion(
 
     let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
     let dynamic_window = dynamic_window_size(settings);
+    if dynamic_memory_enabled {
+        let _ = prompts::ensure_dynamic_memory_templates(&app);
+    }
 
     let (model, provider_cred) = context.select_model(&character)?;
 
@@ -1323,8 +1328,7 @@ pub fn get_default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
 
 #[tauri::command]
 pub fn get_default_system_prompt_template() -> String {
-    use super::storage::default_system_prompt_template;
-    default_system_prompt_template()
+    get_base_prompt(PromptType::SystemPrompt)
 }
 
 // ==================== Prompt Template Commands ====================
@@ -1383,6 +1387,16 @@ pub fn is_app_default_template(id: String) -> bool {
 #[tauri::command]
 pub fn reset_app_default_template(app: AppHandle) -> Result<SystemPromptTemplate, String> {
     prompts::reset_app_default_template(&app)
+}
+
+#[tauri::command]
+pub fn reset_dynamic_summary_template(app: AppHandle) -> Result<SystemPromptTemplate, String> {
+    prompts::reset_dynamic_summary_template(&app)
+}
+
+#[tauri::command]
+pub fn reset_dynamic_memory_template(app: AppHandle) -> Result<SystemPromptTemplate, String> {
+    prompts::reset_dynamic_memory_template(&app)
 }
 
 // Deprecated: get_applicable_prompts_for_* commands removed in favor of global list on client
@@ -1543,8 +1557,19 @@ async fn process_dynamic_memory_cycle(
             summary_model.name, window_size, total_convo_at_start, window_message_ids
         ),
     );
-    let summary =
-        summarize_messages(app, summary_provider, summary_model, &api_key, &convo_window).await?;
+    let summary = summarize_messages(
+        app,
+        summary_provider,
+        summary_model,
+        &api_key,
+        &convo_window,
+        session.memory_summary.as_deref(),
+        character,
+        session,
+        settings,
+        None,
+    )
+    .await?;
 
     log_info(
         app,
@@ -1564,6 +1589,7 @@ async fn process_dynamic_memory_cycle(
         settings,
         &summary,
         &convo_window,
+        character,
     )
     .await?;
 
@@ -1608,20 +1634,28 @@ async fn run_memory_tool_update(
     settings: &Settings,
     summary: &str,
     convo_window: &[StoredMessage],
+    character: &super::types::Character,
 ) -> Result<Vec<Value>, String> {
     let tool_config = build_memory_tool_config();
     let max_entries = dynamic_max_entries(settings);
 
     let mut messages_for_api = Vec::new();
     let system_role = super::request_builder::system_role_for(provider_cred);
-    let system_prompt = format!(
-        "You maintain long-term memories for this chat. Use tools to add or delete memories so that at most {} entries remain. Memories should be concise facts. Call create_memory or delete_memory one at a time, include the updatedMemories list when you change anything, and prefer deleting by ID. When finished, call the done tool.",
-        max_entries
-    );
+
+    let base_template = prompts::get_template(app, APP_DYNAMIC_MEMORY_TEMPLATE_ID)
+        .ok()
+        .flatten()
+        .map(|t| t.content)
+        .unwrap_or_else(|| {
+            "You maintain long-term memories for this chat. Use tools to add or delete concise factual memories. Keep the list tidy and capped at {{max_entries}} entries. Prefer deleting by ID when removing items. When finished, call the done tool.".to_string()
+        });
+    let rendered = prompt_engine::render_with_context(app, &base_template, character, None, session, settings)
+        .replace("{{max_entries}}", &max_entries.to_string());
+
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
         system_role,
-        Some(system_prompt),
+        Some(rendered),
     );
     let memory_lines = format_memories_with_ids(session);
     messages_for_api.push(json!({
@@ -1839,13 +1873,35 @@ async fn summarize_messages(
     model: &Model,
     api_key: &str,
     convo_window: &[StoredMessage],
+    prior_summary: Option<&str>,
+    character: &super::types::Character,
+    session: &Session,
+    settings: &Settings,
+    persona: Option<&super::types::Persona>,
 ) -> Result<String, String> {
     let mut messages_for_api = Vec::new();
     let system_role = super::request_builder::system_role_for(provider_cred);
+
+    // Use dynamic summary template if available
+    let summary_template = prompts::get_template(app, APP_DYNAMIC_SUMMARY_TEMPLATE_ID)
+        .ok()
+        .flatten()
+        .map(|t| t.content)
+        .unwrap_or_else(|| {
+            "Summarize the recent conversation window into a concise paragraph capturing key facts and decisions. Avoid adding new information.".to_string()
+        });
+
+    // Render with context and optional prior summary placeholder
+    let mut rendered =
+        prompt_engine::render_with_context(app, &summary_template, character, persona, session, settings);
+    let prev_text = prior_summary
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("No previous summary provided.");
+    rendered = rendered.replace("{{prev_summary}}", prev_text);
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
         system_role,
-        Some("Summarize the recent conversation window into a concise paragraph capturing key facts and decisions. Avoid adding new information.".to_string()),
+        Some(rendered),
     );
     for msg in convo_window {
         messages_for_api.push(json!({

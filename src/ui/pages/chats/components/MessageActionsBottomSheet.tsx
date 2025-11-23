@@ -106,7 +106,6 @@ export function MessageActionsBottomSheet({
                   </div>
                 )}
 
-              {/* Primary actions - conditional based on message type */}
               {messageAction.message.role === "assistant" || (() => {
                 const userMessages = messages.filter(m => m.role === "user" && !m.id.startsWith("placeholder"));
                 const latestUserMessage = userMessages[userMessages.length - 1];

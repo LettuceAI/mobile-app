@@ -4,44 +4,81 @@ use tauri::AppHandle;
 use super::prompts;
 use super::types::{Character, Model, Persona, Session, Settings};
 
-/// Default system prompt template when no custom prompt is set
-/// Template variables: {{char.name}}, {{char.desc}}, {{scene}}, {{persona.name}}, {{persona.desc}}, {{rules}}
 pub fn default_system_prompt_template() -> String {
-    let mut template = String::new();
-    template.push_str("You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.\n\n");
+    "
+    You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.
+    
+    # Scenario
+    {{scene}}
+    
+    # Your Character: {{char.name}}
+    {{char.desc}}
+    
+    Embody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.
+    
+    # {{persona.name}}'s Character
+    {{persona.desc}}
+    
+    # Roleplay Guidelines
+    {{rules}}
+    
+    # Core Instructions
+    - Write as {{char.name}} from their perspective
+    - You may also act as and portray any other characters mentioned in the scenario or {{char.name}}'s description (friends, companions, NPCs) when they're relevant to the scene
+    - React authentically to {{persona.name}}'s actions and dialogue
+    - Keep responses concise and focused - short to medium length - so {{persona.name}} can actively participate in the roleplay
+    - Show don't tell: Express emotions through actions, body language, and dialogue
+    - Maintain narrative consistency with the established scenario and all character traits
+    - Never break character unless {{persona.name}} explicitly asks you to step out of roleplay
+    - Never speak or act for {{persona.name}} - only describe the environment and other characters' reactions
+    - Avoid summarizing or rushing through scenes. Let moments unfold naturally
+    - If you see a [CONTINUE] instruction, pick up exactly where your last response ended and write new content forward - never restart or repeat yourself
+    - Drive the story forward with your responses while respecting {{persona.name}}'s agency and choices
+    - Use vivid, sensory details to create an immersive experience
+    - When multiple characters are present, write their interactions naturally and distinguish their unique voices
+    "
+        .to_string()
+}
 
-    template.push_str("# Scenario\n{{scene}}\n\n");
+pub fn default_dynamic_summary_prompt() -> String {
+    "Your task is to maintain a single, cumulative summary of the conversation.
 
-    template.push_str("# Your Character: {{char.name}}\n");
-    template.push_str("{{char.desc}}\n\n");
-    template.push_str("Embody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.\n\n");
+    You receive:
+    - the previous global summary (if any)
+    - the newest conversation window
+    - A placeholder for the previous summary: {{prev_summary}}
 
-    template.push_str("# {{persona.name}}'s Character\n");
-    template.push_str("{{persona.desc}}\n\n");
+    Your job:
+    1. Merge the new events into the existing summary.
+    2. Preserve all factual past events unless they are contradicted.
+    3. Keep the chronological flow clear and coherent.
+    4. Remove redundant details or repetitions.
+    5. DO NOT invent motivations, emotions, or events that were not explicitly stated.
 
-    template.push_str("# Roleplay Guidelines\n{{rules}}\n\n");
+    Guidelines:
+    - Capture actions, choices, facts, changes, and important context.
+    - Keep the summary compact but complete.
+    - If special placeholders exist ({{character}}, {{persona}}, etc.), keep them untouched.
+    - Previous summary (if any): {{prev_summary}}
+    - The output must be a single cohesive summary paragraph, representing the entire conversation so far.
 
-    template.push_str("# Core Instructions\n");
-    template.push_str("- Write as {{char.name}} from their perspective\n");
-    template.push_str("- You may also act as and portray any other characters mentioned in the scenario or {{char.name}}'s description (friends, companions, NPCs) when they're relevant to the scene\n");
-    template.push_str("- React authentically to {{persona.name}}'s actions and dialogue\n");
-    template.push_str("- Keep responses concise and focused - short to medium length - so {{persona.name}} can actively participate in the roleplay\n");
-    template.push_str(
-        "- Show don't tell: Express emotions through actions, body language, and dialogue\n",
-    );
-    template.push_str(
-        "- Maintain narrative consistency with the established scenario and all character traits\n",
-    );
-    template.push_str("- Never break character unless {{persona.name}} explicitly asks you to step out of roleplay\n");
-    template.push_str("- Never speak or act for {{persona.name}} - only describe the environment and other characters' reactions\n");
-    template
-        .push_str("- Avoid summarizing or rushing through scenes. Let moments unfold naturally\n");
-    template.push_str("- If you see a [CONTINUE] instruction, pick up exactly where your last response ended and write new content forward - never restart or repeat yourself\n");
-    template.push_str("- Drive the story forward with your responses while respecting {{persona.name}}'s agency and choices\n");
-    template.push_str("- Use vivid, sensory details to create an immersive experience\n");
-    template.push_str("- When multiple characters are present, write their interactions naturally and distinguish their unique voices\n");
+    Output only the final merged summary with no commentary."
+        .to_string()
+}
 
-    template
+pub fn default_dynamic_memory_prompt() -> String {
+    "You manage the long-term memory list for this chat. 
+    Use tools to add, update, or delete memory items as needed.
+    
+    Rules:
+    - Store only stable, factual, conversation-relevant memories.
+    - When adding, keep each memory short, atomic, and free of speculation.
+    - When removing, prefer deleting by the memory ID.
+    - Avoid duplicates and keep the memory list within the configured {{max_entries}} entry limit.
+    - Never invent new facts or infer anything beyond what the user explicitly stated.
+
+    Do not output natural language explanations—only use tool calls when required."
+        .to_string()
 }
 
 /// Build a fully rendered system prompt using the precedence:

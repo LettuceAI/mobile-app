@@ -10,11 +10,16 @@ import {
   getPromptTemplate,
   getAppDefaultTemplateId,
   resetAppDefaultTemplate,
+  resetDynamicSummaryTemplate,
+  resetDynamicMemoryTemplate,
   getDefaultSystemPromptTemplate,
   renderPromptPreview,
 } from "../../../core/prompts/service";
 import { listCharacters, listPersonas } from "../../../core/storage";
 import type { Character, Persona } from "../../../core/storage/schemas";
+
+const DYNAMIC_SUMMARY_TEMPLATE_ID = "prompt_app_dynamic_summary";
+const DYNAMIC_MEMORY_TEMPLATE_ID = "prompt_app_dynamic_memory";
 
 export function EditPromptTemplate() {
   const navigate = useNavigate();
@@ -33,6 +38,7 @@ export function EditPromptTemplate() {
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [isAppDefault, setIsAppDefault] = useState(false);
+  const [promptType, setPromptType] = useState<"system" | "summary" | "memory" | null>(null);
   const [resetting, setResetting] = useState(false);
   const [previewMode, setPreviewMode] = useState<"rendered" | "raw">("rendered");
   const [showVariables, setShowVariables] = useState(false);
@@ -59,7 +65,19 @@ export function EditPromptTemplate() {
         if (template) {
           setName(template.name);
           setContent(template.content);
-          setIsAppDefault(template.id === appDefaultId);
+          const isProtected = template.id === appDefaultId || 
+                             template.id === DYNAMIC_SUMMARY_TEMPLATE_ID || 
+                             template.id === DYNAMIC_MEMORY_TEMPLATE_ID;
+          setIsAppDefault(isProtected);
+          
+          // Detect prompt type
+          if (template.id === appDefaultId) {
+            setPromptType("system");
+          } else if (template.id === DYNAMIC_SUMMARY_TEMPLATE_ID) {
+            setPromptType("summary");
+          } else if (template.id === DYNAMIC_MEMORY_TEMPLATE_ID) {
+            setPromptType("memory");
+          }
         }
       } else {
         const def = await getDefaultSystemPromptTemplate();
@@ -97,13 +115,27 @@ export function EditPromptTemplate() {
   }
 
   async function handleReset() {
-    if (!confirm("Reset to the original default prompt template? This cannot be undone.")) {
+    if (!isAppDefault || !promptType) return;
+    
+    const promptTypeName = 
+      promptType === "system" ? "main system prompt" :
+      promptType === "summary" ? "dynamic summary prompt" :
+      "dynamic memory prompt";
+    
+    if (!confirm(`Reset to the original default ${promptTypeName}? This cannot be undone.`)) {
       return;
     }
 
     setResetting(true);
     try {
-      const updated = await resetAppDefaultTemplate();
+      let updated;
+      if (promptType === "system") {
+        updated = await resetAppDefaultTemplate();
+      } else if (promptType === "summary") {
+        updated = await resetDynamicSummaryTemplate();
+      } else {
+        updated = await resetDynamicMemoryTemplate();
+      }
       setContent(updated.content);
       alert("Reset to default successfully!");
     } catch (error) {
@@ -143,7 +175,20 @@ export function EditPromptTemplate() {
     charCount > 5000 ? "text-amber-400" :
     "text-white/40";
 
-  const variables = [
+  const variables = promptType === "system" ? [
+    { var: "{{char.name}}", label: "Character Name", desc: "Character's name" },
+    { var: "{{char.desc}}", label: "Character Desc", desc: "Character description" },
+    { var: "{{scene}}", label: "Scene", desc: "Starting scene/scenario" },
+    { var: "{{persona.name}}", label: "User Name", desc: "User persona name" },
+    { var: "{{persona.desc}}", label: "User Desc", desc: "User persona description" },
+    { var: "{{rules}}", label: "Rules", desc: "Character behavioral rules" },
+  ] : promptType === "summary" ? [
+    { var: "{{prev_summary}}", label: "Previous Summary", desc: "The cumulative summary from before" },
+    { var: "{{character}}", label: "Character", desc: "Character placeholder" },
+    { var: "{{persona}}", label: "Persona", desc: "Persona placeholder" },
+  ] : promptType === "memory" ? [
+    { var: "{{max_entries}}", label: "Max Entries", desc: "Maximum memory entries allowed" },
+  ] : [
     { var: "{{char.name}}", label: "Character Name", desc: "Character's name" },
     { var: "{{char.desc}}", label: "Character Desc", desc: "Character description" },
     { var: "{{scene}}", label: "Scene", desc: "Starting scene/scenario" },
@@ -227,7 +272,8 @@ export function EditPromptTemplate() {
               </div>
             </div>
 
-            {/* Preview Section */}
+            {/* Preview Section - Only for system prompts */}
+            {promptType === "system" && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -330,6 +376,7 @@ export function EditPromptTemplate() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">

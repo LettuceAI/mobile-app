@@ -6,6 +6,9 @@ import { cn } from "../../design-tokens";
 import { listPromptTemplates, deletePromptTemplate, getAppDefaultTemplateId, isAppDefaultTemplate } from "../../../core/prompts/service";
 import type { SystemPromptTemplate } from "../../../core/storage/schemas";
 
+const DYNAMIC_SUMMARY_TEMPLATE_ID = "prompt_app_dynamic_summary";
+const DYNAMIC_MEMORY_TEMPLATE_ID = "prompt_app_dynamic_memory";
+
 export function SystemPromptsPage() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<SystemPromptTemplate[]>([]);
@@ -56,9 +59,8 @@ export function SystemPromptsPage() {
 
   async function handleDelete(template: SystemPromptTemplate) {
     const isDefault = await isAppDefaultTemplate(template.id);
-    
     if (isDefault) {
-      alert("Cannot delete the App Default template");
+      alert("Cannot delete this protected template");
       return;
     }
     
@@ -188,7 +190,7 @@ export function SystemPromptsPage() {
                             <Pencil className="h-4 w-4" />
                           </button>
                           
-                          {template.id === appDefaultId ? (
+                          {template.id === appDefaultId || template.id === DYNAMIC_SUMMARY_TEMPLATE_ID || template.id === DYNAMIC_MEMORY_TEMPLATE_ID ? (
                             <div className="flex items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1.5">
                               <Lock className="h-3.5 w-3.5 text-amber-400" />
                             </div>

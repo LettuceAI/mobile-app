@@ -1,16 +1,18 @@
 use super::types::{PromptScope, SystemPromptTemplate};
-use crate::storage_manager::db::open_db;
+use crate::{
+    chat_manager::storage::get_base_prompt, chat_manager::storage::PromptType,
+    storage_manager::db::open_db,
+};
 use rusqlite::{params, OptionalExtension};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
 pub const APP_DEFAULT_TEMPLATE_ID: &str = "prompt_app_default";
+pub const APP_DYNAMIC_SUMMARY_TEMPLATE_ID: &str = "prompt_app_dynamic_summary";
+pub const APP_DYNAMIC_MEMORY_TEMPLATE_ID: &str = "prompt_app_dynamic_memory";
 const APP_DEFAULT_TEMPLATE_NAME: &str = "App Default";
-
-fn get_app_default_content() -> String {
-    use super::storage::default_system_prompt_template;
-    default_system_prompt_template()
-}
+const APP_DYNAMIC_SUMMARY_TEMPLATE_NAME: &str = "Dynamic Memory: Summarizer";
+const APP_DYNAMIC_MEMORY_TEMPLATE_NAME: &str = "Dynamic Memory: Memory Manager";
 
 fn generate_id() -> String {
     format!("prompt_{}", uuid::Uuid::new_v4().to_string())
@@ -154,8 +156,13 @@ pub fn update_template(
 
 pub fn delete_template(app: &AppHandle, id: String) -> Result<(), String> {
     if is_app_default_template(&id) {
-        return Err("Cannot delete the App Default template".to_string());
+        return Err("This template is protected and cannot be deleted".to_string());
     }
+
+    if get_template(app, &id)?.is_none() {
+        return Err("Template not found".to_string());
+    }
+
     let conn = open_db(app)?;
     conn.execute("DELETE FROM prompt_templates WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
@@ -182,7 +189,7 @@ pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
     // Insert default
     let conn = open_db(app)?;
     let now = now();
-    let content = get_app_default_content();
+    let content = get_base_prompt(PromptType::SystemPrompt);
     conn.execute(
         "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
         params![APP_DEFAULT_TEMPLATE_ID, APP_DEFAULT_TEMPLATE_NAME, scope_to_str(&PromptScope::AppWide), content, now],
@@ -191,8 +198,47 @@ pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
     Ok(APP_DEFAULT_TEMPLATE_ID.to_string())
 }
 
+pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
+    let conn = open_db(app)?;
+    let now = now();
+
+    // Summarizer template
+    if get_template(app, APP_DYNAMIC_SUMMARY_TEMPLATE_ID)?.is_none() {
+        conn.execute(
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            params![
+                APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
+                APP_DYNAMIC_SUMMARY_TEMPLATE_NAME,
+                scope_to_str(&PromptScope::AppWide),
+                get_base_prompt(PromptType::DynamicSummaryPrompt),
+                now
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Memory manager template
+    if get_template(app, APP_DYNAMIC_MEMORY_TEMPLATE_ID)?.is_none() {
+        conn.execute(
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            params![
+                APP_DYNAMIC_MEMORY_TEMPLATE_ID,
+                APP_DYNAMIC_MEMORY_TEMPLATE_NAME,
+                scope_to_str(&PromptScope::AppWide),
+                get_base_prompt(PromptType::DynamicMemoryPrompt),
+                now
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
 pub fn is_app_default_template(id: &str) -> bool {
     id == APP_DEFAULT_TEMPLATE_ID
+        || id == APP_DYNAMIC_SUMMARY_TEMPLATE_ID
+        || id == APP_DYNAMIC_MEMORY_TEMPLATE_ID
 }
 
 pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
@@ -202,6 +248,28 @@ pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplat
         None,
         None,
         None,
-        Some(get_app_default_content()),
+        Some(get_base_prompt(PromptType::SystemPrompt)),
+    )
+}
+
+pub fn reset_dynamic_summary_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
+    update_template(
+        app,
+        APP_DYNAMIC_SUMMARY_TEMPLATE_ID.to_string(),
+        None,
+        None,
+        None,
+        Some(get_base_prompt(PromptType::DynamicSummaryPrompt)),
+    )
+}
+
+pub fn reset_dynamic_memory_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
+    update_template(
+        app,
+        APP_DYNAMIC_MEMORY_TEMPLATE_ID.to_string(),
+        None,
+        None,
+        None,
+        Some(get_base_prompt(PromptType::DynamicMemoryPrompt)),
     )
 }
