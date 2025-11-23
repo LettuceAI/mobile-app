@@ -233,6 +233,7 @@ export const MessageSchema = z.object({
   variants: z.array(MessageVariantSchema).optional(),
   selectedVariantId: z.string().uuid().nullish(),
   isPinned: z.boolean().default(false).optional(),
+  memoryRefs: z.array(z.string()).optional().default([]),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
 
@@ -363,6 +364,7 @@ export const CharacterSchema = z.object({
   scenes: z.array(SceneSchema).default([]),
   defaultSceneId: z.string().uuid().nullish(),
   defaultModelId: z.string().uuid().nullable().optional(),
+  memoryType: z.enum(["manual", "dynamic"]).default("manual"),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated
   disableAvatarGradient: z.boolean().default(false).optional(),
@@ -385,6 +387,26 @@ export const SessionSchema = z.object({
   ]).optional(),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   memories: z.array(z.string()).default([]),
+  memoryEmbeddings: z.array(z.object({
+    id: z.string(),
+    text: z.string(),
+    embedding: z.array(z.number()),
+    createdAt: z.number().int(),
+  })).default([]).optional(),
+  memorySummary: z.string().default("").optional(),
+  memoryToolEvents: z.array(z.object({
+    id: z.string(),
+    windowStart: z.number().int(),
+    windowEnd: z.number().int(),
+    summary: z.string(),
+    actions: z.array(z.object({
+      name: z.string(),
+      arguments: z.any().optional(),
+      timestamp: z.number().int().optional(),
+      updatedMemories: z.array(z.string()).optional(),
+    })),
+    createdAt: z.number().int(),
+  })).default([]).optional(),
   messages: z.array(MessageSchema),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),

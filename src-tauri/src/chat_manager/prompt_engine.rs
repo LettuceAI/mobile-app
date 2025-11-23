@@ -344,6 +344,7 @@ mod tests {
             scenes: vec![],
             default_scene_id: None,
             default_model_id: None,
+            memory_type: "manual".into(),
             prompt_template_id: None,
             system_prompt: None,
             created_at: 0,
@@ -362,6 +363,7 @@ mod tests {
             prompt_template_id: None,
             system_prompt: None,
             migration_version: 0,
+            advanced_settings: None,
         }
     }
 
@@ -389,10 +391,13 @@ mod tests {
             persona_id: None,
             advanced_model_settings: None,
             memories: vec![],
+            memory_summary: None,
+            memory_tool_events: vec![],
             messages: vec![],
             archived: false,
             created_at: 0,
             updated_at: 0,
+            memory_embeddings: vec![],
         }
     }
 

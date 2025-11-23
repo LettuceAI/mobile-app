@@ -22,6 +22,7 @@ export interface CharacterExportData {
   rules: string[];
   scenes: SceneExport[];
   defaultSceneId?: string;
+  memoryType?: "manual" | "dynamic";
   promptTemplateId?: string;
   systemPrompt?: string;
   disableAvatarGradient: boolean;

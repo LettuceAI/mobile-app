@@ -1,8 +1,9 @@
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
+use crate::embedding_model;
 use crate::utils::{log_error, log_info, log_warn, now_millis};
 
 use super::prompt_engine;
@@ -13,15 +14,88 @@ use super::request::{
 };
 use super::service::{record_usage_if_available, resolve_api_key, ChatContext};
 use super::storage::{default_character_rules, recent_messages, save_session};
+use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
     ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
-    Model, PromptScope, RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
+    MemoryEmbedding, Model, PromptScope, ProviderCredential, RegenerateResult, Session, Settings,
+    StoredMessage, SystemPromptTemplate,
 };
 use crate::utils::emit_debug;
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
 const FALLBACK_MAX_OUTPUT_TOKENS: u32 = 1024;
+const FALLBACK_DYNAMIC_WINDOW: u32 = 20;
+const FALLBACK_DYNAMIC_MAX_ENTRIES: u32 = 50;
+const MEMORY_ID_SPACE: u64 = 1_000_000;
+
+fn is_dynamic_memory_active(settings: &Settings, session_character: &super::types::Character) -> bool {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.enabled)
+        .unwrap_or(false)
+        && session_character.memory_type.eq_ignore_ascii_case("dynamic")
+}
+
+fn dynamic_window_size(settings: &Settings) -> usize {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.summary_message_interval.max(1))
+        .unwrap_or(FALLBACK_DYNAMIC_WINDOW) as usize
+}
+
+fn dynamic_max_entries(settings: &Settings) -> usize {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.max_entries.max(1))
+        .unwrap_or(FALLBACK_DYNAMIC_MAX_ENTRIES) as usize
+}
+
+fn conversation_window(messages: &[StoredMessage], limit: usize) -> Vec<StoredMessage> {
+    let mut convo: Vec<StoredMessage> = messages
+        .iter()
+        .filter(|m| m.role == "user" || m.role == "assistant")
+        .cloned()
+        .collect();
+    if convo.len() > limit {
+        convo.drain(0..(convo.len() - limit));
+    }
+    convo
+}
+
+fn conversation_count(messages: &[StoredMessage]) -> usize {
+    messages
+        .iter()
+        .filter(|m| m.role == "user" || m.role == "assistant")
+        .count()
+}
+
+fn generate_memory_id() -> String {
+    let now = now_millis().unwrap_or(0);
+    format!("{:06}", now % MEMORY_ID_SPACE)
+}
+
+fn format_memories_with_ids(session: &Session) -> Vec<String> {
+    session
+        .memories
+        .iter()
+        .enumerate()
+        .map(|(idx, text)| {
+            let id = session
+                .memory_embeddings
+                .get(idx)
+                .map(|m| m.id.clone())
+                .unwrap_or_else(|| format!("{:06}", (idx as u64) % MEMORY_ID_SPACE));
+            format!("[{}] {}", id, text)
+        })
+        .collect()
+}
 
 fn resolve_temperature(session: &Session, model: &Model, settings: &Settings) -> f64 {
     session
@@ -111,6 +185,55 @@ fn resolve_top_k(session: &Session, model: &Model, _settings: &Settings) -> Opti
         })
 }
 
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.is_empty() || b.is_empty() || a.len() != b.len() {
+        return 0.0;
+    }
+    let mut dot = 0.0;
+    let mut norm_a = 0.0;
+    let mut norm_b = 0.0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        dot += (*x as f64 * *y as f64) as f32;
+        norm_a += (*x as f64 * *x as f64) as f32;
+        norm_b += (*y as f64 * *y as f64) as f32;
+    }
+    let denom = (norm_a.sqrt() * norm_b.sqrt()).max(1e-6);
+    dot / denom
+}
+
+async fn select_relevant_memories(
+    app: &AppHandle,
+    session: &Session,
+    query: &str,
+    limit: usize,
+) -> Vec<MemoryEmbedding> {
+    if query.is_empty() || session.memory_embeddings.is_empty() {
+        return Vec::new();
+    }
+
+    let query_embedding = match embedding_model::compute_embedding(app.clone(), query.to_string()).await {
+        Ok(vec) => vec,
+        Err(err) => {
+            log_warn(app, "memory_retrieval", format!("embedding failed: {}", err));
+            return Vec::new();
+        }
+    };
+
+    let mut scored: Vec<(f32, &MemoryEmbedding)> = session
+        .memory_embeddings
+        .iter()
+        .filter(|m| !m.embedding.is_empty())
+        .map(|m| (cosine_similarity(&query_embedding, &m.embedding), m))
+        .collect();
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored
+        .into_iter()
+        .take(limit)
+        .filter(|(score, _)| *score > 0.0)
+        .map(|(_, m)| m.clone())
+        .collect()
+}
+
 #[tauri::command]
 pub async fn chat_completion(
     app: AppHandle,
@@ -185,6 +308,9 @@ pub async fn chat_completion(
         session.character_id = character.id.clone();
     }
 
+    let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
+    let dynamic_window = dynamic_window_size(settings);
+
     let (model, provider_cred) = context.select_model(&character)?;
 
     log_info(
@@ -220,6 +346,7 @@ pub async fn chat_completion(
         usage: None,
         variants: Vec::new(),
         selected_variant_id: None,
+        memory_refs: Vec::new(),
     };
     session.messages.push(user_msg.clone());
     session.updated_at = now;
@@ -237,7 +364,18 @@ pub async fn chat_completion(
     );
 
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
-    let recent_msgs = recent_messages(&session);
+    let recent_msgs = if dynamic_memory_enabled {
+        conversation_window(&session.messages, dynamic_window)
+    } else {
+        recent_messages(&session)
+    };
+
+    // Retrieve top-k relevant memories for this turn.
+    let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
+        select_relevant_memories(&app, &session, &user_message, 5).await
+    } else {
+        Vec::new()
+    };
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
@@ -246,6 +384,38 @@ pub async fn chat_completion(
         system_role,
         system_prompt,
     );
+    // Inject memory context when available
+    let memory_block = if dynamic_memory_enabled {
+        if relevant_memories.is_empty() {
+            None
+        } else {
+            Some(
+                relevant_memories
+                    .iter()
+                    .map(|m| format!("- {}", m.text))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+        }
+    } else if !session.memories.is_empty() {
+        Some(
+            session
+                .memories
+                .iter()
+                .map(|m| format!("- {}", m))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    } else {
+        None
+    };
+    if let Some(block) = memory_block {
+        crate::chat_manager::messages::push_system_message(
+            &mut messages_for_api,
+            system_role,
+            Some(format!("Relevant memories:\n{}", block)),
+        );
+    }
     // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -412,6 +582,11 @@ pub async fn chat_completion(
         usage: usage.clone(),
         variants: vec![variant],
         selected_variant_id: Some(variant_id),
+        memory_refs: if dynamic_memory_enabled {
+            relevant_memories.iter().map(|m| m.text.clone()).collect()
+        } else {
+            Vec::new()
+        },
     };
 
     session.messages.push(assistant_message.clone());
@@ -452,6 +627,18 @@ pub async fn chat_completion(
         "chat_completion",
     )
     .await;
+
+    if dynamic_memory_enabled {
+        if let Err(err) =
+            process_dynamic_memory_cycle(&app, &mut session, settings, &character).await
+        {
+            log_error(
+                &app,
+                "chat_completion",
+                format!("dynamic memory cycle failed: {}", err),
+            );
+        }
+    }
 
     Ok(ChatTurnResult {
         session_id: session.id,
@@ -1081,6 +1268,7 @@ pub async fn chat_continue(
         usage: usage.clone(),
         variants: vec![variant],
         selected_variant_id: Some(variant_id),
+        memory_refs: Vec::new(),
     };
 
     session.messages.push(assistant_message.clone());
@@ -1235,6 +1423,9 @@ pub fn render_prompt_preview(
             created_at: now,
             updated_at: now,
             memories: vec![],
+            memory_embeddings: vec![],
+            memory_summary: None,
+            memory_tool_events: vec![],
         }
     };
 
@@ -1243,6 +1434,515 @@ pub fn render_prompt_preview(
     let rendered =
         prompt_engine::render_with_context(&app, &content, &character, persona, &session, settings);
     Ok(rendered)
+}
+
+async fn process_dynamic_memory_cycle(
+    app: &AppHandle,
+    session: &mut Session,
+    settings: &Settings,
+    character: &super::types::Character,
+) -> Result<(), String> {
+    let Some(advanced) = settings.advanced_settings.as_ref() else {
+        log_info(app, "dynamic_memory", "advanced settings missing; skipping dynamic memory");
+        return Ok(());
+    };
+    let Some(dynamic) = advanced.dynamic_memory.as_ref() else {
+        log_info(app, "dynamic_memory", "dynamic memory config missing; skipping");
+        return Ok(());
+    };
+    if !dynamic.enabled || !character.memory_type.eq_ignore_ascii_case("dynamic") {
+        log_info(
+            app,
+            "dynamic_memory",
+            format!(
+                "dynamic memory disabled (global={}, character_type={})",
+                dynamic.enabled,
+                character.memory_type
+            ),
+        );
+        return Ok(());
+    }
+
+    let window_size = dynamic.summary_message_interval.max(1) as usize;
+    let total_convo_at_start = conversation_count(&session.messages);
+    let convo_window = conversation_window(&session.messages, window_size);
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "snapshot taken: window_size={} total_convo_at_start={} convo_window_count={}",
+            window_size,
+            total_convo_at_start,
+            convo_window.len()
+        ),
+    );
+    if convo_window.is_empty() {
+        log_warn(app, "dynamic_memory", "no messages in window; skipping");
+        return Ok(());
+    }
+
+    let last_window_end = session
+        .memory_tool_events
+        .last()
+        .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
+        .unwrap_or(0) as usize;
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={}",
+            total_convo_at_start, window_size, last_window_end
+        ),
+    );
+
+    if total_convo_at_start <= last_window_end {
+        log_info(
+            app,
+            "dynamic_memory",
+            "no new messages since last run; skipping",
+        );
+        return Ok(());
+    }
+
+    if total_convo_at_start - last_window_end < window_size {
+        log_info(
+            app,
+            "dynamic_memory",
+            format!(
+                "not enough new messages since last run (needed {}, got {})",
+                window_size,
+                total_convo_at_start - last_window_end
+            ),
+        );
+        return Ok(());
+    }
+
+    let summarisation_model_id = match advanced.summarisation_model_id.as_ref() {
+        Some(id) => id,
+        None => {
+            log_warn(app, "dynamic_memory", "summarisation model not configured");
+            return Err("Summarisation model not configured".to_string());
+        }
+    };
+
+    let (summary_model, summary_provider) =
+        find_model_and_credential(settings, summarisation_model_id)
+            .ok_or_else(|| {
+                log_error(app, "dynamic_memory", "summarisation model unavailable");
+                "Summarisation model unavailable".to_string()
+            })?;
+
+    let api_key = resolve_api_key(app, summary_provider, "dynamic_memory")?;
+    let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
+
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "running summarisation with model={} window_size={} total_convo_at_start={} window_ids={:?}",
+            summary_model.name, window_size, total_convo_at_start, window_message_ids
+        ),
+    );
+    let summary =
+        summarize_messages(app, summary_provider, summary_model, &api_key, &convo_window).await?;
+
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "summary length={} chars; invoking memory tools",
+            summary.len()
+        ),
+    );
+
+    let actions = run_memory_tool_update(
+        app,
+        summary_provider,
+        summary_model,
+        &api_key,
+        session,
+        settings,
+        &summary,
+        &convo_window,
+    )
+    .await?;
+
+    session.memory_summary = Some(summary.clone());
+    let event = json!({
+        "id": Uuid::new_v4().to_string(),
+        "windowStart": total_convo_at_start.saturating_sub(window_size),
+        "windowEnd": total_convo_at_start,
+        "windowMessageIds": window_message_ids,
+        "summary": summary,
+        "actions": actions,
+        "createdAt": now_millis().unwrap_or_default(),
+    });
+    session.memory_tool_events.push(event);
+    if session.memory_tool_events.len() > 50 {
+        let excess = session.memory_tool_events.len() - 50;
+        session.memory_tool_events.drain(0..excess);
+    }
+
+    session.updated_at = now_millis()?;
+    save_session(app, session)?;
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "dynamic memory cycle complete: events={}, memories={}, windowEnd={}",
+            session.memory_tool_events.len(),
+            session.memories.len(),
+            total_convo_at_start
+        ),
+    );
+
+    Ok(())
+}
+
+async fn run_memory_tool_update(
+    app: &AppHandle,
+    provider_cred: &ProviderCredential,
+    model: &Model,
+    api_key: &str,
+    session: &mut Session,
+    settings: &Settings,
+    summary: &str,
+    convo_window: &[StoredMessage],
+) -> Result<Vec<Value>, String> {
+    let tool_config = build_memory_tool_config();
+    let max_entries = dynamic_max_entries(settings);
+
+    let mut messages_for_api = Vec::new();
+    let system_role = super::request_builder::system_role_for(provider_cred);
+    let system_prompt = format!(
+        "You maintain long-term memories for this chat. Use tools to add or delete memories so that at most {} entries remain. Memories should be concise facts. Call create_memory or delete_memory one at a time, include the updatedMemories list when you change anything, and prefer deleting by ID. When finished, call the done tool.",
+        max_entries
+    );
+    crate::chat_manager::messages::push_system_message(
+        &mut messages_for_api,
+        system_role,
+        Some(system_prompt),
+    );
+    let memory_lines = format_memories_with_ids(session);
+    messages_for_api.push(json!({
+        "role": "user",
+        "content": format!(
+            "Conversation summary:\n{}\n\nRecent messages:\n{}\n\nCurrent memories (with IDs):\n{}",
+            summary,
+            convo_window.iter().map(|m| format!("{}: {}", m.role, m.content)).collect::<Vec<_>>().join("\n"),
+            if memory_lines.is_empty() { "none".to_string() } else { memory_lines.join("\n") }
+        )
+    }));
+
+    let built = super::request_builder::build_chat_request(
+        provider_cred,
+        api_key,
+        &model.name,
+        &messages_for_api,
+        None,
+        0.2,
+        1.0,
+        512,
+        false,
+        None,
+        None,
+        None,
+        None,
+        Some(&tool_config),
+    );
+
+    let api_request_payload = ApiRequest {
+        url: built.url,
+        method: Some("POST".into()),
+        headers: Some(built.headers),
+        query: None,
+        body: Some(built.body),
+        timeout_ms: Some(60_000),
+        stream: Some(false),
+        request_id: built.request_id.clone(),
+        provider_id: Some(provider_cred.provider_id.clone()),
+    };
+
+    let api_response = api_request(app.clone(), api_request_payload).await?;
+    if !api_response.ok {
+        let fallback = format!("Provider returned status {}", api_response.status);
+        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+        return Err(if err_message == fallback {
+            err_message
+        } else {
+            format!("{} (status {})", err_message, api_response.status)
+        });
+    }
+
+    let calls = parse_tool_calls(&provider_cred.provider_id, api_response.data());
+    if calls.is_empty() {
+        log_warn(app, "dynamic_memory", "memory tool call returned no tool usage");
+        return Ok(Vec::new());
+    }
+
+    let mut actions_log: Vec<Value> = Vec::new();
+    for call in calls {
+        match call.name.as_str() {
+            "create_memory" => {
+                if let Some(text) = extract_text_argument(&call) {
+                    let mem_id = generate_memory_id();
+                    let embedding = match embedding_model::compute_embedding(app.clone(), text.clone()).await {
+                        Ok(vec) => Some(vec),
+                        Err(err) => {
+                            log_error(app, "dynamic_memory", format!("failed to embed memory: {}", err));
+                            None
+                        }
+                    };
+                    session.memories.push(text.clone());
+                    session.memory_embeddings.push(MemoryEmbedding {
+                        id: mem_id.clone(),
+                        text,
+                        embedding: embedding.unwrap_or_default(),
+                        created_at: now_millis().unwrap_or_default(),
+                    });
+                    actions_log.push(json!({
+                        "name": "create_memory",
+                        "arguments": call.arguments,
+                        "timestamp": now_millis().unwrap_or_default(),
+                        "updatedMemories": format_memories_with_ids(session),
+                    }));
+                }
+            }
+            "delete_memory" => {
+                if let Some(text) = extract_text_argument(&call) {
+                    // Support deletion by ID or text
+                    let target_idx = if text.len() == 6 && text.chars().all(|c| c.is_ascii_digit()) {
+                        session.memory_embeddings.iter().position(|m| m.id == text)
+                    } else {
+                        session.memories.iter().position(|m| m == &text).or_else(|| {
+                            session.memory_embeddings.iter().position(|m| m.text == text)
+                        })
+                    };
+                    if let Some(idx) = target_idx {
+                        session.memories.remove(idx.min(session.memories.len().saturating_sub(1)));
+                        if idx < session.memory_embeddings.len() {
+                            session.memory_embeddings.remove(idx);
+                        }
+                        actions_log.push(json!({
+                            "name": "delete_memory",
+                            "arguments": call.arguments,
+                            "timestamp": now_millis().unwrap_or_default(),
+                            "updatedMemories": format_memories_with_ids(session),
+                        }));
+                    } else {
+                        log_warn(app, "dynamic_memory", format!("delete_memory could not find target: {}", text));
+                    }
+                }
+            }
+            "done" => {
+                actions_log.push(json!({
+                    "name": "done",
+                    "arguments": call.arguments,
+                    "timestamp": now_millis().unwrap_or_default(),
+                }));
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    // Enforce max entries by trimming oldest
+    if session.memories.len() > max_entries {
+        let excess = session.memories.len() - max_entries;
+        session.memories.drain(0..excess);
+        if session.memory_embeddings.len() > max_entries {
+            let excess_embed = session.memory_embeddings.len() - max_entries;
+            session.memory_embeddings.drain(0..excess_embed);
+        }
+    }
+
+    session.updated_at = now_millis()?;
+    save_session(app, session)?;
+    Ok(actions_log)
+}
+
+fn extract_text_argument(call: &ToolCall) -> Option<String> {
+    if let Some(text) = call
+        .arguments
+        .get("text")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+    {
+        return Some(text);
+    }
+    call.raw_arguments.clone()
+}
+
+fn build_memory_tool_config() -> ToolConfig {
+    ToolConfig {
+        tools: vec![
+            ToolDefinition {
+                name: "create_memory".to_string(),
+                description: Some("Create a concise memory entry capturing important facts.".to_string()),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "Concise memory to store" },
+                        "updatedMemories": { "type": "array", "items": { "type": "string" }, "description": "Optional list of all memories after this change" }
+                    },
+                    "required": ["text"]
+                }),
+            },
+            ToolDefinition {
+                name: "delete_memory".to_string(),
+                description: Some("Delete an outdated or redundant memory by matching its text.".to_string()),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "Memory ID (preferred) or exact text to remove" },
+                        "updatedMemories": { "type": "array", "items": { "type": "string" }, "description": "Updated list of memories after deletion" }
+                    },
+                    "required": ["text"]
+                }),
+            },
+            ToolDefinition {
+                name: "done".to_string(),
+                description: Some("Call this when you have finished adding or deleting memories.".to_string()),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "summary": { "type": "string", "description": "Optional short note of changes made" }
+                    },
+                    "required": []
+                }),
+            },
+        ],
+        choice: Some(ToolChoice::Any),
+    }
+}
+
+fn summarization_tool_config() -> ToolConfig {
+    ToolConfig {
+        tools: vec![ToolDefinition {
+            name: "write_summary".to_string(),
+            description: Some("Return a concise summary of the provided conversation window.".to_string()),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "summary": { "type": "string", "description": "Concise summary text" }
+                },
+                "required": ["summary"]
+            }),
+        }],
+        choice: Some(ToolChoice::Required),
+    }
+}
+
+async fn summarize_messages(
+    app: &AppHandle,
+    provider_cred: &ProviderCredential,
+    model: &Model,
+    api_key: &str,
+    convo_window: &[StoredMessage],
+) -> Result<String, String> {
+    let mut messages_for_api = Vec::new();
+    let system_role = super::request_builder::system_role_for(provider_cred);
+    crate::chat_manager::messages::push_system_message(
+        &mut messages_for_api,
+        system_role,
+        Some("Summarize the recent conversation window into a concise paragraph capturing key facts and decisions. Avoid adding new information.".to_string()),
+    );
+    for msg in convo_window {
+        messages_for_api.push(json!({
+            "role": msg.role,
+            "content": msg.content
+        }));
+    }
+    // Mistral requires the last turn to be a user/tool message; append an explicit user ask.
+    messages_for_api.push(json!({
+        "role": "user",
+        "content": "Return only the concise summary for the above conversation window. Use the write_summary tool."
+    }));
+
+    let built = super::request_builder::build_chat_request(
+        provider_cred,
+        api_key,
+        &model.name,
+        &messages_for_api,
+        None,
+        0.2,
+        1.0,
+        512,
+        false,
+        None,
+        None,
+        None,
+        None,
+        Some(&summarization_tool_config()),
+    );
+
+    let api_request_payload = ApiRequest {
+        url: built.url,
+        method: Some("POST".into()),
+        headers: Some(built.headers),
+        query: None,
+        body: Some(built.body),
+        timeout_ms: Some(60_000),
+        stream: Some(false),
+        request_id: built.request_id.clone(),
+        provider_id: Some(provider_cred.provider_id.clone()),
+    };
+
+    let api_response = api_request(app.clone(), api_request_payload).await?;
+    if !api_response.ok {
+        let fallback = format!("Provider returned status {}", api_response.status);
+        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+        return Err(if err_message == fallback {
+            err_message
+        } else {
+            format!("{} (status {})", err_message, api_response.status)
+        });
+    }
+
+    // Prefer tool call output
+    let calls = parse_tool_calls(&provider_cred.provider_id, api_response.data());
+    for call in calls {
+        if call.name == "write_summary" {
+            if let Some(summary) = call
+                .arguments
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+            {
+                if !summary.is_empty() {
+                    return Ok(summary);
+                }
+            }
+        }
+    }
+
+    extract_text(api_response.data())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Failed to summarize recent messages".to_string())
+}
+
+fn find_model_and_credential<'a>(
+    settings: &'a Settings,
+    model_id: &str,
+) -> Option<(&'a Model, &'a ProviderCredential)> {
+    let model = settings.models.iter().find(|m| m.id == model_id)?;
+    let preferred_provider = settings.default_provider_credential_id.as_ref();
+    let provider_cred = settings
+        .provider_credentials
+        .iter()
+        .find(|cred| {
+            cred.provider_id == model.provider_id
+                && preferred_provider
+                    .map(|id| id == &cred.id)
+                    .unwrap_or(false)
+        })
+        .or_else(|| {
+            settings
+                .provider_credentials
+                .iter()
+                .find(|cred| cred.provider_id == model.provider_id)
+        })?;
+    Some((model, provider_cred))
 }
 
 #[tauri::command]

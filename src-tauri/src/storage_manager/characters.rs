@@ -4,12 +4,12 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use super::db::{now_ms, open_db};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = conn
+    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get::<_, i64>(8)?, r.get(9)?, r.get(10)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get::<_, i64>(9)?, r.get(10)?, r.get(11)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -92,6 +92,8 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
     if let Some(dm) = default_model_id {
         root.insert("defaultModelId".into(), JsonValue::String(dm));
     }
+    let memory_value = memory_type.unwrap_or_else(|| "manual".to_string());
+    root.insert("memoryType".into(), JsonValue::String(memory_value));
     if let Some(pt) = prompt_template_id {
         root.insert("promptTemplateId".into(), JsonValue::String(pt));
     }
@@ -161,6 +163,10 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .get("systemPrompt")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let memory_type = match c.get("memoryType").and_then(|v| v.as_str()) {
+        Some("dynamic") => "dynamic".to_string(),
+        _ => "manual".to_string(),
+    };
     let disable_avatar_gradient = c
         .get("disableAvatarGradient")
         .and_then(|v| v.as_bool())
@@ -179,8 +185,8 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               avatar_path=excluded.avatar_path,
@@ -189,9 +195,10 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               default_model_id=excluded.default_model_id,
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt,
+              memory_type=excluded.memory_type,
               disable_avatar_gradient=excluded.disable_avatar_gradient,
               updated_at=excluded.updated_at"#,
-        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, now],
+        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, now],
     ).map_err(|e| e.to_string())?;
 
     // Replace rules

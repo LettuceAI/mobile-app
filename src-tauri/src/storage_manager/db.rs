@@ -148,6 +148,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           description TEXT,
           default_scene_id TEXT,
           default_model_id TEXT,
+          memory_type TEXT NOT NULL DEFAULT 'manual',
           prompt_template_id TEXT,
           system_prompt TEXT,
           disable_avatar_gradient INTEGER NOT NULL DEFAULT 0,
@@ -206,6 +207,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           presence_penalty REAL,
           top_k INTEGER,
           memories TEXT NOT NULL DEFAULT '[]',
+          memory_embeddings TEXT NOT NULL DEFAULT '[]',
+          memory_summary TEXT,
+          memory_tool_events TEXT NOT NULL DEFAULT '[]',
           archived INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,
@@ -224,6 +228,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           total_tokens INTEGER,
           selected_variant_id TEXT,
           is_pinned INTEGER NOT NULL DEFAULT 0,
+          memory_refs TEXT NOT NULL DEFAULT '[]',
           FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
 
@@ -291,6 +296,29 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
       "#,
     )
     .map_err(|e| e.to_string())?;
+
+    // Migrations: add memory_refs to messages if missing
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(messages)")
+        .map_err(|e| e.to_string())?;
+    let mut has_memory_refs = false;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| e.to_string())?;
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        if col_name == "memory_refs" {
+            has_memory_refs = true;
+            break;
+        }
+    }
+    if !has_memory_refs {
+        conn.execute(
+            "ALTER TABLE messages ADD COLUMN memory_refs TEXT NOT NULL DEFAULT '[]'",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
 
     let default_content = crate::chat_manager::prompt_engine::default_system_prompt_template();
     let now = now_ms();

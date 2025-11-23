@@ -1,11 +1,8 @@
-import { useMemo, useState } from "react";
-import { ArrowLeft, Settings, Brain } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { ArrowLeft, Settings, Brain, Loader2, AlertTriangle } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Character, Session } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
-import { BottomMenu, MenuSection } from "../../../components";
-import { MemoryManager } from "./MemoryManager";
-import { addMemory, removeMemory, updateMemory } from "../../../../core/storage";
 
 interface ChatHeaderProps {
   character: Character;
@@ -25,7 +22,36 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
   const navigate = useNavigate();
   const { characterId } = useParams<{ characterId: string }>();
   const avatarUrl = useAvatar("character", character?.id, character?.avatarPath);
-  const [showMemoryMenu, setShowMemoryMenu] = useState(false);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+
+  // Listen for memory operation events
+  useEffect(() => {
+    const handleMemoryBusy = (event: Event) => {
+      const customEvent = event as CustomEvent<{ busy: boolean }>;
+      setMemoryBusy(customEvent.detail?.busy ?? false);
+    };
+
+    const handleMemoryError = (event: Event) => {
+      const customEvent = event as CustomEvent<{ error: string | null }>;
+      setMemoryError(customEvent.detail?.error ?? null);
+    };
+
+    const handleMemorySuccess = () => {
+      setMemoryError(null);
+      onSessionUpdate?.();
+    };
+
+    window.addEventListener("memory:busy", handleMemoryBusy);
+    window.addEventListener("memory:error", handleMemoryError);
+    window.addEventListener("memory:success", handleMemorySuccess);
+
+    return () => {
+      window.removeEventListener("memory:busy", handleMemoryBusy);
+      window.removeEventListener("memory:error", handleMemoryError);
+      window.removeEventListener("memory:success", handleMemorySuccess);
+    };
+  }, [onSessionUpdate]);
 
   const avatarDisplay = useMemo(() => {
     if (avatarUrl && isImageLike(avatarUrl)) {
@@ -47,24 +73,6 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
   }, [character, avatarUrl]);
 
   const headerTitle = useMemo(() => character?.name ?? "Unknown", [character?.name]);
-
-  const handleAddMemory = async (memory: string) => {
-    if (!sessionId) return;
-    await addMemory(sessionId, memory);
-    onSessionUpdate?.();
-  };
-
-  const handleRemoveMemory = async (index: number) => {
-    if (!sessionId) return;
-    await removeMemory(sessionId, index);
-    onSessionUpdate?.();
-  };
-
-  const handleUpdateMemory = async (index: number, memory: string) => {
-    if (!sessionId) return;
-    await updateMemory(sessionId, index, memory);
-    onSessionUpdate?.();
-  };
 
   return (
     <>
@@ -98,12 +106,21 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
           <div className="flex shrink-0 items-center gap-2">
             {session && (
               <button
-                onClick={() => setShowMemoryMenu(true)}
+                onClick={() => {
+                  if (!characterId || !sessionId) return;
+                  navigate(`/chat/${characterId}/memories?sessionId=${sessionId}`);
+                }}
                 className="relative flex items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
                 aria-label="Manage memories"
               >
-                <Brain size={14} />
-                {session.memories && session.memories.length > 0 && (
+                {memoryBusy ? (
+                  <Loader2 size={14} className="animate-spin text-emerald-400" />
+                ) : memoryError ? (
+                  <AlertTriangle size={14} className="text-red-400" />
+                ) : (
+                  <Brain size={14} />
+                )}
+                {!memoryBusy && !memoryError && session.memories && session.memories.length > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
                     {session.memories.length}
                   </span>
@@ -126,30 +143,6 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
           </div>
         </div>
       </header>
-
-      {/* Memory Management Menu */}
-      <BottomMenu
-        isOpen={showMemoryMenu}
-        onClose={() => setShowMemoryMenu(false)}
-        title="Conversation Memories"
-        includeExitIcon={true}
-        location="bottom"
-      >
-        <MenuSection>
-          {session ? (
-            <MemoryManager
-              memories={session.memories || []}
-              onAdd={handleAddMemory}
-              onRemove={handleRemoveMemory}
-              onUpdate={handleUpdateMemory}
-            />
-          ) : (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-6 py-4 text-sm text-amber-200">
-              No active session. Start a conversation first.
-            </div>
-          )}
-        </MenuSection>
-      </BottomMenu>
     </>
   );
 }

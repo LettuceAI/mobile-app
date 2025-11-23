@@ -37,6 +37,8 @@ pub struct CharacterExportData {
     pub rules: Vec<String>,
     pub scenes: Vec<SceneExport>,
     pub default_scene_id: Option<String>,
+    #[serde(default)]
+    pub memory_type: Option<String>,
     pub prompt_template_id: Option<String>,
     pub system_prompt: Option<String>,
     pub disable_avatar_gradient: bool,
@@ -85,13 +87,13 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     let conn = open_db(&app)?;
 
     // Read character data
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, _created_at, _updated_at): 
-        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
+    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, _created_at, _updated_at): 
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
         conn.query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![&character_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get::<_, i64>(7)?, r.get(8)?, r.get(9)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get::<_, i64>(8)?, r.get(9)?, r.get(10)?
             )),
         )
         .map_err(|e| format!("Character not found: {}", e))?;
@@ -188,6 +190,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
             rules,
             scenes,
             default_scene_id,
+            memory_type: Some(memory_type.unwrap_or_else(|| "manual".to_string())),
             prompt_template_id,
             system_prompt,
             disable_avatar_gradient: disable_avatar_gradient != 0,
@@ -278,10 +281,15 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
         None
     };
 
+    let memory_type = match package.character.memory_type.as_deref() {
+        Some("dynamic") => "dynamic".to_string(),
+        _ => "manual".to_string(),
+    };
+
     // Insert character
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)"#,
         params![
             &new_character_id,
             &package.character.name,
@@ -290,6 +298,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
             package.character.description,
             package.character.prompt_template_id,
             package.character.system_prompt,
+            memory_type,
             package.character.disable_avatar_gradient as i64,
             now,
             now
@@ -532,13 +541,13 @@ fn read_imported_character(
     conn: &rusqlite::Connection,
     character_id: &str,
 ) -> Result<String, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at): 
-        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
+    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at): 
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
         conn.query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get::<_, i64>(7)?, r.get(8)?, r.get(9)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get::<_, i64>(8)?, r.get(9)?, r.get(10)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -626,6 +635,8 @@ fn read_imported_character(
     if let Some(ds) = default_scene_id {
         root.insert("defaultSceneId".into(), JsonValue::String(ds));
     }
+    let memory_value = memory_type.unwrap_or_else(|| "manual".to_string());
+    root.insert("memoryType".into(), JsonValue::String(memory_value));
     if let Some(pt) = prompt_template_id {
         root.insert("promptTemplateId".into(), JsonValue::String(pt));
     }

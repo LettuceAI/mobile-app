@@ -1,47 +1,19 @@
 use std::collections::HashMap;
 
-use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::ProviderAdapter;
+use super::{OpenAIChatRequest, ProviderAdapter};
 use crate::chat_manager::tooling::{mistral_tool_choice, openai_tools, ToolConfig};
 
 pub struct MistralAdapter;
-
-#[derive(Serialize)]
-struct MistralCompletionArgs {
-    temperature: f64,
-    #[serde(rename = "top_p")]
-    top_p: f64,
-    #[serde(rename = "max_tokens")]
-    max_tokens: u32,
-    #[serde(rename = "frequency_penalty", skip_serializing_if = "Option::is_none")]
-    frequency_penalty: Option<f64>,
-    #[serde(rename = "presence_penalty", skip_serializing_if = "Option::is_none")]
-    presence_penalty: Option<f64>,
-}
-
-#[derive(Serialize)]
-struct MistralConversationRequest<'a> {
-    model: &'a str,
-    inputs: Vec<Value>,
-    tools: Vec<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_choice: Option<Value>,
-    #[serde(rename = "completion_args")]
-    completion_args: MistralCompletionArgs,
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    instructions: Option<String>,
-}
 
 impl ProviderAdapter for MistralAdapter {
     fn endpoint(&self, base_url: &str) -> String {
         let trimmed = base_url.trim_end_matches('/');
         if trimmed.ends_with("/v1") {
-            format!("{}/conversations", trimmed)
+            format!("{}/chat/completions", trimmed)
         } else {
-            format!("{}/v1/conversations", trimmed)
+            format!("{}/v1/chat/completions", trimmed)
         }
     }
 
@@ -84,43 +56,19 @@ impl ProviderAdapter for MistralAdapter {
         &self,
         model_name: &str,
         messages_for_api: &Vec<Value>,
-        system_prompt: Option<String>,
+        _system_prompt: Option<String>,
         temperature: f64,
         top_p: f64,
         max_tokens: u32,
         should_stream: bool,
-        frequency_penalty: Option<f64>,
-        presence_penalty: Option<f64>,
+        _frequency_penalty: Option<f64>,
+        _presence_penalty: Option<f64>,
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
     ) -> Value {
-        // Derive instructions and messages from OpenAI-style messages
-        let mut instructions = system_prompt;
-        let mut inputs: Vec<Value> = Vec::new();
-
-        if instructions.is_none() {
-            if let Some(first) = messages_for_api.first() {
-                if let Some(role) = first.get("role").and_then(|v| v.as_str()) {
-                    if role == "system" || role == "developer" {
-                        if let Some(text) = first.get("content").and_then(|c| c.as_str()) {
-                            instructions = Some(text.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        for (idx, msg) in messages_for_api.iter().enumerate() {
-            if idx == 0 {
-                if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
-                    if role == "system" || role == "developer" {
-                        continue;
-                    }
-                }
-            }
-
-            inputs.push(msg.clone());
-        }
+        // Mistral's chat API rejects unsupported knobs like freq/presence penalties, so drop them.
+        let frequency_penalty = None;
+        let presence_penalty = None;
 
         let (tools, tool_choice) = if let Some(cfg) = tool_config {
             let tools = openai_tools(cfg).unwrap_or_else(Vec::new);
@@ -134,20 +82,17 @@ impl ProviderAdapter for MistralAdapter {
             (Vec::new(), None)
         };
 
-        let body = MistralConversationRequest {
+        let body = OpenAIChatRequest {
             model: model_name,
-            inputs,
-            tools,
-            tool_choice,
-            completion_args: MistralCompletionArgs {
-                temperature,
-                top_p,
-                max_tokens,
-                frequency_penalty,
-                presence_penalty,
-            },
+            messages: messages_for_api,
             stream: should_stream,
-            instructions,
+            temperature,
+            top_p,
+            max_tokens,
+            frequency_penalty,
+            presence_penalty,
+            tools: if tools.is_empty() { None } else { Some(tools) },
+            tool_choice,
         };
 
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))

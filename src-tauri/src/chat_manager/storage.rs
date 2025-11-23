@@ -90,6 +90,7 @@ fn default_settings() -> Settings {
         models: Vec::new(),
         app_state: serde_json::Value::Null,
         advanced_model_settings: AdvancedModelSettings::default(),
+        advanced_settings: None,
         prompt_template_id: None,
         system_prompt: None,
         migration_version: 0,

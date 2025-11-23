@@ -1,6 +1,7 @@
-import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff } from "lucide-react";
-import { BottomMenu } from "../../../components/BottomMenu";
+import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain } from "lucide-react";
+import { BottomMenu, MenuButton } from "../../../components/BottomMenu";
 import type { StoredMessage } from "../../../../core/storage/schemas";
+import { useEffect } from "react";
 
 interface MessageActionState {
   message: StoredMessage;
@@ -23,6 +24,7 @@ interface MessageActionsBottomSheetProps {
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   setMessageAction: (value: MessageActionState | null) => void;
+  characterMemoryType?: string | null;
 }
 
 export function MessageActionsBottomSheet({
@@ -41,7 +43,13 @@ export function MessageActionsBottomSheet({
   handleRewindToMessage,
   handleTogglePin,
   setMessageAction,
+  characterMemoryType,
 }: MessageActionsBottomSheetProps) {
+
+  useEffect(() => {
+    console.log("Character Memory Type:", characterMemoryType, (messageAction?.message.memoryRefs?.length ?? 0) > 0 )
+  }, []);
+
   return (
     <BottomMenu
       isOpen={Boolean(messageAction)}
@@ -51,16 +59,16 @@ export function MessageActionsBottomSheet({
     >
       {messageAction && (
         <div className="space-y-4 text-white">
-          {/* Token usage - simplified and clean */}
+          {/* Token usage */}
           {messageAction.message.usage && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">Token Usage</span>
+                <span className="text-[11px] font-medium uppercase tracking-wider text-white/50">Token Usage</span>
                 <span className="text-sm font-medium text-white">
                   {messageAction.message.usage.totalTokens ?? "—"}
                 </span>
               </div>
-              <div className="mt-2 flex justify-between text-xs text-gray-500">
+              <div className="mt-1.5 flex justify-between text-[11px] text-white/40">
                 <span>Prompt: {messageAction.message.usage.promptTokens ?? "—"}</span>
                 <span>Response: {messageAction.message.usage.completionTokens ?? "—"}</span>
               </div>
@@ -69,46 +77,61 @@ export function MessageActionsBottomSheet({
 
           {/* Status messages */}
           {actionStatus && (
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2">
               <p className="text-sm text-emerald-200">{actionStatus}</p>
             </div>
           )}
           {actionError && (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
+            <div className="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2">
               <p className="text-sm text-red-200">{actionError}</p>
             </div>
           )}
 
           {messageAction.mode === "view" ? (
             <div className="space-y-3">
+              {characterMemoryType === "dynamic" &&
+                (messageAction.message.memoryRefs?.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Brain size={14} className="text-emerald-300" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-emerald-200/80">Memories Used</span>
+                    </div>
+                    <div className="space-y-1 text-xs leading-relaxed text-emerald-100/70">
+                      {(messageAction.message.memoryRefs || []).slice(0, 8).map((mem, idx) => (
+                        <div key={idx} className="line-clamp-2">
+                          • {mem}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               {/* Primary actions - conditional based on message type */}
               {messageAction.message.role === "assistant" || (() => {
-                // For user messages, only show edit if it's the latest user message
                 const userMessages = messages.filter(m => m.role === "user" && !m.id.startsWith("placeholder"));
                 const latestUserMessage = userMessages[userMessages.length - 1];
                 return latestUserMessage?.id === messageAction.message.id;
               })() ? (
-                <button
+                <MenuButton
+                  icon={Edit3}
+                  title="Edit message"
+                  description="Modify the content"
+                  color="from-indigo-500 to-blue-600"
                   onClick={() => {
                     setActionError(null);
                     setActionStatus(null);
                     setMessageAction({ message: messageAction.message, mode: "edit" });
                     setEditDraft(messageAction.message.content);
                   }}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left text-white transition hover:border-white/25 hover:bg-white/10"
-                >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/10">
-                    <Edit3 size={16} />
-                  </div>
-                  <div>
-                    <div className="font-medium">Edit message</div>
-                    <div className="text-sm text-gray-400">Modify the content</div>
-                  </div>
-                </button>
+                />
               ) : null}
 
-              {/* Copy action - available for all messages */}
-              <button
+              {/* Copy action */}
+              <MenuButton
+                icon={Copy}
+                title="Copy content"
+                description="Copy to clipboard"
+                color="from-purple-500 to-purple-600"
                 onClick={async () => {
                   try {
                     await navigator.clipboard?.writeText(messageAction.message.content);
@@ -118,81 +141,39 @@ export function MessageActionsBottomSheet({
                     setActionError(copyError instanceof Error ? copyError.message : String(copyError));
                   }
                 }}
-                className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left text-white transition hover:border-white/25 hover:bg-white/10"
-              >
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/10">
-                  <Copy size={16} />
-                </div>
-                <div>
-                  <div className="font-medium">Copy content</div>
-                  <div className="text-sm text-gray-400">Copy to clipboard</div>
-                </div>
-              </button>
+              />
 
-              {/* Pin/Unpin action - available for all messages */}
-              <button
+              {/* Pin/Unpin action */}
+              <MenuButton
+                icon={messageAction.message.isPinned ? PinOff : Pin}
+                title={messageAction.message.isPinned ? "Unpin message" : "Pin message"}
+                description={messageAction.message.isPinned ? "Remove pin protection" : "Protect from deletion and rewind"}
+                color="from-blue-500 to-blue-600"
                 onClick={() => void handleTogglePin(messageAction.message)}
                 disabled={actionBusy}
-                className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition hover:border-blue-500/30 hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 ${
-                  messageAction.message.isPinned
-                    ? "border-blue-500/20 bg-blue-500/10"
-                    : "border-white/10 bg-white/5"
-                }`}
-              >
-                <div className={`flex h-7 w-7 items-center justify-center rounded-lg border ${
-                  messageAction.message.isPinned
-                    ? "border-blue-500/20 bg-blue-500/15"
-                    : "border-white/10 bg-white/10"
-                }`}>
-                  {messageAction.message.isPinned ? (
-                    <PinOff size={16} className="text-blue-200" />
-                  ) : (
-                    <Pin size={16} className="text-white" />
-                  )}
-                </div>
-                <div>
-                  <div className={`font-medium ${messageAction.message.isPinned ? "text-blue-100" : "text-white"}`}>
-                    {messageAction.message.isPinned ? "Unpin message" : "Pin message"}
-                  </div>
-                  <div className={`text-sm ${messageAction.message.isPinned ? "text-blue-200/70" : "text-gray-400"}`}>
-                    {messageAction.message.isPinned ? "Remove pin protection" : "Protect from deletion and rewind"}
-                  </div>
-                </div>
-              </button>
+              />
 
               {/* Assistant-specific actions */}
               {messageAction.message.role === "assistant" && (
-                <button
+                <MenuButton
+                  icon={RotateCcw}
+                  title="Rewind to here"
+                  description="Remove all messages after this point"
+                  color="from-indigo-500 to-blue-600"
                   onClick={() => void handleRewindToMessage(messageAction.message)}
                   disabled={actionBusy}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-left transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/15">
-                    <RotateCcw size={16} className="text-amber-200" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-amber-100">Rewind to here</div>
-                    <div className="text-sm text-amber-200/70">Remove all messages after this point</div>
-                  </div>
-                </button>
+                />
               )}
 
               {/* Delete action */}
-              <button
+              <MenuButton
+                icon={Trash2}
+                title="Delete message"
+                description={messageAction.message.isPinned ? "Unpin first to delete" : "Remove this message permanently"}
+                color="from-rose-500 to-red-600"
                 onClick={() => void handleDeleteMessage(messageAction.message)}
                 disabled={actionBusy || messageAction.message.isPinned}
-                className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-2 text-left transition hover:border-red-500/30 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/15">
-                  <Trash2 size={16} className="text-red-200" />
-                </div>
-                <div>
-                  <div className="font-medium text-red-100">Delete message</div>
-                  <div className="text-sm text-red-200/70">
-                    {messageAction.message.isPinned ? "Unpin first to delete" : "Remove this message permanently"}
-                  </div>
-                </div>
-              </button>
+              />
             </div>
           ) : (
             <div className="space-y-4">
@@ -200,7 +181,7 @@ export function MessageActionsBottomSheet({
                 value={editDraft}
                 onChange={(event) => setEditDraft(event.target.value)}
                 rows={4}
-                className="w-full rounded-2xl border border-white/15 bg-black/40 p-4 text-sm text-white placeholder-gray-400 focus:border-emerald-400 focus:outline-none resize-none"
+                className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none resize-none"
                 placeholder="Edit your message..."
                 disabled={actionBusy}
               />
@@ -212,14 +193,14 @@ export function MessageActionsBottomSheet({
                     setMessageAction({ message: messageAction.message, mode: "view" });
                     setEditDraft(messageAction.message.content);
                   }}
-                  className="flex-1 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/10"
+                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => void handleSaveEdit()}
                   disabled={actionBusy}
-                  className="flex-1 rounded-full border border-emerald-400/50 bg-emerald-500/20 px-6 py-3 text-sm font-medium text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex-1 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {actionBusy ? "Saving..." : "Save"}
                 </button>

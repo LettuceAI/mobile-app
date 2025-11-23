@@ -134,7 +134,7 @@ pub(crate) fn apply_body(
 pub(crate) async fn handle_streaming_response(
     app: &tauri::AppHandle,
     req: &ApiRequest,
-    mut response: reqwest::Response,
+    response: reqwest::Response,
     request_id: String,
     status: reqwest::StatusCode,
     ok: bool,
@@ -181,7 +181,7 @@ pub(crate) async fn handle_streaming_response(
                     Some(Ok(chunk)) => {
                         let text = String::from_utf8_lossy(&chunk).to_string();
                         transport::emit_raw(app, &event_name, &text);
-                        log_info(
+                        /*log_info(
                             app,
                             "api_request",
                             &format!(
@@ -189,7 +189,7 @@ pub(crate) async fn handle_streaming_response(
                                 chunk.len(),
                                 url_for_log
                             ),
-                        );
+                        );*/
                         // Buffered SSE decoding to normalized events
                         for event in decoder.feed(&text, req.provider_id.as_deref()) {
                             if let NormalizedEvent::Usage { .. } = event { usage_emitted = true; }

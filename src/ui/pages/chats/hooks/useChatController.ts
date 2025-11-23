@@ -1091,6 +1091,8 @@ function createPlaceholderMessage(role: "user" | "assistant", content: string): 
     usage: undefined,
     variants: [],
     selectedVariantId: undefined,
+    isPinned: false,
+    memoryRefs: [],
   };
 }
 

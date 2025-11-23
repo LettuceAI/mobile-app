@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText, Download } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText, Download, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 
@@ -28,6 +28,8 @@ export function EditCharacterPage() {
     selectedModelId,
     systemPromptTemplateId,
     disableAvatarGradient,
+    memoryType,
+    dynamicMemoryEnabled,
     models,
     loadingModels,
     promptTemplates,
@@ -451,6 +453,47 @@ export function EditCharacterPage() {
             )}
             <p className="text-xs text-white/50">
               Override the default AI model for this character
+            </p>
+          </div>
+
+          {/* Memory Mode */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
+                <Layers className="h-4 w-4 text-amber-300" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Memory Mode</h3>
+              {!dynamicMemoryEnabled && (
+                <span className="ml-auto text-xs text-white/40">Enable Dynamic Memory to switch</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setFields({ memoryType: "manual" })}
+                className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                  memoryType === "manual"
+                    ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                    : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
+                }`}
+              >
+                <p className="text-sm font-semibold">Manual Memory</p>
+                <p className="mt-1 text-xs text-white/60">Manage notes yourself (current system).</p>
+              </button>
+              <button
+                disabled={!dynamicMemoryEnabled}
+                onClick={() => dynamicMemoryEnabled && setFields({ memoryType: "dynamic" })}
+                className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                  memoryType === "dynamic" && dynamicMemoryEnabled
+                    ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                    : "border-white/10 bg-black/15 text-white/60"
+                } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
+              >
+                <p className="text-sm font-semibold">Dynamic Memory</p>
+                <p className="mt-1 text-xs text-white/60">Automatic summaries when enabled globally.</p>
+              </button>
+            </div>
+            <p className="text-xs text-white/50">
+              Dynamic Memory must be turned on in Advanced settings; otherwise manual memory is used.
             </p>
           </div>
 

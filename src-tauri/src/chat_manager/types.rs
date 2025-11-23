@@ -70,6 +70,8 @@ pub struct Settings {
     pub app_state: Value,
     #[serde(default)]
     pub advanced_model_settings: AdvancedModelSettings,
+    #[serde(default)]
+    pub advanced_settings: Option<AdvancedSettings>,
     /// Reference to app-wide system prompt template (if any)
     #[serde(default)]
     pub prompt_template_id: Option<String>,
@@ -80,6 +82,29 @@ pub struct Settings {
     /// Migration version for data structure changes
     #[serde(default)]
     pub migration_version: u32,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedSettings {
+    #[serde(default)]
+    pub summarisation_model_id: Option<String>,
+    #[serde(default)]
+    pub creation_helper_enabled: Option<bool>,
+    #[serde(default)]
+    pub creation_helper_model_id: Option<String>,
+    #[serde(default)]
+    pub dynamic_memory: Option<DynamicMemorySettings>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicMemorySettings {
+    pub enabled: bool,
+    #[serde(default)]
+    pub summary_message_interval: u32,
+    #[serde(default)]
+    pub max_entries: u32,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -119,6 +144,8 @@ pub struct StoredMessage {
     pub variants: Vec<MessageVariant>,
     #[serde(default)]
     pub selected_variant_id: Option<String>,
+    #[serde(default)]
+    pub memory_refs: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -129,6 +156,16 @@ pub struct MessageVariant {
     pub created_at: u64,
     #[serde(default)]
     pub usage: Option<UsageSummary>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryEmbedding {
+    pub id: String,
+    pub text: String,
+    pub embedding: Vec<f32>,
+    #[serde(default)]
+    pub created_at: u64,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -168,6 +205,12 @@ pub struct Session {
     #[serde(default)]
     pub memories: Vec<String>,
     #[serde(default)]
+    pub memory_embeddings: Vec<MemoryEmbedding>,
+    #[serde(default)]
+    pub memory_summary: Option<String>,
+    #[serde(default)]
+    pub memory_tool_events: Vec<serde_json::Value>,
+    #[serde(default)]
     pub messages: Vec<StoredMessage>,
     #[serde(default)]
     pub archived: bool,
@@ -194,6 +237,8 @@ pub struct Character {
     pub default_scene_id: Option<String>,
     #[serde(default)]
     pub default_model_id: Option<String>,
+    #[serde(default = "default_memory_type")]
+    pub memory_type: String,
     /// Reference to a system prompt template (if any)
     #[serde(default)]
     pub prompt_template_id: Option<String>,
@@ -203,6 +248,10 @@ pub struct Character {
     pub system_prompt: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
+}
+
+fn default_memory_type() -> String {
+    "manual".to_string()
 }
 
 #[derive(Deserialize, Serialize, Clone)]

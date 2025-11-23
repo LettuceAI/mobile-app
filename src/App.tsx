@@ -20,7 +20,7 @@ import { AdvancedPage } from "./ui/pages/settings/AdvancedPage";
 import { DynamicMemoryPage } from "./ui/pages/settings/DynamicMemoryPage";
 import { EmbeddingDownloadPage } from "./ui/pages/settings/EmbeddingDownloadPage";
 import { EmbeddingTestPage } from "./ui/pages/settings/EmbeddingTestPage";
-import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage } from "./ui/pages/chats";
+import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage, ChatMemoriesPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
@@ -242,6 +242,7 @@ function AppContent() {
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />
               <Route path="/chat/:characterId/history" element={<ChatHistoryPage />} />
+              <Route path="/chat/:characterId/memories" element={<ChatMemoriesPage />} />
               <Route path="/create/character" element={<CreateCharacterPage />} />
               <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/characters/:characterId/edit" element={<EditCharacterPage />} />

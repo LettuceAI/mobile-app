@@ -199,6 +199,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     defaultSceneId: c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null),
     rules: defaultRules,
     defaultModelId: c.defaultModelId ?? null,
+    memoryType: c.memoryType ?? "manual",
     promptTemplateId: c.promptTemplateId ?? null,
     createdAt: c.createdAt ?? timestamp,
     updatedAt: timestamp,
@@ -276,6 +277,7 @@ export async function createSession(characterId: string, title: string, systemPr
             id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
             role: "scene", // Use "scene" role instead of "assistant"
             content: sceneContent.trim(),
+            memoryRefs: [],
             createdAt: timestamp,
           });
         }

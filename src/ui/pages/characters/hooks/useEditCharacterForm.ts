@@ -24,6 +24,8 @@ type EditCharacterState = {
   selectedModelId: string | null;
   systemPromptTemplateId: string | null;
   disableAvatarGradient: boolean;
+  memoryType: "manual" | "dynamic";
+  dynamicMemoryEnabled: boolean;
   models: Model[];
   loadingModels: boolean;
   promptTemplates: SystemPromptTemplate[];
@@ -54,6 +56,8 @@ const initialState: EditCharacterState = {
   selectedModelId: null,
   systemPromptTemplateId: null,
   disableAvatarGradient: false,
+  memoryType: "manual",
+  dynamicMemoryEnabled: false,
   models: [],
   loadingModels: false,
   promptTemplates: [],
@@ -99,6 +103,12 @@ export function useEditCharacterForm(characterId: string | undefined) {
       setFields({ defaultSceneId: state.scenes[0].id });
     }
   }, [state.scenes, state.defaultSceneId, setFields]);
+
+  useEffect(() => {
+    if (!state.dynamicMemoryEnabled && state.memoryType !== "manual") {
+      setFields({ memoryType: "manual" });
+    }
+  }, [setFields, state.dynamicMemoryEnabled, state.memoryType]);
 
   const loadCharacter = useCallback(async () => {
     if (!characterId) return;
@@ -147,6 +157,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         selectedModelId: character.defaultModelId || null,
         systemPromptTemplateId: character.promptTemplateId || null,
         disableAvatarGradient: character.disableAvatarGradient || false,
+        memoryType: character.memoryType === "dynamic" ? "dynamic" : "manual",
       });
       setError(null);
     } catch (err) {
@@ -161,13 +172,18 @@ export function useEditCharacterForm(characterId: string | undefined) {
     try {
       setFields({ loadingModels: true });
       const settings = await readSettings();
-      setFields({ models: settings.models });
+      const dynamicEnabled = settings.advancedSettings?.dynamicMemory?.enabled ?? false;
+      setFields({
+        models: settings.models,
+        dynamicMemoryEnabled: dynamicEnabled,
+        memoryType: dynamicEnabled ? state.memoryType : "manual",
+      });
     } catch (err) {
       console.error("Failed to load models:", err);
     } finally {
       setFields({ loadingModels: false });
     }
-  }, [setFields]);
+  }, [setFields, state.memoryType]);
 
   const loadPromptTemplates = useCallback(async () => {
     try {
@@ -232,6 +248,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         defaultModelId: state.selectedModelId,
         promptTemplateId: state.systemPromptTemplateId,
         disableAvatarGradient: state.disableAvatarGradient,
+        memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
       });
 
       navigate("/chat");

@@ -324,7 +324,6 @@ use tokenizers::Tokenizer;
 
 const MAX_SEQ_LENGTH: usize = 512;
 const EMBEDDING_DIM: usize = 512;
-const MODEL_ID: &str = "Zeolit/lettuce-emb-512d-v1";
 
 /// Initialize ONNX Runtime
 async fn ensure_ort_init() -> Result<(), String> {

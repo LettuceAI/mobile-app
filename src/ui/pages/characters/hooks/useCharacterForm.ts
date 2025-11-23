@@ -24,6 +24,8 @@ interface CharacterFormState {
   description: string;
   selectedModelId: string | null;
   systemPromptTemplateId: string | null;
+  memoryType: "manual" | "dynamic";
+  dynamicMemoryEnabled: boolean;
   disableAvatarGradient: boolean;
   
   // Models
@@ -49,6 +51,8 @@ type CharacterFormAction =
   | { type: 'SET_DESCRIPTION'; payload: string }
   | { type: 'SET_SELECTED_MODEL_ID'; payload: string | null }
   | { type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID'; payload: string | null }
+  | { type: 'SET_MEMORY_TYPE'; payload: "manual" | "dynamic" }
+  | { type: 'SET_DYNAMIC_MEMORY_ENABLED'; payload: boolean }
   | { type: 'SET_DISABLE_AVATAR_GRADIENT'; payload: boolean }
   | { type: 'SET_MODELS'; payload: Model[] }
   | { type: 'SET_LOADING_MODELS'; payload: boolean }
@@ -68,6 +72,8 @@ const initialState: CharacterFormState = {
   description: '',
   selectedModelId: null,
   systemPromptTemplateId: null,
+  memoryType: 'manual',
+  dynamicMemoryEnabled: false,
   disableAvatarGradient: false,
   models: [],
   loadingModels: true,
@@ -100,6 +106,10 @@ function characterFormReducer(
       return { ...state, selectedModelId: action.payload };
     case 'SET_SYSTEM_PROMPT_TEMPLATE_ID':
       return { ...state, systemPromptTemplateId: action.payload };
+    case 'SET_MEMORY_TYPE':
+      return { ...state, memoryType: action.payload };
+    case 'SET_DYNAMIC_MEMORY_ENABLED':
+      return { ...state, dynamicMemoryEnabled: action.payload };
     case 'SET_DISABLE_AVATAR_GRADIENT':
       return { ...state, disableAvatarGradient: action.payload };
     case 'SET_MODELS':
@@ -140,6 +150,11 @@ export function useCharacterForm() {
         dispatch({ type: 'SET_MODELS', payload: settings.models });
         const defaultId = settings.defaultModelId ?? settings.models[0]?.id ?? null;
         dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: defaultId });
+        const dynamicEnabled = settings.advancedSettings?.dynamicMemory?.enabled ?? false;
+        dispatch({ type: 'SET_DYNAMIC_MEMORY_ENABLED', payload: dynamicEnabled });
+        if (!dynamicEnabled) {
+          dispatch({ type: 'SET_MEMORY_TYPE', payload: 'manual' });
+        }
         
         dispatch({ type: 'SET_PROMPT_TEMPLATES', payload: templates });
       } catch (err) {
@@ -164,10 +179,16 @@ export function useCharacterForm() {
     }
   }, [state.scenes, state.defaultSceneId]);
 
+  useEffect(() => {
+    if (!state.dynamicMemoryEnabled && state.memoryType !== "manual") {
+      dispatch({ type: 'SET_MEMORY_TYPE', payload: 'manual' });
+    }
+  }, [state.dynamicMemoryEnabled, state.memoryType]);
+
   // Actions
   const setStep = useCallback((step: Step) => {
     dispatch({ type: 'SET_STEP', payload: step });
-  }, []);
+  }, [state.dynamicMemoryEnabled]);
 
   const setName = useCallback((name: string) => {
     dispatch({ type: 'SET_NAME', payload: name });
@@ -199,6 +220,10 @@ export function useCharacterForm() {
 
   const setSystemPromptTemplateId = useCallback((id: string | null) => {
     dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: id });
+  }, []);
+
+  const setMemoryType = useCallback((memoryType: "manual" | "dynamic") => {
+    dispatch({ type: 'SET_MEMORY_TYPE', payload: memoryType });
   }, []);
 
   const setDisableAvatarGradient = useCallback((disabled: boolean) => {
@@ -295,6 +320,8 @@ export function useCharacterForm() {
       dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: newDefaultSceneId });
       dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: characterData.disableAvatarGradient || false });
       dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: characterData.promptTemplateId || null });
+      const importedMemoryType = characterData.memoryType === "dynamic" ? "dynamic" : "manual";
+      dispatch({ type: 'SET_MEMORY_TYPE', payload: state.dynamicMemoryEnabled ? importedMemoryType : "manual" });
       
       if (exportPackage.avatarData) {
         dispatch({ type: 'SET_AVATAR_PATH', payload: exportPackage.avatarData });
@@ -365,6 +392,7 @@ export function useCharacterForm() {
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
         promptTemplateId: state.systemPromptTemplateId,
+        memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
         disableAvatarGradient: state.disableAvatarGradient,
       };
       
@@ -380,7 +408,7 @@ export function useCharacterForm() {
     } finally {
       dispatch({ type: 'SET_SAVING', payload: false });
     }
-  }, [state.name, state.avatarPath, state.backgroundImagePath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.systemPromptTemplateId, state.saving]);
+  }, [state.name, state.avatarPath, state.backgroundImagePath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.systemPromptTemplateId, state.memoryType, state.dynamicMemoryEnabled, state.saving]);
 
   // Computed values
   const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
@@ -400,6 +428,7 @@ export function useCharacterForm() {
       setDescription,
       setSelectedModelId,
       setSystemPromptTemplateId,
+      setMemoryType,
       setDisableAvatarGradient,
       handleAvatarUpload,
       handleBackgroundImageUpload,

@@ -634,6 +634,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
               onClick={() => setShowMemoryMenu(true)}
               disabled={!currentSession}
             />
+            <SettingsButton
+              icon={<History className="h-4 w-4" />}
+              title="Conversation Memory Page"
+              subtitle="Summary, AI tags, tool call history"
+              onClick={() => {
+                if (!characterId) return;
+                const query = currentSession ? `?sessionId=${currentSession.id}` : "";
+                navigate(`/chat/${characterId}/memories${query}`);
+              }}
+              disabled={!currentSession}
+            />
           </section>
         </motion.div>
       </main>

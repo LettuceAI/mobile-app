@@ -86,6 +86,9 @@ export function CreateCharacterPage() {
               loadingModels={state.loadingModels}
               selectedModelId={state.selectedModelId}
               onSelectModel={actions.setSelectedModelId}
+              memoryType={state.memoryType}
+              dynamicMemoryEnabled={state.dynamicMemoryEnabled}
+              onMemoryTypeChange={actions.setMemoryType}
               promptTemplates={state.promptTemplates}
               loadingTemplates={state.loadingTemplates}
               systemPromptTemplateId={state.systemPromptTemplateId}

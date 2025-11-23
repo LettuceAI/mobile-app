@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, AlertCircle, Brain, FileText, Loader2 } from "lucide-react";
+import { Sparkles, AlertCircle, Brain, FileText, Loader2, Layers } from "lucide-react";
 import type { Model, SystemPromptTemplate } from "../../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 
@@ -10,6 +10,9 @@ interface DescriptionStepProps {
   loadingModels: boolean;
   selectedModelId: string | null;
   onSelectModel: (value: string | null) => void;
+  memoryType: "manual" | "dynamic";
+  dynamicMemoryEnabled: boolean;
+  onMemoryTypeChange: (value: "manual" | "dynamic") => void;
   promptTemplates: SystemPromptTemplate[];
   loadingTemplates: boolean;
   systemPromptTemplateId: string | null;
@@ -27,6 +30,9 @@ export function DescriptionStep({
   loadingModels,
   selectedModelId,
   onSelectModel,
+  memoryType,
+  dynamicMemoryEnabled,
+  onMemoryTypeChange,
   promptTemplates,
   loadingTemplates,
   systemPromptTemplateId,
@@ -230,6 +236,68 @@ export function DescriptionStep({
         )}
         <p className={cn(typography.bodySmall.size, "text-white/40")}>
           This model will power the character's responses
+        </p>
+      </div>
+
+      {/* Memory Mode */}
+      <div className={spacing.field}>
+        <div className="flex items-center justify-between">
+          <label
+            className={cn(
+              typography.label.size,
+              typography.label.weight,
+              typography.label.tracking,
+              "uppercase text-white/70"
+            )}
+          >
+            Memory Mode
+          </label>
+          {!dynamicMemoryEnabled && (
+            <span className="text-[11px] text-white/45">Enable in Settings to switch</span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onMemoryTypeChange("manual")}
+            className={cn(
+              "flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition",
+              memoryType === "manual"
+                ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]"
+                : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/10"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4" />
+              <span className="text-sm font-semibold">Manual Memory</span>
+            </div>
+            <p className="text-xs text-white/60">
+              Current system: add and manage memory notes yourself.
+            </p>
+          </button>
+          <button
+            type="button"
+            disabled={!dynamicMemoryEnabled}
+            onClick={() => dynamicMemoryEnabled && onMemoryTypeChange("dynamic")}
+            className={cn(
+              "flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition",
+              memoryType === "dynamic" && dynamicMemoryEnabled
+                ? "border-blue-400/60 bg-blue-500/15 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                : "border-white/10 bg-white/5 text-white/60",
+              !dynamicMemoryEnabled && "cursor-not-allowed opacity-50"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-sm font-semibold">Dynamic Memory</span>
+            </div>
+            <p className="text-xs text-white/60">
+              Automatic summaries and context updates for this character.
+            </p>
+          </button>
+        </div>
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
+          Dynamic memory requires it to be enabled in Advanced settings. Otherwise, manual memory is used.
         </p>
       </div>
 

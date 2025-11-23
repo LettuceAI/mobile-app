@@ -74,22 +74,44 @@ pub async fn send_with_retries(
         let result = attempt_builder.send().await;
         match result {
             Ok(resp) => {
-                if resp.status().is_server_error() && attempt < max_retries {
+                let status = resp.status();
+                let is_rate_limited = status.as_u16() == 429;
+                let should_retry_status = status.is_server_error();
+                let rate_limit_attempts: u32 = 3;
+                let allowed_retries = if is_rate_limited {
+                    rate_limit_attempts.saturating_sub(1)
+                } else {
+                    max_retries
+                };
+
+                if (is_rate_limited || should_retry_status) && attempt < allowed_retries {
                     attempt += 1;
-                    let delay = backoff_delay_ms(attempt);
+
+                    // Honor Retry-After header for 429s when present; otherwise use exponential backoff.
+                    let retry_after_ms = if is_rate_limited {
+                        resp.headers()
+                            .get("retry-after")
+                            .and_then(|h| h.to_str().ok())
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .map(|secs| secs * 1000)
+                    } else {
+                        None
+                    };
+                    let delay = retry_after_ms.unwrap_or_else(|| backoff_delay_ms(attempt));
+
                     log_warn(
                         app,
                         scope,
                         format!(
-                            "server error {} - retrying in {}ms (attempt {}/{})",
-                            resp.status(),
+                            "{} {} - retrying in {}ms (attempt {}/{})",
+                            status,
+                            if is_rate_limited { "rate limited" } else { "server error" },
                             delay,
                             attempt,
-                            max_retries
+                            allowed_retries
                         ),
                     );
                     sleep(Duration::from_millis(delay)).await;
-                    // continue loop
                 } else {
                     return Ok(resp);
                 }
@@ -120,5 +142,3 @@ fn backoff_delay_ms(attempt: u32) -> u64 {
     let base = 200u64 * (1u64 << (attempt.saturating_sub(1).min(3)));
     base
 }
-
-// JSON/log helpers are in crate::serde_utils

@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 9;
+const CURRENT_MIGRATION_VERSION: u32 = 12;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -132,6 +132,36 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v8_to_v9(app)?;
         version = 9;
+    }
+
+    if version < 10 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v9 -> v10: Add memory_type to characters".to_string(),
+        );
+        migrate_v9_to_v10(app)?;
+        version = 10;
+    }
+
+    if version < 11 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v10 -> v11: Add memory_embeddings to sessions".to_string(),
+        );
+        migrate_v10_to_v11(app)?;
+        version = 11;
+    }
+
+    if version < 12 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v11 -> v12: Add memory summary and tool events to sessions".to_string(),
+        );
+        migrate_v11_to_v12(app)?;
+        version = 12;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -516,6 +546,131 @@ fn migrate_v8_to_v9(app: &AppHandle) -> Result<(), String> {
     let conn = open_db(app)?;
     // Add column with default null if it doesn't exist
     let _ = conn.execute("ALTER TABLE settings ADD COLUMN advanced_settings TEXT", []);
+
+    Ok(())
+}
+
+/// Migration v9 -> v10: add memory_type column to characters table
+fn migrate_v9_to_v10(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if column already exists
+    let mut has_column = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(characters)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "memory_type" {
+            has_column = true;
+            break;
+        }
+    }
+
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN memory_type TEXT DEFAULT 'manual'",
+            [],
+        );
+    }
+
+    // Ensure all rows have a value
+    let _ = conn.execute(
+        "UPDATE characters SET memory_type = 'manual' WHERE memory_type IS NULL",
+        [],
+    );
+
+    Ok(())
+}
+
+/// Migration v10 -> v11: add memory_embeddings column to sessions table
+fn migrate_v10_to_v11(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check for existing column
+    let mut has_column = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "memory_embeddings" {
+            has_column = true;
+            break;
+        }
+    }
+
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE sessions ADD COLUMN memory_embeddings TEXT DEFAULT '[]'",
+            [],
+        );
+    }
+
+    let _ = conn.execute(
+        "UPDATE sessions SET memory_embeddings = '[]' WHERE memory_embeddings IS NULL",
+        [],
+    );
+
+    Ok(())
+}
+
+/// Migration v11 -> v12: add memory_summary and memory_tool_events columns to sessions
+fn migrate_v11_to_v12(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Add memory_summary if missing
+    let mut has_summary = false;
+    let mut has_events = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "memory_summary" {
+            has_summary = true;
+        }
+        if name == "memory_tool_events" {
+            has_events = true;
+        }
+    }
+
+    if !has_summary {
+        let _ = conn.execute(
+            "ALTER TABLE sessions ADD COLUMN memory_summary TEXT",
+            [],
+        );
+    }
+
+    if !has_events {
+        let _ = conn.execute(
+            "ALTER TABLE sessions ADD COLUMN memory_tool_events TEXT DEFAULT '[]'",
+            [],
+        );
+    }
+
+    let _ = conn.execute(
+        "UPDATE sessions SET memory_tool_events = coalesce(memory_tool_events, '[]')",
+        [],
+    );
 
     Ok(())
 }

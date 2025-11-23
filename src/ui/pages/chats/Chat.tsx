@@ -323,6 +323,7 @@ export function ChatConversationPage() {
         handleRewindToMessage={chatController.handleRewindToMessage}
         handleTogglePin={chatController.handleTogglePin}
         setMessageAction={setMessageAction}
+        characterMemoryType={character?.memoryType}
       />
     </div>
   );
