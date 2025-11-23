@@ -15,6 +15,80 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
     {
+        version: "1.0-beta_4",
+        date: "2025-11-23",
+        changes: [
+            {
+                type: "improvement",
+                description: "Completely redesigned the top navigation bar to feel more modern and aligned with common mobile UI patterns"
+            },
+            {
+                type: "improvement",
+                description: "Moved Settings from the bottom navigation to the top navigation for a more predictable app layout"
+            },
+            {
+                type: "feature",
+                description: "Replaced the Settings slot in the bottom navigation with a new Library section"
+            },
+            {
+                type: "feature",
+                description: "Added a Library page that displays Characters and Personas as cards with avatar-based backgrounds for a more visual browsing experience"
+            },
+            {
+                type: "improvement",
+                description: "Removed Character and Persona management tabs from Settings and fully migrated them into the Library page"
+            },
+            {
+                type: "feature",
+                description: "Developed a lightweight in-house embedding model (lettuce-emb) to power dynamic memory and semantic recall"
+            },
+            {
+                type: "feature",
+                description: "Introduced Manual Memory, letting users pin important information without limiting context length (with the caveat that large memories can increase token usage on paid models)"
+            },
+            {
+                type: "feature",
+                description: "Introduced Dynamic Memory with a sliding window of the last N messages that are periodically summarised into long-term memories in the background"
+            },
+            {
+                type: "feature",
+                description: "Dynamic Memory now uses embeddings to retrieve the most relevant memories for each message, and users can choose which model powers both the summariser and memory manager"
+            },
+            {
+                type: "feature",
+                description: "Added Character and Persona import/export via .json files for easier backup and sharing"
+            },
+            {
+                type: "breaking",
+                description: "Migrated all app storage from .bin/.json files to a SQLite .db backend for more reliable, scalable data handling"
+            },
+            {
+                type: "improvement",
+                description: "Improved UI consistency across multiple screens, tightening spacing, typography and component alignment"
+            },
+            {
+                type: "improvement",
+                description: "Added required-variable validation to the prompt editor to prevent saving prompts with missing placeholders"
+            },
+            {
+                type: "improvement",
+                description: "Extended usage tracking with typed events for chat, regenerate, continue, summarisation tool calls and memory management tool calls"
+            },
+            {
+                type: "feature",
+                description: "Made pinned messages fully functional and integrated with the new memory features"
+            },
+            {
+                type: "improvement",
+                description: "Optimised ChatHistory and Edit Character/Persona pages for smoother scrolling and lower resource usage"
+            },
+            {
+                type: "improvement",
+                description: "Redesigned bottom popup animations to be smoother and stutter-free"
+            }
+        ]
+    },
+    {
         version: "1.0-beta_3.2",
         date: "2025-11-08",
         changes: [
