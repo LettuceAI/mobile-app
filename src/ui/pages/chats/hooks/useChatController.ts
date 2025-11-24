@@ -7,6 +7,7 @@ import type { Character, Persona, Session, StoredMessage } from "../../../../cor
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 import { logManager } from "../../../../core/utils/logger";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface VariantState {
   variants: StoredMessage["variants"];
@@ -375,9 +376,21 @@ export function useChatController(
           msg.id === messageId ? updatedMessage : msg
         );
         
+        let newSystemPrompt = state.session.systemPrompt;
+        try {
+          newSystemPrompt = await invoke<string>("regenerate_session_system_prompt", {
+            sessionId: state.session.id,
+            personaId: state.session.personaId || "",
+          });
+          console.log("[ChatController] System prompt regenerated after scene switch");
+        } catch (err) {
+          console.error("[ChatController] Failed to regenerate system prompt after scene switch:", err);
+        }
+        
         const updatedSession: Session = {
           ...state.session,
           selectedSceneId: nextScene.id,
+          systemPrompt: newSystemPrompt,
           messages: updatedMessages,
           updatedAt: Date.now(),
         } as Session;

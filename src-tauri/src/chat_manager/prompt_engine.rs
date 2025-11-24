@@ -182,7 +182,6 @@ pub fn render_with_context(
     )
 }
 
-/// Internal rendering function that optionally logs to backend
 fn render_with_context_internal(
     app: Option<&AppHandle>,
     base_template: &str,
@@ -191,7 +190,6 @@ fn render_with_context_internal(
     _session: &Session,
     settings: &Settings,
 ) -> String {
-    // Get character info early (needed for dynamic replacements in scenes)
     let char_name = &character.name;
     let raw_char_desc = character
         .description
@@ -207,15 +205,15 @@ fn render_with_context_internal(
         .filter(|s| !s.is_empty())
         .unwrap_or("");
 
-    // Build scene content from character's default scene
-    // Priority: character.default_scene_id > first scene (if only one exists)
-    let scene_id_to_use = character.default_scene_id.as_ref().or_else(|| {
-        if character.scenes.len() == 1 {
-            character.scenes.first().map(|s| &s.id)
-        } else {
-            None
-        }
-    });
+    let scene_id_to_use = _session.selected_scene_id.as_ref()
+        .or_else(|| character.default_scene_id.as_ref())
+        .or_else(|| {
+            if character.scenes.len() == 1 {
+                character.scenes.first().map(|s| &s.id)
+            } else {
+                None
+            }
+        });
 
     let scene_content = if let Some(selected_scene_id) = scene_id_to_use {
         if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
