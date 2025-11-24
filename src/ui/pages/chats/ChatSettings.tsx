@@ -429,28 +429,18 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const characterName = useMemo(() => currentCharacter?.name ?? "Unknown Character", [currentCharacter?.name]);
   const effectiveModelId = getEffectiveModelId();
   const currentModel = models.find(m => m.id === effectiveModelId);
-  const defaultAdvancedSummary = useMemo(() => {
-    const defaults = createDefaultAdvancedModelSettings();
-    return formatAdvancedModelSettingsSummary(defaults, "Temp 0.7 • Top P 1 • Max 1024");
-  }, []);
-
-  const globalAdvancedSummary = useMemo(() => {
-    return formatAdvancedModelSettingsSummary(
-      globalAdvancedSettings ?? createDefaultAdvancedModelSettings(),
-      defaultAdvancedSummary
-    );
-  }, [globalAdvancedSettings, defaultAdvancedSummary]);
-
+  
   const sessionAdvancedSummary = useMemo(() => {
     if (!currentSession) {
       return "Open a chat session first";
     }
-    const inheritedLabel = `Inherits ${globalAdvancedSummary}`;
+    // If session override exists, use it; otherwise use model's advanced settings
+    const effectiveSettings = sessionAdvancedSettings ?? currentModel?.advancedModelSettings ?? createDefaultAdvancedModelSettings();
     return formatAdvancedModelSettingsSummary(
-      sessionAdvancedSettings ?? null,
-      inheritedLabel
+      effectiveSettings,
+      "Default settings"
     );
-  }, [currentSession, sessionAdvancedSettings, globalAdvancedSummary]);
+  }, [currentSession, sessionAdvancedSettings, currentModel]);
 
   const handleBack = () => {
     if (characterId) {
@@ -615,7 +605,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
               subtitle={sessionAdvancedSummary}
               onClick={() => {
                 if (!currentSession) return;
-                const draft = sessionAdvancedSettings ?? globalAdvancedSettings ?? createDefaultAdvancedModelSettings();
+                const draft = sessionAdvancedSettings ?? currentModel?.advancedModelSettings ?? createDefaultAdvancedModelSettings();
                 setSessionAdvancedDraft(draft);
                 setSessionOverrideEnabled(Boolean(sessionAdvancedSettings));
                 setShowSessionAdvancedMenu(true);
