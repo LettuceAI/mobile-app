@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronRight, SlidersHorizontal, Target, Scale, Sparkles, Settings2, Lightbulb, Cpu, Info } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
@@ -14,9 +14,10 @@ import {
 import { BottomMenu } from "../../components/BottomMenu";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelsController } from "./hooks/useModelsController";
+import { useNavigationManager } from "../../navigation";
 
 export function ModelsPage() {
-    const navigate = useNavigate();
+    const { toNewModel, toEditModel } = useNavigationManager();
     const [searchParams, setSearchParams] = useSearchParams();
     const isAdvancedView = searchParams.get("view") === "advanced";
     const [showParameterSupport, setShowParameterSupport] = useState(false);
@@ -55,8 +56,8 @@ export function ModelsPage() {
     );
 
     useEffect(() => {
-        (window as any).__openAddModel = () => navigate('/settings/models/new');
-        const listener = () => navigate('/settings/models/new');
+        (window as any).__openAddModel = () => toNewModel();
+        const listener = () => toNewModel();
         window.addEventListener("models:add", listener);
         return () => {
             if ((window as any).__openAddModel) {
@@ -64,7 +65,7 @@ export function ModelsPage() {
             }
             window.removeEventListener("models:add", listener);
         };
-    }, [navigate]);
+    }, [toNewModel]);
 
     const openAdvancedView = () => {
         const next = new URLSearchParams(searchParams);
@@ -531,7 +532,7 @@ export function ModelsPage() {
 
                 {models.length === 0 && (
                     <EmptyState
-                        onCreate={() => navigate('/settings/models/new')}
+                        onCreate={() => toNewModel()}
                     />
                 )}
                 {models.map(model => {
@@ -540,7 +541,7 @@ export function ModelsPage() {
                     return (
                         <button
                             key={model.id}
-                            onClick={() => navigate(`/settings/models/${model.id}`)}
+                            onClick={() => toEditModel(model.id)}
                             className={`group w-full rounded-xl border px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-white/20 active:scale-[0.99] ${isDefault ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'}`}
                         >
                             <div className="flex items-center gap-3">

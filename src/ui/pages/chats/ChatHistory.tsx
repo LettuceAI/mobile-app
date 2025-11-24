@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Trash2, MessageCircle, AlertCircle, Edit3 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import type { Character } from "../../../core/storage/schemas";
 import {
@@ -11,6 +11,7 @@ import {
   updateSessionTitle
 } from "../../../core/storage";
 import { typography, radius, cn } from "../../design-tokens";
+import { Routes, useNavigationManager } from "../../navigation";
 
 interface SessionPreview {
   id: string;
@@ -22,7 +23,7 @@ interface SessionPreview {
 
 export function ChatHistoryPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const navigate = useNavigate();
+  const { go, backOrReplace } = useNavigationManager();
   const [character, setCharacter] = useState<Character | null>(null);
   const [sessions, setSessions] = useState<SessionPreview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -139,7 +140,7 @@ export function ChatHistoryPage() {
         className="z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
         <div className="flex">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
             className={cn(
               "flex flex-shrink-0 items-center justify-center border border-white/15 bg-white/5 text-white/70",
               radius.full,
@@ -208,7 +209,7 @@ export function ChatHistoryPage() {
               <SessionCard
                 key={session.id}
                 session={session}
-                onSelect={() => navigate(`/chat/${characterId}?sessionId=${session.id}`)}
+                onSelect={() => go(Routes.chatSession(characterId!, session.id))}
                 onDelete={() => handleDelete(session.id)}
                 onRename={(newTitle) => handleRename(session.id, newTitle)}
                 isBusy={busyIds.has(session.id)}

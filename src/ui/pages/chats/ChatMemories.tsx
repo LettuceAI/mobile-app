@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare } from "lucide-react";
 import type { Character, Session } from "../../../core/storage/schemas";
 import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
+import { Routes, useNavigationManager } from "../../navigation";
 
 type MemoryToolEvent = NonNullable<Session["memoryToolEvents"]>[number];
 
@@ -291,7 +292,7 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
 }
 
 export function ChatMemoriesPage() {
-  const navigate = useNavigate();
+  const { go, backOrReplace } = useNavigationManager();
   const { characterId } = useParams();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("sessionId");
@@ -354,12 +355,9 @@ export function ChatMemoriesPage() {
 
   const handleScrollToMessage = useCallback((messageId: string) => {
     // Navigate back to chat with a message ID parameter
-    const params = new URLSearchParams({ sessionId: session?.id || "" });
-    if (messageId) {
-      params.set("highlightMessage", messageId);
-    }
-    navigate(`/chats/${characterId}?${params.toString()}`);
-  }, [navigate, characterId, session?.id]);
+    const extra = messageId ? { highlightMessage: messageId } : undefined;
+    go(Routes.chatSession(characterId!, session?.id || undefined, extra));
+  }, [go, characterId, session?.id]);
 
   const handleAddNew = async () => {
     const trimmed = newMemory.trim();
@@ -427,7 +425,7 @@ export function ChatMemoriesPage() {
       <div className={cn("flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center", colors.surface.base)}>
         <p className={cn("text-sm", colors.text.secondary)}>{error || "Session not found"}</p>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
           className={cn(
             components.button.primary,
             components.button.sizes.md,
@@ -449,7 +447,7 @@ export function ChatMemoriesPage() {
       )}>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
             className={cn(
               "flex items-center justify-center",
               radius.full,

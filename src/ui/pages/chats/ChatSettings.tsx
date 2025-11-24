@@ -22,6 +22,7 @@ import {
   sanitizeAdvancedModelSettings,
 } from "../../components/AdvancedModelSettingsForm";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
+import { Routes, useNavigationManager } from "../../navigation";
 
 function isImageLike(value?: string) {
   if (!value) return false;
@@ -217,6 +218,7 @@ function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, o
 
 function ChatSettingsContent({ character }: { character: Character }) {
   const navigate = useNavigate();
+  const { backOrReplace } = useNavigationManager();
   const { characterId } = useParams();
   const [models, setModels] = useState<Model[]>([]);
   const [globalDefaultModelId, setGlobalDefaultModelId] = useState<string | null>(null);
@@ -447,12 +449,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('sessionId');
       if (sessionId) {
-        navigate(`/chat/${characterId}?sessionId=${sessionId}`);
+        navigate(Routes.chatSession(characterId, sessionId));
       } else {
-        navigate('/chat');
+        navigate(Routes.chat);
       }
     } else {
-      navigate(-1);
+      backOrReplace(Routes.chat);
     }
   };
 

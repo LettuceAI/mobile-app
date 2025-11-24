@@ -2,16 +2,19 @@
 import { useEffect } from "react";
 import { onBackButtonPress } from "@tauri-apps/api/app";
 import { exit } from "@tauri-apps/plugin-process";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { PluginListener } from "@tauri-apps/api/core";
+import { useNavigationManager } from "../navigation";
 
 export function useAndroidBackHandler(
     options?: {
         canLeave?: () => boolean | Promise<boolean>;
         onRootBack?: () => Promise<void> | void;
+        // Optional fallback route to use instead of exiting when there is no history entry.
+        fallbackPath?: string;
     }
 ) {
-    const navigate = useNavigate();
+    const { back, backOrReplace } = useNavigationManager();
     const location = useLocation();
 
     useEffect(() => {
@@ -25,8 +28,13 @@ export function useAndroidBackHandler(
                 }
                 const idx = (window.history.state && (window.history.state as any).idx) ?? 0;
                 if (idx > 0) {
-                    navigate(-1);
+                    back();
                 } else {
+                    const fallback = options?.fallbackPath;
+                    if (fallback) {
+                        backOrReplace(fallback);
+                        return;
+                    }
                     await options?.onRootBack?.();
                     await exit(0);
                 }
@@ -34,5 +42,5 @@ export function useAndroidBackHandler(
         })();
 
         return () => { unlisten?.unregister(); };
-    }, [location.key]);
+    }, [location.key, back, backOrReplace, options?.canLeave, options?.onRootBack, options?.fallbackPath]);
 }

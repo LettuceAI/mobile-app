@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 
 import {
@@ -25,6 +25,7 @@ import {
   modelEditorReducer,
   type ModelEditorState,
 } from "./modelEditorReducer";
+import { Routes, useNavigationManager } from "../../../navigation";
 
 type ControllerReturn = {
   state: ModelEditorState;
@@ -54,7 +55,7 @@ function useModelEditorState() {
 }
 
 export function useModelEditorController(): ControllerReturn {
-  const navigate = useNavigate();
+  const { toModelsList, backOrReplace } = useNavigationManager();
   const { modelId } = useParams<{ modelId: string }>();
   const isNew = !modelId || modelId === "new";
   const [state, dispatch] = useModelEditorState();
@@ -107,7 +108,7 @@ export function useModelEditorController(): ControllerReturn {
         } else {
           const existing = settings.models.find((m) => m.id === modelId) || null;
           if (!existing) {
-            navigate("/settings/models");
+            toModelsList({ replace: true });
             return;
           }
           nextEditorModel = existing;
@@ -164,7 +165,7 @@ export function useModelEditorController(): ControllerReturn {
     return () => {
       cancelled = true;
     };
-  }, [isNew, modelId, navigate]);
+  }, [isNew, modelId, toModelsList]);
 
   const providerDisplay = useMemo(() => {
     return (prov: ProviderCredential) => {
@@ -416,7 +417,7 @@ export function useModelEditorController(): ControllerReturn {
           ? sanitizeAdvancedModelSettings(modelAdvancedDraft)
           : undefined,
       });
-      navigate("/settings/models");
+      backOrReplace(Routes.settingsModels);
     } catch (error: any) {
       console.error("Failed to save model", error);
       dispatch({
@@ -426,7 +427,7 @@ export function useModelEditorController(): ControllerReturn {
     } finally {
       dispatch({ type: "set_saving", payload: false });
     }
-  }, [navigate, state]);
+  }, [backOrReplace, state]);
 
   const handleDelete = useCallback(async () => {
     const { editorModel } = state;
@@ -435,7 +436,7 @@ export function useModelEditorController(): ControllerReturn {
     dispatch({ type: "set_error", payload: null });
     try {
       await removeModel(editorModel.id);
-      navigate("/settings/models");
+      backOrReplace(Routes.settingsModels);
     } catch (error: any) {
       console.error("Failed to delete model", error);
       dispatch({
@@ -445,7 +446,7 @@ export function useModelEditorController(): ControllerReturn {
     } finally {
       dispatch({ type: "set_deleting", payload: false });
     }
-  }, [navigate, state, isNew]);
+  }, [backOrReplace, state, isNew]);
 
   const handleSetDefault = useCallback(async () => {
     const { editorModel } = state;

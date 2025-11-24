@@ -6,6 +6,7 @@ import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
 import { invoke } from "@tauri-apps/api/core";
 import { DISCORD_SERVER_LINK, GITHUB_REPO_LINK } from "../../../core/utils/links";
+import { useNavigationManager } from "../../navigation";
 
 interface RowProps {
   icon: React.ReactNode;
@@ -90,6 +91,7 @@ function Row({ icon, title, subtitle, onClick, count, tone = 'default' }: RowPro
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const { toModelsList } = useNavigationManager();
   const {
     state: { providers, models, characterCount, isLoading },
   } = useSettingsSummary();
@@ -128,7 +130,7 @@ export function SettingsPage() {
       title: 'Models',
       subtitle: 'Manage AI model catalog',
       count: modelCount,
-      onClick: () => navigate('/settings/models')
+      onClick: () => toModelsList()
     },
     /*{
       key: 'characters',
