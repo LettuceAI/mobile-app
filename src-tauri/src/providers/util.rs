@@ -2,15 +2,8 @@ use crate::{chat_manager::types::ProviderId, storage_manager};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION};
 use serde_json::Value;
 
-pub fn default_base_url(provider_id: &ProviderId) -> Option<&'static str> {
-    match provider_id.0.as_str() {
-        "openai" => Some("https://api.openai.com"),
-        "anthropic" => Some("https://api.anthropic.com"),
-        "openrouter" => Some("https://openrouter.ai/api"),
-        "groq" => Some("https://api.groq.com"),
-        "mistral" => Some("https://api.mistral.ai"),
-        _ => None,
-    }
+pub fn default_base_url(provider_id: &ProviderId) -> Option<String> {
+    crate::providers::config::get_provider_config(provider_id).map(|cfg| cfg.default_base_url)
 }
 
 pub fn resolve_base_url(
@@ -79,7 +72,25 @@ pub fn build_headers(provider_id: &ProviderId, api_key: &str) -> Result<HeaderMa
                     .map_err(|e| format!("invalid x-api-key header: {e}"))?,
             );
         }
+        "featherless" => {
+            // Featherless uses "Authentication" instead of "Authorization"
+            headers.insert(
+                HeaderName::from_static("authentication"),
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| format!("invalid authentication header: {e}"))?,
+            );
+        }
+        "gemini" => {
+            // Gemini can use x-goog-api-key header, but typically uses query param
+            // We'll support header-based auth as an alternative
+            headers.insert(
+                HeaderName::from_static("x-goog-api-key"),
+                HeaderValue::from_str(api_key)
+                    .map_err(|e| format!("invalid x-goog-api-key header: {e}"))?,
+            );
+        }
         _ => {
+            // Standard Bearer token for most providers
             headers.insert(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", api_key))
@@ -95,12 +106,26 @@ pub fn build_verify_url(provider_id: &ProviderId, base_url: &str) -> String {
     match provider_id.0.as_str() {
         "openrouter" => format!("{}/v1/key", trimmed),
         "groq" => format!("{}/openai/v1/models", trimmed),
-        "mistral" => format!("{}/v1/models", trimmed),
-        _ => format!("{}/v1/models", trimmed),
+        "gemini" => {
+            format!("{}/models", trimmed)
+        }
+        "zai" => {
+            if trimmed.ends_with("/v1") {
+                format!("{}/llm", trimmed)
+            } else {
+                format!("{}/v1/llm", trimmed)
+            }
+        }
+        _ => {
+            if trimmed.ends_with("/v1") || trimmed.ends_with("/v1beta") {
+                format!("{}/models", trimmed)
+            } else {
+                format!("{}/v1/models", trimmed)
+            }
+        }
     }
 }
 
-/// Attempt to extract an error message from a provider JSON payload.
 pub fn extract_error_message(payload: &Value) -> Option<String> {
     if let Some(error) = payload.get("error") {
         match error {

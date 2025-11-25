@@ -20,8 +20,24 @@ pub async fn verify_model_exists(
     credential_id: String,
     model: String,
 ) -> Result<VerifyModelResponse, String> {
-    // Only verify for OpenAI / Anthropic. Others pass.
-    if provider_id != "openai" && provider_id != "anthropic" {
+    let supports_model_list = matches!(
+        provider_id.as_str(),
+        "openai"
+            | "anthropic"
+            | "deepseek"
+            | "qwen"
+            | "moonshot"
+            | "xai"
+            | "featherless"
+            | "nanogpt"
+            | "anannas"
+            | "gemini"
+            | "groq"
+            | "mistral"
+            | "openrouter"
+    );
+
+    if !supports_model_list {
         return Ok(VerifyModelResponse {
             provider_id,
             credential_id,
@@ -31,7 +47,6 @@ pub async fn verify_model_exists(
         });
     }
 
-    // Load settings to find baseUrl.
     let settings_json = match storage_manager::internal_read_settings(&app)? {
         None => Value::Null,
         Some(txt) => serde_json::from_str::<Value>(&txt).map_err(|e| e.to_string())?,
@@ -52,7 +67,6 @@ pub async fn verify_model_exists(
         }
     }
 
-    // Retrieve API key inline from settings providerCredentials
     let mut api_key: Option<String> = None;
     if let Some(creds) = settings_json
         .get("providerCredentials")
@@ -87,28 +101,15 @@ pub async fn verify_model_exists(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let (url, headers) = if provider_id == "openai" {
-        let base = base_url.unwrap_or_else(|| "https://api.openai.com".to_string());
-        let mut h = reqwest::header::HeaderMap::new();
-        h.insert(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", api_key).parse().unwrap(),
-        );
-        (format!("{}/v1/models", base.trim_end_matches('/')), h)
-    } else {
-        // anthropic
-        let base = base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string());
-        let mut h = reqwest::header::HeaderMap::new();
-        h.insert(
-            reqwest::header::HeaderName::from_static("x-api-key"),
-            api_key.parse().unwrap(),
-        );
-        h.insert(
-            reqwest::header::HeaderName::from_static("anthropic-version"),
-            "2023-06-01".parse().unwrap(),
-        );
-        (format!("{}/v1/models", base.trim_end_matches('/')), h)
-    };
+    let pid = crate::chat_manager::types::ProviderId(provider_id.clone());
+
+    let base =
+        crate::providers::util::resolve_base_url(&app, &pid, base_url, Some(&credential_id))?;
+
+    let url = crate::providers::util::build_verify_url(&pid, &base);
+
+    let headers = crate::providers::util::build_headers(&pid, &api_key)
+        .map_err(|e| format!("Failed to build headers: {}", e))?;
 
     let resp = match client.get(&url).headers(headers).send().await {
         Ok(r) => r,
@@ -145,13 +146,26 @@ pub async fn verify_model_exists(
             });
         }
     };
-
     let mut exists = false;
-    if let Some(arr) = json.get("data").and_then(|v| v.as_array()) {
-        for item in arr {
-            if item.get("id").and_then(|v| v.as_str()) == Some(model.as_str()) {
-                exists = true;
-                break;
+
+    if provider_id == "gemini" {
+        if let Some(arr) = json.get("models").and_then(|v| v.as_array()) {
+            for item in arr {
+                if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                    if name == model.as_str() || name.ends_with(&format!("/{}", model)) {
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+        }
+    } else {
+        if let Some(arr) = json.get("data").and_then(|v| v.as_array()) {
+            for item in arr {
+                if item.get("id").and_then(|v| v.as_str()) == Some(model.as_str()) {
+                    exists = true;
+                    break;
+                }
             }
         }
     }
