@@ -196,7 +196,9 @@ pub struct Session {
     pub id: String,
     pub character_id: String,
     pub title: String,
-    #[serde(default)]
+    /// DEPRECATED: System prompts are now always rebuilt dynamically
+    #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     pub system_prompt: Option<String>,
     #[serde(default)]
     pub selected_scene_id: Option<String>,
@@ -241,8 +243,9 @@ pub struct Character {
     pub default_model_id: Option<String>,
     #[serde(default = "default_memory_type")]
     pub memory_type: String,
-    /// Reference to a system prompt template (if any)
-    #[serde(default)]
+    /// DEPRECATED: Character-level templates removed (use model/app templates only)
+    #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     pub prompt_template_id: Option<String>,
     /// DEPRECATED: Old system prompt field (migrated to templates)
     #[serde(default, skip_serializing)]

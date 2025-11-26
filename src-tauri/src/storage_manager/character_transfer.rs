@@ -3,6 +3,8 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::fs;
+
+#[cfg(not(target_os = "android"))]
 use tauri::Manager;
 
 use super::db::{now_ms, open_db};

@@ -2,7 +2,6 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info, Brain } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { invoke } from "@tauri-apps/api/core";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
 import { useChatController } from "./hooks/useChatController";
@@ -351,27 +350,18 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
     try {
       console.log("Changing persona to:", personaId);
-      
-      // Regenerate the system prompt with the new persona
-      const systemPrompt = await invoke<string>("regenerate_session_system_prompt", {
-        sessionId: currentSession.id,
-        personaId: personaId || "",
-      });
-      
-      // Update and save session with new persona and system prompt
+
       const updatedSession = {
         ...currentSession,
         personaId: personaId === null ? "" : personaId,
-        systemPrompt: systemPrompt || undefined,
         updatedAt: Date.now(),
       };
-      
+
       console.log("Updated session:", updatedSession);
       await saveSession(updatedSession);
       console.log("Session saved successfully");
       setCurrentSession(updatedSession);
       setShowPersonaSelector(false);
-      setSessionAdvancedSettings(updatedSession.advancedModelSettings ?? null);
 
       if (characterId && currentSession.id) {
         navigate(`/chat/${characterId}?sessionId=${currentSession.id}`, { replace: true });
@@ -431,7 +421,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const characterName = useMemo(() => currentCharacter?.name ?? "Unknown Character", [currentCharacter?.name]);
   const effectiveModelId = getEffectiveModelId();
   const currentModel = models.find(m => m.id === effectiveModelId);
-  
+
   const sessionAdvancedSummary = useMemo(() => {
     if (!currentSession) {
       return "Open a chat session first";
@@ -509,7 +499,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   return (
     <div className="min-h-screen bg-[#050505] text-gray-100">
       {/* Header */}
-      <header className="z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
+      <header className="z-20 shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
         <div className="flex items-center justify-between gap-3">
           <button
             onClick={handleBack}
@@ -666,7 +656,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 description="Disable persona for this conversation"
                 isSelected={currentSession?.personaId === null || currentSession?.personaId === undefined}
                 onClick={() => handleChangePersona(null)}
-                onLongPress={() => {}}
+                onLongPress={() => { }}
               />
               {personas.map((persona) => (
                 <PersonaOption
@@ -887,32 +877,30 @@ function ChatSettingsContent({ character }: { character: Character }) {
                       <label className="text-sm font-medium text-white">Max Output Tokens</label>
                       <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
                     </div>
-                    
+
                     <div className="flex gap-2 mb-3">
                       <button
                         type="button"
                         onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: null })}
-                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                          !sessionAdvancedDraft.maxOutputTokens
-                            ? 'bg-purple-400/20 text-purple-200'
-                            : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
-                        }`}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!sessionAdvancedDraft.maxOutputTokens
+                          ? 'bg-purple-400/20 text-purple-200'
+                          : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
+                          }`}
                       >
                         Auto
                       </button>
                       <button
                         type="button"
                         onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: 1024 })}
-                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                          sessionAdvancedDraft.maxOutputTokens
-                            ? 'bg-purple-400/20 text-purple-200'
-                            : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
-                        }`}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${sessionAdvancedDraft.maxOutputTokens
+                          ? 'bg-purple-400/20 text-purple-200'
+                          : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
+                          }`}
                       >
                         Custom
                       </button>
                     </div>
-                    
+
                     {sessionAdvancedDraft.maxOutputTokens !== null && sessionAdvancedDraft.maxOutputTokens !== undefined && (
                       <input
                         type="number"
@@ -925,9 +913,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                       />
                     )}
-                    
+
                     <p className="mt-2 text-xs text-white/40">
-                      {!sessionAdvancedDraft.maxOutputTokens 
+                      {!sessionAdvancedDraft.maxOutputTokens
                         ? 'Let the model decide the response length'
                         : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
                       }
@@ -1077,12 +1065,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
         location="bottom"
       >
         <MenuSection>
-          <ProviderParameterSupportInfo 
+          <ProviderParameterSupportInfo
             providerId={(() => {
               const effectiveModelId = getEffectiveModelId();
               const model = models.find(m => m.id === effectiveModelId);
               return model?.providerId || 'openai';
-            })()} 
+            })()}
           />
         </MenuSection>
       </BottomMenu>

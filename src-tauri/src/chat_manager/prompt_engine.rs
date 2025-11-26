@@ -81,8 +81,7 @@ pub fn default_dynamic_memory_prompt() -> String {
         .to_string()
 }
 
-/// Build a fully rendered system prompt using the precedence:
-/// session > character template > model template > app-wide template > default
+/// model template > app default template (from database)
 pub fn build_system_prompt(
     app: &AppHandle,
     character: &Character,
@@ -93,49 +92,27 @@ pub fn build_system_prompt(
 ) -> Option<String> {
     let mut debug_parts: Vec<Value> = Vec::new();
 
-    // Priority: session > character template > model template > app-wide template > default
-    let base_template = if let Some(session_prompt) = &session.system_prompt {
-        debug_parts.push(json!({ "source": "session_override" }));
-        session_prompt.clone()
-    } else if let Some(char_template_id) = &character.prompt_template_id {
-        // Resolve character prompt template
-        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
-            debug_parts
-                .push(json!({ "source": "character_template", "template_id": char_template_id }));
-            template.content
-        } else {
-            debug_parts.push(json!({ "source": "character_template_not_found", "template_id": char_template_id, "fallback": "default" }));
-            default_system_prompt_template()
-        }
-    } else if let Some(model_template_id) = &model.prompt_template_id {
-        // Resolve model prompt template
+    let base_template = if let Some(model_template_id) = &model.prompt_template_id {
         if let Ok(Some(template)) = prompts::get_template(app, model_template_id) {
-            debug_parts
-                .push(json!({ "source": "model_template", "template_id": model_template_id }));
+            debug_parts.push(json!({
+                "source": "model_template",
+                "template_id": model_template_id
+            }));
             template.content
         } else {
-            debug_parts.push(json!({ "source": "model_template_not_found", "template_id": model_template_id, "fallback": "default" }));
-            default_system_prompt_template()
-        }
-    } else if let Some(app_template_id) = &settings.prompt_template_id {
-        // Resolve app-wide prompt template
-        if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
-            debug_parts
-                .push(json!({ "source": "app_wide_template", "template_id": app_template_id }));
-            template.content
-        } else {
-            debug_parts.push(json!({ "source": "app_wide_template_not_found", "template_id": app_template_id, "fallback": "default" }));
-            default_system_prompt_template()
+            debug_parts.push(json!({
+                "source": "model_template_not_found",
+                "template_id": model_template_id,
+                "fallback": "app_default"
+            }));
+            get_app_default_template_content(app, settings, &mut debug_parts)
         }
     } else {
-        debug_parts.push(json!({ "source": "default_template" }));
-        default_system_prompt_template()
+        get_app_default_template_content(app, settings, &mut debug_parts)
     };
 
-    // Render with context
     let rendered = render_with_context(app, &base_template, character, persona, session, settings);
 
-    // Inject memories if present
     let final_prompt = if !session.memories.is_empty() {
         let mut result = rendered;
         result.push_str("\n\n# Key Memories\n");
@@ -160,6 +137,41 @@ pub fn build_system_prompt(
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+/// Helper function to get app default template content from database
+fn get_app_default_template_content(
+    app: &AppHandle,
+    settings: &Settings,
+    debug_parts: &mut Vec<Value>,
+) -> String {
+    // Try settings.prompt_template_id first (user's custom app default)
+    if let Some(app_template_id) = &settings.prompt_template_id {
+        if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
+            debug_parts.push(json!({
+                "source": "app_wide_template",
+                "template_id": app_template_id
+            }));
+            return template.content;
+        }
+    }
+
+    match prompts::get_template(app, prompts::APP_DEFAULT_TEMPLATE_ID) {
+        Ok(Some(template)) => {
+            debug_parts.push(json!({
+                "source": "app_default_template",
+                "template_id": prompts::APP_DEFAULT_TEMPLATE_ID
+            }));
+            template.content
+        }
+        _ => {
+            debug_parts.push(json!({
+                "source": "emergency_hardcoded_fallback",
+                "warning": "app_default template not found in database"
+            }));
+            default_system_prompt_template()
+        }
     }
 }
 
@@ -205,7 +217,9 @@ fn render_with_context_internal(
         .filter(|s| !s.is_empty())
         .unwrap_or("");
 
-    let scene_id_to_use = _session.selected_scene_id.as_ref()
+    let scene_id_to_use = _session
+        .selected_scene_id
+        .as_ref()
         .or_else(|| character.default_scene_id.as_ref())
         .or_else(|| {
             if character.scenes.len() == 1 {

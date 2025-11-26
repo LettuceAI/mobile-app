@@ -122,7 +122,6 @@ pub fn run() {
             chat_manager::get_required_template_variables,
             chat_manager::validate_template_variables,
             chat_manager::render_prompt_preview,
-            chat_manager::regenerate_session_system_prompt,
             usage::usage_add_record,
             usage::usage_query_records,
             usage::usage_get_stats,

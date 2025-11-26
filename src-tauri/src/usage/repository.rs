@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::fs;
-use tauri::{AppHandle, Manager};
+
+use tauri::AppHandle;
+#[cfg(not(target_os = "android"))]
+use tauri::Manager;
 
 use super::tracking::{
     CharacterStats, ModelStats, ProviderStats, RequestUsage, UsageFilter, UsageStats,

@@ -365,8 +365,6 @@ export const CharacterSchema = z.object({
   defaultSceneId: z.string().uuid().nullish(),
   defaultModelId: z.string().uuid().nullable().optional(),
   memoryType: z.enum(["manual", "dynamic"]).default("manual"),
-  promptTemplateId: z.string().nullish().optional(),
-  systemPrompt: z.string().nullish().optional(), // Deprecated
   disableAvatarGradient: z.boolean().default(false).optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
@@ -377,7 +375,6 @@ export const SessionSchema = z.object({
   id: z.string().uuid(),
   characterId: z.string().uuid(),
   title: z.string(),
-  systemPrompt: z.string().nullish(),
   selectedSceneId: z.string().uuid().nullish(), // ID of the scene from character.scenes array
   personaId: z.union([
     z.string().uuid(),
