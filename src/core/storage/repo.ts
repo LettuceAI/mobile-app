@@ -200,7 +200,6 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     rules: defaultRules,
     defaultModelId: c.defaultModelId ?? null,
     memoryType: c.memoryType ?? "manual",
-    promptTemplateId: c.promptTemplateId ?? null,
     createdAt: c.createdAt ?? timestamp,
     updatedAt: timestamp,
   } as Character;
@@ -253,7 +252,7 @@ export async function deleteSession(id: string): Promise<void> {
   await storageBridge.sessionDelete(id);
 }
 
-export async function createSession(characterId: string, title: string, systemPrompt?: string, selectedSceneId?: string): Promise<Session> {
+export async function createSession(characterId: string, title: string, selectedSceneId?: string): Promise<Session> {
   const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
   const timestamp = now();
 
@@ -289,7 +288,6 @@ export async function createSession(characterId: string, title: string, systemPr
     id,
     characterId,
     title,
-    systemPrompt,
     selectedSceneId: selectedSceneId || character?.defaultSceneId || character?.scenes[0]?.id,
     memories: [],
     messages,

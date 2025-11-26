@@ -65,7 +65,6 @@ export function ChatPage() {
       const session = await createSession(
         character.id,
         "New Chat",
-        undefined,
         character.scenes && character.scenes.length > 0 ? character.scenes[0].id : undefined
       );
       navigate(`/chat/${character.id}?sessionId=${session.id}`);
@@ -275,7 +274,7 @@ function EmptyState() {
     <div className={cn(
       "p-8 text-center",
       radius.lg,
-      "border border-dashed border-white/10 bg-white/[0.02]"
+      "border border-dashed border-white/10 bg-white/2"
     )}>
       <div className={spacing.field}>
         <h3 className={cn(
@@ -356,7 +355,7 @@ const CharacterCard = memo(({
       className={cn(
         "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl text-left bg-white/5",
         interactive.transition.default,
-        "hover:border-white/20 hover:bg-white/[0.08]",
+        "hover:border-white/20 hover:bg-white/8",
         interactive.active.scale,
         hasGradient ? "" : "border border-white/10"
       )}

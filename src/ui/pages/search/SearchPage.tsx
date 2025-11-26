@@ -56,30 +56,29 @@ export function SearchPage() {
   const startChat = async (character: Character) => {
     try {
       const allSessionIds = await listSessionIds();
-      
+
       if (allSessionIds.length > 0) {
         const sessions = await Promise.all(
           allSessionIds.map((id) => getSession(id).catch(() => null))
         );
-        
+
         const characterSessions = sessions
-          .filter((session): session is NonNullable<typeof session> => 
+          .filter((session): session is NonNullable<typeof session> =>
             session !== null && session.characterId === character.id
           )
           .sort((a, b) => b.updatedAt - a.updatedAt);
-        
+
         if (characterSessions.length > 0) {
           const latestSession = characterSessions[0];
           navigate(`/chat/${character.id}?sessionId=${latestSession.id}`);
           return;
         }
       }
-      
+
       const session = await createSession(
-        character.id, 
-        "New Chat", 
-        undefined, 
-        character.scenes && character.scenes.length > 0 ? character.scenes[0].id : undefined
+        character.id,
+        "New Chat",
+        character.scenes?.[0]?.id
       );
       navigate(`/chat/${character.id}?sessionId=${session.id}`);
     } catch (error) {
@@ -97,7 +96,7 @@ export function SearchPage() {
   return (
     <div className="flex h-screen flex-col bg-[#050505] text-gray-200">
       {/* Header with back button and search */}
-      <div 
+      <div
         className="sticky top-0 z-30 border-b border-white/5 bg-[#050505]/95 backdrop-blur-xl"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
       >
@@ -209,8 +208,8 @@ export function SearchPage() {
           filteredCharacters.length > 0 ? (
             <CharacterList characters={filteredCharacters} onSelect={startChat} />
           ) : (
-            <EmptyState 
-              message={searchQuery ? "No characters found" : "No characters yet"} 
+            <EmptyState
+              message={searchQuery ? "No characters found" : "No characters yet"}
               description={searchQuery ? "Try a different search term" : "Create a character to get started"}
             />
           )
@@ -218,8 +217,8 @@ export function SearchPage() {
           filteredPersonas.length > 0 ? (
             <PersonaList personas={filteredPersonas} onSelect={openPersona} />
           ) : (
-            <EmptyState 
-              message={searchQuery ? "No personas found" : "No personas yet"} 
+            <EmptyState
+              message={searchQuery ? "No personas found" : "No personas yet"}
               description={searchQuery ? "Try a different search term" : "Create a persona to get started"}
             />
           )
@@ -229,11 +228,11 @@ export function SearchPage() {
   );
 }
 
-function CharacterList({ 
-  characters, 
-  onSelect 
-}: { 
-  characters: Character[]; 
+function CharacterList({
+  characters,
+  onSelect
+}: {
+  characters: Character[];
   onSelect: (character: Character) => void;
 }) {
   return (
@@ -250,12 +249,12 @@ function CharacterList({
                 radius.lg,
                 "border border-white/10 bg-white/5",
                 interactive.transition.default,
-                "hover:border-white/20 hover:bg-white/[0.08]",
+                "hover:border-white/20 hover:bg-white/8",
                 "active:scale-[0.98]"
               )}
             >
               {/* Hover gradient effect */}
-              <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <div className="absolute inset-y-0 right-0 w-1/3 bg-linear-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
               {/* Avatar */}
               <div className={cn(
@@ -306,11 +305,11 @@ function CharacterList({
   );
 }
 
-function PersonaList({ 
-  personas, 
-  onSelect 
-}: { 
-  personas: Persona[]; 
+function PersonaList({
+  personas,
+  onSelect
+}: {
+  personas: Persona[];
   onSelect: (persona: Persona) => void;
 }) {
   return (
@@ -325,12 +324,12 @@ function PersonaList({
                 radius.lg,
                 "border border-white/10 bg-white/5",
                 interactive.transition.default,
-                "hover:border-white/20 hover:bg-white/[0.08]",
+                "hover:border-white/20 hover:bg-white/8",
                 "active:scale-[0.98]"
               )}
             >
               {/* Hover gradient effect */}
-              <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <div className="absolute inset-y-0 right-0 w-1/3 bg-linear-to-l from-emerald-400/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
               {/* Icon */}
               <div className={cn(
@@ -425,7 +424,7 @@ function EmptyState({ message, description }: { message: string; description?: s
     <div className={cn(
       "mt-8 p-8 text-center",
       radius.lg,
-      "border border-dashed border-white/10 bg-white/[0.02]"
+      "border border-dashed border-white/10 bg-white/2"
     )}>
       <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5">
         <Search size={28} className="text-white/30" />

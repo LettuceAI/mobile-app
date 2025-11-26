@@ -128,8 +128,8 @@ export function CharactersPage() {
                     <div className={cn(
                       "absolute inset-y-0 right-0 w-1/4 transition",
                       hasGrad 
-                        ? "bg-gradient-to-l from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
-                        : "bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                        ? "bg-linear-to-l from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                        : "bg-linear-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
                     )} />
 
                     {/* Avatar */}

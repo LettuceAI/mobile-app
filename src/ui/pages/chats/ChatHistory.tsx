@@ -137,12 +137,12 @@ export function ChatHistoryPage() {
     <div className="min-h-screen bg-[#050505]">
       {/* Header */}
       <div
-        className="z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
+        className="z-20 shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
         <div className="flex">
           <button
             onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
             className={cn(
-              "flex flex-shrink-0 items-center justify-center border border-white/15 bg-white/5 text-white/70",
+              "flex shrink-0 items-center justify-center border border-white/15 bg-white/5 text-white/70",
               radius.full,
               "active:scale-95 transition-transform"
             )}

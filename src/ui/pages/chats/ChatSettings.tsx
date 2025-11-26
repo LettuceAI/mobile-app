@@ -313,7 +313,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
       const session = await createSession(
         characterId,
         "New Chat",
-        undefined,
         currentCharacter.scenes && currentCharacter.scenes.length > 0 ? currentCharacter.scenes[0].id : undefined
       );
       navigate(`/chat/${characterId}?sessionId=${session.id}`, { replace: true });

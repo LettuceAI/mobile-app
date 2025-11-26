@@ -7,7 +7,6 @@ import type { Character, Persona, Session, StoredMessage } from "../../../../cor
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 import { logManager } from "../../../../core/utils/logger";
-import { invoke } from "@tauri-apps/api/core";
 
 export interface VariantState {
   variants: StoredMessage["variants"];
@@ -86,9 +85,9 @@ function createStreamBatcher(dispatch: React.Dispatch<any>) {
           const content = pendingContentByMessage.get(messageId) ?? "";
           return content
             ? {
-                type: "UPDATE_MESSAGE_CONTENT" as const,
-                payload: { messageId, content },
-              }
+              type: "UPDATE_MESSAGE_CONTENT" as const,
+              payload: { messageId, content },
+            }
             : null;
         })
         .filter((action): action is { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } } => action !== null);
@@ -140,7 +139,7 @@ export function useChatController(
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
   const [settingsVersion, setSettingsVersion] = useState(0);
   const { sessionId } = options;
-  
+
   const longPressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -161,8 +160,8 @@ export function useChatController(
 
     (async () => {
       try {
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_LOADING", payload: true },
             { type: "SET_ERROR", payload: null }
@@ -209,9 +208,8 @@ export function useChatController(
 
         if (!targetSession) {
           targetSession = await createSession(
-            match.id, 
-            match.name ?? "New chat", 
-            undefined, 
+            match.id,
+            match.name ?? "New chat",
             match.scenes && match.scenes.length > 0 ? match.scenes[0].id : undefined
           );
         }
@@ -233,8 +231,8 @@ export function useChatController(
         }
 
         if (!cancelled) {
-          dispatch({ 
-            type: "BATCH", 
+          dispatch({
+            type: "BATCH",
             actions: [
               { type: "SET_CHARACTER", payload: match },
               { type: "SET_PERSONA", payload: selectedPersona },
@@ -276,16 +274,16 @@ export function useChatController(
       if (!state.character || !state.session?.selectedSceneId) {
         return { variants: [], selectedIndex: -1, total: 0 };
       }
-      
+
       const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
-      
+
       return {
-        variants: state.character.scenes as any, 
+        variants: state.character.scenes as any,
         selectedIndex: currentSceneIndex,
         total: state.character.scenes.length,
       };
     }
-    
+
     const variants = message.variants ?? [];
     if (variants.length === 0) {
       return {
@@ -347,66 +345,54 @@ export function useChatController(
   const handleVariantSwipe = useCallback(
     async (messageId: string, direction: "prev" | "next") => {
       if (!state.session || state.regeneratingMessageId) return;
-      
+
       const currentMessage = state.messages.find((msg) => msg.id === messageId);
       if (!currentMessage) return;
 
       if (isStartingSceneMessage(currentMessage)) {
         if (!state.character || !state.session?.selectedSceneId) return;
-        
+
         const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
         if (currentSceneIndex === -1) return;
-        
+
         const nextSceneIndex = direction === "next" ? currentSceneIndex + 1 : currentSceneIndex - 1;
         if (nextSceneIndex < 0 || nextSceneIndex >= state.character.scenes.length) return;
-        
+
         const nextScene = state.character.scenes[nextSceneIndex];
-        
+
         // Get the scene content (variant or original)
         const sceneContent = nextScene.selectedVariantId
           ? nextScene.variants?.find(v => v.id === nextScene.selectedVariantId)?.content ?? nextScene.content
           : nextScene.content;
-        
+
         const updatedMessage: StoredMessage = {
           ...currentMessage,
           content: sceneContent,
         };
-        
-        const updatedMessages = state.messages.map((msg) => 
+
+        const updatedMessages = state.messages.map((msg) =>
           msg.id === messageId ? updatedMessage : msg
         );
-        
-        let newSystemPrompt = state.session.systemPrompt;
-        try {
-          newSystemPrompt = await invoke<string>("regenerate_session_system_prompt", {
-            sessionId: state.session.id,
-            personaId: state.session.personaId || "",
-          });
-          console.log("[ChatController] System prompt regenerated after scene switch");
-        } catch (err) {
-          console.error("[ChatController] Failed to regenerate system prompt after scene switch:", err);
-        }
-        
+
         const updatedSession: Session = {
           ...state.session,
           selectedSceneId: nextScene.id,
-          systemPrompt: newSystemPrompt,
           messages: updatedMessages,
           updatedAt: Date.now(),
         } as Session;
-        
+
         dispatch({ type: "SET_SESSION", payload: updatedSession });
         dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
-        
+
         try {
           await saveSession(updatedSession);
         } catch (err) {
           console.error("ChatController: failed to persist scene switch", err);
         }
-        
+
         return;
       }
-      
+
       // Regular message variant swipe logic (only for assistant messages)
       if (currentMessage.role !== "assistant") return;
       if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== messageId) return;
@@ -442,8 +428,8 @@ export function useChatController(
       const userPlaceholder = createPlaceholderMessage("user", message);
       const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
-      dispatch({ 
-        type: "BATCH", 
+      dispatch({
+        type: "BATCH",
         actions: [
           { type: "SET_SENDING", payload: true },
           { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
@@ -470,7 +456,7 @@ export function useChatController(
             // ignore malformed payloads
           }
         });
-        
+
         // Fallback
         unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
           if (normalizedActive) return;
@@ -494,14 +480,14 @@ export function useChatController(
           updatedAt: result.assistantMessage.createdAt,
         } as Session;
 
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
             { type: "SET_MESSAGES", payload: updatedSession.messages ?? [] },
-            { 
-              type: "REPLACE_PLACEHOLDER_MESSAGES", 
-              payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage } 
+            {
+              type: "REPLACE_PLACEHOLDER_MESSAGES",
+              payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage }
             }
           ]
         });
@@ -511,25 +497,25 @@ export function useChatController(
         const latest = await getSession(state.session.id).catch(() => null);
         if (latest) {
           const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          dispatch({ 
-            type: "BATCH", 
+          dispatch({
+            type: "BATCH",
             actions: [
               { type: "SET_SESSION", payload: { ...latest, messages: ordered } },
               { type: "SET_MESSAGES", payload: ordered }
             ]
           });
         } else {
-          dispatch({ 
-            type: "SET_MESSAGES", 
-            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id) 
+          dispatch({
+            type: "SET_MESSAGES",
+            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id)
           });
         }
       } finally {
         streamBatcher.cancel();
         if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SENDING", payload: false },
             { type: "SET_ACTIVE_REQUEST_ID", payload: null }
@@ -547,8 +533,8 @@ export function useChatController(
 
       const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
-      dispatch({ 
-        type: "BATCH", 
+      dispatch({
+        type: "BATCH",
         actions: [
           { type: "SET_SENDING", payload: true },
           { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
@@ -600,8 +586,8 @@ export function useChatController(
           updatedAt: result.assistantMessage.createdAt,
         } as Session;
 
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
             { type: "SET_MESSAGES", payload: updatedSession.messages ?? [] }
@@ -614,9 +600,9 @@ export function useChatController(
 
         const abortedByUser = errMsg.toLowerCase().includes("aborted by user") || errMsg.toLowerCase().includes("cancelled");
         if (!abortedByUser) {
-          dispatch({ 
-            type: "SET_MESSAGES", 
-            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id) 
+          dispatch({
+            type: "SET_MESSAGES",
+            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id)
           });
           if (state.session) {
             const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
@@ -637,8 +623,8 @@ export function useChatController(
         streamBatcher.cancel();
         if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SENDING", payload: false },
             { type: "SET_ACTIVE_REQUEST_ID", payload: null }
@@ -668,21 +654,21 @@ export function useChatController(
       }
 
       const requestId = crypto.randomUUID();
-  let unlistenRaw: UnlistenFn | null = null;
-  let unlistenNormalized: UnlistenFn | null = null;
-  let normalizedActive = false;
+      let unlistenRaw: UnlistenFn | null = null;
+      let unlistenNormalized: UnlistenFn | null = null;
+      let normalizedActive = false;
 
-      dispatch({ 
-        type: "BATCH", 
+      dispatch({
+        type: "BATCH",
         actions: [
           { type: "SET_REGENERATING_MESSAGE_ID", payload: message.id },
           { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
           { type: "SET_SENDING", payload: true },
           { type: "SET_ERROR", payload: null },
           { type: "SET_HELD_MESSAGE_ID", payload: null },
-          { 
-            type: "SET_MESSAGES", 
-            payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg)) 
+          {
+            type: "SET_MESSAGES",
+            payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg))
           }
         ]
       });
@@ -729,21 +715,21 @@ export function useChatController(
           updatedAt: Date.now(),
         } as Session;
 
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
-            { 
-              type: "SET_MESSAGES", 
-              payload: state.messages.map((msg) => (msg.id === message.id ? result.assistantMessage : msg)) 
+            {
+              type: "SET_MESSAGES",
+              payload: state.messages.map((msg) => (msg.id === message.id ? result.assistantMessage : msg))
             }
           ]
         });
-        
+
         if (state.messageAction?.message.id === message.id) {
-          dispatch({ 
-            type: "SET_MESSAGE_ACTION", 
-            payload: { message: result.assistantMessage, mode: state.messageAction.mode } 
+          dispatch({
+            type: "SET_MESSAGE_ACTION",
+            payload: { message: result.assistantMessage, mode: state.messageAction.mode }
           });
         }
       } catch (err) {
@@ -752,8 +738,8 @@ export function useChatController(
         const latest = await getSession(state.session.id).catch(() => null);
         if (latest) {
           const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          dispatch({ 
-            type: "BATCH", 
+          dispatch({
+            type: "BATCH",
             actions: [
               { type: "SET_SESSION", payload: { ...latest, messages: ordered } },
               { type: "SET_MESSAGES", payload: ordered }
@@ -764,8 +750,8 @@ export function useChatController(
         streamBatcher.cancel();
         if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_REGENERATING_MESSAGE_ID", payload: null },
             { type: "SET_ACTIVE_REQUEST_ID", payload: null },
@@ -779,36 +765,36 @@ export function useChatController(
 
   const handleAbort = useCallback(async () => {
     if (!state.activeRequestId || !state.session) return;
-    
+
     try {
       await abortMessage(state.activeRequestId);
       log.info("aborted request", state.activeRequestId);
-      
+
       const messagesWithoutPlaceholders = state.messages.map(msg => {
         if (msg.id.startsWith('placeholder-')) {
           if (msg.content.trim().length > 0) {
             return {
               ...msg,
-              id: crypto.randomUUID(), 
+              id: crypto.randomUUID(),
             };
           }
           return null;
         }
         return msg;
       }).filter((msg): msg is StoredMessage => msg !== null);
-      
+
       const updatedSession: Session = {
         ...state.session,
         messages: messagesWithoutPlaceholders,
         updatedAt: Date.now(),
       };
-      
+
       console.log("ChatController: saving session after abort with message IDs:", messagesWithoutPlaceholders.map(m => ({ id: m.id, role: m.role, contentLength: m.content.length })));
-      
+
       try {
         await saveSession(updatedSession);
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
             { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
@@ -819,9 +805,9 @@ export function useChatController(
         log.error("failed to save incomplete messages after abort", saveErr);
         dispatch({ type: "SET_MESSAGES", payload: messagesWithoutPlaceholders });
       }
-      
-      dispatch({ 
-        type: "BATCH", 
+
+      dispatch({
+        type: "BATCH",
         actions: [
           { type: "SET_SENDING", payload: false },
           { type: "SET_ACTIVE_REQUEST_ID", payload: null }
@@ -842,15 +828,15 @@ export function useChatController(
           }
           return msg;
         }).filter((msg): msg is StoredMessage => msg !== null);
-        
+
         const updatedSession: Session = {
           ...state.session!,
           messages: messagesWithoutPlaceholders,
           updatedAt: Date.now(),
         };
         await saveSession(updatedSession);
-        dispatch({ 
-          type: "BATCH", 
+        dispatch({
+          type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
             { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
@@ -862,9 +848,9 @@ export function useChatController(
         const cleaned = state.messages.filter(msg => !msg.id.startsWith('placeholder-') || msg.content.trim().length > 0);
         dispatch({ type: "SET_MESSAGES", payload: cleaned });
       }
-      
-      dispatch({ 
-        type: "BATCH", 
+
+      dispatch({
+        type: "BATCH",
         actions: [
           { type: "SET_SENDING", payload: false },
           { type: "SET_ACTIVE_REQUEST_ID", payload: null }
@@ -880,8 +866,8 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_ERROR", payload: "Message cannot be empty" });
       return;
     }
-    dispatch({ 
-      type: "BATCH", 
+    dispatch({
+      type: "BATCH",
       actions: [
         { type: "SET_ACTION_BUSY", payload: true },
         { type: "SET_ACTION_ERROR", payload: null },
@@ -892,14 +878,14 @@ export function useChatController(
       const updatedMessages = (state.session.messages ?? []).map((msg) =>
         msg.id === state.messageAction!.message.id
           ? {
-              ...msg,
-              content: updatedContent,
-              variants: (msg.variants ?? []).map((variant) =>
-                variant.id === (msg.selectedVariantId ?? variant.id)
-                  ? { ...variant, content: updatedContent }
-                  : variant,
-              ),
-            }
+            ...msg,
+            content: updatedContent,
+            variants: (msg.variants ?? []).map((variant) =>
+              variant.id === (msg.selectedVariantId ?? variant.id)
+                ? { ...variant, content: updatedContent }
+                : variant,
+            ),
+          }
           : msg,
       );
       const updatedSession: Session = {
@@ -921,12 +907,12 @@ export function useChatController(
   const handleDeleteMessage = useCallback(
     async (message: StoredMessage) => {
       if (!state.session) return;
-      
+
       if (message.isPinned) {
         dispatch({ type: "SET_ACTION_ERROR", payload: "Cannot delete pinned message. Unpin it first." });
         return;
       }
-      
+
       const confirmed = window.confirm("Delete this message?");
       if (!confirmed) return;
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
@@ -955,31 +941,31 @@ export function useChatController(
   const handleRewindToMessage = useCallback(
     async (message: StoredMessage) => {
       if (!state.session) return;
-      
+
       // Check if there are any pinned messages after this message
       const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
       if (messageIndex === -1) {
         dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
         return;
       }
-      
+
       const messagesAfter = state.session.messages.slice(messageIndex + 1);
       const hasPinnedAfter = messagesAfter.some(msg => msg.isPinned);
-      
+
       if (hasPinnedAfter) {
         dispatch({ type: "SET_ACTION_ERROR", payload: "Cannot rewind: there are pinned messages after this point. Unpin them first." });
         return;
       }
-      
+
       const confirmed = window.confirm(
         "Rewind conversation to this message? All messages after this point will be removed."
       );
       if (!confirmed) return;
-      
+
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
       dispatch({ type: "SET_ACTION_ERROR", payload: null });
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
-      
+
       try {
         const updatedMessages = state.session.messages.slice(0, messageIndex + 1);
         const updatedSession: Session = {
@@ -987,7 +973,7 @@ export function useChatController(
           messages: updatedMessages,
           updatedAt: Date.now(),
         };
-        
+
         await saveSession(updatedSession);
         dispatch({ type: "SET_SESSION", payload: updatedSession });
         dispatch({ type: "REWIND_TO_MESSAGE", payload: { messageId: message.id, messages: updatedMessages } });
@@ -1004,14 +990,14 @@ export function useChatController(
   const handleTogglePin = useCallback(
     async (message: StoredMessage) => {
       if (!state.session) return;
-      
+
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
       dispatch({ type: "SET_ACTION_ERROR", payload: null });
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
-      
+
       try {
         const updatedSession = await toggleMessagePin(state.session.id, message.id);
-        
+
         if (updatedSession) {
           dispatch({ type: "SET_SESSION", payload: updatedSession });
           dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages });
@@ -1057,7 +1043,7 @@ export function useChatController(
     heldMessageId: state.heldMessageId,
     regeneratingMessageId: state.regeneratingMessageId,
     activeRequestId: state.activeRequestId,
-    
+
     // Setters
     setDraft: useCallback((value: string) => dispatch({ type: "SET_DRAFT", payload: value }), []),
     setError: useCallback((value: string | null) => dispatch({ type: "SET_ERROR", payload: value }), []),
@@ -1067,7 +1053,7 @@ export function useChatController(
     setActionBusy: useCallback((value: boolean) => dispatch({ type: "SET_ACTION_BUSY", payload: value }), []),
     setEditDraft: useCallback((value: string) => dispatch({ type: "SET_EDIT_DRAFT", payload: value }), []),
     setHeldMessageId: useCallback((value: string | null) => dispatch({ type: "SET_HELD_MESSAGE_ID", payload: value }), []),
-    
+
     // Actions
     handleSend,
     handleContinue,

@@ -136,10 +136,10 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className={`rounded-xl border border-white/10 ${alt ? 'bg-white/[0.065]' : 'bg-white/5'} overflow-hidden`}>
+    <div className={`rounded-xl border border-white/10 ${alt ? 'bg-white/6.5' : 'bg-white/5'} overflow-hidden`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.08] transition active:scale-[0.99]"
+        className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/8 transition active:scale-[0.99]"
       >
         <div className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-2 min-w-0">
@@ -168,7 +168,7 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           {request.cost && (
             <span className="text-sm font-medium text-emerald-400">
               {formatCurrency(request.cost.totalCost)}
@@ -481,7 +481,7 @@ export function UsagePage() {
 
           <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 transition cursor-pointer">
             <span className="text-sm text-white">Show successful requests only</span>
-            <div className="flex items-center flex-shrink-0">
+            <div className="flex items-center shrink-0">
               <input
                 id="show-only-successful"
                 type="checkbox"
@@ -527,7 +527,7 @@ export function UsagePage() {
               transition={{ duration: 0.2 }}
               className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-3 flex items-center gap-2"
             >
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-emerald-100">CSV exported successfully</p>
                 <p className="text-[10px] text-emerald-200/70 truncate">{exportSuccess}</p>
@@ -696,7 +696,7 @@ export function UsagePage() {
                   className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
                 >
                   {/* Top gradient highlight */}
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-white/10 to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b from-white/10 to-transparent" />
                   <div className="max-h-60 overflow-y-auto space-y-1">
                     {characterOptions.map(opt => {
                       const selected = selectedCharacterId === opt.id;

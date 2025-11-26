@@ -22,7 +22,7 @@ type EditCharacterState = {
   defaultSceneId: string | null;
   newSceneContent: string;
   selectedModelId: string | null;
-  systemPromptTemplateId: string | null;
+
   disableAvatarGradient: boolean;
   memoryType: "manual" | "dynamic";
   dynamicMemoryEnabled: boolean;
@@ -54,7 +54,7 @@ const initialState: EditCharacterState = {
   defaultSceneId: null,
   newSceneContent: "",
   selectedModelId: null,
-  systemPromptTemplateId: null,
+
   disableAvatarGradient: false,
   memoryType: "manual",
   dynamicMemoryEnabled: false,
@@ -124,7 +124,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
 
       let loadedAvatarPath = "";
       let backgroundImage = character.backgroundImagePath || "";
-      
+
       if (character.avatarPath) {
         try {
           const avatarUrl = await loadAvatar("character", character.id, character.avatarPath);
@@ -136,7 +136,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
       } else {
         loadedAvatarPath = "";
       }
-      
+
       if (backgroundImage && !backgroundImage.startsWith("data:") && backgroundImage.length === 36) {
         try {
           const { convertToImageUrl } = await import("../../../../core/storage/images");
@@ -146,7 +146,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
           console.warn("Failed to convert background image ID to URL:", err);
         }
       }
-      
+
       setFields({
         name: character.name,
         description: character.description || "",
@@ -155,7 +155,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: character.scenes || [],
         defaultSceneId: character.defaultSceneId || null,
         selectedModelId: character.defaultModelId || null,
-        systemPromptTemplateId: character.promptTemplateId || null,
+
         disableAvatarGradient: character.disableAvatarGradient || false,
         memoryType: character.memoryType === "dynamic" ? "dynamic" : "manual",
       });
@@ -233,7 +233,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         invalidateAvatarCache("character", characterId);
       }
 
-      const backgroundImageId = state.backgroundImagePath 
+      const backgroundImageId = state.backgroundImagePath
         ? (state.backgroundImagePath.startsWith("data:") ? await convertToImageRef(state.backgroundImagePath) : state.backgroundImagePath)
         : undefined;
 
@@ -246,7 +246,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId,
         defaultModelId: state.selectedModelId,
-        promptTemplateId: state.systemPromptTemplateId,
+
         disableAvatarGradient: state.disableAvatarGradient,
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
       });
@@ -280,16 +280,16 @@ export function useEditCharacterForm(characterId: string | undefined) {
 
   const addScene = useCallback(() => {
     if (!state.newSceneContent.trim()) return;
-    
+
     const sceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const timestamp = Date.now();
-    
+
     const newScenes = [...state.scenes, {
       id: sceneId,
       content: state.newSceneContent.trim(),
       createdAt: timestamp,
     }];
-    
+
     setFields({
       scenes: newScenes,
       defaultSceneId: newScenes.length === 1 ? sceneId : state.defaultSceneId,
@@ -302,7 +302,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
     const nextDefaultSceneId = state.defaultSceneId === sceneId
       ? (newScenes.length === 1 ? newScenes[0].id : null)
       : state.defaultSceneId;
-    
+
     setFields({ scenes: newScenes, defaultSceneId: nextDefaultSceneId });
   }, [setFields, state.defaultSceneId, state.scenes]);
 
@@ -313,7 +313,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
   const saveEditedScene = useCallback(() => {
     if (!state.editingSceneId || !state.editingSceneContent.trim()) return;
 
-    const updatedScenes = state.scenes.map(scene => 
+    const updatedScenes = state.scenes.map(scene =>
       scene.id === state.editingSceneId
         ? { ...scene, content: state.editingSceneContent.trim() }
         : scene
@@ -356,7 +356,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
       setFields({ avatarPath: reader.result as string });
     };
     reader.readAsDataURL(file);
-    
+
     // Clear input so same file can be selected again
     event.target.value = "";
   }, [setFields]);

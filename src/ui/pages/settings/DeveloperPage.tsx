@@ -2,7 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Sparkles, User, MessageSquare } from "lucide-react";
 import { typography, radius, interactive, cn } from "../../design-tokens";
-import { saveCharacter, savePersona, createSession, listCharacters, listPersonas } from "../../../core/storage/repo";
+import { saveCharacter, savePersona, createSession, listCharacters } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 
 export function DeveloperPage() {
@@ -67,13 +67,10 @@ export function DeveloperPage() {
       }
 
       const character = characters[0];
-      const personas = await listPersonas();
-      const persona = personas.length > 0 ? personas[0] : undefined;
 
       const session = await createSession(
         character.id,
         `Test Session - ${new Date().toLocaleTimeString()}`,
-        persona?.id,
         character.scenes?.[0]?.id
       );
 
@@ -86,7 +83,7 @@ export function DeveloperPage() {
   const generateBulkTestData = async () => {
     try {
       setStatus("Generating bulk test data...");
-      
+
       for (let i = 1; i <= 3; i++) {
         const now = Date.now();
         const testCharacter: Partial<Character> = {
@@ -203,7 +200,7 @@ export function DeveloperPage() {
         </section>
 
         {/* Debug Info */}
-        <section className={cn("mt-8 space-y-3")}> 
+        <section className={cn("mt-8 space-y-3")}>
           <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-3")}>
             Storage Maintenance
           </h2>
@@ -225,17 +222,17 @@ export function DeveloperPage() {
           <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-3 mt-6")}>
             Environment Info
           </h2>
-          
+
           <InfoCard
             title="Mode"
             value={import.meta.env.MODE}
           />
-          
+
           <InfoCard
             title="Dev Mode"
             value={import.meta.env.DEV ? "Yes" : "No"}
           />
-          
+
           <InfoCard
             title="Vite Version"
             value={import.meta.env.VITE_APP_VERSION || "N/A"}

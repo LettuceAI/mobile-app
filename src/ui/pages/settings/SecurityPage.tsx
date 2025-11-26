@@ -43,7 +43,7 @@ export function SecurityPage() {
                 <div>
                     <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Content Filtering</h2>
                     <div className={`relative overflow-hidden rounded-xl border px-4 py-3 transition-all duration-300 ${isPureModeEnabled
-                            ? 'border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-white/5 to-white/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+                            ? 'border-emerald-400/20 bg-linear-to-br from-emerald-500/10 via-white/5 to-white/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
                             : 'border-white/10 bg-white/5'
                         }`}>
                         {/* Subtle inner glow when enabled */}

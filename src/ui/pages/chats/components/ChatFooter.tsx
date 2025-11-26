@@ -18,7 +18,6 @@ export function ChatFooter({
   setDraft,
   error,
   sending,
-  character,
   onSendMessage,
   onAbort,
   hasBackgroundImage
@@ -26,7 +25,7 @@ export function ChatFooter({
   const hasDraft = draft.trim().length > 0;
 
   return (
-    <footer className={`z-20 flex-shrink-0 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
+    <footer className={`z-20 shrink-0 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
       {error && (
         <div className={cn(
           "mb-3 px-4 py-2.5",

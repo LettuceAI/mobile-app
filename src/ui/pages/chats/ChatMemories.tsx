@@ -713,7 +713,7 @@ export function ChatMemoriesPage() {
                               <p className={cn(
                                 typography.bodySmall.size,
                                 colors.text.secondary,
-                                "leading-relaxed break-words"
+                                "leading-relaxed wrap-break-word"
                               )}>
                                 {item.text}
                               </p>
@@ -863,7 +863,7 @@ export function ChatMemoriesPage() {
                           <p className={cn(
                             typography.bodySmall.size,
                             colors.text.secondary,
-                            "leading-relaxed break-words whitespace-pre-wrap"
+                            "leading-relaxed wrap-break-word whitespace-pre-wrap"
                           )}>
                             {msg.content}
                           </p>

@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, FileText, Download, Layers } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, Download, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 
@@ -26,14 +26,13 @@ export function EditCharacterPage() {
     defaultSceneId,
     newSceneContent,
     selectedModelId,
-    systemPromptTemplateId,
+
     disableAvatarGradient,
     memoryType,
     dynamicMemoryEnabled,
     models,
     loadingModels,
-    promptTemplates,
-    loadingTemplates,
+
     editingSceneId,
     editingSceneContent,
   } = state;
@@ -65,7 +64,7 @@ export function EditCharacterPage() {
   const getAvatarPreview = () => {
     if (!avatarPath) {
       return (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-500/20 to-blue-500/20">
+        <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-emerald-500/20 to-blue-500/20">
           <span className="text-lg font-bold text-white">{avatarInitial}</span>
         </div>
       );
@@ -99,10 +98,10 @@ export function EditCharacterPage() {
           </AnimatePresence>
 
           {/* Avatar & Name Card */}
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]">
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-linear-to-br from-white/5 to-white/2">
             <div className="flex items-center gap-4 p-4">
               {/* Avatar */}
-              <div className="relative h-16 w-16 flex-shrink-0">
+              <div className="relative h-16 w-16 shrink-0">
                 <label className="relative block h-full w-full cursor-pointer overflow-hidden rounded-2xl border border-white/10 group">
                   {getAvatarPreview()}
                   {/* Overlay on hover */}
@@ -127,7 +126,7 @@ export function EditCharacterPage() {
                   </button>
                 )}
               </div>
-              
+
               {/* Name Input */}
               <div className="flex-1 space-y-1.5">
                 <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
@@ -179,13 +178,13 @@ export function EditCharacterPage() {
               <h3 className="text-sm font-semibold text-white">Chat Background</h3>
               <span className="text-xs text-white/40">(Optional)</span>
             </div>
-            
+
             <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
               {backgroundImagePath ? (
                 <div className="relative">
-                  <img 
-                    src={backgroundImagePath} 
-                    alt="Background preview" 
+                  <img
+                    src={backgroundImagePath}
+                    alt="Background preview"
                     className="h-32 w-full object-cover"
                   />
                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
@@ -266,7 +265,7 @@ export function EditCharacterPage() {
                 </span>
               )}
             </div>
-            
+
             {/* Existing Scenes */}
             <AnimatePresence mode="popLayout">
               {scenes.length > 0 && (
@@ -274,7 +273,7 @@ export function EditCharacterPage() {
                   {scenes.map((scene, index) => {
                     const isEditing = editingSceneId === scene.id;
                     const isDefault = defaultSceneId === scene.id;
-                    
+
                     return (
                       <motion.div
                         key={scene.id}
@@ -283,27 +282,24 @@ export function EditCharacterPage() {
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9, x: -20 }}
                         transition={{ duration: 0.15 }}
-                        className={`overflow-hidden rounded-xl border ${
-                          isDefault 
-                            ? "border-emerald-400/30 bg-emerald-400/5" 
-                            : "border-white/10 bg-white/5"
-                        }`}
+                        className={`overflow-hidden rounded-xl border ${isDefault
+                          ? "border-emerald-400/30 bg-emerald-400/5"
+                          : "border-white/10 bg-white/5"
+                          }`}
                       >
                         {/* Scene Header */}
-                        <div className={`flex items-center gap-2 border-b px-3.5 py-2.5 ${
-                          isDefault 
-                            ? "border-emerald-400/20 bg-emerald-400/10" 
-                            : "border-white/10 bg-white/5"
-                        }`}>
-                          {/* Scene number badge */}
-                          <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${
-                            isDefault
-                              ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
-                              : "border-white/10 bg-white/5 text-white/60"
+                        <div className={`flex items-center gap-2 border-b px-3.5 py-2.5 ${isDefault
+                          ? "border-emerald-400/20 bg-emerald-400/10"
+                          : "border-white/10 bg-white/5"
                           }`}>
+                          {/* Scene number badge */}
+                          <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${isDefault
+                            ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
+                            : "border-white/10 bg-white/5 text-white/60"
+                            }`}>
                             {index + 1}
                           </div>
-                          
+
                           {/* Default badge */}
                           {isDefault && (
                             <div className="flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-2 py-0.5">
@@ -311,7 +307,7 @@ export function EditCharacterPage() {
                               <span className="text-[10px] font-medium text-emerald-200">Default Scene</span>
                             </div>
                           )}
-                          
+
                           {/* Actions */}
                           <div className="ml-auto flex items-center gap-1.5">
                             {!isEditing && !isDefault && (
@@ -340,7 +336,7 @@ export function EditCharacterPage() {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* Scene Content */}
                         <div className="p-3.5">
                           {isEditing ? (
@@ -365,11 +361,10 @@ export function EditCharacterPage() {
                                 <button
                                   onClick={saveEditedScene}
                                   disabled={!editingSceneContent.trim()}
-                                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
-                                    editingSceneContent.trim()
-                                      ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 active:scale-95 active:bg-emerald-400/30"
-                                      : "border border-white/5 bg-white/5 text-white/30"
-                                  }`}
+                                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${editingSceneContent.trim()
+                                    ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 active:scale-95 active:bg-emerald-400/30"
+                                    : "border border-white/5 bg-white/5 text-white/30"
+                                    }`}
                                 >
                                   Save Changes
                                 </button>
@@ -389,30 +384,29 @@ export function EditCharacterPage() {
             {/* Add New Scene */}
             <motion.div layout className="space-y-2">
               <textarea
-              value={newSceneContent}
-              onChange={(e) => setFields({ newSceneContent: e.target.value })}
-              rows={5}
-              placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
-              className="w-full resize-y rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none min-h-[140px] max-h-[320px] overflow-auto"
-            />
-            <div className="flex justify-end text-[11px] text-white/40">
-              {wordCount(newSceneContent)} words
-            </div>
-            <motion.button
-              onClick={addScene}
-              disabled={!newSceneContent.trim()}
-              whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-                  newSceneContent.trim()
-                    ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
-                    : "border border-white/10 bg-white/5 text-white/40"
-                }`}
+                value={newSceneContent}
+                onChange={(e) => setFields({ newSceneContent: e.target.value })}
+                rows={5}
+                placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
+                className="w-full resize-y rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none min-h-[140px] max-h-[320px] overflow-auto"
+              />
+              <div className="flex justify-end text-[11px] text-white/40">
+                {wordCount(newSceneContent)} words
+              </div>
+              <motion.button
+                onClick={addScene}
+                disabled={!newSceneContent.trim()}
+                whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
+                className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${newSceneContent.trim()
+                  ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
+                  : "border border-white/10 bg-white/5 text-white/40"
+                  }`}
               >
                 <Plus className="h-4 w-4" />
                 Add Scene
               </motion.button>
             </motion.div>
-            
+
             <p className="text-xs text-white/50">
               Create multiple starting scenarios. One will be selected when starting a new chat.
             </p>
@@ -427,7 +421,7 @@ export function EditCharacterPage() {
               <h3 className="text-sm font-semibold text-white">Default Model</h3>
               <span className="ml-auto text-xs text-white/40">(Optional)</span>
             </div>
-            
+
             {loadingModels ? (
               <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
                 <Loader2 className="h-4 w-4 animate-spin text-white/50" />
@@ -470,11 +464,10 @@ export function EditCharacterPage() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setFields({ memoryType: "manual" })}
-                className={`rounded-xl border px-3.5 py-3 text-left transition ${
-                  memoryType === "manual"
-                    ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
-                    : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
-                }`}
+                className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "manual"
+                  ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                  : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
+                  }`}
               >
                 <p className="text-sm font-semibold">Manual Memory</p>
                 <p className="mt-1 text-xs text-white/60">Manage notes yourself (current system).</p>
@@ -482,11 +475,10 @@ export function EditCharacterPage() {
               <button
                 disabled={!dynamicMemoryEnabled}
                 onClick={() => dynamicMemoryEnabled && setFields({ memoryType: "dynamic" })}
-                className={`rounded-xl border px-3.5 py-3 text-left transition ${
-                  memoryType === "dynamic" && dynamicMemoryEnabled
-                    ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
-                    : "border-white/10 bg-black/15 text-white/60"
-                } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
+                className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "dynamic" && dynamicMemoryEnabled
+                  ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                  : "border-white/10 bg-black/15 text-white/60"
+                  } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
               >
                 <p className="text-sm font-semibold">Dynamic Memory</p>
                 <p className="mt-1 text-xs text-white/60">Automatic summaries when enabled globally.</p>
@@ -497,52 +489,17 @@ export function EditCharacterPage() {
             </p>
           </div>
 
-          {/* System Prompt Template Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
-                <FileText className="h-4 w-4 text-blue-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-white">System Prompt</h3>
-              <span className="ml-auto text-xs text-white/40">(Optional)</span>
-            </div>
-            
-            {loadingTemplates ? (
-              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-white/50" />
-                <span className="text-sm text-white/50">Loading templates...</span>
-              </div>
-            ) : (
-              <select
-                value={systemPromptTemplateId || ""}
-                onChange={(e) => setFields({ systemPromptTemplateId: e.target.value || null })}
-                className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
-              >
-                <option value="">Use app default</option>
-                {promptTemplates
-                  .filter(t => t.name !== "App Default")
-                  .map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-              </select>
-            )}
-            <p className="text-xs text-white/50">
-              Select a custom system prompt template for this character
-            </p>
-          </div>
+
 
           {/* Save Button */}
           <motion.button
             onClick={handleSave}
             disabled={!canSave}
             whileTap={{ scale: canSave ? 0.98 : 1 }}
-            className={`w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition ${
-              canSave
-                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-lg shadow-emerald-400/10 hover:bg-emerald-400/30"
-                : "border border-white/10 bg-white/5 text-white/40"
-            }`}
+            className={`w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition ${canSave
+              ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-lg shadow-emerald-400/10 hover:bg-emerald-400/30"
+              : "border border-white/10 bg-white/5 text-white/40"
+              }`}
           >
             {saving ? (
               <span className="flex items-center justify-center gap-2">
