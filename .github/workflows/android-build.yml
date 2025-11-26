@@ -48,6 +48,16 @@ jobs:
         with:
           ndk-version: ${{ env.NDK_VERSION }}
           link-to-sdk: true
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            perl
+
 
       - name: Install Android Rust targets
         run: |
