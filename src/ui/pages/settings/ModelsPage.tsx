@@ -563,7 +563,7 @@ export function ModelsPage() {
                                             <>
                                                 <span className="opacity-40">•</span>
                                                 <span className="rounded bg-blue-400/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-200">
-                                                    {model.modelType === "multimodal" ? "Multimodal" :
+                                                    {model.modelType === "multimodel" ? "Multimodel" :
                                                         model.modelType === "imagegeneration" ? "Image Gen" :
                                                             model.modelType === "embedding" ? "Embedding" :
                                                                 model.modelType}

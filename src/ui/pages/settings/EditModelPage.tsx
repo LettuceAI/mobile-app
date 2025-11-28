@@ -165,7 +165,7 @@ export function EditModelPage() {
               className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
             >
               <option value="chat" className="bg-black">Chat</option>
-              <option value="multimodal" className="bg-black">Multimodal</option>
+              <option value="multimodel" className="bg-black">Multimodel</option>
               <option value="imagegeneration" className="bg-black">Image Generation</option>
               <option value="embedding" className="bg-black">Embedding</option>
             </select>
@@ -276,8 +276,8 @@ export function EditModelPage() {
                 <div className="flex items-center shrink-0">
                   <div
                     className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-all duration-200 ${overrideEnabled
-                        ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                        : 'bg-white/20'
+                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                      : 'bg-white/20'
                       }`}
                   >
                     <span
@@ -368,8 +368,8 @@ export function EditModelPage() {
                       type="button"
                       onClick={() => handleMaxTokensChange(null as any)}
                       className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!modelAdvancedDraft.maxOutputTokens
-                          ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                          : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                        ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                        : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
                         }`}
                     >
                       Auto
@@ -378,8 +378,8 @@ export function EditModelPage() {
                       type="button"
                       onClick={() => handleMaxTokensChange(1024)}
                       className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${modelAdvancedDraft.maxOutputTokens
-                          ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                          : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                        ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                        : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
                         }`}
                     >
                       Custom

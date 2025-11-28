@@ -265,7 +265,7 @@ export const ProviderCredentialSchema = z.object({
 });
 export type ProviderCredential = z.infer<typeof ProviderCredentialSchema>;
 
-export const ModelTypeSchema = z.enum(["chat", "multimodal", "imagegeneration", "embedding"]);
+export const ModelTypeSchema = z.enum(["chat", "multimodel", "imagegeneration", "embedding"]);
 export type ModelType = z.infer<typeof ModelTypeSchema>;
 
 export const ModelSchema = z.object({
