@@ -302,7 +302,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
   }, [sessionAdvancedSettings, globalAdvancedSettings]);
 
   const getEffectiveModelId = () => {
-    // Mirror the backend select_model logic: character.default_model_id || settings.default_model_id
     return currentCharacter?.defaultModelId || globalDefaultModelId || null;
   };
 

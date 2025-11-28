@@ -90,7 +90,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 
     // Models
     let mut stmt = conn
-        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, advanced_model_settings, prompt_template_id, system_prompt FROM models ORDER BY created_at ASC")
+        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt FROM models ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
     let models_iter = stmt
         .query_map([], |r| {
@@ -100,9 +100,10 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             let provider_label: String = r.get(3)?;
             let display_name: String = r.get(4)?;
             let created_at: i64 = r.get(5)?;
-            let advanced: Option<String> = r.get(6)?;
-            let prompt_template_id: Option<String> = r.get(7)?;
-            let system_prompt: Option<String> = r.get(8)?;
+            let model_type: String = r.get(6)?;
+            let advanced: Option<String> = r.get(7)?;
+            let prompt_template_id: Option<String> = r.get(8)?;
+            let system_prompt: Option<String> = r.get(9)?;
             let mut obj = JsonMap::new();
             obj.insert("id".into(), JsonValue::String(id));
             obj.insert("name".into(), JsonValue::String(name));
@@ -110,6 +111,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             obj.insert("providerLabel".into(), JsonValue::String(provider_label));
             obj.insert("displayName".into(), JsonValue::String(display_name));
             obj.insert("createdAt".into(), JsonValue::from(created_at));
+            obj.insert("modelType".into(), JsonValue::String(model_type));
             if let Some(s) = advanced {
                 if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
                     obj.insert("advancedModelSettings".into(), v);
@@ -303,6 +305,10 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
                 .and_then(|v| v.as_str())
                 .unwrap_or(name);
             let created_at = m.get("createdAt").and_then(|v| v.as_i64()).unwrap_or(now);
+            let model_type = m
+                .get("modelType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("chat");
             let adv = m
                 .get("advancedModelSettings")
                 .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
@@ -315,8 +321,8 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
             tx.execute(
-                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, advanced_model_settings, prompt_template_id, system_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                params![id, name, provider_id, provider_label, display_name, created_at, adv, prompt_template_id, system_prompt],
+                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![id, name, provider_id, provider_label, display_name, created_at, model_type, adv, prompt_template_id, system_prompt],
             ).map_err(|e| e.to_string())?;
         }
     }

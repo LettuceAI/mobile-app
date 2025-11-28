@@ -265,6 +265,9 @@ export const ProviderCredentialSchema = z.object({
 });
 export type ProviderCredential = z.infer<typeof ProviderCredentialSchema>;
 
+export const ModelTypeSchema = z.enum(["chat", "multimodal", "imagegeneration", "embedding"]);
+export type ModelType = z.infer<typeof ModelTypeSchema>;
+
 export const ModelSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
@@ -272,6 +275,7 @@ export const ModelSchema = z.object({
   providerLabel: z.string().min(1),
   displayName: z.string().min(1),
   createdAt: z.number().int(),
+  modelType: ModelTypeSchema.default("chat"),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated

@@ -48,6 +48,8 @@ pub struct Model {
     pub provider_label: String,
     pub display_name: String,
     pub created_at: u64,
+    #[serde(default = "default_model_type")]
+    pub model_type: String,
     #[serde(default)]
     pub advanced_model_settings: Option<AdvancedModelSettings>,
     /// Reference to a system prompt template (if any)
@@ -57,6 +59,10 @@ pub struct Model {
     #[serde(default, skip_serializing)]
     #[allow(dead_code)]
     pub system_prompt: Option<String>,
+}
+
+fn default_model_type() -> String {
+    "chat".to_string()
 }
 
 #[derive(Deserialize, Serialize, Clone)]

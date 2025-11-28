@@ -424,6 +424,7 @@ mod tests {
             provider_label: "openai".into(),
             display_name: "GPT Test".into(),
             created_at: 0,
+            model_type: "chat".into(),
             advanced_model_settings: None,
             prompt_template_id: None,
             system_prompt: None,

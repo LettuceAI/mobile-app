@@ -155,6 +155,24 @@ export function EditModelPage() {
           </div>
 
           <div className="space-y-2">
+            <label className="text-[11px] font-medium text-white/70">MODEL TYPE</label>
+            <select
+              value={editorModel.modelType || "chat"}
+              onChange={(e) => {
+                editorModel.modelType = e.target.value as any;
+                handleModelNameChange(editorModel.name); // Trigger state update
+              }}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
+            >
+              <option value="chat" className="bg-black">Chat</option>
+              <option value="multimodal" className="bg-black">Multimodal</option>
+              <option value="imagegeneration" className="bg-black">Image Generation</option>
+              <option value="embedding" className="bg-black">Embedding</option>
+            </select>
+            <p className="text-xs text-white/50">Model capability type</p>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-[11px] font-medium text-white/70">SYSTEM PROMPT TEMPLATE (OPTIONAL)</label>
             {loadingTemplates ? (
               <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
@@ -257,16 +275,14 @@ export function EditModelPage() {
 
                 <div className="flex items-center shrink-0">
                   <div
-                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-all duration-200 ${
-                      overrideEnabled
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-all duration-200 ${overrideEnabled
                         ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
                         : 'bg-white/20'
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                        overrideEnabled ? 'translate-x-5' : 'translate-x-0'
-                      }`}
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${overrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
                     />
                   </div>
                 </div>
@@ -346,32 +362,30 @@ export function EditModelPage() {
                     <label className="text-sm font-medium text-white">Max Output Tokens</label>
                     <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
                   </div>
-                  
+
                   <div className="flex gap-2 mb-3">
                     <button
                       type="button"
                       onClick={() => handleMaxTokensChange(null as any)}
-                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                        !modelAdvancedDraft.maxOutputTokens
+                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!modelAdvancedDraft.maxOutputTokens
                           ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
                           : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
-                      }`}
+                        }`}
                     >
                       Auto
                     </button>
                     <button
                       type="button"
                       onClick={() => handleMaxTokensChange(1024)}
-                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                        modelAdvancedDraft.maxOutputTokens
+                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${modelAdvancedDraft.maxOutputTokens
                           ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
                           : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
-                      }`}
+                        }`}
                     >
                       Custom
                     </button>
                   </div>
-                  
+
                   {modelAdvancedDraft.maxOutputTokens !== null && modelAdvancedDraft.maxOutputTokens !== undefined && (
                     <input
                       type="number"
@@ -384,9 +398,9 @@ export function EditModelPage() {
                       className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
                     />
                   )}
-                  
+
                   <p className="mt-2 text-xs text-white/40">
-                    {!modelAdvancedDraft.maxOutputTokens 
+                    {!modelAdvancedDraft.maxOutputTokens
                       ? 'Let the model decide the response length'
                       : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
                     }

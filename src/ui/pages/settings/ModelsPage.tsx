@@ -273,8 +273,8 @@ export function ModelsPage() {
                                                     setForceCustomMode(true);
                                                 }}
                                                 className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!advancedDraft.maxOutputTokens
-                                                        ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                                                        : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                                                    ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                                                    : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
                                                     }`}
                                             >
                                                 Auto
@@ -286,8 +286,8 @@ export function ModelsPage() {
                                                     setForceCustomMode(true);
                                                 }}
                                                 className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${advancedDraft.maxOutputTokens
-                                                        ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                                                        : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
+                                                    ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
+                                                    : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
                                                     }`}
                                             >
                                                 Custom
@@ -559,6 +559,17 @@ export function ModelsPage() {
                                         <code className="rounded bg-black/40 px-1 py-[1px] font-mono text-[10px]">{model.name}</code>
                                         <span className="opacity-40">•</span>
                                         <span className="truncate">{model.providerLabel || providerInfo?.label}</span>
+                                        {model.modelType && model.modelType !== "chat" && (
+                                            <>
+                                                <span className="opacity-40">•</span>
+                                                <span className="rounded bg-blue-400/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-200">
+                                                    {model.modelType === "multimodal" ? "Multimodal" :
+                                                        model.modelType === "imagegeneration" ? "Image Gen" :
+                                                            model.modelType === "embedding" ? "Embedding" :
+                                                                model.modelType}
+                                                </span>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60 transition" />

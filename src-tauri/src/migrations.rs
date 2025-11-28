@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 13;
+const CURRENT_MIGRATION_VERSION: u32 = 14;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -158,7 +158,8 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v11 -> v12: Add memory summary and tool events to sessions".to_string(),
+            "Running migration v11 -> v12: Add memory summary and tool events to sessions"
+                .to_string(),
         );
         migrate_v11_to_v12(app)?;
         version = 12;
@@ -172,6 +173,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v12_to_v13(app)?;
         version = 13;
+    }
+
+    if version < 14 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v13 -> v14: Add model_type to models".to_string(),
+        );
+        migrate_v13_to_v14(app)?;
+        version = 14;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -664,10 +675,7 @@ fn migrate_v11_to_v12(app: &AppHandle) -> Result<(), String> {
     }
 
     if !has_summary {
-        let _ = conn.execute(
-            "ALTER TABLE sessions ADD COLUMN memory_summary TEXT",
-            [],
-        );
+        let _ = conn.execute("ALTER TABLE sessions ADD COLUMN memory_summary TEXT", []);
     }
 
     if !has_events {
@@ -909,6 +917,45 @@ fn migrate_v12_to_v13(app: &AppHandle) -> Result<(), String> {
     // Ensure all existing rows have a value
     let _ = conn.execute(
         "UPDATE usage_records SET operation_type = 'chat' WHERE operation_type IS NULL",
+        [],
+    );
+
+    Ok(())
+}
+
+/// Migration v13 -> v14: add model_type column to models table
+fn migrate_v13_to_v14(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if column already exists
+    let mut has_column = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(models)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "model_type" {
+            has_column = true;
+            break;
+        }
+    }
+
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE models ADD COLUMN model_type TEXT DEFAULT 'chat'",
+            [],
+        );
+    }
+
+    // Ensure all existing rows have a value
+    let _ = conn.execute(
+        "UPDATE models SET model_type = 'chat' WHERE model_type IS NULL",
         [],
     );
 

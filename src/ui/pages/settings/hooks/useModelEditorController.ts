@@ -104,6 +104,7 @@ export function useModelEditorController(): ControllerReturn {
             providerId: firstProvider?.providerId || firstCap?.id || "",
             providerLabel: firstProvider?.label || firstCap?.name || "",
             createdAt: Date.now(),
+            modelType: "chat",
           } as Model;
         } else {
           const existing = settings.models.find((m) => m.id === modelId) || null;
