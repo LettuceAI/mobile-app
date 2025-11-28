@@ -86,7 +86,16 @@ jobs:
           echo "Using NDK at $NDK"
           echo "Toolchain bin at $TOOLCHAIN"
 
-          for triple in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
+          # Triples that various crates/OpenSSL might expect
+          TRIPLES=(
+            aarch64-linux-android
+            armv7-linux-androideabi
+            arm-linux-androideabi      # <-- old-style triple OpenSSL is using
+            i686-linux-android
+            x86_64-linux-android
+          )
+
+          for triple in "${TRIPLES[@]}"; do
             sudo ln -sf "$TOOLCHAIN/llvm-ar" "/usr/local/bin/${triple}-ar"
             sudo ln -sf "$TOOLCHAIN/llvm-ranlib" "/usr/local/bin/${triple}-ranlib"
           done
