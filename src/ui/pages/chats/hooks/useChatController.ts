@@ -1100,9 +1100,14 @@ function parseStreamDelta(chunk: string): string {
   const lines = chunk.split("\n");
   for (const raw of lines) {
     const line = raw.trim();
+
+    if (!line) continue;
+    if (line.startsWith(":")) continue;
+
     if (!line.startsWith("data:")) continue;
     const data = line.slice(5).trim();
     if (!data || data === "[DONE]") continue;
+
     try {
       const parsed = JSON.parse(data);
       const delta = parsed?.choices?.[0]?.delta?.content;
@@ -1115,3 +1120,4 @@ function parseStreamDelta(chunk: string): string {
   }
   return output;
 }
+
