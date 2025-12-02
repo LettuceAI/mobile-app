@@ -3,7 +3,7 @@ import { CreatePersonaForm } from "./components/CreatePersonaForm";
 import { useCreatePersonaController } from "./hooks/createPersonaReducer";
 
 export function CreatePersonaPage() {
-    const { state, dispatch, canSave, handleAvatarUpload, handleImport, handleSave, topNavPath } = useCreatePersonaController();
+    const { state, dispatch, canSave, handleImport, handleSave, topNavPath } = useCreatePersonaController();
 
     return (
         <div className="flex min-h-screen flex-col bg-[#050505] text-gray-100">
@@ -13,7 +13,6 @@ export function CreatePersonaPage() {
                 <CreatePersonaForm
                     state={state}
                     dispatch={dispatch}
-                    onAvatarUpload={handleAvatarUpload}
                     onImport={handleImport}
                     onSave={handleSave}
                     canSave={canSave}

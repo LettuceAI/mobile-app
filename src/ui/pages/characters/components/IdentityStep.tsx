@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, Sparkles, Image, Upload } from "lucide-react";
-import type { ReactNode } from "react";
+import { X, Camera, Sparkles, Image, Upload } from "lucide-react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
+import { AvatarPicker } from "../../../components/AvatarPicker";
 
 interface IdentityStepProps {
   name: string;
@@ -10,13 +10,11 @@ interface IdentityStepProps {
   onAvatarChange: (value: string) => void;
   backgroundImagePath: string;
   onBackgroundImageChange: (value: string) => void;
-  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onBackgroundImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   disableAvatarGradient: boolean;
   onDisableAvatarGradientChange: (value: boolean) => void;
   onContinue: () => void;
   canContinue: boolean;
-  avatarPreview: ReactNode;
   onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -27,13 +25,11 @@ export function IdentityStep({
   onAvatarChange,
   backgroundImagePath,
   onBackgroundImageChange,
-  onUpload,
   onBackgroundImageUpload,
   disableAvatarGradient,
   onDisableAvatarGradientChange,
   onContinue,
   canContinue,
-  avatarPreview,
   onImport,
 }: IdentityStepProps) {
   return (
@@ -55,80 +51,43 @@ export function IdentityStep({
       </div>
 
       {/* Avatar Section */}
-      <div className="relative flex flex-col items-center gap-3 py-4">
-
-        <div className="relative">
-          <motion.div
-            whileTap={{ scale: 0.97 }}
-            className={cn(
-              "relative h-32 w-32 overflow-hidden border-2",
-              radius.full,
-              avatarPath ? "border-white/20" : "border-white/10",
-              "bg-gradient-to-br from-white/5 to-white/10",
-              shadows.lg,
-              interactive.transition.default
-            )}
-          >
-            {avatarPreview}
-
-            {/* Upload overlay */}
-            {!avatarPath && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-                <Sparkles className="h-7 w-7 text-white/30" />
-              </div>
-            )}
-          </motion.div>
-
-          {/* Upload Button */}
-          <label
-            className={cn(
-              "group absolute -bottom-1 -right-1 z-20 flex h-10 w-10 cursor-pointer items-center justify-center border-2 border-[#050505] text-white/60",
-              radius.full,
-              avatarPath ? "bg-purple-500/20" : "bg-[#0b0b0d]",
-              shadows.lg,
-              interactive.transition.default,
-              "active:scale-95",
-              "active:bg-purple-500/30"
-            )}
-          >
-            <Camera size={17} />
-            <input type="file" accept="image/*" onChange={onUpload} className="hidden" />
-          </label>
+      <div className="space-y-3">
+        <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
+          Avatar
+        </label>
+        <div className="flex items-center gap-4">
+          {/* Avatar Picker with Generation Support */}
+          <AvatarPicker
+            currentAvatarPath={avatarPath}
+            onAvatarChange={onAvatarChange}
+            avatarPreview={
+              avatarPath ? (
+                <img
+                  src={avatarPath}
+                  alt="Character avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Camera className="text-white/30" size={32} />
+                </div>
+              )
+            }
+          />
 
           {/* Remove Button */}
-          <AnimatePresence>
-            {avatarPath && (
-              <motion.button
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+          {avatarPath && (
+            <button
               onClick={() => onAvatarChange("")}
-              className={cn(
-                "absolute -top-1 -left-1 flex h-10 w-10 items-center justify-center bg-red-500",
-                radius.full,
-                interactive.transition.default,
-                "active:scale-95 active:bg-red-600"
-              )}
-              >
-              <X size={24} className="text-white" strokeWidth={3} />
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <motion.p
-          key={avatarPath ? "has-avatar" : "no-avatar"}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            "text-center",
-            typography.bodySmall.size,
-            "text-white/40"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 backdrop-blur-xl transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 active:scale-95"
+            >
+              <X size={20} strokeWidth={3} />
+            </button>
           )}
-        >
-          {avatarPath ? "Tap camera to change avatar" : "Tap camera to add avatar"}
-        </motion.p>
+        </div>
+        <p className="text-xs text-white/40">
+          Optional: Add a visual identity for this character
+        </p>
       </div>
 
       {/* Name Input */}

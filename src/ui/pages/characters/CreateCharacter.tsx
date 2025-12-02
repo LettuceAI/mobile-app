@@ -6,7 +6,6 @@ import { useCharacterForm, Step } from "./hooks/useCharacterForm";
 import { IdentityStep } from "./components/IdentityStep";
 import { StartingSceneStep } from "./components/StartingSceneStep";
 import { DescriptionStep } from "./components/DescriptionStep";
-import { AvatarPreview } from "./components/AvatarPreview";
 import { TopNav } from "../../components/App";
 
 export function CreateCharacterPage() {
@@ -56,15 +55,11 @@ export function CreateCharacterPage() {
               onAvatarChange={actions.setAvatarPath}
               backgroundImagePath={state.backgroundImagePath}
               onBackgroundImageChange={actions.setBackgroundImagePath}
-              onUpload={actions.handleAvatarUpload}
               onBackgroundImageUpload={actions.handleBackgroundImageUpload}
               disableAvatarGradient={state.disableAvatarGradient}
               onDisableAvatarGradientChange={actions.setDisableAvatarGradient}
               onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
-              avatarPreview={
-                <AvatarPreview avatarPath={state.avatarPath} name={state.name} />
-              }
               onImport={actions.handleImport}
             />
           ) : state.step === Step.StartingScene ? (

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { usePersonaFormController } from "./hooks/usePersonaFormController";
 import { exportPersona, downloadJson, generateExportFilename } from "../../../core/storage/personaTransfer";
 import { useState } from "react";
+import { AvatarPicker } from "../../components/AvatarPicker";
 
 const wordCount = (text: string) => {
   const trimmed = text.trim();
@@ -42,21 +43,8 @@ export function EditPersonaPage() {
     }
   };
 
-  const handleAvatarUpload = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (event) => {
-      const file = (event.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        setAvatarPath(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
+  const handleAvatarChange = (newPath: string) => {
+    setAvatarPath(newPath || null);
   };
 
   if (loading) {
@@ -90,26 +78,24 @@ export function EditPersonaPage() {
               Avatar
             </label>
             <div className="flex items-center gap-4">
-              {/* Avatar Preview with Upload Button */}
-              <button
-                onClick={handleAvatarUpload}
-                className="group relative h-32 w-32 overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl transition hover:border-white/30 active:scale-95"
-              >
-                {avatarPath ? (
-                  <img
-                    src={avatarPath}
-                    alt="Persona avatar"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Camera className="text-white/30" size={32} />
-                  </div>
-                )}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-                  <Camera className="text-white" size={24} />
-                </div>
-              </button>
+              {/* Avatar Picker with Generation Support */}
+              <AvatarPicker
+                currentAvatarPath={avatarPath ?? ""}
+                onAvatarChange={handleAvatarChange}
+                avatarPreview={
+                  avatarPath ? (
+                    <img
+                      src={avatarPath}
+                      alt="Persona avatar"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Camera className="text-white/30" size={32} />
+                    </div>
+                  )
+                }
+              />
 
               {/* Remove Button */}
               {avatarPath && (

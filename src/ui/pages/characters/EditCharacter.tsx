@@ -1,7 +1,8 @@
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Edit2, Image, Download, Layers } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Image, Download, Layers, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
+import { AvatarPicker } from "../../components/AvatarPicker";
 
 const wordCount = (text: string) => {
   const trimmed = text.trim();
@@ -47,7 +48,6 @@ export function EditCharacterPage() {
     saveEditedScene,
     cancelEditingScene,
     handleBackgroundImageUpload,
-    handleAvatarUpload,
   } = actions;
 
   const { avatarInitial, canSave } = computed;
@@ -59,18 +59,6 @@ export function EditCharacterPage() {
       </div>
     );
   }
-
-  // Get avatar preview for header
-  const getAvatarPreview = () => {
-    if (!avatarPath) {
-      return (
-        <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-emerald-500/20 to-blue-500/20">
-          <span className="text-lg font-bold text-white">{avatarInitial}</span>
-        </div>
-      );
-    }
-    return <img src={avatarPath} alt="Avatar" className="h-full w-full object-cover" />;
-  };
 
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
@@ -102,19 +90,12 @@ export function EditCharacterPage() {
             <div className="flex items-center gap-4 p-4">
               {/* Avatar */}
               <div className="relative h-16 w-16 shrink-0">
-                <label className="relative block h-full w-full cursor-pointer overflow-hidden rounded-2xl border border-white/10 group">
-                  {getAvatarPreview()}
-                  {/* Overlay on hover */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Edit2 className="h-5 w-5 text-white" />
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-                </label>
+                <AvatarPicker
+                  currentAvatarPath={avatarPath}
+                  onAvatarChange={(path) => setFields({ avatarPath: path })}
+                  size="sm"
+                  placeholder={avatarInitial}
+                />
                 {/* Remove avatar button */}
                 {avatarPath && (
                   <button
