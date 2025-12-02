@@ -1,4 +1,5 @@
 pub mod config;
+pub mod openrouter;
 pub mod util;
 pub mod verify;
 

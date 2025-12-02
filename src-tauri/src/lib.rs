@@ -3,6 +3,7 @@ mod api;
 mod chat_manager;
 mod embedding_model;
 mod error;
+mod image_generator;
 mod migrations;
 mod models;
 mod pricing_cache;
@@ -52,6 +53,7 @@ pub fn run() {
             models::verify_model_exists,
             providers::verify_provider_api_key,
             providers::get_provider_configs,
+            providers::openrouter::get_openrouter_models,
             storage_manager::settings::storage_read_settings,
             storage_manager::settings::storage_write_settings,
             // Legacy file-based storage commands removed from handler
@@ -137,6 +139,7 @@ pub fn run() {
             embedding_model::initialize_embedding_model,
             embedding_model::run_embedding_test,
             embedding_model::delete_embedding_model,
+            image_generator::commands::generate_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

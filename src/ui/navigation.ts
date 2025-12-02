@@ -26,6 +26,7 @@ export const Routes = {
   settingsModels: "/settings/models",
   settingsModelsNew: "/settings/models/new",
   settingsModel: (modelId: string) => `/settings/models/${modelId}`,
+  settingsImageGeneration: "/settings/image-generation",
 } as const;
 
 export type BackMapping = {
@@ -37,6 +38,7 @@ export type BackMapping = {
 export const BACK_MAPPINGS: BackMapping[] = [
   { match: (p) => p.includes("/settings/models") && p.includes("view=advanced"), target: Routes.settingsModels },
   { match: (p) => p.startsWith("/settings/models/"), target: Routes.settingsModels },
+  { match: (p) => p.startsWith("/settings/image-generation"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings/providers/"), target: "/settings/providers" },
   { match: (p) => p.startsWith("/settings/prompts/new"), target: "/settings/prompts" },
   { match: (p) => p.startsWith("/settings/prompts/"), target: "/settings/prompts" },

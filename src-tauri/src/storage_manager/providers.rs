@@ -1,4 +1,4 @@
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use super::db::open_db;
@@ -86,4 +86,45 @@ pub fn provider_delete(app: tauri::AppHandle, id: String) -> Result<(), String> 
     conn.execute("DELETE FROM provider_credentials WHERE id = ?", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+pub fn get_provider_credential(
+    app: &tauri::AppHandle,
+    id: &str,
+) -> Result<crate::chat_manager::types::ProviderCredential, String> {
+    let conn = open_db(app).map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials WHERE id = ?")
+        .map_err(|e| e.to_string())?;
+
+    let row = stmt
+        .query_row(params![id], |r| {
+            let id: String = r.get(0)?;
+            let provider_id: String = r.get(1)?;
+            let label: String = r.get(2)?;
+            let api_key: Option<String> = r.get(3)?;
+            let base_url: Option<String> = r.get(4)?;
+            let default_model: Option<String> = r.get(5)?;
+            let headers_json: Option<String> = r.get(6)?;
+
+            let headers = if let Some(s) = headers_json {
+                serde_json::from_str(&s).ok()
+            } else {
+                None
+            };
+
+            Ok(crate::chat_manager::types::ProviderCredential {
+                id,
+                provider_id,
+                label,
+                api_key,
+                base_url,
+                default_model,
+                headers,
+            })
+        })
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    row.ok_or_else(|| "Provider credential not found".to_string())
 }

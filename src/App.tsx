@@ -8,6 +8,7 @@ import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
 import { ModelsPage } from "./ui/pages/settings/ModelsPage";
 import { EditModelPage } from "./ui/pages/settings/EditModelPage";
+import { ImageGenerationPage } from "./ui/pages/settings/ImageGenerationPage";
 import { SystemPromptsPage } from "./ui/pages/settings/SystemPromptsPage";
 import { EditPromptTemplate } from "./ui/pages/settings/EditPromptTemplate";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
@@ -226,6 +227,7 @@ function AppContent() {
               <Route path="/settings/models" element={<ModelsPage />} />
               <Route path="/settings/models/new" element={<EditModelPage />} />
               <Route path="/settings/models/:modelId" element={<EditModelPage />} />
+              <Route path="/settings/image-generation" element={<ImageGenerationPage />} />
               <Route path="/settings/prompts" element={<SystemPromptsPage />} />
               <Route path="/settings/prompts/new" element={<EditPromptTemplate />} />
               <Route path="/settings/prompts/:id" element={<EditPromptTemplate />} />

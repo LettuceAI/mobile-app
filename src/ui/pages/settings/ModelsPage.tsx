@@ -144,7 +144,7 @@ export function ModelsPage() {
                                         }
                                     }}
                                     className={`w-full rounded-2xl border p-4 text-left transition ${isSelected
-                                        ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-400/20 to-emerald-500/10'
+                                        ? 'border-emerald-400/40 bg-linear-to-br from-emerald-400/20 to-emerald-500/10'
                                         : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.99]'
                                         } ${isCustom && !isSelected ? 'cursor-pointer' : ''}`}
                                 >
@@ -455,7 +455,7 @@ export function ModelsPage() {
                     {/* Info Card */}
                     <div className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-4">
                         <div className="flex gap-3">
-                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-400/10 text-blue-400">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-400/10 text-blue-400">
                                 <Lightbulb className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
@@ -504,7 +504,7 @@ export function ModelsPage() {
                         onClick={openAdvancedView}
                         className="flex flex-1 items-center gap-3 text-left transition active:scale-[0.99]"
                     >
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-100">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-100">
                             <SlidersHorizontal className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -521,13 +521,13 @@ export function ModelsPage() {
                                 e.stopPropagation();
                                 setShowParameterSupport(true);
                             }}
-                            className="group/info flex flex-shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
+                            className="group/info flex shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
                             aria-label="View parameter support"
                         >
                             <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
                         </button>
                     </button>
-                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-emerald-200" />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-emerald-200" />
                 </div>
 
                 {models.length === 0 && (

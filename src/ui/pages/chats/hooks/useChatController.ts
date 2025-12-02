@@ -437,17 +437,15 @@ export function useChatController(
         ]
       });
 
-      let unlistenRaw: UnlistenFn | null = null;
       let unlistenNormalized: UnlistenFn | null = null;
-      let normalizedActive = false;
       const streamBatcher = createStreamBatcher(dispatch);
 
       try {
+        // Only use normalized provider-agnostic stream
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
           try {
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
-              normalizedActive = true;
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
@@ -455,14 +453,6 @@ export function useChatController(
           } catch {
             // ignore malformed payloads
           }
-        });
-
-        // Fallback
-        unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
-          if (normalizedActive) return;
-          const delta = parseStreamDelta(event.payload ?? "");
-          if (!delta) return;
-          streamBatcher.update(assistantPlaceholder.id, delta);
         });
 
         const result = await sendChatTurn({
@@ -512,7 +502,6 @@ export function useChatController(
         }
       } finally {
         streamBatcher.cancel();
-        if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
         dispatch({
           type: "BATCH",
@@ -542,18 +531,15 @@ export function useChatController(
         ]
       });
 
-      let unlistenRaw: UnlistenFn | null = null;
       let unlistenNormalized: UnlistenFn | null = null;
-      let normalizedActive = false;
       const streamBatcher = createStreamBatcher(dispatch);
 
       try {
-        // Prefer normalized provider-agnostic stream if available
+        // Only use normalized provider-agnostic stream
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
           try {
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
-              normalizedActive = true;
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
@@ -561,14 +547,6 @@ export function useChatController(
           } catch {
             // ignore malformed payloads
           }
-        });
-
-        // Fallback: raw SSE if normalized isn't emitted
-        unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
-          if (normalizedActive) return;
-          const delta = parseStreamDelta(event.payload ?? "");
-          if (!delta) return;
-          streamBatcher.update(assistantPlaceholder.id, delta);
         });
 
         const result = await continueConversation({
@@ -621,7 +599,6 @@ export function useChatController(
         }
       } finally {
         streamBatcher.cancel();
-        if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
         dispatch({
           type: "BATCH",
@@ -654,9 +631,7 @@ export function useChatController(
       }
 
       const requestId = crypto.randomUUID();
-      let unlistenRaw: UnlistenFn | null = null;
       let unlistenNormalized: UnlistenFn | null = null;
-      let normalizedActive = false;
 
       dispatch({
         type: "BATCH",
@@ -676,12 +651,11 @@ export function useChatController(
       const streamBatcher = createStreamBatcher(dispatch);
 
       try {
-        // Prefer normalized provider-agnostic stream if available
+        // Only use normalized provider-agnostic stream
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
           try {
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
-              normalizedActive = true;
               streamBatcher.update(message.id, String(payload.data.text));
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
@@ -689,14 +663,6 @@ export function useChatController(
           } catch {
             // ignore malformed payloads
           }
-        });
-
-        // Fallback: raw SSE if normalized isn't emitted
-        unlistenRaw = await listen<string>(`api://${requestId}`, (event) => {
-          if (normalizedActive) return;
-          const delta = parseStreamDelta(event.payload ?? "");
-          if (!delta) return;
-          streamBatcher.update(message.id, delta);
         });
 
         const result = await regenerateAssistantMessage({
@@ -748,7 +714,6 @@ export function useChatController(
         }
       } finally {
         streamBatcher.cancel();
-        if (unlistenRaw) unlistenRaw();
         if (unlistenNormalized) unlistenNormalized();
         dispatch({
           type: "BATCH",
@@ -1094,30 +1059,3 @@ function createPlaceholderMessage(role: "user" | "assistant", content: string): 
     memoryRefs: [],
   };
 }
-
-function parseStreamDelta(chunk: string): string {
-  let output = "";
-  const lines = chunk.split("\n");
-  for (const raw of lines) {
-    const line = raw.trim();
-
-    if (!line) continue;
-    if (line.startsWith(":")) continue;
-
-    if (!line.startsWith("data:")) continue;
-    const data = line.slice(5).trim();
-    if (!data || data === "[DONE]") continue;
-
-    try {
-      const parsed = JSON.parse(data);
-      const delta = parsed?.choices?.[0]?.delta?.content;
-      if (typeof delta === "string") {
-        output += delta;
-      }
-    } catch (error) {
-      continue;
-    }
-  }
-  return output;
-}
-

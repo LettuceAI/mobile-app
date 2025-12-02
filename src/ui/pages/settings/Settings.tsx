@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, Image } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -132,6 +132,13 @@ export function SettingsPage() {
       count: modelCount,
       onClick: () => toModelsList()
     },
+    {
+      key: 'image-generation',
+      icon: <Image />,
+      title: 'Image Generation',
+      subtitle: 'Generate images with AI',
+      onClick: () => navigate('/settings/image-generation')
+    },
     /*{
       key: 'characters',
       icon: <Sparkles />,
@@ -259,7 +266,7 @@ export function SettingsPage() {
             Core
           </h2>
           <div className={spacing.field}>
-            {items.filter(i => ['providers', 'models', 'characters', 'personas', 'prompts', 'security', 'usage', 'advanced'].includes(i.key)).map(item => (
+            {items.filter(i => ['providers', 'models', 'image-generation', 'characters', 'personas', 'prompts', 'security', 'usage', 'advanced'].includes(i.key)).map(item => (
               <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
             ))}
           </div>
