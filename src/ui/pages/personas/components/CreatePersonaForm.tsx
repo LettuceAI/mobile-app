@@ -1,8 +1,9 @@
 import { Dispatch } from "react";
-import { Bookmark, Camera, X, Upload, Loader2 } from "lucide-react";
+import { Bookmark, Camera, X, Upload, Loader2, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PersonaFormState, PersonaFormAction } from "../hooks/createPersonaReducer";
 import { AvatarPicker } from "../../../components/AvatarPicker";
+import { typography, radius, spacing, interactive, cn } from "../../../design-tokens";
 
 const wordCount = (text: string) => {
   const trimmed = text.trim();
@@ -40,7 +41,7 @@ export function CreatePersonaForm({
       className="space-y-6"
     >
       {/* Title */}
-      <div className="space-y-1.5 text-center">
+      <div className="space-y-1.5 text-left">
         <h2 className="text-xl font-semibold text-white">Create Persona</h2>
         <p className="text-sm text-white/50">Define a reusable writing style</p>
       </div>
@@ -84,25 +85,64 @@ export function CreatePersonaForm({
         </div>
 
         {/* Title Input */}
-        <div className="space-y-2">
-          <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
-            Title
+        <div className={spacing.field}>
+          <label
+            className={cn(
+              typography.label.size,
+              typography.label.weight,
+              typography.label.tracking,
+              "uppercase text-white/70"
+            )}
+          >
+            Persona Title *
           </label>
-          <input
-            value={title}
-            onChange={(e) => dispatch({ type: "set_title", value: e.target.value })}
-            placeholder="Professional Writer"
-            className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-white placeholder-white/40 transition focus:border-white/30 focus:bg-black/40 focus:outline-none"
-            autoFocus
-          />
-          <p className="text-xs text-white/40">
+          <div className="relative">
+            <input
+              value={title}
+              onChange={(e) => dispatch({ type: "set_title", value: e.target.value })}
+              placeholder="Professional Writer"
+              className={cn(
+                "w-full border bg-black/20 px-4 py-3.5 text-white placeholder-white/40 backdrop-blur-xl",
+                radius.md,
+                typography.body.size,
+                interactive.transition.default,
+                "focus:border-white/30 focus:bg-black/30 focus:outline-none",
+                title.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10"
+              )}
+            />
+            {title.trim() && (
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+              >
+                <div
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center",
+                    radius.full,
+                    "bg-emerald-400/20"
+                  )}
+                >
+                  <CheckCircle className="h-3 w-3 text-emerald-300" />
+                </div>
+              </motion.div>
+            )}
+          </div>
+          <p className={cn(typography.bodySmall.size, "text-white/40")}>
             A short name for this persona
           </p>
         </div>
 
         {/* Description Textarea */}
-        <div className="space-y-2">
-          <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
+        <div className={spacing.field}>
+          <label
+            className={cn(
+              typography.label.size,
+              typography.label.weight,
+              typography.label.tracking,
+              "uppercase text-white/70"
+            )}
+          >
             Description
           </label>
           <textarea
@@ -110,24 +150,39 @@ export function CreatePersonaForm({
             onChange={(e) => dispatch({ type: "set_description", value: e.target.value })}
             rows={7}
             placeholder="Write in a professional, clear, and concise style. Use formal language and focus on delivering information effectively..."
-            className="w-full resize-y rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/30 focus:bg-black/40 focus:outline-none min-h-[140px] max-h-[320px]"
+            className={cn(
+              "w-full resize-y border bg-black/20 px-4 py-3.5 text-sm leading-relaxed text-white placeholder-white/40 backdrop-blur-xl min-h-[140px] max-h-[320px]",
+              radius.md,
+              interactive.transition.default,
+              "focus:border-white/30 focus:bg-black/30 focus:outline-none",
+              description.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10"
+            )}
           />
           <div className="flex justify-end text-[11px] text-white/40">
             {wordCount(description)} words
           </div>
-          <p className="text-xs text-white/40">
+          <p className={cn(typography.bodySmall.size, "text-white/40")}>
             Describe the writing style or personality traits
           </p>
         </div>
 
         {/* Default Option */}
-        <div className="space-y-2">
+        <div className={spacing.field}>
           <button
             onClick={() => dispatch({ type: "set_default", value: !isDefault })}
-            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl transition hover:border-white/25 hover:bg-white/5 active:scale-[0.99]"
+            className={cn(
+              "flex w-full items-center justify-between border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+              radius.md,
+              interactive.transition.default,
+              "hover:border-white/25 hover:bg-white/5 active:scale-[0.99]"
+            )}
           >
             <div className="flex items-center gap-3">
-              <div className={`rounded-lg p-2 transition ${isDefault ? "bg-emerald-400/20 text-emerald-300" : "bg-white/10 text-white/50"}`}>
+              <div className={cn(
+                "p-2 transition",
+                radius.lg,
+                isDefault ? "bg-emerald-400/20 text-emerald-300" : "bg-white/10 text-white/50"
+              )}>
                 <Bookmark size={16} />
               </div>
               <div className="text-left">
@@ -142,10 +197,18 @@ export function CreatePersonaForm({
 
             <div className="relative">
               <div
-                className={`h-6 w-11 rounded-full transition-colors ${isDefault ? "bg-emerald-400/40" : "bg-white/20"}`}
+                className={cn(
+                  "h-6 w-11 transition-colors",
+                  radius.full,
+                  isDefault ? "bg-emerald-400/40" : "bg-white/20"
+                )}
               >
                 <div
-                  className={`absolute top-0.5 h-5 w-5 rounded-full transition-transform ${isDefault ? "translate-x-5 bg-emerald-300" : "translate-x-0.5 bg-white"}`}
+                  className={cn(
+                    "absolute top-0.5 h-5 w-5 transition-transform",
+                    radius.full,
+                    isDefault ? "translate-x-5 bg-emerald-300" : "translate-x-0.5 bg-white"
+                  )}
                 />
               </div>
             </div>
@@ -160,7 +223,10 @@ export function CreatePersonaForm({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 backdrop-blur-xl"
+            className={cn(
+              "overflow-hidden border border-red-400/20 bg-red-400/10 px-4 py-3 backdrop-blur-xl",
+              radius.md
+            )}
           >
             <p className="text-sm text-red-200">{error}</p>
           </motion.div>
@@ -172,7 +238,10 @@ export function CreatePersonaForm({
         onClick={onImport}
         disabled={importing}
         whileTap={{ scale: importing ? 1 : 0.98 }}
-        className="w-full rounded-xl border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50"
+        className={cn(
+          "w-full border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50",
+          radius.md
+        )}
       >
         {importing ? (
           <span className="flex items-center justify-center gap-2">
@@ -193,11 +262,13 @@ export function CreatePersonaForm({
           disabled={!canSave}
           onClick={onSave}
           whileTap={{ scale: canSave ? 0.98 : 1 }}
-          className={`w-full rounded-xl py-3.5 text-sm font-semibold transition ${
+          className={cn(
+            "w-full py-3.5 text-sm font-semibold transition",
+            radius.md,
             canSave
               ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-[0_8px_24px_rgba(52,211,153,0.15)] hover:border-emerald-400/60 hover:bg-emerald-400/30"
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
-          }`}
+          )}
         >
           {saving ? (
             <div className="flex items-center justify-center gap-2">
