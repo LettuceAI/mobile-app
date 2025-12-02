@@ -47,15 +47,12 @@ export function CreatePersonaForm({
 
       <div className="space-y-5 rounded-2xl p-4">
         {/* Avatar Section */}
-        <div className="space-y-3">
-          <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
-            Avatar
-          </label>
-          <div className="flex items-center gap-4">
-            {/* Avatar Picker with Generation Support */}
+        <div className="flex flex-col items-center py-4">
+          <div className="relative">
             <AvatarPicker
               currentAvatarPath={avatarPath ?? ""}
               onAvatarChange={handleAvatarChange}
+              size={"lg"}
               avatarPreview={
                 avatarPath ? (
                   <img
@@ -65,24 +62,24 @@ export function CreatePersonaForm({
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
-                    <Camera className="text-white/30" size={32} />
+                    <Camera className="text-white/30" size={36} />
                   </div>
                 )
               }
             />
 
-            {/* Remove Button */}
+            {/* Remove Button - top left */}
             {avatarPath && (
               <button
                 onClick={() => dispatch({ type: "set_avatar_path", value: null })}
-                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 backdrop-blur-xl transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 active:scale-95"
+                className="absolute -top-1 -left-1 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
               >
-                <X size={20} strokeWidth={3} />
+                <X size={14} strokeWidth={2.5} />
               </button>
             )}
           </div>
-          <p className="text-xs text-white/40">
-            Optional: Add a visual identity for this persona
+          <p className="mt-3 text-xs text-white/40">
+            Tap camera to add or generate avatar
           </p>
         </div>
 

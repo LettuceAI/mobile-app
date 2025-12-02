@@ -50,9 +50,9 @@ export function AvatarPicker({
   }, []);
 
   const sizeClasses = {
-    sm: "h-16 w-16",
-    md: "h-24 w-24",
-    lg: "h-32 w-32",
+    sm: "h-20 w-20",
+    md: "h-28 w-28",
+    lg: "h-48 w-48",
   };
 
   const handleButtonClick = useCallback(() => {
