@@ -1,4 +1,4 @@
-import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain } from "lucide-react";
+import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain, GitBranch } from "lucide-react";
 import { BottomMenu, MenuButton } from "../../../components/BottomMenu";
 import type { StoredMessage } from "../../../../core/storage/schemas";
 import { useEffect } from "react";
@@ -22,6 +22,7 @@ interface MessageActionsBottomSheetProps {
   handleSaveEdit: () => Promise<void>;
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
+  handleBranchFromMessage: (message: StoredMessage) => Promise<string | null>;
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   setMessageAction: (value: MessageActionState | null) => void;
   characterMemoryType?: string | null;
@@ -41,6 +42,7 @@ export function MessageActionsBottomSheet({
   handleSaveEdit,
   handleDeleteMessage,
   handleRewindToMessage,
+  handleBranchFromMessage,
   handleTogglePin,
   setMessageAction,
   characterMemoryType,
@@ -163,6 +165,16 @@ export function MessageActionsBottomSheet({
                   disabled={actionBusy}
                 />
               )}
+
+              {/* Branch from here - available for all message types */}
+              <MenuButton
+                icon={GitBranch}
+                title="Branch from here"
+                description="Create a new chat from this point"
+                color="from-teal-500 to-emerald-600"
+                onClick={() => void handleBranchFromMessage(messageAction.message)}
+                disabled={actionBusy}
+              />
 
               {/* Delete action */}
               <MenuButton

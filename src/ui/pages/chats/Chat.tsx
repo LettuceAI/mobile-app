@@ -1,5 +1,5 @@
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import type { StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
@@ -22,6 +22,7 @@ const SCROLL_THRESHOLD = 10; // pixels of movement to cancel long press
 export function ChatConversationPage() {
   const { characterId } = useParams<{ characterId: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const sessionId = searchParams.get("sessionId") || undefined;
 
   const chatController = useChatController(characterId, { sessionId });
@@ -321,6 +322,13 @@ export function ChatConversationPage() {
         handleSaveEdit={handleSaveEdit}
         handleDeleteMessage={handleDeleteMessage}
         handleRewindToMessage={chatController.handleRewindToMessage}
+        handleBranchFromMessage={async (message) => {
+          const newSessionId = await chatController.handleBranchFromMessage(message);
+          if (newSessionId && characterId) {
+            navigate(`/chats/${characterId}?sessionId=${newSessionId}`);
+          }
+          return newSessionId;
+        }}
         handleTogglePin={chatController.handleTogglePin}
         setMessageAction={setMessageAction}
         characterMemoryType={character?.memoryType}

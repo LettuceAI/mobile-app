@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
+import { createSession, createBranchedSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
@@ -55,6 +55,7 @@ export interface ChatController {
   handleSaveEdit: () => Promise<void>;
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
+  handleBranchFromMessage: (message: StoredMessage) => Promise<string | null>;
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
@@ -982,6 +983,50 @@ export function useChatController(
     [resetMessageActions, state.session],
   );
 
+  const handleBranchFromMessage = useCallback(
+    async (message: StoredMessage): Promise<string | null> => {
+      if (!state.session) return null;
+
+      dispatch({ type: "SET_ACTION_BUSY", payload: true });
+      dispatch({ type: "SET_ACTION_ERROR", payload: null });
+      dispatch({ type: "SET_ACTION_STATUS", payload: null });
+
+      try {
+        const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+        if (messageIndex === -1) {
+          dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
+          return null;
+        }
+
+        const messageCount = messageIndex + 1;
+        const confirmed = window.confirm(
+          `Create a new chat branch from this point? The new chat will contain ${messageCount} message${messageCount > 1 ? 's' : ''}.`
+        );
+        if (!confirmed) {
+          dispatch({ type: "SET_ACTION_BUSY", payload: false });
+          return null;
+        }
+
+        const branchedSession = await createBranchedSession(state.session, message.id);
+        
+        dispatch({ type: "SET_ACTION_STATUS", payload: "Chat branch created! Redirecting..." });
+        
+        // Return the new session ID so the caller can navigate to it
+        setTimeout(() => {
+          resetMessageActions();
+        }, 500);
+        
+        return branchedSession.id;
+      } catch (err) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        return null;
+      } finally {
+        dispatch({ type: "SET_ACTION_BUSY", payload: false });
+      }
+    },
+    [resetMessageActions, state.session],
+  );
+
   useEffect(() => {
     return () => {
       if (longPressTimerRef.current !== null) {
@@ -1031,6 +1076,7 @@ export function useChatController(
     handleSaveEdit,
     handleDeleteMessage,
     handleRewindToMessage,
+    handleBranchFromMessage,
     handleTogglePin,
     resetMessageActions,
     initializeLongPressTimer: (timer) => {

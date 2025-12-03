@@ -226,8 +226,6 @@ export async function saveAdvancedSettings(settings: Settings["advancedSettings"
   broadcastSettingsUpdated();
 }
 
-// Legacy writeSessionIndex removed (DB manages session IDs)
-
 export async function getSession(id: string): Promise<Session | null> {
   const data = await storageBridge.sessionGet(id);
   return data ? SessionSchema.parse(data) : null;
@@ -295,6 +293,43 @@ export async function createSession(characterId: string, title: string, selected
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+  await saveSession(s);
+  return s;
+}
+
+export async function createBranchedSession(
+  sourceSession: Session,
+  branchAtMessageId: string
+): Promise<Session> {
+  const messageIndex = sourceSession.messages.findIndex(m => m.id === branchAtMessageId);
+  if (messageIndex === -1) {
+    throw new Error("Message not found in session");
+  }
+
+  const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
+  const timestamp = now();
+
+  const branchedMessages: StoredMessage[] = sourceSession.messages
+    .slice(0, messageIndex + 1)
+    .map(msg => ({
+      ...msg,
+      id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+      createdAt: msg.createdAt,
+    }));
+
+  const s: Session = {
+    id,
+    characterId: sourceSession.characterId,
+    title: `${sourceSession.title} (branch)`,
+    selectedSceneId: sourceSession.selectedSceneId,
+    personaId: sourceSession.personaId,
+    memories: [...sourceSession.memories], 
+    messages: branchedMessages,
+    archived: false,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
   await saveSession(s);
   return s;
 }
