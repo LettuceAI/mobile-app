@@ -29,8 +29,8 @@ interface ChatMessageProps {
   theme: ThemeColors;
   character: Character | null;
   persona: Persona | null;
-  // When provided, this content will be rendered instead of message.content
   displayContent?: string;
+  onImageClick?: (src: string, alt: string) => void;
 }
 
 // Avatar component for user/assistant
@@ -137,6 +137,7 @@ function ChatMessageInner({
   character,
   persona,
   displayContent,
+  onImageClick,
 }: ChatMessageProps) {
   // Memoize all computed values
   const computed = useMemo(() => {
@@ -261,7 +262,12 @@ function ChatMessageInner({
                     key={attachment.id}
                     className={cn(
                       radius.md,
-                      "overflow-hidden border border-white/15"
+                      "overflow-hidden border border-white/15",
+                      attachment.data && onImageClick && "cursor-pointer hover:border-white/30 transition-colors"
+                    )}
+                    onClick={() => attachment.data && onImageClick?.(
+                      attachment.data,
+                      attachment.filename || "Attached image"
                     )}
                   >
                     {attachment.data ? (

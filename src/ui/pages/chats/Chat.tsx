@@ -1,5 +1,7 @@
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
 import type { Character, StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
@@ -36,6 +38,11 @@ export function ChatConversationPage() {
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
   const [messageToBranch, setMessageToBranch] = useState<StoredMessage | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
+
+  const handleImageClick = useCallback((src: string, alt: string) => {
+    setSelectedImage({ src, alt });
+  }, []);
 
   useEffect(() => {
     if (showCharacterSelector) {
@@ -306,6 +313,7 @@ export function ChatConversationPage() {
                 displayContent={displayContent}
                 character={character}
                 persona={persona}
+                onImageClick={handleImageClick}
               />
             );
           })}
@@ -397,6 +405,40 @@ export function ChatConversationPage() {
           )}
         </div>
       </BottomMenu>
+
+      {/* Full-screen Image Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4"
+            onClick={() => setSelectedImage(null)}
+          >
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="absolute right-6 top-10 z-[101] flex h-10 w-11 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-400"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X size={24} />
+            </motion.button>
+            <motion.img
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              src={selectedImage.src}
+              alt={selectedImage.alt}
+              className="max-h-[90vh] max-w-[90vw] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

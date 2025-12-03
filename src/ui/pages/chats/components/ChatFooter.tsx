@@ -86,35 +86,32 @@ export function ChatFooter({
       
       {/* Attachment Preview */}
       {hasAttachments && (
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div className="mb-2 flex flex-wrap gap-2 overflow-visible p-1">
           {pendingAttachments.map((attachment) => (
             <div 
               key={attachment.id} 
               className={cn(
-                "relative group",
+                "relative",
                 radius.md,
-                "overflow-hidden border border-white/15 bg-white/5"
+                "border border-white/20 bg-white/10"
               )}
             >
               <img
                 src={attachment.data}
                 alt={attachment.filename || "Attachment"}
-                className="h-16 w-16 object-cover"
+                className={cn("h-20 w-20 object-cover", radius.md)}
               />
               {onRemoveAttachment && (
                 <button
                   onClick={() => onRemoveAttachment(attachment.id)}
                   className={cn(
-                    "absolute -right-1 -top-1",
-                    "flex h-5 w-5 items-center justify-center",
-                    radius.full,
-                    "bg-red-500 text-white",
-                    "opacity-0 group-hover:opacity-100",
-                    interactive.transition.fast
+                    "absolute -right-1 -top-1 z-50",
+                    interactive.transition.fast,
+                    interactive.active.scale
                   )}
                   aria-label="Remove attachment"
                 >
-                  <X size={12} />
+                  <X className="h-5 w-5 text-black drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]" />
                 </button>
               )}
             </div>
@@ -144,7 +141,7 @@ export function ChatFooter({
             onClick={handlePlusClick}
             disabled={sending}
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center",
+              "flex h-10 w-11 shrink-0 items-center justify-center",
               radius.full,
               "border border-white/15 bg-white/10 text-white/70",
               interactive.transition.fast,
@@ -176,7 +173,8 @@ export function ChatFooter({
         {draft.length === 0 && !hasAttachments && (
           <span
             className={cn(
-              "pointer-events-none absolute left-5",
+              "pointer-events-none absolute",
+              onAddAttachment ? "left-[4rem]" : "left-5",
               "top-1/2 -translate-y-1/2",
               "text-white/40",
               "transition-opacity duration-150",
@@ -186,13 +184,12 @@ export function ChatFooter({
           >
             Send a message...
           </span>
-
         )}
         <button
           onClick={sending && onAbort ? onAbort : onSendMessage}
           disabled={sending && !onAbort}
           className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center",
+            "flex h-10 w-11 shrink-0 items-center justify-center",
             radius.full,
             sending && onAbort
               ? "border border-red-400/40 bg-red-400/20 text-red-100"
