@@ -7,7 +7,7 @@ import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
 import { useNavigate } from "react-router-dom";
 import { BottomMenu } from "../../components";
-import { MessageCircle, Edit2, Trash2, Download, Check } from "lucide-react";
+import { MessageCircle, Edit2, Trash2, Download, Check, BookOpen, Users } from "lucide-react";
 import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
 
 type FilterOption = "All" | "Characters" | "Personas";
@@ -119,15 +119,51 @@ export function LibraryPage() {
     return (
         <div className="flex h-full flex-col pb-6 text-gray-200">
             <main className="flex-1 overflow-y-auto px-4 pt-4">
-                <div className="grid grid-cols-2 gap-3 pb-24">
-                    {filteredItems.map((item) => (
-                        <LibraryCard
-                            key={`${item.itemType}-${item.id}`}
-                            item={item}
-                            onSelect={handleSelect}
-                        />
-                    ))}
-                </div>
+                {filteredItems.length === 0 ? (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="flex flex-1 flex-col items-center justify-center px-6 py-20"
+                    >
+                        <div className="relative mb-6">
+                            <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                                <BookOpen className="h-10 w-10 text-white/30" />
+                            </div>
+                        </div>
+                        <h3 className={cn(typography.heading.size, typography.heading.weight, typography.heading.lineHeight, "mb-2 text-center text-white/80")}>
+                            {filter === "All" 
+                                ? "Your library is empty" 
+                                : filter === "Characters" 
+                                    ? "No characters yet" 
+                                    : "No personas yet"}
+                        </h3>
+                        <p className="mb-6 max-w-[280px] text-center text-sm text-white/50">
+                            {filter === "All" 
+                                ? "Create characters and personas to see them here" 
+                                : filter === "Characters" 
+                                    ? "Create your first character to start chatting" 
+                                    : "Create a persona to customize your chat identity"}
+                        </p>
+                        <button
+                            onClick={() => navigate(filter === "Personas" ? "/settings/personas/create" : "/settings/characters/create")}
+                            className="flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-5 py-2.5 text-sm font-medium text-emerald-100 transition active:scale-95 active:bg-emerald-400/30"
+                        >
+                            <Users className="h-4 w-4" />
+                            {filter === "Personas" ? "Create Persona" : "Create Character"}
+                        </button>
+                    </motion.div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-3 pb-24">
+                        {filteredItems.map((item) => (
+                            <LibraryCard
+                                key={`${item.itemType}-${item.id}`}
+                                item={item}
+                                onSelect={handleSelect}
+                            />
+                        ))}
+                    </div>
+                )}
             </main>
 
             {/* Filter Menu */}

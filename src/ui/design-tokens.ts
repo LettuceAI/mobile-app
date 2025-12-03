@@ -22,6 +22,11 @@ export const typography = {
         weight: 'font-semibold',
         lineHeight: 'leading-normal',
     },
+    heading: {
+        size: 'text-xl',        
+        weight: 'font-semibold',
+        lineHeight: 'leading-relaxed',
+    },
     body: {
         size: 'text-sm',         // 14px
         weight: 'font-normal',
