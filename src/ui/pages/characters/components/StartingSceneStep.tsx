@@ -1,8 +1,9 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, BookOpen, Edit2 } from "lucide-react";
+import { Plus, X, BookOpen, Edit2, ChevronDown } from "lucide-react";
 import type { Scene } from "../../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
+import { BottomMenu } from "../../../components/BottomMenu";
 
 interface StartingSceneStepProps {
   scenes: Scene[];
@@ -24,6 +25,7 @@ export function StartingSceneStep({
   const [newSceneContent, setNewSceneContent] = React.useState("");
   const [editingSceneId, setEditingSceneId] = React.useState<string | null>(null);
   const [editingSceneContent, setEditingSceneContent] = React.useState("");
+  const [expandedSceneId, setExpandedSceneId] = React.useState<string | null>(null);
 
   const addScene = () => {
     if (!newSceneContent.trim()) return;
@@ -90,7 +92,7 @@ export function StartingSceneStep({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -16 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className={spacing.section}
+      className={cn(spacing.section, "flex flex-col flex-1 min-h-0")}
     >
       {/* Title */}
       <div className={spacing.tight}>
@@ -115,10 +117,11 @@ export function StartingSceneStep({
       {/* Existing Scenes */}
       <AnimatePresence mode="popLayout">
         {scenes.length > 0 && (
-          <motion.div layout className={spacing.item}>
+          <motion.div layout className={cn(spacing.item, "space-y-2")}>
             {scenes.map((scene, index) => {
               const isEditing = editingSceneId === scene.id;
               const isDefault = defaultSceneId === scene.id;
+              const isExpanded = expandedSceneId === scene.id || isEditing;
               
               return (
                 <motion.div
@@ -134,12 +137,15 @@ export function StartingSceneStep({
                       : "border-white/10 bg-white/5"
                   }`}
                 >
-                  {/* Scene Header */}
-                  <div className={`flex items-center gap-2 border-b px-3.5 py-2.5 ${
-                    isDefault 
-                      ? "border-emerald-400/20 bg-emerald-400/10" 
-                      : "border-white/10 bg-white/5"
-                  }`}>
+                  {/* Scene Header - clickable to expand/collapse */}
+                  <button
+                    onClick={() => !isEditing && setExpandedSceneId(isExpanded ? null : scene.id)}
+                    className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${
+                      isDefault 
+                        ? "border-emerald-400/20 bg-emerald-400/10" 
+                        : "border-white/10 bg-white/5"
+                    }`}
+                  >
                     {/* Scene number badge */}
                     <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${
                       isDefault
@@ -153,77 +159,79 @@ export function StartingSceneStep({
                     {isDefault && (
                       <div className="flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-2 py-0.5">
                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        <span className="text-[10px] font-medium text-emerald-200">Default Scene</span>
+                        <span className="text-[10px] font-medium text-emerald-200">Default</span>
                       </div>
+                    )}
+
+                    {/* Preview text when collapsed */}
+                    {!isExpanded && !isEditing && (
+                      <span className="flex-1 truncate text-sm text-white/50">
+                        {scene.content.slice(0, 50)}{scene.content.length > 50 ? "..." : ""}
+                      </span>
                     )}
                     
-                    {/* Actions */}
-                    <div className="ml-auto flex items-center gap-1.5">
-                      {!isEditing && !isDefault && (
-                        <button
-                          onClick={() => onDefaultSceneIdChange(scene.id)}
-                          className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-white/60 transition active:scale-95 active:bg-white/10"
-                        >
-                          Set Default
-                        </button>
-                      )}
-                      {!isEditing && (
-                        <button
-                          onClick={() => startEditingScene(scene)}
-                          className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/60 transition active:scale-95 active:bg-white/10"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {!isEditing && (
-                        <button
-                          onClick={() => deleteScene(scene.id)}
-                          className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 transition active:bg-red-400/10 active:text-red-400"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Scene Content */}
-                  <div className="p-3.5">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={editingSceneContent}
-                          onChange={(e) => setEditingSceneContent(e.target.value)}
-                          rows={4}
-                          className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
-                          autoFocus
-                        />
-                        <div className="flex justify-end text-[11px] text-white/40">
-                          {wordCount(editingSceneContent)} words
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={cancelEditingScene}
-                            className="flex-1 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-white/70 transition active:scale-95 active:bg-white/10"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={saveEditedScene}
-                            disabled={!editingSceneContent.trim()}
-                            className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
-                              editingSceneContent.trim()
-                                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 active:scale-95 active:bg-emerald-400/30"
-                                : "border border-white/5 bg-white/5 text-white/30"
-                            }`}
-                          >
-                            Save Changes
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm leading-relaxed text-white/90">{scene.content}</p>
+                    {/* Expand indicator */}
+                    {!isEditing && (
+                      <ChevronDown 
+                        className={cn(
+                          "h-4 w-4 text-white/40 transition-transform ml-auto",
+                          isExpanded && "rotate-180"
+                        )} 
+                      />
                     )}
-                  </div>
+                  </button>
+                  
+                  {/* Scene Content - collapsible */}
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-3.5">
+                          <div className="space-y-3">
+                            <p className="text-sm leading-relaxed text-white/90">{scene.content}</p>
+                            
+                            {/* Actions when expanded */}
+                            <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                              {!isDefault && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDefaultSceneIdChange(scene.id);
+                                  }}
+                                  className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-white/60 transition active:scale-95 active:bg-white/10"
+                                >
+                                  Set as Default
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingScene(scene);
+                                }}
+                                className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/60 transition active:scale-95 active:bg-white/10"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteScene(scene.id);
+                                }}
+                                className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 transition active:bg-red-400/10 active:text-red-400"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               );
             })}
@@ -236,7 +244,7 @@ export function StartingSceneStep({
         <textarea
           value={newSceneContent}
           onChange={(e) => setNewSceneContent(e.target.value)}
-          rows={3}
+          rows={8}
           placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
           className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
         />
@@ -247,7 +255,7 @@ export function StartingSceneStep({
           onClick={addScene}
           disabled={!newSceneContent.trim()}
           whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-          className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+          className={`flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
             newSceneContent.trim()
               ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
               : "border border-white/10 bg-white/5 text-white/40"
@@ -258,12 +266,11 @@ export function StartingSceneStep({
         </motion.button>
       </motion.div>
 
-      <p className="text-xs text-white/50">
-        Create multiple starting scenarios. One will be selected when starting a new chat.
-      </p>
-
-      {/* Continue Button */}
-      <div className="pt-2">
+      {/* Continue Button - moved to bottom */}
+      <div className="pt-4 mt-auto space-y-3">
+        <p className="text-xs text-white/50 text-center">
+          Create multiple starting scenarios. One will be selected when starting a new chat.
+        </p>
         <motion.button
           disabled={!canContinue}
           onClick={onContinue}
@@ -284,6 +291,56 @@ export function StartingSceneStep({
           Continue to Details
         </motion.button>
       </div>
+
+      {/* Edit Scene Bottom Menu */}
+      <BottomMenu
+        isOpen={editingSceneId !== null}
+        onClose={cancelEditingScene}
+        title="Edit Scene"
+      >
+        <div className="space-y-4">
+          <textarea
+            value={editingSceneContent}
+            onChange={(e) => setEditingSceneContent(e.target.value)}
+            rows={12}
+            className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/20 focus:outline-none"
+            placeholder="Enter scene content..."
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-white/40">
+              {wordCount(editingSceneContent)} words
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={cancelEditingScene}
+              className={cn(
+                "flex-1 py-3 text-sm font-medium text-white/70 transition",
+                "border border-white/10 bg-white/5",
+                "hover:bg-white/10 hover:text-white",
+                "active:scale-[0.98]",
+                radius.lg
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveEditedScene}
+              disabled={!editingSceneContent.trim()}
+              className={cn(
+                "flex-1 py-3 text-sm font-semibold text-white transition",
+                "bg-gradient-to-r from-emerald-500 to-green-500",
+                "hover:from-emerald-400 hover:to-green-400",
+                "active:scale-[0.98]",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                radius.lg
+              )}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </BottomMenu>
     </motion.div>
   );
 }
