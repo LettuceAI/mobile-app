@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, createBranchedSession, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
+import { createSession, createBranchedSession, createBranchedSessionToCharacter, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
@@ -56,6 +56,7 @@ export interface ChatController {
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
   handleBranchFromMessage: (message: StoredMessage) => Promise<string | null>;
+  handleBranchToCharacter: (message: StoredMessage, targetCharacterId: string) => Promise<{ sessionId: string; characterId: string } | null>;
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
@@ -1027,6 +1028,44 @@ export function useChatController(
     [resetMessageActions, state.session],
   );
 
+  const handleBranchToCharacter = useCallback(
+    async (message: StoredMessage, targetCharacterId: string): Promise<{ sessionId: string; characterId: string } | null> => {
+      if (!state.session) return null;
+
+      dispatch({ type: "SET_ACTION_BUSY", payload: true });
+      dispatch({ type: "SET_ACTION_ERROR", payload: null });
+      dispatch({ type: "SET_ACTION_STATUS", payload: null });
+
+      try {
+        const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+        if (messageIndex === -1) {
+          dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
+          return null;
+        }
+
+        const branchedSession = await createBranchedSessionToCharacter(
+          state.session, 
+          message.id, 
+          targetCharacterId
+        );
+        
+        dispatch({ type: "SET_ACTION_STATUS", payload: "Chat branch created! Redirecting..." });
+        
+        setTimeout(() => {
+          resetMessageActions();
+        }, 500);
+        
+        return { sessionId: branchedSession.id, characterId: targetCharacterId };
+      } catch (err) {
+        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        return null;
+      } finally {
+        dispatch({ type: "SET_ACTION_BUSY", payload: false });
+      }
+    },
+    [resetMessageActions, state.session],
+  );
+
   useEffect(() => {
     return () => {
       if (longPressTimerRef.current !== null) {
@@ -1077,6 +1116,7 @@ export function useChatController(
     handleDeleteMessage,
     handleRewindToMessage,
     handleBranchFromMessage,
+    handleBranchToCharacter,
     handleTogglePin,
     resetMessageActions,
     initializeLongPressTimer: (timer) => {

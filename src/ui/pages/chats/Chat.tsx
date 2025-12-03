@@ -1,9 +1,9 @@
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import type { StoredMessage } from "../../../core/storage/schemas";
+import type { Character, StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
-import { getSession } from "../../../core/storage";
+import { getSession, listCharacters } from "../../../core/storage";
 
 import { useChatController } from "./hooks/useChatController";
 import { replacePlaceholders } from "../../../core/utils/placeholders";
@@ -15,6 +15,9 @@ import {
   LoadingSpinner,
   EmptyState
 } from "./components";
+import { BottomMenu } from "../../components";
+import { useAvatar } from "../../hooks/useAvatar";
+import { radius, cn } from "../../design-tokens";
 
 const LONG_PRESS_DELAY = 450;
 const SCROLL_THRESHOLD = 10; // pixels of movement to cancel long press
@@ -29,6 +32,16 @@ export function ChatConversationPage() {
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
   const [sessionForHeader, setSessionForHeader] = useState(chatController.session);
+
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false);
+  const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
+  const [messageToBranch, setMessageToBranch] = useState<StoredMessage | null>(null);
+
+  useEffect(() => {
+    if (showCharacterSelector) {
+      listCharacters().then(setAvailableCharacters).catch(console.error);
+    }
+  }, [showCharacterSelector]);
 
   // Reload session data when memories change
   const handleSessionUpdate = useCallback(async () => {
@@ -329,10 +342,85 @@ export function ChatConversationPage() {
           }
           return newSessionId;
         }}
+        onBranchToCharacter={(message) => {
+          setMessageToBranch(message);
+          setShowCharacterSelector(true);
+        }}
         handleTogglePin={chatController.handleTogglePin}
         setMessageAction={setMessageAction}
         characterMemoryType={character?.memoryType}
       />
+
+      {/* Character Selection for Branch */}
+      <BottomMenu
+        isOpen={showCharacterSelector}
+        onClose={() => {
+          setShowCharacterSelector(false);
+          setMessageToBranch(null);
+        }}
+        title="Select Character"
+      >
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+          <p className="text-sm text-white/50 mb-4">
+            Choose a character to continue this conversation with:
+          </p>
+          {availableCharacters
+            .filter(c => c.id !== characterId)
+            .map((char) => (
+              <CharacterOption
+                key={char.id}
+                character={char}
+                onClick={async () => {
+                  if (!messageToBranch) return;
+                  const result = await chatController.handleBranchToCharacter(messageToBranch, char.id);
+                  if (result) {
+                    setShowCharacterSelector(false);
+                    setMessageToBranch(null);
+                    navigate(`/chats/${result.characterId}?sessionId=${result.sessionId}`);
+                  }
+                }}
+              />
+            ))}
+          {availableCharacters.filter(c => c.id !== characterId).length === 0 && (
+            <p className="text-center text-white/40 py-8">
+              No other characters available. Create more characters first.
+            </p>
+          )}
+        </div>
+      </BottomMenu>
     </div>
+  );
+}
+
+function CharacterOption({ character, onClick }: { character: Character; onClick: () => void }) {
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-3 p-3 text-left transition",
+        radius.lg,
+        "border border-white/10 bg-white/5",
+        "hover:border-white/20 hover:bg-white/10",
+        "active:scale-[0.99]"
+      )}
+    >
+      <div className={cn("h-10 w-10 overflow-hidden flex-shrink-0", radius.full, "bg-white/10")}>
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-white/50 font-semibold">
+            {character.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-medium text-white truncate">{character.name}</h3>
+        <p className="text-xs text-white/50 truncate">
+          {character.description || "No description"}
+        </p>
+      </div>
+    </button>
   );
 }

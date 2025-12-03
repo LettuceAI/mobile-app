@@ -1,4 +1,4 @@
-import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain, GitBranch } from "lucide-react";
+import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain, GitBranch, Users } from "lucide-react";
 import { BottomMenu, MenuButton } from "../../../components/BottomMenu";
 import type { StoredMessage } from "../../../../core/storage/schemas";
 import { useEffect } from "react";
@@ -23,6 +23,7 @@ interface MessageActionsBottomSheetProps {
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
   handleBranchFromMessage: (message: StoredMessage) => Promise<string | null>;
+  onBranchToCharacter: (message: StoredMessage) => void;
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   setMessageAction: (value: MessageActionState | null) => void;
   characterMemoryType?: string | null;
@@ -43,6 +44,7 @@ export function MessageActionsBottomSheet({
   handleDeleteMessage,
   handleRewindToMessage,
   handleBranchFromMessage,
+  onBranchToCharacter,
   handleTogglePin,
   setMessageAction,
   characterMemoryType,
@@ -173,6 +175,16 @@ export function MessageActionsBottomSheet({
                 description="Create a new chat from this point"
                 color="from-teal-500 to-emerald-600"
                 onClick={() => void handleBranchFromMessage(messageAction.message)}
+                disabled={actionBusy}
+              />
+
+              {/* Branch to different character */}
+              <MenuButton
+                icon={Users}
+                title="Branch to character"
+                description="Continue this conversation with a different character"
+                color="from-violet-500 to-purple-600"
+                onClick={() => onBranchToCharacter(messageAction.message)}
                 disabled={actionBusy}
               />
 

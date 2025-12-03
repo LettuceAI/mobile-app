@@ -334,6 +334,49 @@ export async function createBranchedSession(
   return s;
 }
 
+export async function createBranchedSessionToCharacter(
+  sourceSession: Session,
+  branchAtMessageId: string,
+  targetCharacterId: string
+): Promise<Session> {
+  const messageIndex = sourceSession.messages.findIndex(m => m.id === branchAtMessageId);
+  if (messageIndex === -1) {
+    throw new Error("Message not found in session");
+  }
+
+  const characters = await listCharacters();
+  const targetCharacter = characters.find(c => c.id === targetCharacterId);
+  const characterName = targetCharacter?.name || "Unknown";
+
+  const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
+  const timestamp = now();
+
+  const branchedMessages: StoredMessage[] = sourceSession.messages
+    .slice(0, messageIndex + 1)
+    .filter(msg => msg.role !== "scene")
+    .map(msg => ({
+      ...msg,
+      id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+      createdAt: msg.createdAt,
+    }));
+
+  const s: Session = {
+    id,
+    characterId: targetCharacterId,
+    title: `Branch to ${characterName}`,
+    selectedSceneId: targetCharacter?.defaultSceneId || targetCharacter?.scenes?.[0]?.id,
+    personaId: sourceSession.personaId,
+    memories: [],
+    messages: branchedMessages,
+    archived: false,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  await saveSession(s);
+  return s;
+}
+
 export async function toggleMessagePin(sessionId: string, messageId: string): Promise<Session | null> {
   const updated = await storageBridge.messageTogglePin(sessionId, messageId);
   return updated ? SessionSchema.parse(updated) : null;
