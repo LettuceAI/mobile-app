@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 14;
+const CURRENT_MIGRATION_VERSION: u32 = 15;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -183,6 +183,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v13_to_v14(app)?;
         version = 14;
+    }
+
+    if version < 15 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v14 -> v15: Add attachments column to messages".to_string(),
+        );
+        migrate_v14_to_v15(app)?;
+        version = 15;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -958,6 +968,39 @@ fn migrate_v13_to_v14(app: &AppHandle) -> Result<(), String> {
         "UPDATE models SET model_type = 'chat' WHERE model_type IS NULL",
         [],
     );
+
+    Ok(())
+}
+
+/// Migration v14 -> v15: add attachments column to messages table
+fn migrate_v14_to_v15(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if column already exists
+    let mut has_column = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(messages)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "attachments" {
+            has_column = true;
+            break;
+        }
+    }
+
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT '[]'",
+            [],
+        );
+    }
 
     Ok(())
 }

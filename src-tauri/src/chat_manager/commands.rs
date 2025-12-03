@@ -285,6 +285,85 @@ async fn select_relevant_memories(
         .collect()
 }
 
+use super::types::ImageAttachment;
+use crate::storage_manager::media::storage_save_session_attachment;
+
+fn persist_attachments(
+    app: &AppHandle,
+    character_id: &str,
+    session_id: &str,
+    message_id: &str,
+    role: &str,
+    attachments: Vec<ImageAttachment>,
+) -> Result<Vec<ImageAttachment>, String> {
+    let mut persisted = Vec::new();
+    
+    for attachment in attachments {
+        if attachment.storage_path.is_some() && attachment.data.is_empty() {
+            persisted.push(attachment);
+            continue;
+        }
+        
+        if attachment.data.is_empty() {
+            continue;
+        }
+        
+        let storage_path = storage_save_session_attachment(
+            app.clone(),
+            character_id.to_string(),
+            session_id.to_string(),
+            message_id.to_string(),
+            attachment.id.clone(),
+            role.to_string(),
+            attachment.data.clone(),
+        )?;
+        
+        persisted.push(ImageAttachment {
+            id: attachment.id,
+            data: String::new(),
+            mime_type: attachment.mime_type,
+            filename: attachment.filename,
+            width: attachment.width,
+            height: attachment.height,
+            storage_path: Some(storage_path),
+        });
+    }
+    
+    Ok(persisted)
+}
+
+use crate::storage_manager::media::storage_load_session_attachment;
+
+fn load_attachment_data(app: &AppHandle, message: &StoredMessage) -> StoredMessage {
+    let mut loaded_message = message.clone();
+    
+    loaded_message.attachments = message.attachments.iter().map(|attachment| {
+        if !attachment.data.is_empty() {
+            return attachment.clone();
+        }
+        
+        let storage_path = match &attachment.storage_path {
+            Some(path) => path,
+            None => return attachment.clone(),
+        };
+        
+        match storage_load_session_attachment(app.clone(), storage_path.clone()) {
+            Ok(data) => ImageAttachment {
+                id: attachment.id.clone(),
+                data,
+                mime_type: attachment.mime_type.clone(),
+                filename: attachment.filename.clone(),
+                width: attachment.width,
+                height: attachment.height,
+                storage_path: attachment.storage_path.clone(),
+            },
+            Err(_) => attachment.clone(), 
+        }
+    }).collect();
+    
+    loaded_message
+}
+
 #[tauri::command]
 pub async fn chat_completion(
     app: AppHandle,
@@ -297,6 +376,7 @@ pub async fn chat_completion(
         persona_id,
         stream,
         request_id,
+        attachments,
     } = args;
 
     log_info(
@@ -391,9 +471,20 @@ pub async fn chat_completion(
     let api_key = resolve_api_key(&app, provider_cred, "chat_completion")?;
 
     let now = now_millis()?;
+    
+    let user_msg_id = uuid::Uuid::new_v4().to_string();
+    
+    let persisted_attachments = persist_attachments(
+        &app,
+        &character_id,
+        &session_id,
+        &user_msg_id,
+        "user",
+        attachments,
+    )?;
 
     let user_msg = StoredMessage {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: user_msg_id,
         role: "user".into(),
         content: user_message.clone(),
         created_at: now,
@@ -402,6 +493,7 @@ pub async fn chat_completion(
         selected_variant_id: None,
         memory_refs: Vec::new(),
         is_pinned: false,
+        attachments: persisted_attachments,
     };
     session.messages.push(user_msg.clone());
     session.updated_at = now;
@@ -490,9 +582,10 @@ pub async fn chat_completion(
     // Include pinned messages first (if dynamic memory is enabled)
     // Pinned messages are always included but don't count against the sliding window limit
     for msg in &pinned_msgs {
+        let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
-            msg,
+            &msg_with_data,
             char_name,
             persona_name,
         );
@@ -500,9 +593,10 @@ pub async fn chat_completion(
 
     // Then include recent unpinned messages from sliding window
     for msg in &recent_msgs {
+        let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
-            msg,
+            &msg_with_data,
             char_name,
             persona_name,
         );
@@ -668,6 +762,7 @@ pub async fn chat_completion(
             Vec::new()
         },
         is_pinned: false,
+        attachments: Vec::new(),
     };
 
     session.messages.push(assistant_message.clone());
@@ -883,9 +978,10 @@ pub async fn chat_regenerate(
 
             // Include pinned messages first
             for msg in &pinned_msgs {
+                let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                     &mut out,
-                    msg,
+                    &msg_with_data,
                     char_name,
                     persona_name,
                 );
@@ -893,9 +989,10 @@ pub async fn chat_regenerate(
 
             // Then include recent unpinned messages
             for msg in &recent_msgs {
+                let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                     &mut out,
-                    msg,
+                    &msg_with_data,
                     char_name,
                     persona_name,
                 );
@@ -909,9 +1006,10 @@ pub async fn chat_regenerate(
                 if idx == target_index {
                     continue;
                 }
+                let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                     &mut out,
-                    msg,
+                    &msg_with_data,
                     char_name,
                     persona_name,
                 );
@@ -1234,9 +1332,10 @@ pub async fn chat_continue(
 
     // Include pinned messages first (if dynamic memory is enabled)
     for msg in &pinned_msgs {
+        let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
-            msg,
+            &msg_with_data,
             char_name,
             persona_name,
         );
@@ -1244,9 +1343,10 @@ pub async fn chat_continue(
 
     // Then include recent unpinned messages from sliding window
     for msg in &recent_msgs {
+        let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut messages_for_api,
-            msg,
+            &msg_with_data,
             char_name,
             persona_name,
         );
@@ -1417,6 +1517,7 @@ pub async fn chat_continue(
         selected_variant_id: Some(variant_id),
         memory_refs: Vec::new(),
         is_pinned: false,
+        attachments: Vec::new(),
     };
 
     session.messages.push(assistant_message.clone());

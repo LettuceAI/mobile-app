@@ -56,7 +56,6 @@ pub fn run() {
             providers::openrouter::get_openrouter_models,
             storage_manager::settings::storage_read_settings,
             storage_manager::settings::storage_write_settings,
-            // Legacy file-based storage commands removed from handler
             storage_manager::settings::settings_set_defaults,
             storage_manager::providers::provider_upsert,
             storage_manager::providers::provider_delete,
@@ -104,6 +103,10 @@ pub fn run() {
             storage_manager::media::storage_load_avatar,
             storage_manager::media::storage_delete_avatar,
             storage_manager::media::generate_avatar_gradient,
+            storage_manager::media::storage_save_session_attachment,
+            storage_manager::media::storage_load_session_attachment,
+            storage_manager::media::storage_delete_session_attachments,
+            storage_manager::media::storage_session_attachment_exists,
             storage_manager::db::db_optimize,
             storage_manager::importer::legacy_backup_and_remove,
             chat_manager::chat_completion,

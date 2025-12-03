@@ -42,7 +42,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
     };
 
     // messages
-    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
     let mrows = mstmt
         .query_map(params![id], |r| {
             Ok((
@@ -56,6 +56,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
                 r.get::<_, Option<String>>(7)?,
                 r.get::<_, i64>(8)?,
                 r.get::<_, Option<String>>(9)?,
+                r.get::<_, Option<String>>(10)?,
             ))
         })
         .map_err(|e| e.to_string())?;
@@ -72,6 +73,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
             selected_variant_id,
             is_pinned,
             memory_refs_json,
+            attachments_json,
         ) = mr.map_err(|e| e.to_string())?;
         let mut vstmt = conn.prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens FROM message_variants WHERE message_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
         let vrows = vstmt
@@ -109,6 +111,12 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         if let Some(refs_json) = memory_refs_json {
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(&refs_json) {
                 mobj.insert("memoryRefs".into(), parsed);
+            }
+        }
+        // Parse and insert attachments
+        if let Some(att_json) = attachments_json {
+            if let Ok(parsed) = serde_json::from_str::<JsonValue>(&att_json) {
+                mobj.insert("attachments".into(), parsed);
             }
         }
         messages.push(JsonValue::Object(mobj));
@@ -318,8 +326,12 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                 .get("memoryRefs")
                 .cloned()
                 .unwrap_or_else(|| JsonValue::Array(Vec::new()));
+            let attachments = m
+                .get("attachments")
+                .cloned()
+                .unwrap_or_else(|| JsonValue::Array(Vec::new()));
             tx.execute(
-                "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     &mid,
                     &id,
@@ -331,7 +343,8 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                     tt,
                     selected_variant_id,
                     is_pinned,
-                    memory_refs.to_string()
+                    memory_refs.to_string(),
+                    attachments.to_string()
                 ],
             ).map_err(|e| e.to_string())?;
 

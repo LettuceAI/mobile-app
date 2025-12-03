@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { createSession, createBranchedSession, createBranchedSessionToCharacter, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
-import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
+import type { Character, Persona, Session, StoredMessage, ImageAttachment } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 import { logManager } from "../../../../core/utils/logger";
@@ -32,6 +32,7 @@ export interface ChatController {
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
   activeRequestId: string | null;
+  pendingAttachments: ImageAttachment[];
 
   // Setters 
   setDraft: (value: string) => void;
@@ -42,9 +43,13 @@ export interface ChatController {
   setActionBusy: (value: boolean) => void;
   setEditDraft: (value: string) => void;
   setHeldMessageId: (value: string | null) => void;
+  setPendingAttachments: (attachments: ImageAttachment[]) => void;
+  addPendingAttachment: (attachment: ImageAttachment) => void;
+  removePendingAttachment: (attachmentId: string) => void;
+  clearPendingAttachments: () => void;
 
   // Actions
-  handleSend: (message: string) => Promise<void>;
+  handleSend: (message: string, attachments?: ImageAttachment[]) => Promise<void>;
   handleContinue: () => Promise<void>;
   handleRegenerate: (message: StoredMessage) => Promise<void>;
   handleAbort: () => Promise<void>;
@@ -423,11 +428,14 @@ export function useChatController(
   );
 
   const handleSend = useCallback(
-    async (message: string) => {
+    async (message: string, attachments?: ImageAttachment[]) => {
       if (!state.session || !state.character) return;
       const requestId = crypto.randomUUID();
+      
+      // Use provided attachments or fall back to pending attachments from state
+      const messageAttachments = attachments ?? state.pendingAttachments;
 
-      const userPlaceholder = createPlaceholderMessage("user", message);
+      const userPlaceholder = createPlaceholderMessage("user", message, messageAttachments);
       const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
       dispatch({
@@ -435,7 +443,8 @@ export function useChatController(
         actions: [
           { type: "SET_SENDING", payload: true },
           { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
-          { type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] }
+          { type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] },
+          { type: "CLEAR_PENDING_ATTACHMENTS" }
         ]
       });
 
@@ -464,6 +473,7 @@ export function useChatController(
           personaId: state.persona?.id,
           stream: true,
           requestId,
+          attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
         });
 
         const updatedSession: Session = {
@@ -514,7 +524,7 @@ export function useChatController(
         });
       }
     },
-    [state.character, state.persona?.id, state.session, state.messages],
+    [state.character, state.persona?.id, state.session, state.messages, state.pendingAttachments],
   );
 
   const handleContinue = useCallback(
@@ -1092,6 +1102,7 @@ export function useChatController(
     heldMessageId: state.heldMessageId,
     regeneratingMessageId: state.regeneratingMessageId,
     activeRequestId: state.activeRequestId,
+    pendingAttachments: state.pendingAttachments,
 
     // Setters
     setDraft: useCallback((value: string) => dispatch({ type: "SET_DRAFT", payload: value }), []),
@@ -1102,6 +1113,10 @@ export function useChatController(
     setActionBusy: useCallback((value: boolean) => dispatch({ type: "SET_ACTION_BUSY", payload: value }), []),
     setEditDraft: useCallback((value: string) => dispatch({ type: "SET_EDIT_DRAFT", payload: value }), []),
     setHeldMessageId: useCallback((value: string | null) => dispatch({ type: "SET_HELD_MESSAGE_ID", payload: value }), []),
+    setPendingAttachments: useCallback((attachments: ImageAttachment[]) => dispatch({ type: "SET_PENDING_ATTACHMENTS", payload: attachments }), []),
+    addPendingAttachment: useCallback((attachment: ImageAttachment) => dispatch({ type: "ADD_PENDING_ATTACHMENT", payload: attachment }), []),
+    removePendingAttachment: useCallback((attachmentId: string) => dispatch({ type: "REMOVE_PENDING_ATTACHMENT", payload: attachmentId }), []),
+    clearPendingAttachments: useCallback(() => dispatch({ type: "CLEAR_PENDING_ATTACHMENTS" }), []),
 
     // Actions
     handleSend,
@@ -1132,7 +1147,7 @@ export function useChatController(
   };
 }
 
-function createPlaceholderMessage(role: "user" | "assistant", content: string): StoredMessage {
+function createPlaceholderMessage(role: "user" | "assistant", content: string, attachments?: import("../../../../core/storage/schemas").ImageAttachment[]): StoredMessage {
   return {
     id: `placeholder-${role}-${crypto.randomUUID()}`,
     role,
@@ -1143,5 +1158,6 @@ function createPlaceholderMessage(role: "user" | "assistant", content: string): 
     selectedVariantId: undefined,
     isPinned: false,
     memoryRefs: [],
+    attachments: attachments ?? [],
   };
 }

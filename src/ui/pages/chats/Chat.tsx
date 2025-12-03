@@ -79,6 +79,9 @@ export function ChatConversationPage() {
     heldMessageId,
     setHeldMessageId,
     regeneratingMessageId,
+    pendingAttachments,
+    addPendingAttachment,
+    removePendingAttachment,
     handleSend,
     handleContinue,
     handleRegenerate,
@@ -202,14 +205,16 @@ export function ChatConversationPage() {
     if (sending) return;
     setError(null);
 
-    if (draft.trim()) {
+    const hasContent = draft.trim().length > 0 || pendingAttachments.length > 0;
+    
+    if (hasContent) {
       const content = draft.trim();
       setDraft("");
       await handleSend(content);
     } else {
       await handleContinue();
     }
-  }, [sending, setError, draft, setDraft, handleSend, handleContinue]);
+  }, [sending, setError, draft, setDraft, handleSend, handleContinue, pendingAttachments]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -318,6 +323,9 @@ export function ChatConversationPage() {
           onSendMessage={handleSendMessage}
           onAbort={handleAbort}
           hasBackgroundImage={!!backgroundImageData}
+          pendingAttachments={pendingAttachments}
+          onAddAttachment={addPendingAttachment}
+          onRemoveAttachment={removePendingAttachment}
         />
       </div>
 

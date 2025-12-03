@@ -1,4 +1,4 @@
-import type { Character, Persona, Session, StoredMessage } from "../../../../core/storage/schemas";
+import type { Character, Persona, Session, StoredMessage, ImageAttachment } from "../../../../core/storage/schemas";
 
 export interface MessageActionState {
   message: StoredMessage;
@@ -29,6 +29,9 @@ export interface ChatState {
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
   activeRequestId: string | null;
+  
+  // Attachments
+  pendingAttachments: ImageAttachment[];
 }
 
 export type ChatAction =
@@ -52,7 +55,11 @@ export type ChatAction =
   | { type: "RESET_MESSAGE_ACTIONS" }
   | { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } }
   | { type: "REPLACE_PLACEHOLDER_MESSAGES"; payload: { userPlaceholder: StoredMessage; assistantPlaceholder: StoredMessage; userMessage: StoredMessage; assistantMessage: StoredMessage } }
-  | { type: "REWIND_TO_MESSAGE"; payload: { messageId: string; messages: StoredMessage[] } };
+  | { type: "REWIND_TO_MESSAGE"; payload: { messageId: string; messages: StoredMessage[] } }
+  | { type: "SET_PENDING_ATTACHMENTS"; payload: ImageAttachment[] }
+  | { type: "ADD_PENDING_ATTACHMENT"; payload: ImageAttachment }
+  | { type: "REMOVE_PENDING_ATTACHMENT"; payload: string }
+  | { type: "CLEAR_PENDING_ATTACHMENTS" };
 
 export const initialChatState: ChatState = {
   character: null,
@@ -71,6 +78,7 @@ export const initialChatState: ChatState = {
   heldMessageId: null,
   regeneratingMessageId: null,
   activeRequestId: null,
+  pendingAttachments: [],
 };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -162,6 +170,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         messages: action.payload.messages,
       };
+    
+    case "SET_PENDING_ATTACHMENTS":
+      return { ...state, pendingAttachments: action.payload };
+    
+    case "ADD_PENDING_ATTACHMENT":
+      return { ...state, pendingAttachments: [...state.pendingAttachments, action.payload] };
+    
+    case "REMOVE_PENDING_ATTACHMENT":
+      return { 
+        ...state, 
+        pendingAttachments: state.pendingAttachments.filter(a => a.id !== action.payload) 
+      };
+    
+    case "CLEAR_PENDING_ATTACHMENTS":
+      return { ...state, pendingAttachments: [] };
     
     default:
       return state;

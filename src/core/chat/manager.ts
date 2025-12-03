@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { StoredMessage, UsageSummary } from "../storage/schemas";
+import type { StoredMessage, UsageSummary, ImageAttachment } from "../storage/schemas";
 
 export interface ChatTurnResult {
   sessionId: string;
@@ -28,9 +28,10 @@ export async function sendChatTurn(params: {
   personaId?: string | null;
   stream?: boolean;
   requestId?: string;
+  attachments?: ImageAttachment[];
 }): Promise<ChatTurnResult> {
-  const { sessionId, characterId, message, personaId, stream = true, requestId } = params;
-  if (!message.trim()) {
+  const { sessionId, characterId, message, personaId, stream = true, requestId, attachments = [] } = params;
+  if (!message.trim() && attachments.length === 0) {
     throw new Error("Message cannot be empty");
   }
 
@@ -42,6 +43,7 @@ export async function sendChatTurn(params: {
       personaId: personaId ?? null,
       stream,
       requestId: requestId ?? null,
+      attachments,
     }
   });
 }

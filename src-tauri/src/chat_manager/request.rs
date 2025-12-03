@@ -331,6 +331,7 @@ pub fn ensure_assistant_variant(message: &mut StoredMessage) {
             content: message.content.clone(),
             created_at: message.created_at,
             usage: message.usage.clone(),
+            attachments: Vec::new(),
         });
         message.selected_variant_id = Some(id);
     } else if message.selected_variant_id.is_none() {
@@ -350,5 +351,6 @@ pub fn new_assistant_variant(
         content,
         created_at,
         usage,
+        attachments: Vec::new(),
     }
 }

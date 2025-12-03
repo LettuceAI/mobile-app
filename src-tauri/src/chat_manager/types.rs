@@ -137,6 +137,22 @@ impl Default for AdvancedModelSettings {
     }
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageAttachment {
+    pub id: String,
+    pub data: String,
+    pub mime_type: String,
+    #[serde(default)]
+    pub filename: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    #[serde(default)]
+    pub storage_path: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredMessage {
@@ -154,6 +170,8 @@ pub struct StoredMessage {
     pub memory_refs: Vec<String>,
     #[serde(default)]
     pub is_pinned: bool,
+    #[serde(default)]
+    pub attachments: Vec<ImageAttachment>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -164,6 +182,8 @@ pub struct MessageVariant {
     pub created_at: u64,
     #[serde(default)]
     pub usage: Option<UsageSummary>,
+    #[serde(default)]
+    pub attachments: Vec<ImageAttachment>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -309,6 +329,8 @@ pub struct ChatCompletionArgs {
     pub stream: Option<bool>,
     #[serde(alias = "requestId")]
     pub request_id: Option<String>,
+    #[serde(default)]
+    pub attachments: Vec<ImageAttachment>,
 }
 
 #[derive(Deserialize)]

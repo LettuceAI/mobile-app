@@ -142,7 +142,7 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
 }
 
 pub(crate) fn app_version() -> String {
-    "1.0-beta_4".to_string()
+    "1.0.0-beta.5".to_string()
 }
 
 #[tauri::command]

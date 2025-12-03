@@ -6,6 +6,7 @@ import type { StoredMessage, Character, Persona } from "../../../../core/storage
 import { radius, typography, interactive, cn } from "../../../design-tokens";
 import type { ThemeColors } from "../../../../core/utils/imageAnalysis";
 import { useAvatar } from "../../../hooks/useAvatar";
+import { useSessionAttachments } from "../../../hooks/useSessionAttachment";
 
 interface VariantState {
   total: number;
@@ -200,6 +201,9 @@ function ChatMessageInner({
     [computed.shouldAnimate]
   );
 
+  // Load attachments with lazy loading support for persisted images
+  const loadedAttachments = useSessionAttachments(message.attachments);
+
   return (
     <div
       className={cn(
@@ -248,11 +252,49 @@ function ChatMessageInner({
         {computed.showTypingIndicator ? (
           <TypingIndicator />
         ) : (
-          <MarkdownRenderer 
-            key={message.id + ":" + computed.selectedVariantIndex}
-            content={displayContent ?? message.content} 
-            className="text-inherit" 
-          />
+          <>
+            {/* Display attachments if present (with lazy loading support) */}
+            {loadedAttachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {loadedAttachments.map((attachment) => (
+                  <div 
+                    key={attachment.id}
+                    className={cn(
+                      radius.md,
+                      "overflow-hidden border border-white/15"
+                    )}
+                  >
+                    {attachment.data ? (
+                      <img
+                        src={attachment.data}
+                        alt={attachment.filename || "Attached image"}
+                        className="max-h-48 max-w-full object-contain"
+                        style={{
+                          maxWidth: attachment.width && attachment.width > 300 ? 300 : attachment.width || 300
+                        }}
+                      />
+                    ) : (
+                      // Loading placeholder
+                      <div 
+                        className="flex items-center justify-center bg-white/5"
+                        style={{
+                          width: Math.min(attachment.width || 150, 300),
+                          height: Math.min(attachment.height || 100, 192)
+                        }}
+                      >
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <MarkdownRenderer 
+              key={message.id + ":" + computed.selectedVariantIndex}
+              content={displayContent ?? message.content} 
+              className="text-inherit" 
+            />
+          </>
         )}
 
         {(computed.isAssistant || computed.isScene) && computed.totalVariants > 1 && (
@@ -311,6 +353,7 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     a.content === b.content &&
     a.selectedVariantId === b.selectedVariantId &&
     (a.variants?.length ?? 0) === (b.variants?.length ?? 0) &&
+    (a.attachments?.length ?? 0) === (b.attachments?.length ?? 0) &&
     prev.index === next.index &&
     prev.messagesLength === next.messagesLength &&
     prev.heldMessageId === next.heldMessageId &&

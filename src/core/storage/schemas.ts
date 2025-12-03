@@ -218,7 +218,7 @@ export function getSupportedParameters(providerId: string): (keyof AdvancedModel
 
 export const ImageAttachmentSchema = z.object({
   id: z.string().uuid(),
-  /** Base64 encoded image data or a URL */
+  /** Base64 encoded image data or a URL - may be empty if storagePath is set (lazy loading) */
   data: z.string(),
   /** MIME type (e.g., 'image/png', 'image/jpeg') */
   mimeType: z.string(),
@@ -228,6 +228,8 @@ export const ImageAttachmentSchema = z.object({
   width: z.number().int().optional(),
   /** Height in pixels */
   height: z.number().int().optional(),
+  /** Relative storage path for persisted images (lazy loading) */
+  storagePath: z.string().optional(),
 });
 export type ImageAttachment = z.infer<typeof ImageAttachmentSchema>;
 
