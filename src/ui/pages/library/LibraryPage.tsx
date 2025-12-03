@@ -1,6 +1,6 @@
 import { useEffect, useState, memo } from "react";
 import { motion } from "framer-motion";
-import { listCharacters, listPersonas, deleteCharacter, deletePersona } from "../../../core/storage/repo";
+import { listCharacters, listPersonas, deleteCharacter, deletePersona, createSession } from "../../../core/storage/repo";
 import type { Character, Persona } from "../../../core/storage/schemas";
 import { typography, interactive, cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -49,9 +49,16 @@ export function LibraryPage() {
         setSelectedItem(item);
     };
 
-    const handleStartChat = () => {
+    const handleStartChat = async () => {
         if (selectedItem && selectedItem.itemType === "character") {
-            navigate(`/chat/${selectedItem.id}`);
+            const sceneId = (selectedItem as Character).defaultSceneId || (selectedItem as Character).scenes?.[0]?.id;
+            const session = await createSession(
+                selectedItem.id,
+                `Chat with ${getItemName(selectedItem)}`,
+                sceneId
+            );
+
+            navigate(`/chat/${selectedItem.id}?sessionId=${session.id}`);
             setSelectedItem(null);
         }
     };
@@ -132,21 +139,21 @@ export function LibraryPage() {
                             </div>
                         </div>
                         <h3 className={cn(typography.heading.size, typography.heading.weight, typography.heading.lineHeight, "mb-2 text-center text-white/80")}>
-                            {filter === "All" 
-                                ? "Your library is empty" 
-                                : filter === "Characters" 
-                                    ? "No characters yet" 
+                            {filter === "All"
+                                ? "Your library is empty"
+                                : filter === "Characters"
+                                    ? "No characters yet"
                                     : "No personas yet"}
                         </h3>
                         <p className="mb-6 max-w-[280px] text-center text-sm text-white/50">
-                            {filter === "All" 
-                                ? "Create characters and personas to see them here" 
-                                : filter === "Characters" 
-                                    ? "Create your first character to start chatting" 
+                            {filter === "All"
+                                ? "Create characters and personas to see them here"
+                                : filter === "Characters"
+                                    ? "Create your first character to start chatting"
                                     : "Create a persona to customize your chat identity"}
                         </p>
                         <button
-                            onClick={() => navigate(filter === "Personas" ? "/settings/personas/create" : "/settings/characters/create")}
+                            onClick={() => navigate(filter === "Personas" ? "/personas/create" : "/characters/create")}
                             className="flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-5 py-2.5 text-sm font-medium text-emerald-100 transition active:scale-95 active:bg-emerald-400/30"
                         >
                             <Users className="h-4 w-4" />

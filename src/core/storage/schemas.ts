@@ -216,11 +216,27 @@ export function getSupportedParameters(providerId: string): (keyof AdvancedModel
     .map(([param]) => param as keyof AdvancedModelSettings);
 }
 
+export const ImageAttachmentSchema = z.object({
+  id: z.string().uuid(),
+  /** Base64 encoded image data or a URL */
+  data: z.string(),
+  /** MIME type (e.g., 'image/png', 'image/jpeg') */
+  mimeType: z.string(),
+  /** Original filename if available */
+  filename: z.string().optional(),
+  /** Width in pixels */
+  width: z.number().int().optional(),
+  /** Height in pixels */
+  height: z.number().int().optional(),
+});
+export type ImageAttachment = z.infer<typeof ImageAttachmentSchema>;
+
 export const MessageVariantSchema = z.object({
   id: z.string().uuid(),
   content: z.string(),
   createdAt: z.number().int(),
   usage: UsageSummarySchema.optional().nullable(),
+  attachments: z.array(ImageAttachmentSchema).optional(),
 });
 export type MessageVariant = z.infer<typeof MessageVariantSchema>;
 
@@ -234,6 +250,8 @@ export const MessageSchema = z.object({
   selectedVariantId: z.string().uuid().nullish(),
   isPinned: z.boolean().default(false).optional(),
   memoryRefs: z.array(z.string()).optional().default([]),
+  /** Image attachments for multimodal messages */
+  attachments: z.array(ImageAttachmentSchema).optional(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
 
