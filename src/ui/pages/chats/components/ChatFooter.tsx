@@ -51,15 +51,9 @@ export function ChatFooter({
           className={cn(
             "max-h-32 flex-1 resize-none bg-transparent py-3",
             typography.body.size,
-            "text-white placeholder:text-transparent", // hide native text
+            "text-white placeholder:text-transparent",
             "focus:outline-none"
           )}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !sending) {
-              e.preventDefault();
-              onSendMessage();
-            }
-          }}
           disabled={sending}
         />
 
