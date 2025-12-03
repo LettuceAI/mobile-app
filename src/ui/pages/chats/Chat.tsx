@@ -344,6 +344,7 @@ export function ChatConversationPage() {
         }}
         onBranchToCharacter={(message) => {
           setMessageToBranch(message);
+          closeMessageActions(true); // Close the message actions sheet first
           setShowCharacterSelector(true);
         }}
         handleTogglePin={chatController.handleTogglePin}

@@ -1,7 +1,7 @@
-import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain, GitBranch, Users } from "lucide-react";
-import { BottomMenu, MenuButton } from "../../../components/BottomMenu";
+import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain, GitBranch, Users, type LucideIcon } from "lucide-react";
+import { BottomMenu } from "../../../components/BottomMenu";
 import type { StoredMessage } from "../../../../core/storage/schemas";
-import { useEffect } from "react";
+import { cn, radius } from "../../../design-tokens";
 
 interface MessageActionState {
   message: StoredMessage;
@@ -29,6 +29,51 @@ interface MessageActionsBottomSheetProps {
   characterMemoryType?: string | null;
 }
 
+// Action row component
+function ActionRow({ 
+  icon: Icon, 
+  label, 
+  onClick, 
+  disabled = false,
+  variant = "default",
+  iconBg
+}: { 
+  icon: LucideIcon; 
+  label: string; 
+  onClick: () => void; 
+  disabled?: boolean;
+  variant?: "default" | "danger";
+  iconBg?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex w-full items-center gap-3 px-1 py-2.5 transition-all rounded-lg",
+        "hover:bg-white/5 active:bg-white/10",
+        "disabled:opacity-40 disabled:pointer-events-none",
+        variant === "danger" && "hover:bg-red-500/10"
+      )}
+    >
+      <div className={cn(
+        "flex items-center justify-center w-8 h-8 rounded-lg",
+        iconBg || "bg-white/10"
+      )}>
+        <Icon size={16} className={cn(
+          variant === "danger" ? "text-red-400" : "text-white"
+        )} />
+      </div>
+      <span className={cn(
+        "text-[15px] text-left",
+        variant === "danger" ? "text-red-400" : "text-white/90"
+      )}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export function MessageActionsBottomSheet({
   messageAction,
   actionError,
@@ -50,9 +95,22 @@ export function MessageActionsBottomSheet({
   characterMemoryType,
 }: MessageActionsBottomSheetProps) {
 
-  useEffect(() => {
-    console.log("Character Memory Type:", characterMemoryType, (messageAction?.message.memoryRefs?.length ?? 0) > 0 )
-  }, []);
+  const canEdit = messageAction?.message.role === "assistant" || (() => {
+    const userMessages = messages.filter(m => m.role === "user" && !m.id.startsWith("placeholder"));
+    const latestUserMessage = userMessages[userMessages.length - 1];
+    return latestUserMessage?.id === messageAction?.message.id;
+  })();
+
+  const handleCopy = async () => {
+    if (!messageAction) return;
+    try {
+      await navigator.clipboard?.writeText(messageAction.message.content);
+      setActionStatus("Copied!");
+      setTimeout(() => setActionStatus(null), 1500);
+    } catch (copyError) {
+      setActionError(copyError instanceof Error ? copyError.message : String(copyError));
+    }
+  };
 
   return (
     <BottomMenu
@@ -62,64 +120,54 @@ export function MessageActionsBottomSheet({
       title={messageAction?.message.role === "assistant" ? "Assistant Message" : "User Message"}
     >
       {messageAction && (
-        <div className="space-y-4 text-white">
-          {/* Token usage */}
+        <div className="text-white">
+          {/* Token usage - minimal */}
           {messageAction.message.usage && (
-            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-white/50">Token Usage</span>
-                <span className="text-sm font-medium text-white">
-                  {messageAction.message.usage.totalTokens ?? "—"}
-                </span>
-              </div>
-              <div className="mt-1.5 flex justify-between text-[11px] text-white/40">
-                <span>Prompt: {messageAction.message.usage.promptTokens ?? "—"}</span>
-                <span>Response: {messageAction.message.usage.completionTokens ?? "—"}</span>
-              </div>
+            <div className="flex items-center gap-2 text-xs text-white/40 mb-4">
+              <span>{messageAction.message.usage.promptTokens ?? 0} in</span>
+              <span>·</span>
+              <span>{messageAction.message.usage.completionTokens ?? 0} out</span>
+              <span>·</span>
+              <span className="text-white/60 font-medium">{messageAction.message.usage.totalTokens ?? 0} tokens</span>
             </div>
           )}
 
           {/* Status messages */}
           {actionStatus && (
-            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2">
+            <div className="mb-3 px-3 py-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10">
               <p className="text-sm text-emerald-200">{actionStatus}</p>
             </div>
           )}
           {actionError && (
-            <div className="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2">
+            <div className="mb-3 px-3 py-2 rounded-lg border border-red-400/20 bg-red-400/10">
               <p className="text-sm text-red-200">{actionError}</p>
             </div>
           )}
 
           {messageAction.mode === "view" ? (
-            <div className="space-y-3">
+            <div className="space-y-1">
+              {/* Memories section */}
               {characterMemoryType === "dynamic" &&
                 (messageAction.message.memoryRefs?.length ?? 0) > 0 && (
-                  <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Brain size={14} className="text-emerald-300" />
-                      <span className="text-[11px] font-medium uppercase tracking-wider text-emerald-200/80">Memories Used</span>
+                  <div className="mb-3 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Brain size={14} className="text-emerald-400" />
+                      <span className="text-xs font-medium text-emerald-300">
+                        {messageAction.message.memoryRefs?.length} memories used
+                      </span>
                     </div>
-                    <div className="space-y-1 text-xs leading-relaxed text-emerald-100/70">
-                      {(messageAction.message.memoryRefs || []).slice(0, 8).map((mem, idx) => (
-                        <div key={idx} className="line-clamp-2">
-                          • {mem}
-                        </div>
-                      ))}
+                    <div className="text-xs text-emerald-200/70 line-clamp-2">
+                      {(messageAction.message.memoryRefs || []).slice(0, 2).join(" • ")}
                     </div>
                   </div>
                 )}
 
-              {messageAction.message.role === "assistant" || (() => {
-                const userMessages = messages.filter(m => m.role === "user" && !m.id.startsWith("placeholder"));
-                const latestUserMessage = userMessages[userMessages.length - 1];
-                return latestUserMessage?.id === messageAction.message.id;
-              })() ? (
-                <MenuButton
+              {/* Basic actions */}
+              {canEdit && (
+                <ActionRow
                   icon={Edit3}
-                  title="Edit message"
-                  description="Modify the content"
-                  color="from-indigo-500 to-blue-600"
+                  label="Edit"
+                  iconBg="bg-blue-500/20"
                   onClick={() => {
                     setActionError(null);
                     setActionStatus(null);
@@ -127,75 +175,62 @@ export function MessageActionsBottomSheet({
                     setEditDraft(messageAction.message.content);
                   }}
                 />
-              ) : null}
-
-              {/* Copy action */}
-              <MenuButton
+              )}
+              
+              <ActionRow
                 icon={Copy}
-                title="Copy content"
-                description="Copy to clipboard"
-                color="from-purple-500 to-purple-600"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard?.writeText(messageAction.message.content);
-                    setActionStatus("Copied to clipboard");
-                    setTimeout(() => setActionStatus(null), 1500);
-                  } catch (copyError) {
-                    setActionError(copyError instanceof Error ? copyError.message : String(copyError));
-                  }
-                }}
+                label="Copy"
+                iconBg="bg-violet-500/20"
+                onClick={() => void handleCopy()}
               />
-
-              {/* Pin/Unpin action */}
-              <MenuButton
+              
+              <ActionRow
                 icon={messageAction.message.isPinned ? PinOff : Pin}
-                title={messageAction.message.isPinned ? "Unpin message" : "Pin message"}
-                description={messageAction.message.isPinned ? "Remove pin protection" : "Protect from deletion and rewind"}
-                color="from-blue-500 to-blue-600"
+                label={messageAction.message.isPinned ? "Unpin" : "Pin"}
+                iconBg="bg-amber-500/20"
                 onClick={() => void handleTogglePin(messageAction.message)}
                 disabled={actionBusy}
               />
 
-              {/* Assistant-specific actions */}
+              {/* Separator */}
+              <div className="h-px bg-white/5 my-2" />
+
+              {/* Chat flow actions */}
               {messageAction.message.role === "assistant" && (
-                <MenuButton
+                <ActionRow
                   icon={RotateCcw}
-                  title="Rewind to here"
-                  description="Remove all messages after this point"
-                  color="from-indigo-500 to-blue-600"
+                  label="Rewind to here"
+                  iconBg="bg-cyan-500/20"
                   onClick={() => void handleRewindToMessage(messageAction.message)}
                   disabled={actionBusy}
                 />
               )}
 
-              {/* Branch from here - available for all message types */}
-              <MenuButton
+              <ActionRow
                 icon={GitBranch}
-                title="Branch from here"
-                description="Create a new chat from this point"
-                color="from-teal-500 to-emerald-600"
+                label="Branch from here"
+                iconBg="bg-emerald-500/20"
                 onClick={() => void handleBranchFromMessage(messageAction.message)}
                 disabled={actionBusy}
               />
 
-              {/* Branch to different character */}
-              <MenuButton
+              <ActionRow
                 icon={Users}
-                title="Branch to character"
-                description="Continue this conversation with a different character"
-                color="from-violet-500 to-purple-600"
+                label="Branch to character"
+                iconBg="bg-pink-500/20"
                 onClick={() => onBranchToCharacter(messageAction.message)}
                 disabled={actionBusy}
               />
 
-              {/* Delete action */}
-              <MenuButton
+              {/* Separator */}
+              <div className="h-px bg-white/5 my-2" />
+
+              <ActionRow
                 icon={Trash2}
-                title="Delete message"
-                description={messageAction.message.isPinned ? "Unpin first to delete" : "Remove this message permanently"}
-                color="from-rose-500 to-red-600"
+                label={messageAction.message.isPinned ? "Unpin to delete" : "Delete"}
                 onClick={() => void handleDeleteMessage(messageAction.message)}
                 disabled={actionBusy || messageAction.message.isPinned}
+                variant="danger"
               />
             </div>
           ) : (
@@ -203,10 +238,16 @@ export function MessageActionsBottomSheet({
               <textarea
                 value={editDraft}
                 onChange={(event) => setEditDraft(event.target.value)}
-                rows={4}
-                className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none resize-none"
+                rows={5}
+                className={cn(
+                  "w-full p-3 text-sm text-white placeholder-white/40",
+                  "border border-white/10 bg-black/30",
+                  "focus:border-white/20 focus:outline-none resize-none",
+                  radius.lg
+                )}
                 placeholder="Edit your message..."
                 disabled={actionBusy}
+                autoFocus
               />
               <div className="flex gap-3">
                 <button
@@ -216,14 +257,27 @@ export function MessageActionsBottomSheet({
                     setMessageAction({ message: messageAction.message, mode: "view" });
                     setEditDraft(messageAction.message.content);
                   }}
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+                  className={cn(
+                    "flex-1 px-4 py-3 text-sm font-medium text-white/70 transition",
+                    "border border-white/10 bg-white/5",
+                    "hover:bg-white/10 hover:text-white",
+                    "active:scale-[0.98]",
+                    radius.lg
+                  )}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => void handleSaveEdit()}
                   disabled={actionBusy}
-                  className="flex-1 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={cn(
+                    "flex-1 px-4 py-3 text-sm font-semibold text-white transition",
+                    "bg-emerald-500",
+                    "hover:bg-emerald-400",
+                    "active:scale-[0.98]",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    radius.lg
+                  )}
                 >
                   {actionBusy ? "Saving..." : "Save"}
                 </button>
