@@ -498,7 +498,7 @@ export function ModelsPage() {
             {/* List (TopNav handles title/back) */}
             <div className="flex-1 overflow-y-auto mx-2 py-3 space-y-2">
                 <div
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 py-3 text-white"
+                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 py-3 px-3 text-white"
                 >
                     <button
                         onClick={openAdvancedView}
@@ -515,17 +515,13 @@ export function ModelsPage() {
                                 {advancedSummary}
                             </div>
                         </div>
-
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setShowParameterSupport(true);
-                            }}
-                            className="group/info flex shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95"
-                            aria-label="View parameter support"
-                        >
-                            <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
-                        </button>
+                    </button>
+                    <button
+                        onClick={() => setShowParameterSupport(true)}
+                        className="group/info flex shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95 mx-2"
+                        aria-label="View parameter support"
+                    >
+                        <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
                     </button>
                     <ChevronRight className="h-4 w-4 shrink-0 text-emerald-200" />
                 </div>

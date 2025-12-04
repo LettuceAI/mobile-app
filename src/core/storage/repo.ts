@@ -57,35 +57,26 @@ export async function readSettings(): Promise<Settings> {
   const parsed = SettingsSchema.safeParse(data);
   if (parsed.success) {
     const settings = parsed.data;
-    let needsUpdate = false;
-    for (const model of settings.models) {
-      if (!model.providerLabel) {
-        const providerCred = settings.providerCredentials.find((p) => p.providerId === model.providerId);
-        if (providerCred) {
-          (model as any).providerLabel = providerCred.label;
-          needsUpdate = true;
-        }
+    
+    const modelsWithoutProviderLabel = settings.models.filter(m => !m.providerLabel);
+    const missingAdvancedSettings = !settings.advancedModelSettings;
+    
+    for (const model of modelsWithoutProviderLabel) {
+      const providerCred = settings.providerCredentials.find((p) => p.providerId === model.providerId);
+      if (providerCred) {
+        (model as any).providerLabel = providerCred.label;
       }
     }
-    if (!settings.advancedModelSettings) {
+    
+    if (missingAdvancedSettings) {
       settings.advancedModelSettings = createDefaultAdvancedModelSettings();
-      needsUpdate = true;
+      console.log("[repo] readSettings: Initializing default advanced model settings");
+      await saveAdvancedModelSettings(settings.advancedModelSettings);
     }
-    if (needsUpdate) {
-      console.log("[repo] readSettings: Updating settings with defaults (granular)", {
-        missingProviderLabel: settings.models.some(m => !m.providerLabel),
-        missingAdvancedSettings: !settings.advancedModelSettings
-      });
-      if (!settings.advancedModelSettings) {
-        await saveAdvancedModelSettings(createDefaultAdvancedModelSettings());
-      }
-      // Provider labels are transient/derived, we don't need to persist them back to DB immediately 
-      // unless we want to cache them. For now, we just return the patched object.
-    }
+    
     return settings;
   }
 
-  // If settings don't exist, we still need to initialize the row
   await storageBridge.settingsSetDefaults(null, null);
   return fallback;
 }
