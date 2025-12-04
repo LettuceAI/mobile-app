@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
@@ -7,6 +7,32 @@ import type { Character, Persona, Session, StoredMessage, ImageAttachment } from
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 import { logManager } from "../../../../core/utils/logger";
+
+// Global lock to prevent concurrent session saves
+const sessionSaveQueue = new Map<string, Promise<void>>();
+
+/**
+ * Safely saves a session with locking to prevent race conditions.
+ * Uses per-session locks to allow different sessions to be saved concurrently
+ * but serializes saves to the same session.
+ */
+async function safeSaveSession(session: Session): Promise<void> {
+  const sessionId = session.id;
+  
+  const pendingSave = sessionSaveQueue.get(sessionId);
+  if (pendingSave) {
+    await pendingSave;
+  }
+  
+  const savePromise = saveSession(session).finally(() => {
+    if (sessionSaveQueue.get(sessionId) === savePromise) {
+      sessionSaveQueue.delete(sessionId);
+    }
+  });
+  
+  sessionSaveQueue.set(sessionId, savePromise);
+  return savePromise;
+}
 
 export interface VariantState {
   variants: StoredMessage["variants"];
@@ -144,21 +170,43 @@ export function useChatController(
 ): ChatController {
   const log = logManager({ component: "useChatController" });
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
-  const [settingsVersion, setSettingsVersion] = useState(0);
   const { sessionId } = options;
 
   const longPressTimerRef = useRef<number | null>(null);
+  // Track if a session operation is in progress to prevent race conditions
+  const sessionOperationRef = useRef<boolean>(false);
+  // Track last known session updated_at to detect stale saves
+  const lastKnownSessionTimestampRef = useRef<number>(0);
 
+  // Settings update handling - only reload character info, NOT the session
+  // This prevents the race condition when switching models during active chat
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handler = () => {
-      setSettingsVersion((prev) => prev + 1);
+    const handler = async () => {
+      // Don't reload during active operations
+      if (sessionOperationRef.current) {
+        log.info("Skipping settings reload - session operation in progress");
+        return;
+      }
+      
+      // Only reload character (which contains model info), not session
+      if (characterId && state.character) {
+        try {
+          const list = await listCharacters();
+          const match = list.find((c) => c.id === characterId) ?? null;
+          if (match) {
+            dispatch({ type: "SET_CHARACTER", payload: match });
+          }
+        } catch (err) {
+          log.error("Failed to reload character on settings change", err);
+        }
+      }
     };
     window.addEventListener(SETTINGS_UPDATED_EVENT, handler);
     return () => {
       window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
     };
-  }, []);
+  }, [characterId, state.character, log]);
 
   useEffect(() => {
     if (!characterId) return;
@@ -238,6 +286,8 @@ export function useChatController(
         }
 
         if (!cancelled) {
+          // Track the last known timestamp to detect stale saves
+          lastKnownSessionTimestampRef.current = normalizedSession.updatedAt;
           dispatch({
             type: "BATCH",
             actions: [
@@ -263,7 +313,7 @@ export function useChatController(
     return () => {
       cancelled = true;
     };
-  }, [characterId, sessionId, settingsVersion]);
+  }, [characterId, sessionId]);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -341,9 +391,13 @@ export function useChatController(
       }
 
       try {
-        await saveSession(updatedSession);
+        sessionOperationRef.current = true;
+        await safeSaveSession(updatedSession);
+        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
       } catch (err) {
         console.error("ChatController: failed to persist variant selection", err);
+      } finally {
+        sessionOperationRef.current = false;
       }
     },
     [state.messageAction, state.messages, state.regeneratingMessageId, state.session],
@@ -392,9 +446,13 @@ export function useChatController(
         dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
 
         try {
-          await saveSession(updatedSession);
+          sessionOperationRef.current = true;
+          await safeSaveSession(updatedSession);
+          lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
         } catch (err) {
           console.error("ChatController: failed to persist scene switch", err);
+        } finally {
+          sessionOperationRef.current = false;
         }
 
         return;
@@ -602,10 +660,14 @@ export function useChatController(
               updatedAt: Date.now(),
             };
             try {
-              await saveSession(syncedSession);
+              sessionOperationRef.current = true;
+              await safeSaveSession(syncedSession);
+              lastKnownSessionTimestampRef.current = syncedSession.updatedAt;
               dispatch({ type: "SET_SESSION", payload: syncedSession });
             } catch (saveErr) {
               console.error("ChatController: failed to sync session after continue error", saveErr);
+            } finally {
+              sessionOperationRef.current = false;
             }
           }
         }
@@ -769,7 +831,9 @@ export function useChatController(
       console.log("ChatController: saving session after abort with message IDs:", messagesWithoutPlaceholders.map(m => ({ id: m.id, role: m.role, contentLength: m.content.length })));
 
       try {
-        await saveSession(updatedSession);
+        sessionOperationRef.current = true;
+        await safeSaveSession(updatedSession);
+        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
         dispatch({
           type: "BATCH",
           actions: [
@@ -781,6 +845,8 @@ export function useChatController(
       } catch (saveErr) {
         log.error("failed to save incomplete messages after abort", saveErr);
         dispatch({ type: "SET_MESSAGES", payload: messagesWithoutPlaceholders });
+      } finally {
+        sessionOperationRef.current = false;
       }
 
       dispatch({
@@ -811,7 +877,9 @@ export function useChatController(
           messages: messagesWithoutPlaceholders,
           updatedAt: Date.now(),
         };
-        await saveSession(updatedSession);
+        sessionOperationRef.current = true;
+        await safeSaveSession(updatedSession);
+        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
         dispatch({
           type: "BATCH",
           actions: [
@@ -824,6 +892,8 @@ export function useChatController(
         // Even if everything fails, try to clean up placeholders from UI
         const cleaned = state.messages.filter(msg => !msg.id.startsWith('placeholder-') || msg.content.trim().length > 0);
         dispatch({ type: "SET_MESSAGES", payload: cleaned });
+      } finally {
+        sessionOperationRef.current = false;
       }
 
       dispatch({
@@ -870,13 +940,16 @@ export function useChatController(
         messages: updatedMessages,
         updatedAt: Date.now(),
       };
-      await saveSession(updatedSession);
+      sessionOperationRef.current = true;
+      await safeSaveSession(updatedSession);
+      lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
       dispatch({ type: "SET_SESSION", payload: updatedSession });
       dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
       resetMessageActions();
     } catch (err) {
       dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
     } finally {
+      sessionOperationRef.current = false;
       dispatch({ type: "SET_ACTION_BUSY", payload: false });
     }
   }, [state.editDraft, state.messageAction, resetMessageActions, state.session]);
@@ -902,13 +975,16 @@ export function useChatController(
           messages: updatedMessages,
           updatedAt: Date.now(),
         };
-        await saveSession(updatedSession);
+        sessionOperationRef.current = true;
+        await safeSaveSession(updatedSession);
+        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
         dispatch({ type: "SET_SESSION", payload: updatedSession });
         dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
         resetMessageActions();
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
       } finally {
+        sessionOperationRef.current = false;
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
     },
@@ -951,13 +1027,16 @@ export function useChatController(
           updatedAt: Date.now(),
         };
 
-        await saveSession(updatedSession);
+        sessionOperationRef.current = true;
+        await safeSaveSession(updatedSession);
+        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
         dispatch({ type: "SET_SESSION", payload: updatedSession });
         dispatch({ type: "REWIND_TO_MESSAGE", payload: { messageId: message.id, messages: updatedMessages } });
         resetMessageActions();
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
       } finally {
+        sessionOperationRef.current = false;
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
     },

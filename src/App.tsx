@@ -34,10 +34,33 @@ import { TopNav, BottomNav } from "./ui/components/App";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useAndroidBackHandler } from "./ui/hooks/useAndroidBackHandler";
 import { logManager, isLoggingEnabled } from "./core/utils/logger";
+import { storageBridge } from "./core/storage/files";
 
 const chatLog = logManager({ component: "Chat" });
 
 function App() {
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        storageBridge.dbCheckpoint().catch((err) => {
+          console.warn("Failed to checkpoint database on background:", err);
+        });
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      storageBridge.dbCheckpoint().catch(() => {});
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
     (async () => {

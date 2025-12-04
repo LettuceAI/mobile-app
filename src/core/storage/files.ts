@@ -97,5 +97,8 @@ export const storageBridge = {
     fileCount: number;
     estimatedSessions: number;
     lastUpdatedMs: number | null;
-  }>
+  }>,
+  
+  dbCheckpoint: () => invoke("db_checkpoint") as Promise<void>,
+  dbOptimize: () => invoke("db_optimize") as Promise<void>,
 };

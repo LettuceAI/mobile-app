@@ -108,6 +108,7 @@ pub fn run() {
             storage_manager::media::storage_delete_session_attachments,
             storage_manager::media::storage_session_attachment_exists,
             storage_manager::db::db_optimize,
+            storage_manager::db::db_checkpoint,
             storage_manager::importer::legacy_backup_and_remove,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,

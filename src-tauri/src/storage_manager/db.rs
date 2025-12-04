@@ -369,3 +369,14 @@ pub fn db_optimize(app: tauri::AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Force a WAL checkpoint to ensure all pending writes are persisted.
+/// This should be called when the app is about to be backgrounded or closed.
+#[tauri::command]
+pub fn db_checkpoint(app: tauri::AppHandle) -> Result<(), String> {
+    let conn = open_db(&app)?;
+    // PRAGMA wal_checkpoint(TRUNCATE) forces a full checkpoint and truncates the WAL file
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+        .map_err(|e| format!("WAL checkpoint failed: {}", e))?;
+    Ok(())
+}
