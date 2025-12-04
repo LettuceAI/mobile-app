@@ -46,7 +46,7 @@ export function CreatePersonaForm({
         <p className="text-sm text-white/50">Define a reusable writing style</p>
       </div>
 
-      <div className="space-y-5 rounded-2xl p-4">
+      <div className="space-y-5 rounded-2xl">
         {/* Avatar Section */}
         <div className="flex flex-col items-center py-4">
           <div className="relative">
