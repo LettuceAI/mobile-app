@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, Upload, FileArchive, Lock, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 import {
   setOnboardingCompleted,
   setOnboardingSkipped,
 } from "../../../core/storage/appState";
+import { storageBridge } from "../../../core/storage/files";
 import logoSvg from "../../../assets/logo.svg";
 import { typography, radius, spacing, interactive, shadows, colors, cn } from "../../design-tokens";
 
 export function WelcomePage() {
   const navigate = useNavigate();
   const [showSkipWarning, setShowSkipWarning] = useState(false);
+  const [showRestoreBackup, setShowRestoreBackup] = useState(false);
 
   const handleAddProvider = () => {
     navigate("/onboarding/provider");
@@ -21,6 +23,11 @@ export function WelcomePage() {
   const handleConfirmSkip = async () => {
     await setOnboardingCompleted(true);
     await setOnboardingSkipped(true);
+    navigate("/chat");
+  };
+
+  const handleRestoreComplete = async () => {
+    await setOnboardingCompleted(true);
     navigate("/chat");
   };
 
@@ -154,6 +161,22 @@ export function WelcomePage() {
           >
             Skip for now
           </button>
+
+          <button
+            className={cn(
+              "w-full flex items-center justify-center gap-2 px-6 py-3",
+              radius.md,
+              "border border-white/10 bg-white/5 text-white/60",
+              typography.body.size,
+              interactive.transition.default,
+              interactive.active.scale,
+              "hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80"
+            )}
+            onClick={() => setShowRestoreBackup(true)}
+          >
+            <Upload size={16} />
+            Restore from Backup
+          </button>
         </motion.div>
 
         {/* Bottom hint */}
@@ -176,6 +199,13 @@ export function WelcomePage() {
           onClose={() => setShowSkipWarning(false)}
           onConfirm={handleConfirmSkip}
           onAddProvider={handleAddProvider}
+        />
+      )}
+
+      {showRestoreBackup && (
+        <RestoreBackupModal
+          onClose={() => setShowRestoreBackup(false)}
+          onComplete={handleRestoreComplete}
         />
       )}
     </div>
@@ -308,6 +338,321 @@ function SkipWarning({
           >
             Skip anyway
           </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+interface BackupInfo {
+  version: number;
+  createdAt: number;
+  appVersion: string;
+  encrypted: boolean;
+  totalFiles: number;
+  path: string;
+  filename: string;
+}
+
+function RestoreBackupModal({
+  onClose,
+  onComplete,
+}: {
+  onClose: () => void;
+  onComplete: () => void | Promise<void>;
+}) {
+  const [isExiting, setIsExiting] = useState(false);
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedBackup, setSelectedBackup] = useState<BackupInfo | null>(null);
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load backups on mount
+  useEffect(() => {
+    loadBackups();
+  }, []);
+
+  const loadBackups = async () => {
+    try {
+      setLoading(true);
+      const list = await storageBridge.backupList();
+      setBackups(list);
+    } catch (e) {
+      console.error("Failed to load backups:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (restoring) return;
+    setIsExiting(true);
+    setTimeout(onClose, 200);
+  };
+
+  const handleRestore = async () => {
+    if (!selectedBackup) return;
+
+    if (selectedBackup.encrypted && password.length < 1) {
+      setError("Password is required");
+      return;
+    }
+
+    try {
+      setError(null);
+      setRestoring(true);
+
+      if (selectedBackup.encrypted) {
+        const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, password);
+        if (!valid) {
+          setError("Incorrect password");
+          setRestoring(false);
+          return;
+        }
+      }
+
+      await storageBridge.backupImport(
+        selectedBackup.path,
+        selectedBackup.encrypted ? password : undefined
+      );
+
+      setIsExiting(true);
+      setTimeout(() => {
+        alert("Backup restored! The app will now reload.");
+        void onComplete();
+      }, 200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Restore failed");
+      setRestoring(false);
+    }
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isExiting ? 0 : 1 }}
+      transition={{ duration: 0.2 }}
+      onClick={handleClose}
+    >
+      <motion.div
+        className={cn(
+          "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6",
+          "rounded-t-3xl sm:rounded-3xl sm:mb-8",
+          "max-h-[80vh] overflow-hidden flex flex-col",
+          shadows.xl
+        )}
+        initial={{ y: "100%", opacity: 0 }}
+        animate={{
+          y: isExiting ? "100%" : 0,
+          opacity: isExiting ? 0 : 1
+        }}
+        transition={{
+          type: "spring",
+          damping: 30,
+          stiffness: 350,
+          duration: 0.2
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={cn(typography.h2.size, typography.h2.weight, "text-white")}>
+            Restore Backup
+          </h3>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto space-y-4">
+          {!selectedBackup ? (
+            <>
+              <p className={cn(typography.bodySmall.size, "text-white/50")}>
+                Select a backup from your Downloads folder to restore.
+              </p>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-white/30" />
+                </div>
+              ) : backups.length === 0 ? (
+                <div className={cn("border border-white/10 bg-white/5 p-6 text-center", radius.md)}>
+                  <FileArchive className="mx-auto h-8 w-8 text-white/20" />
+                  <p className="mt-3 text-sm text-white/40">No backups found</p>
+                  <p className="mt-1 text-xs text-white/30">
+                    Place .lettuce files in your Downloads folder
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {backups.map((backup) => (
+                    <button
+                      key={backup.path}
+                      onClick={() => {
+                        setSelectedBackup(backup);
+                        setPassword("");
+                        setError(null);
+                      }}
+                      className={cn(
+                        "w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left",
+                        interactive.transition.default,
+                        "hover:border-white/20 hover:bg-white/[0.08]",
+                        "active:scale-[0.99]"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10">
+                          <FileArchive className="h-4 w-4 text-white/60" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium text-white">{backup.filename}</p>
+                            {backup.encrypted && <Lock className="h-3 w-3 shrink-0 text-amber-400/70" />}
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-white/40">
+                            {formatDate(backup.createdAt)} · v{backup.appVersion}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Selected backup info */}
+              <div className={cn("border border-white/10 bg-white/5 p-3", radius.md)}>
+                <div className="flex items-center gap-3">
+                  <FileArchive className="h-6 w-6 text-white/40" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">{selectedBackup.filename}</p>
+                    <p className="text-xs text-white/40">
+                      {formatDate(selectedBackup.createdAt)} · v{selectedBackup.appVersion}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info notice */}
+              <div className={cn(
+                "flex items-start gap-2 border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs text-blue-200",
+                radius.md
+              )}>
+                <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>This will set up the app with your backed up data, including characters, chats, and settings.</span>
+              </div>
+
+              {error && (
+                <div className={cn(
+                  "flex items-center gap-2 border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200",
+                  radius.md
+                )}>
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+
+              {selectedBackup.encrypted && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/50">Backup Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter password"
+                      className={cn(
+                        "w-full border border-white/10 bg-white/5 px-4 py-3 pr-12 text-white placeholder-white/30",
+                        radius.lg,
+                        "focus:border-white/20 focus:outline-none"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className={cn("flex flex-col pt-4", spacing.field)}>
+          {selectedBackup ? (
+            <>
+              <button
+                onClick={handleRestore}
+                disabled={restoring || (selectedBackup.encrypted && password.length < 1)}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-6 py-3",
+                  radius.md,
+                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                  typography.body.size,
+                  typography.h3.weight,
+                  interactive.transition.fast,
+                  interactive.active.scale,
+                  "hover:border-emerald-400/60 hover:bg-emerald-400/30",
+                  "disabled:opacity-50"
+                )}
+              >
+                {restoring ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Restoring...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    Restore Backup
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setSelectedBackup(null)}
+                disabled={restoring}
+                className={cn(
+                  "px-6 py-3",
+                  radius.md,
+                  "border border-white/10 bg-white/5 text-white/60",
+                  typography.body.size,
+                  interactive.transition.fast,
+                  interactive.active.scale,
+                  "hover:border-white/20 hover:bg-white/10 hover:text-white",
+                  "disabled:opacity-50"
+                )}
+              >
+                Back
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleClose}
+              className={cn(
+                "px-6 py-3",
+                radius.md,
+                "border border-white/10 bg-white/5 text-white/60",
+                typography.body.size,
+                interactive.transition.fast,
+                interactive.active.scale,
+                "hover:border-white/20 hover:bg-white/10 hover:text-white"
+              )}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </motion.div>
     </motion.div>
