@@ -21,6 +21,7 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
     if (basePath === "/settings/models" || basePath.startsWith("/settings/models/")) return "Models";
     if (basePath === "/settings/security") return "Security";
     if (basePath === "/settings/reset") return "Reset";
+    if (basePath === "/settings/backup") return "Backup & Restore";
     if (basePath === "/settings/usage") return "Usage Analytics";
     if (basePath === "/settings/changelog") return "Changelog";
     if (basePath === "/settings/prompts/new") return "Create Template";

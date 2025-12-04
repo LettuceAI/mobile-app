@@ -6,3 +6,4 @@ export * from "./SystemPromptsPage";
 export * from "./SecurityPage";
 export * from "./ResetPage";
 export * from "./UsagePage";
+export * from "./BackupRestorePage";

@@ -101,4 +101,33 @@ export const storageBridge = {
   
   dbCheckpoint: () => invoke("db_checkpoint") as Promise<void>,
   dbOptimize: () => invoke("db_optimize") as Promise<void>,
+
+  // Full app backup/restore
+  backupExport: (password?: string) => invoke<string>("backup_export", { password: password ?? null }),
+  backupImport: (backupPath: string, password?: string) => invoke("backup_import", { backupPath, password: password ?? null }) as Promise<void>,
+  backupCheckEncrypted: (backupPath: string) => invoke<boolean>("backup_check_encrypted", { backupPath }),
+  backupVerifyPassword: (backupPath: string, password: string) => invoke<boolean>("backup_verify_password", { backupPath, password }),
+  backupGetInfo: (backupPath: string) => invoke<{
+    version: number;
+    createdAt: number;
+    appVersion: string;
+    encrypted: boolean;
+    totalFiles: number;
+    imageCount: number;
+    avatarCount: number;
+    attachmentCount: number;
+  }>("backup_get_info", { backupPath }),
+  backupList: () => invoke<Array<{
+    version: number;
+    createdAt: number;
+    appVersion: string;
+    encrypted: boolean;
+    totalFiles: number;
+    imageCount: number;
+    avatarCount: number;
+    attachmentCount: number;
+    path: string;
+    filename: string;
+  }>>("backup_list"),
+  backupDelete: (backupPath: string) => invoke("backup_delete", { backupPath }) as Promise<void>,
 };

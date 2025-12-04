@@ -13,6 +13,7 @@ import { SystemPromptsPage } from "./ui/pages/settings/SystemPromptsPage";
 import { EditPromptTemplate } from "./ui/pages/settings/EditPromptTemplate";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
+import { BackupRestorePage } from "./ui/pages/settings/BackupRestorePage";
 import { UsagePage } from "./ui/pages/settings/UsagePage";
 import { CharactersPage } from "./ui/pages/settings/CharactersPage";
 import { DeveloperPage } from "./ui/pages/settings/DeveloperPage";
@@ -263,6 +264,7 @@ function AppContent() {
               <Route path="/settings/changelog" element={<ChangelogPage />} />
               <Route path="/settings/developer" element={<DeveloperPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />
+              <Route path="/settings/backup" element={<BackupRestorePage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />

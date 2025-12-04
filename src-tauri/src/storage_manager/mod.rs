@@ -1,3 +1,4 @@
+pub mod backup;
 pub mod character_transfer;
 pub mod characters;
 pub mod db;

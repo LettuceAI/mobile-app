@@ -46,6 +46,7 @@ export const BACK_MAPPINGS: BackMapping[] = [
   { match: (p) => p.startsWith("/settings/embedding-download"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-test"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/security"), target: Routes.settings },
+  { match: (p) => p.startsWith("/settings/backup"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings/usage"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings/changelog"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings/developer"), target: Routes.settings },
