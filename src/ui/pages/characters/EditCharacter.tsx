@@ -90,7 +90,7 @@ export function EditCharacterPage() {
           </AnimatePresence>
 
           {/* Avatar & Name Card */}
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-linear-to-br from-white/5 to-white/2">
+          <div className="rounded-2xl border border-white/10 bg-linear-to-br from-white/5 to-white/2">
             <div className="flex items-center gap-4 p-4">
               {/* Avatar */}
               <div className="relative h-16 w-16 shrink-0">

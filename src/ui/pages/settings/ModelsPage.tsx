@@ -496,41 +496,41 @@ export function ModelsPage() {
     return (
         <div className="flex h-full flex-col">
             {/* List (TopNav handles title/back) */}
-            <div className="flex-1 overflow-y-auto mx-2 py-3 space-y-2">
-                <div
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-400/10 py-3 px-3 text-white"
+            <div className="flex-1 overflow-y-auto mx-3 py-3 space-y-3">
+                {/* Response Style Card - Special treatment */}
+                <button
+                    onClick={openAdvancedView}
+                    className="group w-full rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-500/15 via-emerald-400/10 to-teal-500/5 p-4 text-left transition-all active:scale-[0.98]"
                 >
-                    <button
-                        onClick={openAdvancedView}
-                        className="flex flex-1 items-center gap-3 text-left transition active:scale-[0.99]"
-                    >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-100">
-                            <SlidersHorizontal className="h-4 w-4" />
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-400/20 text-emerald-300 shadow-lg shadow-emerald-900/20">
+                            <SlidersHorizontal className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 text-sm font-medium text-white">
-                                <span>Response Style</span>
-                            </div>
-                            <div className="mt-0.5 truncate text-xs text-emerald-100/80">
-                                {advancedSummary}
-                            </div>
+                            <span className="text-[15px] font-semibold text-white">Response Style</span>
+                            <div className="mt-1 text-xs text-emerald-200/70">{advancedSummary}</div>
+                            <span
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowParameterSupport(true);
+                                }}
+                                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/70 transition-all hover:bg-white/20 hover:text-white active:scale-95"
+                            >
+                                <Info className="h-3.5 w-3.5" />
+                                Parameter Support
+                            </span>
                         </div>
-                    </button>
-                    <button
-                        onClick={() => setShowParameterSupport(true)}
-                        className="group/info flex shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/5 p-1.5 transition-all hover:border-blue-400/40 hover:bg-blue-400/10 hover:shadow-lg hover:shadow-blue-400/20 active:scale-95 mx-2"
-                        aria-label="View parameter support"
-                    >
-                        <Info className="h-3.5 w-3.5 text-blue-400 transition-transform group-hover/info:scale-110" />
-                    </button>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-emerald-200" />
-                </div>
+                        <ChevronRight className="h-5 w-5 shrink-0 text-emerald-300/50 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-300/80" />
+                    </div>
+                </button>
 
                 {models.length === 0 && (
                     <EmptyState
                         onCreate={() => toNewModel()}
                     />
                 )}
+                
+                {/* Model Cards */}
                 {models.map(model => {
                     const isDefault = model.id === defaultModelId;
                     const providerInfo = providers.find(p => p.providerId === model.providerId);
@@ -538,27 +538,31 @@ export function ModelsPage() {
                         <button
                             key={model.id}
                             onClick={() => toEditModel(model.id)}
-                            className={`group w-full rounded-xl border px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-white/20 active:scale-[0.99] ${isDefault ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'}`}
+                            className={`group w-full rounded-2xl border p-4 text-left transition-all active:scale-[0.98] ${
+                                isDefault 
+                                    ? 'border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 to-transparent' 
+                                    : 'border-white/10 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.06]'
+                            }`}
                         >
                             <div className="flex items-center gap-3">
-                                <div className="flex-1 min-w-0">
+                                <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="truncate text-sm font-medium text-white">{model.displayName || model.name}</span>
+                                        <span className="truncate text-[15px] font-medium text-white">{model.displayName || model.name}</span>
                                         {isDefault && (
-                                            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
-                                                <Check className="h-3 w-3" />
-                                                DEFAULT
+                                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-400/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                                                <Check className="h-2.5 w-2.5" />
+                                                Default
                                             </span>
                                         )}
                                     </div>
-                                    <div className="mt-0.5 flex items-center gap-1 text-[11px] text-white/50">
-                                        <code className="rounded bg-black/40 px-1 py-[1px] font-mono text-[10px]">{model.name}</code>
-                                        <span className="opacity-40">•</span>
-                                        <span className="truncate">{model.providerLabel || providerInfo?.label}</span>
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                        <code className="rounded-md bg-black/30 px-1.5 py-0.5 font-mono text-[10px] text-white/40">{model.name}</code>
+                                        <span className="text-white/20">·</span>
+                                        <span className="text-[11px] text-white/40">{model.providerLabel || providerInfo?.label}</span>
                                         {model.modelType && model.modelType !== "chat" && (
                                             <>
-                                                <span className="opacity-40">•</span>
-                                                <span className="rounded bg-blue-400/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-200">
+                                                <span className="text-white/20">·</span>
+                                                <span className="rounded-md bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">
                                                     {model.modelType === "multimodel" ? "Multimodel" :
                                                         model.modelType === "imagegeneration" ? "Image Gen" :
                                                             model.modelType === "embedding" ? "Embedding" :
@@ -568,7 +572,7 @@ export function ModelsPage() {
                                         )}
                                     </div>
                                 </div>
-                                <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60 transition" />
+                                <ChevronRight className="h-4 w-4 text-white/20 transition-all group-hover:translate-x-0.5 group-hover:text-white/40" />
                             </div>
                         </button>
                     );
