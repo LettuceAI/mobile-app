@@ -302,11 +302,23 @@ export async function createBranchedSession(
 
   const branchedMessages: StoredMessage[] = sourceSession.messages
     .slice(0, messageIndex + 1)
-    .map(msg => ({
-      ...msg,
-      id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
-      createdAt: msg.createdAt,
-    }));
+    .map(msg => {
+      const newVariants = msg.variants?.map(v => ({
+        ...v,
+        id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+      }));
+
+      const newSelectedVariantId = msg.selectedVariantId && msg.variants
+        ? newVariants?.[msg.variants.findIndex(v => v.id === msg.selectedVariantId)]?.id
+        : undefined;
+      return {
+        ...msg,
+        id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+        createdAt: msg.createdAt,
+        variants: newVariants,
+        selectedVariantId: newSelectedVariantId,
+      };
+    });
 
   const s: Session = {
     id,
@@ -345,11 +357,23 @@ export async function createBranchedSessionToCharacter(
   const branchedMessages: StoredMessage[] = sourceSession.messages
     .slice(0, messageIndex + 1)
     .filter(msg => msg.role !== "scene")
-    .map(msg => ({
-      ...msg,
-      id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
-      createdAt: msg.createdAt,
-    }));
+    .map(msg => {
+      const newVariants = msg.variants?.map(v => ({
+        ...v,
+        id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+      }));
+
+      const newSelectedVariantId = msg.selectedVariantId && msg.variants
+        ? newVariants?.[msg.variants.findIndex(v => v.id === msg.selectedVariantId)]?.id
+        : undefined;
+      return {
+        ...msg,
+        id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
+        createdAt: msg.createdAt,
+        variants: newVariants,
+        selectedVariantId: newSelectedVariantId,
+      };
+    });
 
   const s: Session = {
     id,
