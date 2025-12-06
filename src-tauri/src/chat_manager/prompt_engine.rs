@@ -46,7 +46,6 @@ pub fn default_dynamic_summary_prompt() -> String {
     You receive:
     - the previous global summary (if any)
     - the newest conversation window
-    - A placeholder for the previous summary: {{prev_summary}}
 
     Your job:
     1. Merge the new events into the existing summary.
