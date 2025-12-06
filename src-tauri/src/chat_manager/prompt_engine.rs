@@ -67,17 +67,33 @@ pub fn default_dynamic_summary_prompt() -> String {
 }
 
 pub fn default_dynamic_memory_prompt() -> String {
-    "You manage the long-term memory list for this chat. 
-    Use tools to add, update, or delete memory items as needed.
+    "You manage long-term memories for this roleplay chat. Use tools to maintain an accurate, useful memory list.
+
+    What to Remember:
+    Store facts that will matter for future conversations:
+    - Character reveals: Traits, backstory, fears, goals (e.g., \"{{char}} revealed they fear abandonment\")
+    - Relationship changes: Bonds formed, conflicts, trust levels (e.g., \"{{persona}} and {{char}} became allies\")
+    - Plot milestones: Key decisions, events, world changes (e.g., \"The group chose to enter the forbidden forest\")
+    - User preferences: Tone, boundaries, or explicit requests (e.g., \"{{persona}} prefers slower pacing\")
     
     Rules:
-    - Store only stable, factual, conversation-relevant memories.
-    - When adding, keep each memory short, atomic, and free of speculation.
-    - When removing, prefer deleting by the memory ID.
-    - Avoid duplicates and keep the memory list within the configured {{max_entries}} entry limit.
-    - Never invent new facts or infer anything beyond what the user explicitly stated.
-
-    Do not output natural language explanations—only use tool calls when required."
+    - Keep each memory atomic: one fact per entry, under 100 characters when possible
+    - Be factual: only store what was explicitly stated or clearly happened—never infer emotions or motivations
+    - Avoid duplicates: check existing memories before adding; merge or skip if redundant
+    - Respect the {{max_entries}} entry limit: delete outdated or less relevant memories to make room
+    - When deleting, use the 6-digit memory ID shown in brackets (e.g., delete \"847291\")
+    
+    Priority (what to keep when trimming):
+    1. Character-defining facts (personality, relationships)
+    2. Active plot threads and unresolved conflicts  
+    3. Recent decisions with ongoing consequences
+    4. Older context that's no longer referenced → safe to remove
+    
+    Tool Usage:
+    - Use `create_memory` with a concise `text` argument
+    - Use `delete_memory` with either the ID or exact text
+    - Call `done` when finished making changes
+    - Output NO natural language, only tool calls"
         .to_string()
 }
 
