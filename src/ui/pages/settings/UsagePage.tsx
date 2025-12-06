@@ -217,6 +217,20 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
                 </div>
               )}
 
+              {request.memoryTokens !== undefined && request.memoryTokens > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-white/40">Memory</span>
+                  <span className="text-white/60">{request.memoryTokens.toLocaleString()} tokens</span>
+                </div>
+              )}
+
+              {request.summaryTokens !== undefined && request.summaryTokens > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-white/40">Summary</span>
+                  <span className="text-white/60">{request.summaryTokens.toLocaleString()} tokens</span>
+                </div>
+              )}
+
               {request.completionTokens !== undefined && (
                 <div className="flex justify-between text-xs">
                   <span className="text-white/40">Output</span>
