@@ -15,6 +15,7 @@ import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
 import { BackupRestorePage } from "./ui/pages/settings/BackupRestorePage";
 import { UsagePage } from "./ui/pages/settings/UsagePage";
+import { LogsPage } from "./ui/pages/settings/LogsPage";
 import { CharactersPage } from "./ui/pages/settings/CharactersPage";
 import { DeveloperPage } from "./ui/pages/settings/DeveloperPage";
 import { ChangelogPage } from "./ui/pages/settings/ChangelogPage";
@@ -257,6 +258,7 @@ function AppContent() {
               <Route path="/settings/prompts/:id" element={<EditPromptTemplate />} />
               <Route path="/settings/security" element={<SecurityPage />} />
               <Route path="/settings/usage" element={<UsagePage />} />
+              <Route path="/settings/logs" element={<LogsPage />} />
               <Route path="/settings/advanced" element={<AdvancedPage />} />
               <Route path="/settings/advanced/memory" element={<DynamicMemoryPage />} />
               <Route path="/settings/embedding-download" element={<EmbeddingDownloadPage />} />

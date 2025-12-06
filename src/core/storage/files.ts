@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
 
 async function readJsonCommand<T>(command: string, args?: Record<string, unknown>, fallback?: T): Promise<T | null> {
   try {
@@ -98,7 +100,7 @@ export const storageBridge = {
     estimatedSessions: number;
     lastUpdatedMs: number | null;
   }>,
-  
+
   dbCheckpoint: () => invoke("db_checkpoint") as Promise<void>,
   dbOptimize: () => invoke("db_optimize") as Promise<void>,
 
@@ -130,4 +132,63 @@ export const storageBridge = {
     filename: string;
   }>>("backup_list"),
   backupDelete: (backupPath: string) => invoke("backup_delete", { backupPath }) as Promise<void>,
+
+  // Byte-based operations for Android content URI support
+  backupGetInfoFromBytes: (data: Uint8Array) => invoke<{
+    version: number;
+    createdAt: number;
+    appVersion: string;
+    encrypted: boolean;
+    totalFiles: number;
+    imageCount: number;
+    avatarCount: number;
+    attachmentCount: number;
+  }>("backup_get_info_from_bytes", { data: Array.from(data) }),
+  backupCheckEncryptedFromBytes: (data: Uint8Array) => invoke<boolean>("backup_check_encrypted_from_bytes", { data: Array.from(data) }),
+  backupVerifyPasswordFromBytes: (data: Uint8Array, password: string) => invoke<boolean>("backup_verify_password_from_bytes", { data: Array.from(data), password }),
+  backupImportFromBytes: (data: Uint8Array, password?: string) => invoke("backup_import_from_bytes", { data: Array.from(data), password: password ?? null }) as Promise<void>,
+
+  backupPickFile: async (): Promise<{ data: Uint8Array; filename: string } | null> => {
+    try {
+      const selected = await open({
+        multiple: false,
+      });
+
+      if (!selected) return null;
+
+      console.log("[backupPickFile] Selected file:", selected);
+
+      const data = await readFile(selected);
+
+      console.log("[backupPickFile] Read file, size:", data.length);
+
+      if (data.length === 0) {
+        throw new Error("File is empty or could not be read");
+      }
+
+      let filename: string;
+      console.log("[backupPickFile] Selected file type:", selected);
+      if (typeof selected === "string") {
+        const parts = selected.split("/");
+        filename = parts[parts.length - 1] || "backup.lettuce";
+        if (filename.startsWith("content:") || filename.includes("%")) {
+          filename = "backup.lettuce";
+        }
+      } else {
+        filename = "backup.lettuce";
+      }
+
+      // Ensure .lettuce extension
+      if (!filename.endsWith(".lettuce") && !filename.endsWith(".zip")) {
+        filename = filename + ".lettuce";
+      }
+
+      console.log("[backupPickFile] Filename:", filename, "Data size:", data.length);
+
+      return { data, filename };
+    } catch (error) {
+      console.error("[backupPickFile] Error:", error);
+      throw error;
+    }
+  },
 };

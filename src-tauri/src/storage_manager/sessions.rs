@@ -144,10 +144,10 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
     // Parse memories JSON array
     let memories: JsonValue =
         serde_json::from_str(&memories_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
-    let memory_embeddings: JsonValue = serde_json::from_str(&memory_embeddings_json)
-        .unwrap_or_else(|_| JsonValue::Array(vec![]));
-    let memory_tool_events: JsonValue = serde_json::from_str(&memory_tool_events_json)
-        .unwrap_or_else(|_| JsonValue::Array(vec![]));
+    let memory_embeddings: JsonValue =
+        serde_json::from_str(&memory_embeddings_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
+    let memory_tool_events: JsonValue =
+        serde_json::from_str(&memory_tool_events_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
 
     let session = serde_json::json!({
         "id": id,
@@ -477,7 +477,11 @@ pub async fn session_add_memory(
     let embedding = match embedding_model::compute_embedding(app.clone(), memory.clone()).await {
         Ok(vec) => vec,
         Err(err) => {
-            log_warn(&app, "session_add_memory", format!("embedding failed: {}", err));
+            log_warn(
+                &app,
+                "session_add_memory",
+                format!("embedding failed: {}", err),
+            );
             Vec::new()
         }
     };
@@ -594,18 +598,32 @@ pub async fn session_update_memory(
         memories[memory_index] = new_memory.clone();
 
         // Recompute embedding
-        let embedding = match embedding_model::compute_embedding(app.clone(), new_memory.clone()).await {
-            Ok(vec) => vec,
-            Err(err) => {
-                log_error(&app, "session_update_memory", format!("embedding failed: {}", err));
-                Vec::new()
-            }
-        };
+        let embedding =
+            match embedding_model::compute_embedding(app.clone(), new_memory.clone()).await {
+                Ok(vec) => vec,
+                Err(err) => {
+                    log_error(
+                        &app,
+                        "session_update_memory",
+                        format!("embedding failed: {}", err),
+                    );
+                    Vec::new()
+                }
+            };
 
         if memory_index < memory_embeddings.len() {
-            if let Some(obj) = memory_embeddings.get_mut(memory_index).and_then(|v| v.as_object_mut()) {
-                obj.insert("text".into(), JsonValue::String(memories[memory_index].clone()));
-                obj.insert("embedding".into(), JsonValue::Array(embedding.iter().map(|f| JsonValue::from(*f)).collect()));
+            if let Some(obj) = memory_embeddings
+                .get_mut(memory_index)
+                .and_then(|v| v.as_object_mut())
+            {
+                obj.insert(
+                    "text".into(),
+                    JsonValue::String(memories[memory_index].clone()),
+                );
+                obj.insert(
+                    "embedding".into(),
+                    JsonValue::Array(embedding.iter().map(|f| JsonValue::from(*f)).collect()),
+                );
             }
         } else {
             memory_embeddings.push(serde_json::json!({

@@ -4,6 +4,7 @@ mod chat_manager;
 mod embedding_model;
 mod error;
 mod image_generator;
+mod logger;
 mod migrations;
 mod models;
 mod pricing_cache;
@@ -19,16 +20,23 @@ pub fn run() {
     use tauri::Manager;
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
 
+            let log_manager =
+                logger::LogManager::new(app.handle()).expect("Failed to initialize log manager");
+            app.manage(log_manager);
+
             match storage_manager::db::init_pool(app.handle()) {
                 Ok(pool) => {
-                    app.manage(pool);
+                    let swappable = storage_manager::db::SwappablePool::new(pool);
+                    app.manage(swappable);
                 }
                 Err(e) => panic!("Failed to initialize database pool: {}", e),
             }
@@ -116,6 +124,10 @@ pub fn run() {
             storage_manager::backup::backup_get_info,
             storage_manager::backup::backup_list,
             storage_manager::backup::backup_delete,
+            storage_manager::backup::backup_get_info_from_bytes,
+            storage_manager::backup::backup_check_encrypted_from_bytes,
+            storage_manager::backup::backup_verify_password_from_bytes,
+            storage_manager::backup::backup_import_from_bytes,
             storage_manager::importer::legacy_backup_and_remove,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,
@@ -151,6 +163,13 @@ pub fn run() {
             embedding_model::run_embedding_test,
             embedding_model::delete_embedding_model,
             image_generator::commands::generate_image,
+            logger::log_to_file,
+            logger::list_log_files,
+            logger::read_log_file,
+            logger::delete_log_file,
+            logger::clear_all_logs,
+            logger::get_log_dir_path,
+            logger::save_log_to_downloads,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

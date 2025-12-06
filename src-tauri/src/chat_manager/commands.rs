@@ -297,17 +297,17 @@ fn persist_attachments(
     attachments: Vec<ImageAttachment>,
 ) -> Result<Vec<ImageAttachment>, String> {
     let mut persisted = Vec::new();
-    
+
     for attachment in attachments {
         if attachment.storage_path.is_some() && attachment.data.is_empty() {
             persisted.push(attachment);
             continue;
         }
-        
+
         if attachment.data.is_empty() {
             continue;
         }
-        
+
         let storage_path = storage_save_session_attachment(
             app.clone(),
             character_id.to_string(),
@@ -317,7 +317,7 @@ fn persist_attachments(
             role.to_string(),
             attachment.data.clone(),
         )?;
-        
+
         persisted.push(ImageAttachment {
             id: attachment.id,
             data: String::new(),
@@ -328,7 +328,7 @@ fn persist_attachments(
             storage_path: Some(storage_path),
         });
     }
-    
+
     Ok(persisted)
 }
 
@@ -336,31 +336,35 @@ use crate::storage_manager::media::storage_load_session_attachment;
 
 fn load_attachment_data(app: &AppHandle, message: &StoredMessage) -> StoredMessage {
     let mut loaded_message = message.clone();
-    
-    loaded_message.attachments = message.attachments.iter().map(|attachment| {
-        if !attachment.data.is_empty() {
-            return attachment.clone();
-        }
-        
-        let storage_path = match &attachment.storage_path {
-            Some(path) => path,
-            None => return attachment.clone(),
-        };
-        
-        match storage_load_session_attachment(app.clone(), storage_path.clone()) {
-            Ok(data) => ImageAttachment {
-                id: attachment.id.clone(),
-                data,
-                mime_type: attachment.mime_type.clone(),
-                filename: attachment.filename.clone(),
-                width: attachment.width,
-                height: attachment.height,
-                storage_path: attachment.storage_path.clone(),
-            },
-            Err(_) => attachment.clone(), 
-        }
-    }).collect();
-    
+
+    loaded_message.attachments = message
+        .attachments
+        .iter()
+        .map(|attachment| {
+            if !attachment.data.is_empty() {
+                return attachment.clone();
+            }
+
+            let storage_path = match &attachment.storage_path {
+                Some(path) => path,
+                None => return attachment.clone(),
+            };
+
+            match storage_load_session_attachment(app.clone(), storage_path.clone()) {
+                Ok(data) => ImageAttachment {
+                    id: attachment.id.clone(),
+                    data,
+                    mime_type: attachment.mime_type.clone(),
+                    filename: attachment.filename.clone(),
+                    width: attachment.width,
+                    height: attachment.height,
+                    storage_path: attachment.storage_path.clone(),
+                },
+                Err(_) => attachment.clone(),
+            }
+        })
+        .collect();
+
     loaded_message
 }
 
@@ -471,9 +475,9 @@ pub async fn chat_completion(
     let api_key = resolve_api_key(&app, provider_cred, "chat_completion")?;
 
     let now = now_millis()?;
-    
+
     let user_msg_id = uuid::Uuid::new_v4().to_string();
-    
+
     let persisted_attachments = persist_attachments(
         &app,
         &character_id,
@@ -818,6 +822,7 @@ pub async fn chat_completion(
     }
 
     Ok(ChatTurnResult {
+        session: session.clone(),
         session_id: session.id,
         request_id,
         user_message: user_msg,
@@ -1211,6 +1216,7 @@ pub async fn chat_regenerate(
     .await;
 
     Ok(RegenerateResult {
+        session: session.clone(),
         session_id: session.id,
         request_id,
         assistant_message: assistant_clone,
@@ -1560,6 +1566,7 @@ pub async fn chat_continue(
     .await;
 
     Ok(ContinueResult {
+        session: session.clone(),
         session_id: session.id,
         request_id,
         assistant_message,
@@ -1842,7 +1849,7 @@ async fn process_dynamic_memory_cycle(
         ),
     );
 
-    let actions = run_memory_tool_update(
+    let actions = match run_memory_tool_update(
         app,
         summary_provider,
         summary_model,
@@ -1853,7 +1860,38 @@ async fn process_dynamic_memory_cycle(
         &convo_window,
         character,
     )
-    .await?;
+    .await
+    {
+        Ok(actions) => actions,
+        Err(err) => {
+            log_error(
+                app,
+                "dynamic_memory",
+                format!("memory tool update failed: {}", err),
+            );
+            // Record a failure event so the window advances and we don't retry every turn.
+            let event = json!({
+                "id": Uuid::new_v4().to_string(),
+                "windowStart": total_convo_at_start.saturating_sub(window_size),
+                "windowEnd": total_convo_at_start,
+                "windowMessageIds": window_message_ids,
+                "summary": summary,
+                "actions": [],
+                "error": err,
+                "status": "error",
+                "createdAt": now_millis().unwrap_or_default(),
+            });
+            session.memory_summary = Some(summary.clone());
+            session.memory_tool_events.push(event);
+            if session.memory_tool_events.len() > 50 {
+                let excess = session.memory_tool_events.len() - 50;
+                session.memory_tool_events.drain(0..excess);
+            }
+            session.updated_at = now_millis()?;
+            save_session(app, session)?;
+            return Ok(());
+        }
+    };
 
     session.memory_summary = Some(summary.clone());
     let event = json!({
@@ -1962,7 +2000,17 @@ async fn run_memory_tool_update(
 
     let api_response = api_request(app.clone(), api_request_payload).await?;
 
-    // Extract and record usage for memory manager operation
+    if !api_response.ok {
+        let fallback = format!("Provider returned status {}", api_response.status);
+        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+        return Err(if err_message == fallback {
+            err_message
+        } else {
+            format!("{} (status {})", err_message, api_response.status)
+        });
+    }
+
+    // Extract and record usage for memory manager operation only on success
     let usage = extract_usage(api_response.data());
     let context = ChatContext::initialize(app.clone())?;
     record_usage_if_available(
@@ -1978,16 +2026,6 @@ async fn run_memory_tool_update(
         "run_memory_tool_update",
     )
     .await;
-
-    if !api_response.ok {
-        let fallback = format!("Provider returned status {}", api_response.status);
-        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
-        return Err(if err_message == fallback {
-            err_message
-        } else {
-            format!("{} (status {})", err_message, api_response.status)
-        });
-    }
 
     let calls = parse_tool_calls(&provider_cred.provider_id, api_response.data());
     if calls.is_empty() {

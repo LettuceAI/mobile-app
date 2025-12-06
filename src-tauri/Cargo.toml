@@ -23,6 +23,7 @@ anyhow = "1"
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = "2"
@@ -52,6 +53,7 @@ tokenizers = { version = "0.20", features = ["http"] }
 ndarray = "0.16"
 lazy_static = "1.5.0"
 anyhow = "1.0.100"
+tauri-plugin-fs = "2"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 machine-uid = "0.3"

@@ -276,7 +276,10 @@ impl UsageRepository {
         log_info(
             &self.app,
             "export_csv",
-            format!("Exporting CSV with filter: start={:?}, end={:?}", filter.start_timestamp, filter.end_timestamp),
+            format!(
+                "Exporting CSV with filter: start={:?}, end={:?}",
+                filter.start_timestamp, filter.end_timestamp
+            ),
         );
         let records = self.query_records(filter)?;
         log_info(
@@ -297,7 +300,11 @@ impl UsageRepository {
         log_info(
             &self.app,
             "save_csv",
-            format!("Saving CSV to downloads: {} ({} bytes)", filename, csv_data.len()),
+            format!(
+                "Saving CSV to downloads: {} ({} bytes)",
+                filename,
+                csv_data.len()
+            ),
         );
 
         #[cfg(target_os = "android")]
@@ -307,7 +314,8 @@ impl UsageRepository {
         };
 
         #[cfg(not(target_os = "android"))]
-        let download_dir = self.app
+        let download_dir = self
+            .app
             .path()
             .download_dir()
             .map_err(|e| format!("Failed to get downloads directory: {}", e))?;

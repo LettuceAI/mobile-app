@@ -76,19 +76,40 @@ export function BackupRestorePage() {
 
         {/* Backups List */}
         <div>
-          <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">
-            Available Backups
-          </h2>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">
+              Available Backups
+            </h2>
+            <button
+              onClick={actions.handleBrowseForBackup}
+              className="text-[10px] font-medium text-blue-400 hover:text-blue-300"
+            >
+              Browse Files
+            </button>
+          </div>
 
           {state.loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-white/30" />
             </div>
           ) : state.backups.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
               <FileArchive className="mx-auto h-8 w-8 text-white/20" />
-              <p className="mt-3 text-sm text-white/40">No backups yet</p>
-              <p className="mt-1 text-xs text-white/30">Create a backup to protect your data</p>
+              <p className="mt-3 text-sm text-white/40">No backups found</p>
+              <p className="mt-1 text-xs text-white/30">Create a backup or tap "Browse Files" to find one</p>
+              <button
+                onClick={actions.handleBrowseForBackup}
+                className={cn(
+                  "mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg",
+                  "border border-blue-400/30 bg-blue-400/10",
+                  "text-sm text-blue-300 font-medium",
+                  "hover:bg-blue-400/20 active:scale-[0.98]",
+                  interactive.transition.default
+                )}
+              >
+                <Upload className="h-4 w-4" />
+                Browse for .lettuce file
+              </button>
             </div>
           ) : (
             <div className="space-y-2">
@@ -106,6 +127,7 @@ export function BackupRestorePage() {
 
         <p className="px-1 text-[11px] text-white/30">
           Backups are saved as encrypted <code className="text-white/40">.lettuce</code> files in your Downloads folder.
+          {" "}If a backup isn't showing, tap "Browse Files" to select it manually.
         </p>
       </section>
 

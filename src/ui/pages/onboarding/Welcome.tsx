@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, Upload, FileArchive, Lock, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -365,6 +365,8 @@ function RestoreBackupModal({
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBackup, setSelectedBackup] = useState<BackupInfo | null>(null);
+  const [isPickedFile, setIsPickedFile] = useState(false);
+  const pickedFileDataRef = useRef<Uint8Array | null>(null);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -387,8 +389,38 @@ function RestoreBackupModal({
     }
   };
 
+  const handleBrowseForBackup = async () => {
+    try {
+      setError(null);
+      const result = await storageBridge.backupPickFile();
+      if (!result) return; // User cancelled
+      
+      const { data, filename } = result;
+      
+      // Store file data in ref
+      pickedFileDataRef.current = data;
+      
+      // Get info using bytes
+      const info = await storageBridge.backupGetInfoFromBytes(data);
+      
+      const backupInfo: BackupInfo = {
+        ...info,
+        path: "",
+        filename,
+      };
+      
+      setSelectedBackup(backupInfo);
+      setIsPickedFile(true);
+      setPassword("");
+    } catch (e) {
+      console.error("Failed to browse for backup:", e);
+      setError(e instanceof Error ? e.message : "Failed to open file");
+    }
+  };
+
   const handleClose = () => {
     if (restoring) return;
+    pickedFileDataRef.current = null;
     setIsExiting(true);
     setTimeout(onClose, 200);
   };
@@ -405,20 +437,41 @@ function RestoreBackupModal({
       setError(null);
       setRestoring(true);
 
-      if (selectedBackup.encrypted) {
-        const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, password);
-        if (!valid) {
-          setError("Incorrect password");
-          setRestoring(false);
-          return;
+      if (isPickedFile && pickedFileDataRef.current) {
+        // Use byte-based import for picked files
+        const data = pickedFileDataRef.current;
+        
+        if (selectedBackup.encrypted) {
+          const valid = await storageBridge.backupVerifyPasswordFromBytes(data, password);
+          if (!valid) {
+            setError("Incorrect password");
+            setRestoring(false);
+            return;
+          }
         }
+
+        await storageBridge.backupImportFromBytes(
+          data,
+          selectedBackup.encrypted ? password : undefined
+        );
+      } else {
+        // Use path-based import
+        if (selectedBackup.encrypted) {
+          const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, password);
+          if (!valid) {
+            setError("Incorrect password");
+            setRestoring(false);
+            return;
+          }
+        }
+
+        await storageBridge.backupImport(
+          selectedBackup.path,
+          selectedBackup.encrypted ? password : undefined
+        );
       }
 
-      await storageBridge.backupImport(
-        selectedBackup.path,
-        selectedBackup.encrypted ? password : undefined
-      );
-
+      pickedFileDataRef.current = null;
       setIsExiting(true);
       setTimeout(() => {
         alert("Backup restored! The app will now reload.");
@@ -474,9 +527,17 @@ function RestoreBackupModal({
         <div className="flex-1 overflow-y-auto space-y-4">
           {!selectedBackup ? (
             <>
-              <p className={cn(typography.bodySmall.size, "text-white/50")}>
-                Select a backup from your Downloads folder to restore.
-              </p>
+              <div className="flex items-center justify-between">
+                <p className={cn(typography.bodySmall.size, "text-white/50")}>
+                  Select a backup to restore.
+                </p>
+                <button
+                  onClick={handleBrowseForBackup}
+                  className="text-xs font-medium text-blue-400 hover:text-blue-300"
+                >
+                  Browse Files
+                </button>
+              </div>
 
               {loading ? (
                 <div className="flex items-center justify-center py-8">
@@ -487,8 +548,21 @@ function RestoreBackupModal({
                   <FileArchive className="mx-auto h-8 w-8 text-white/20" />
                   <p className="mt-3 text-sm text-white/40">No backups found</p>
                   <p className="mt-1 text-xs text-white/30">
-                    Place .lettuce files in your Downloads folder
+                    Tap browse to select a .lettuce file
                   </p>
+                  <button
+                    onClick={handleBrowseForBackup}
+                    className={cn(
+                      "mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg",
+                      "border border-blue-400/30 bg-blue-400/10",
+                      "text-sm text-blue-300 font-medium",
+                      "hover:bg-blue-400/20 active:scale-[0.98]",
+                      interactive.transition.default
+                    )}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Browse for .lettuce file
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -497,6 +571,8 @@ function RestoreBackupModal({
                       key={backup.path}
                       onClick={() => {
                         setSelectedBackup(backup);
+                        setIsPickedFile(false);
+                        pickedFileDataRef.current = null;
                         setPassword("");
                         setError(null);
                       }}

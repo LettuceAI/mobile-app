@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { exit } from "@tauri-apps/plugin-process";
 
 import { ResetManager } from "../../../core/storage/reset";
 import { typography, radius, interactive, shadows, cn } from "../../design-tokens";
@@ -16,8 +17,9 @@ export function ResetPage() {
       setIsResetting(true);
       await ResetManager.resetAllData();
 
-      // Navigate to welcome/setup page after successful reset
-      navigate("/welcome", { replace: true });
+      // Force app restart for clean database state
+      // The app will re-initialize fresh when reopened
+      await exit(0);
     } catch (error: any) {
       console.error("Reset failed:", error);
       alert(`Reset failed: ${error.message}`);
@@ -29,103 +31,103 @@ export function ResetPage() {
   return (
     <div className="px-0 pt-4 pb-4 text-gray-100" data-settings-scroll>
       <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="mx-auto w-full max-w-md text-center"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="mx-auto w-full max-w-md text-center"
+      >
+        {/* Warning Icon */}
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.3 }}
+          className={cn(
+            "mx-auto mb-8 flex h-24 w-24 items-center justify-center border border-red-400/30 bg-red-400/10 text-red-300",
+            radius.full,
+            shadows.lg
+          )}
         >
-          {/* Warning Icon */}
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-            className={cn(
-              "mx-auto mb-8 flex h-24 w-24 items-center justify-center border border-red-400/30 bg-red-400/10 text-red-300",
-              radius.full,
-              shadows.lg
-            )}
-          >
-            <AlertTriangle size={44} strokeWidth={2} />
-          </motion.div>
+          <AlertTriangle size={44} strokeWidth={2} />
+        </motion.div>
 
-          {/* Title & Description */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="mb-10 space-y-3"
-          >
-            <h2 className={cn(typography.display.size, typography.display.weight, "text-white")}>
-              Reset Everything
-            </h2>
-            <p className={cn(typography.body.size, typography.body.lineHeight, "text-white/50")}>
-              This will permanently delete all providers, models, characters, chat sessions, and preferences from this device.
+        {/* Title & Description */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="mb-10 space-y-3"
+        >
+          <h2 className={cn(typography.display.size, typography.display.weight, "text-white")}>
+            Reset Everything
+          </h2>
+          <p className={cn(typography.body.size, typography.body.lineHeight, "text-white/50")}>
+            This will permanently delete all providers, models, characters, chat sessions, and preferences from this device.
+          </p>
+        </motion.div>
+
+        {/* Warning Message */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className={cn(
+            "mb-8 border border-red-400/30 bg-red-400/5 p-4",
+            radius.lg
+          )}
+        >
+          <div className="flex items-center justify-center gap-2">
+            <AlertTriangle size={16} className="text-red-300" strokeWidth={2.5} />
+            <p className={cn(typography.bodySmall.size, typography.h3.weight, "text-red-200")}>
+              This action cannot be undone
             </p>
-          </motion.div>
+          </div>
+        </motion.div>
 
-          {/* Warning Message */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+        {/* Action Buttons */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col gap-3"
+        >
+          <button
+            onClick={() => setShowConfirmModal(true)}
+            disabled={isResetting}
             className={cn(
-              "mb-8 border border-red-400/30 bg-red-400/5 p-4",
-              radius.lg
+              "w-full px-6 py-4",
+              radius.md,
+              typography.body.size,
+              typography.h3.weight,
+              "border border-red-400/40 bg-red-400/20 text-red-100",
+              shadows.glow,
+              interactive.transition.default,
+              "active:scale-[0.97] active:border-red-400/60 active:bg-red-400/30",
+              "disabled:cursor-not-allowed disabled:opacity-50"
             )}
           >
             <div className="flex items-center justify-center gap-2">
-              <AlertTriangle size={16} className="text-red-300" strokeWidth={2.5} />
-              <p className={cn(typography.bodySmall.size, typography.h3.weight, "text-red-200")}>
-                This action cannot be undone
-              </p>
+              <Trash2 size={18} />
+              <span>Reset All Data</span>
             </div>
-          </motion.div>
+          </button>
 
-          {/* Action Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="flex flex-col gap-3"
+          <button
+            onClick={() => navigate("/settings")}
+            disabled={isResetting}
+            className={cn(
+              "w-full px-6 py-3",
+              radius.md,
+              typography.body.size,
+              "border border-white/10 bg-white/5 text-white/60",
+              interactive.transition.default,
+              "active:scale-[0.97] active:bg-white/10",
+              "disabled:cursor-not-allowed disabled:opacity-50"
+            )}
           >
-            <button
-              onClick={() => setShowConfirmModal(true)}
-              disabled={isResetting}
-              className={cn(
-                "w-full px-6 py-4",
-                radius.md,
-                typography.body.size,
-                typography.h3.weight,
-                "border border-red-400/40 bg-red-400/20 text-red-100",
-                shadows.glow,
-                interactive.transition.default,
-                "active:scale-[0.97] active:border-red-400/60 active:bg-red-400/30",
-                "disabled:cursor-not-allowed disabled:opacity-50"
-              )}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Trash2 size={18} />
-                <span>Reset All Data</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => navigate("/settings")}
-              disabled={isResetting}
-              className={cn(
-                "w-full px-6 py-3",
-                radius.md,
-                typography.body.size,
-                "border border-white/10 bg-white/5 text-white/60",
-                interactive.transition.default,
-                "active:scale-[0.97] active:bg-white/10",
-                "disabled:cursor-not-allowed disabled:opacity-50"
-              )}
-            >
-              Cancel
-            </button>
-          </motion.div>
+            Cancel
+          </button>
         </motion.div>
+      </motion.div>
 
       {/* Confirmation Modal */}
       <AnimatePresence>

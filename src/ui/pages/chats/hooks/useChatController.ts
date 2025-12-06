@@ -534,17 +534,19 @@ export function useChatController(
           attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
         });
 
+        // Use session from backend which includes updated memories, memorySummary, and memoryToolEvents
+        // after dynamic memory cycle processing
+        const orderedMessages = [...(result.session.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
         const updatedSession: Session = {
-          ...state.session,
-          messages: [...(state.session.messages ?? []), result.userMessage, result.assistantMessage],
-          updatedAt: result.assistantMessage.createdAt,
-        } as Session;
+          ...result.session,
+          messages: orderedMessages,
+        };
 
         dispatch({
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
-            { type: "SET_MESSAGES", payload: updatedSession.messages ?? [] },
+            { type: "SET_MESSAGES", payload: orderedMessages },
             {
               type: "REPLACE_PLACEHOLDER_MESSAGES",
               payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage }
@@ -627,18 +629,18 @@ export function useChatController(
           requestId,
         });
 
-        const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
+        // Use session from backend which has the authoritative state
+        const orderedMessages = [...(result.session.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
         const updatedSession: Session = {
-          ...state.session,
-          messages: [...currentMessages, result.assistantMessage],
-          updatedAt: result.assistantMessage.createdAt,
-        } as Session;
+          ...result.session,
+          messages: orderedMessages,
+        };
 
         dispatch({
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
-            { type: "SET_MESSAGES", payload: updatedSession.messages ?? [] }
+            { type: "SET_MESSAGES", payload: orderedMessages }
           ]
         });
       } catch (err) {
@@ -746,14 +748,12 @@ export function useChatController(
           requestId,
         });
 
-        const updatedMessages = [...(state.session.messages ?? [])].map((msg) =>
-          msg.id === message.id ? result.assistantMessage : msg,
-        );
+        // Use session from backend which has the authoritative state
+        const orderedMessages = [...(result.session.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
         const updatedSession: Session = {
-          ...state.session,
-          messages: updatedMessages,
-          updatedAt: Date.now(),
-        } as Session;
+          ...result.session,
+          messages: orderedMessages,
+        };
 
         dispatch({
           type: "BATCH",
@@ -761,7 +761,7 @@ export function useChatController(
             { type: "SET_SESSION", payload: updatedSession },
             {
               type: "SET_MESSAGES",
-              payload: state.messages.map((msg) => (msg.id === message.id ? result.assistantMessage : msg))
+              payload: orderedMessages
             }
           ]
         });

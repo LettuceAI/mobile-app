@@ -105,7 +105,11 @@ pub async fn send_with_retries(
                         format!(
                             "{} {} - retrying in {}ms (attempt {}/{})",
                             status,
-                            if is_rate_limited { "rate limited" } else { "server error" },
+                            if is_rate_limited {
+                                "rate limited"
+                            } else {
+                                "server error"
+                            },
                             delay,
                             attempt,
                             allowed_retries

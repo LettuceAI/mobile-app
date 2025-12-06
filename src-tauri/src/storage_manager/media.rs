@@ -475,19 +475,19 @@ pub fn storage_save_session_attachment(
     } else {
         &base64_data
     };
-    
+
     let bytes = general_purpose::STANDARD
         .decode(data)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
-    
+
     let sessions_dir = storage_root(&app)?
         .join("sessions")
         .join(&character_id)
         .join(&session_id);
     fs::create_dir_all(&sessions_dir).map_err(|e| e.to_string())?;
-    
+
     let role_prefix = if role == "assistant" { "ai" } else { "user" };
-    
+
     let webp_bytes = match image::load_from_memory(&bytes) {
         Ok(img) => {
             let mut webp_data: Vec<u8> = Vec::new();
@@ -496,22 +496,22 @@ pub fn storage_save_session_attachment(
                 .map_err(|e| format!("Failed to encode WebP: {}", e))?;
             webp_data
         }
-        Err(_) => bytes, 
+        Err(_) => bytes,
     };
-    
+
     // Filename: <role>_<message_id>_<attachment_id>.webp
     let filename = format!("{}_{}_{}.webp", role_prefix, message_id, attachment_id);
     let image_path = sessions_dir.join(&filename);
     fs::write(&image_path, webp_bytes).map_err(|e| e.to_string())?;
-    
+
     let relative_path = format!("sessions/{}/{}/{}", character_id, session_id, filename);
-    
+
     log_debug(
         &app,
         "session_attachment",
         format!("Saved attachment: {}", relative_path),
     );
-    
+
     Ok(relative_path)
 }
 
@@ -521,13 +521,13 @@ pub fn storage_load_session_attachment(
     storage_path: String,
 ) -> Result<String, String> {
     let full_path = storage_root(&app)?.join(&storage_path);
-    
+
     if !full_path.exists() {
         return Err(format!("Attachment not found: {}", storage_path));
     }
-    
+
     let bytes = fs::read(&full_path).map_err(|e| e.to_string())?;
-    
+
     // Determine MIME type from extension
     let mime_type = if storage_path.ends_with(".webp") {
         "image/webp"
@@ -540,7 +540,7 @@ pub fn storage_load_session_attachment(
     } else {
         "image/webp"
     };
-    
+
     let base64_data = general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:{};base64,{}", mime_type, base64_data))
 }
@@ -555,16 +555,19 @@ pub fn storage_delete_session_attachments(
         .join("sessions")
         .join(&character_id)
         .join(&session_id);
-    
+
     if sessions_dir.exists() {
         fs::remove_dir_all(&sessions_dir).map_err(|e| e.to_string())?;
         log_info(
             &app,
             "session_attachment",
-            format!("Deleted all attachments for session: {}/{}", character_id, session_id),
+            format!(
+                "Deleted all attachments for session: {}/{}",
+                character_id, session_id
+            ),
         );
     }
-    
+
     Ok(())
 }
 

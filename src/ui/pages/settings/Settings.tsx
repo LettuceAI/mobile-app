@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, Image, HardDrive } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, Image, HardDrive, FileCode } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -191,6 +191,13 @@ export function SettingsPage() {
       onClick: () => navigate('/settings/advanced')
     },
     {
+      key: 'logs',
+      icon: <FileCode />,
+      title: 'Logs',
+      subtitle: 'View and download application logs',
+      onClick: () => navigate('/settings/logs')
+    },
+    {
       key: 'guide',
       icon: <BookOpen />,
       title: 'Setup Guide',
@@ -273,7 +280,7 @@ export function SettingsPage() {
             Core
           </h2>
           <div className={spacing.field}>
-            {items.filter(i => ['providers', 'models', 'image-generation', 'characters', 'personas', 'prompts', 'security', 'backup', 'usage', 'advanced'].includes(i.key)).map(item => (
+            {items.filter(i => ['providers', 'models', 'image-generation', 'characters', 'personas', 'prompts', 'security', 'backup', 'usage', 'advanced', 'logs'].includes(i.key)).map(item => (
               <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
             ))}
           </div>

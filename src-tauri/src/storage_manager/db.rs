@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::RwLock;
 
 use super::legacy::storage_root;
 use crate::utils::{log_info, log_warn, now_millis};
@@ -15,6 +16,94 @@ use tauri::Manager;
 
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type DbConnection = r2d2::PooledConnection<SqliteConnectionManager>;
+
+/// Wrapper that allows the database pool to be swapped at runtime.
+/// This is used for backup restore without requiring app restart.
+pub struct SwappablePool {
+    pool: RwLock<DbPool>,
+}
+
+impl SwappablePool {
+    pub fn new(pool: DbPool) -> Self {
+        Self {
+            pool: RwLock::new(pool),
+        }
+    }
+
+    /// Get a connection from the current pool
+    pub fn get_connection(&self) -> Result<DbConnection, String> {
+        let pool = self
+            .pool
+            .read()
+            .map_err(|e| format!("Pool lock poisoned: {}", e))?;
+        pool.get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))
+    }
+
+    /// Swap the pool with a new one (used after backup restore)
+    pub fn swap(&self, new_pool: DbPool) -> Result<(), String> {
+        let mut pool = self
+            .pool
+            .write()
+            .map_err(|e| format!("Pool lock poisoned: {}", e))?;
+        *pool = new_pool;
+        Ok(())
+    }
+}
+
+/// Create a new pool for a given database path
+pub fn create_pool_for_path(path: &PathBuf) -> Result<DbPool, String> {
+    let manager = SqliteConnectionManager::file(path).with_init(|c| {
+        c.execute_batch(
+            r#"
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA temp_store=MEMORY;
+                PRAGMA cache_size=-8000;
+                PRAGMA wal_autocheckpoint=1000;
+                PRAGMA mmap_size=268435456;
+                PRAGMA foreign_keys=ON;
+                "#,
+        )
+    });
+
+    Pool::builder()
+        .max_size(10)
+        .build(manager)
+        .map_err(|e| format!("Failed to create pool: {}", e))
+}
+
+/// Reload the database by creating a new pool and swapping it with the existing one.
+/// This is used after backup restore to pick up the new database without restarting.
+pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
+    use crate::utils::log_info;
+
+    let path = db_path(app)?;
+    log_info(
+        app,
+        "database",
+        format!("Reloading database from {:?}", path),
+    );
+
+    // Create a new pool for the database path
+    let new_pool = create_pool_for_path(&path)?;
+
+    // Get a connection to verify it works and init schema
+    let conn = new_pool
+        .get()
+        .map_err(|e| format!("Failed to get connection from new pool: {}", e))?;
+    init_db(app, &conn)?;
+
+    // Drop the connection before swapping
+    drop(conn);
+
+    // Swap the pool
+    let swappable = app.state::<SwappablePool>();
+    swappable.swap(new_pool)?;
+
+    log_info(app, "database", "Database pool reloaded successfully");
+    Ok(())
+}
 
 pub fn init_pool(app: &tauri::AppHandle) -> Result<DbPool, String> {
     let path = db_path(app)?;
@@ -68,9 +157,8 @@ pub fn init_pool(app: &tauri::AppHandle) -> Result<DbPool, String> {
 }
 
 pub fn open_db(app: &tauri::AppHandle) -> Result<DbConnection, String> {
-    let pool = app.state::<DbPool>();
-    pool.get()
-        .map_err(|e| format!("Failed to get connection from pool: {}", e))
+    let swappable = app.state::<SwappablePool>();
+    swappable.get_connection()
 }
 
 pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String> {
@@ -303,9 +391,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(messages)")
         .map_err(|e| e.to_string())?;
     let mut has_memory_refs = false;
-    let mut rows = stmt
-        .query([])
-        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
     while let Some(row) = rows.next().map_err(|e| e.to_string())? {
         let col_name: String = row.get(1).map_err(|e| e.to_string())?;
         if col_name == "memory_refs" {

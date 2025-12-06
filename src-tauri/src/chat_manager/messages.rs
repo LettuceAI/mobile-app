@@ -28,10 +28,10 @@ pub fn build_multimodal_content(text: &str, attachments: &[ImageAttachment]) -> 
         if attachment.data.is_empty() {
             continue;
         }
-        
-        let image_url = if attachment.data.starts_with("http://") 
-            || attachment.data.starts_with("https://") 
-            || attachment.data.starts_with("data:") 
+
+        let image_url = if attachment.data.starts_with("http://")
+            || attachment.data.starts_with("https://")
+            || attachment.data.starts_with("data:")
         {
             attachment.data.clone()
         } else {
@@ -46,7 +46,7 @@ pub fn build_multimodal_content(text: &str, attachments: &[ImageAttachment]) -> 
             }
         }));
     }
-    
+
     if content_parts.is_empty() {
         content_parts.push(json!({
             "type": "text",
@@ -100,8 +100,7 @@ pub fn sanitize_placeholders_in_api_messages(
                         .replace("{{char}}", char_name)
                         .replace("{{persona}}", persona_name);
                     *content = serde_json::Value::String(updated);
-                }
-                else if let Some(arr) = content.as_array_mut() {
+                } else if let Some(arr) = content.as_array_mut() {
                     for part in arr.iter_mut() {
                         if let Some(part_obj) = part.as_object_mut() {
                             if part_obj.get("type").and_then(|t| t.as_str()) == Some("text") {

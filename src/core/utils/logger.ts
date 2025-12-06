@@ -1,4 +1,5 @@
 import { isDevelopmentMode } from "./env";
+import { invoke } from "@tauri-apps/api/core";
 
 type LogLevel = "debug" | "info" | "warn" | "error" | "log";
 
@@ -38,7 +39,28 @@ function fmtPrefix(level: LogLevel, opts: LoggerOptions): string {
 function write(level: LogLevel, opts: LoggerOptions, args: any[]) {
   if (!_enabled) return;
   const method: (...data: any[]) => void = (console as any)[level] || console.log;
-  method(fmtPrefix(level, opts), ...args);
+  const prefix = fmtPrefix(level, opts);
+  method(prefix, ...args);
+  
+  // Also log to file
+  try {
+    const message = args.map(arg => 
+      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    
+    invoke('log_to_file', {
+      timestamp: new Date().toISOString(),
+      level: level.toUpperCase(),
+      component: opts.component,
+      function: opts.fn || null,
+      message: message,
+    }).catch(err => {
+      // Silently fail if logging to file doesn't work
+      console.warn('Failed to log to file:', err);
+    });
+  } catch (err) {
+    // Silently fail
+  }
 }
 
 const disabledLogger: Logger = {

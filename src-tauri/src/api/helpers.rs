@@ -5,12 +5,13 @@ use serde_json::Value;
 use crate::{
     abort_manager::AbortRegistry,
     chat_manager::{
-        request as chat_request,
-        sse,
+        request as chat_request, sse,
         tooling::parse_tool_calls,
         types::{ErrorEnvelope, NormalizedEvent},
     },
-    serde_utils::{json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json},
+    serde_utils::{
+        json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json,
+    },
     transport::{self, emit_normalized},
     utils::{log_error, log_info, log_warn},
 };
@@ -304,10 +305,8 @@ pub(crate) async fn handle_non_streaming_response(
             );
             let value = parse_body_to_value(&text);
             if let Some(req_id) = &request_id {
-                let calls = parse_tool_calls(
-                    req.provider_id.as_deref().unwrap_or_default(),
-                    &value,
-                );
+                let calls =
+                    parse_tool_calls(req.provider_id.as_deref().unwrap_or_default(), &value);
                 if !calls.is_empty() {
                     emit_normalized(app, req_id, NormalizedEvent::ToolCall { calls });
                 }
@@ -339,4 +338,3 @@ pub(crate) async fn handle_non_streaming_response(
         }
     }
 }
-

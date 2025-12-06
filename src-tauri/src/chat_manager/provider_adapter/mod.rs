@@ -97,6 +97,7 @@ pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send +
         "moonshot" | "moonshot-ai" => Box::new(moonshot::MoonshotAdapter),
         "featherless" => Box::new(featherless::FeatherlessAdapter),
         "qwen" => Box::new(qwen::QwenAdapter),
+        "openrouter" => Box::new(openai::OpenRouterAdapter),
         _ => Box::new(openai::OpenAIAdapter),
     }
 }

@@ -122,34 +122,71 @@ pub async fn backup_export(
 
     log_info(&app, "backup", "Database backup complete");
 
+    // Prepare encryption if password provided
+    let encryption = if let Some(ref pwd) = password {
+        let mut salt = [0u8; 16];
+        let mut nonce = [0u8; 24];
+        OsRng.fill_bytes(&mut salt);
+        OsRng.fill_bytes(&mut nonce);
+        let key = derive_key_from_password(pwd, &salt);
+        Some((salt, nonce, key))
+    } else {
+        None
+    };
+
     // Create the zip file
     let file = File::create(&output_path).map_err(|e| e.to_string())?;
     let mut zip = ZipWriter::new(file);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
-    // Add database to zip
+    // Add database to zip (encrypted if password provided)
     let db_bytes = fs::read(&temp_db).map_err(|e| e.to_string())?;
-    zip.start_file("database/app.db", options)
-        .map_err(|e| e.to_string())?;
-    zip.write_all(&db_bytes).map_err(|e| e.to_string())?;
+    if let Some((_, nonce, key)) = &encryption {
+        let encrypted_db = encrypt_data(&db_bytes, key, nonce)?;
+        zip.start_file("database/app.db.enc", options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&encrypted_db).map_err(|e| e.to_string())?;
+    } else {
+        zip.start_file("database/app.db", options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&db_bytes).map_err(|e| e.to_string())?;
+    }
 
     log_info(&app, "backup", "Added database to archive");
 
     // Add images directory
     if images_dir.exists() {
-        add_directory_to_zip(&mut zip, &images_dir, "images", options)?;
+        add_directory_to_zip(
+            &mut zip,
+            &images_dir,
+            "images",
+            options,
+            encryption.as_ref(),
+        )?;
         log_info(&app, "backup", "Added images to archive");
     }
 
     // Add avatars directory
     if avatars_dir.exists() {
-        add_directory_to_zip(&mut zip, &avatars_dir, "avatars", options)?;
+        add_directory_to_zip(
+            &mut zip,
+            &avatars_dir,
+            "avatars",
+            options,
+            encryption.as_ref(),
+        )?;
         log_info(&app, "backup", "Added avatars to archive");
     }
 
     // Add attachments directory
     if attachments_dir.exists() {
-        add_directory_to_zip(&mut zip, &attachments_dir, "attachments", options)?;
+        add_directory_to_zip(
+            &mut zip,
+            &attachments_dir,
+            "attachments",
+            options,
+            encryption.as_ref(),
+        )?;
         log_info(&app, "backup", "Added attachments to archive");
     }
 
@@ -161,39 +198,34 @@ pub async fn backup_export(
 
     let app_version = app.package_info().version.to_string();
 
-    let (manifest, encrypted_content) = if let Some(ref pwd) = password {
-        // Generate salt and nonce
-        let mut salt = [0u8; 16];
-        let mut nonce = [0u8; 24];
-        OsRng.fill_bytes(&mut salt);
-        OsRng.fill_bytes(&mut nonce);
-
-        let key = derive_key_from_password(pwd, &salt);
-
-        // We'll encrypt a marker file to verify password on import
+    let manifest = if let Some((salt, nonce, key)) = &encryption {
+        // Create encrypted marker to verify password on import
         let marker = b"LETTUCE_BACKUP_VERIFIED";
-        let encrypted_marker = encrypt_data(marker, &key, &nonce)?;
+        let encrypted_marker = encrypt_data(marker, key, nonce)?;
 
-        let manifest = BackupManifest {
+        // Add encrypted marker
+        zip.start_file("encrypted_marker.bin", options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&encrypted_marker)
+            .map_err(|e| e.to_string())?;
+
+        BackupManifest {
             version: BACKUP_VERSION,
             created_at: now,
             app_version,
             encrypted: true,
             salt: Some(general_purpose::STANDARD.encode(salt)),
             nonce: Some(general_purpose::STANDARD.encode(nonce)),
-        };
-
-        (manifest, Some(encrypted_marker))
+        }
     } else {
-        let manifest = BackupManifest {
+        BackupManifest {
             version: BACKUP_VERSION,
             created_at: now,
             app_version,
             encrypted: false,
             salt: None,
             nonce: None,
-        };
-        (manifest, None)
+        }
     };
 
     // Add manifest
@@ -202,13 +234,6 @@ pub async fn backup_export(
         .map_err(|e| e.to_string())?;
     zip.write_all(manifest_json.as_bytes())
         .map_err(|e| e.to_string())?;
-
-    // Add encrypted marker if password was provided
-    if let Some(marker) = encrypted_content {
-        zip.start_file("encrypted_marker.bin", options)
-            .map_err(|e| e.to_string())?;
-        zip.write_all(&marker).map_err(|e| e.to_string())?;
-    }
 
     zip.finish().map_err(|e| e.to_string())?;
 
@@ -224,12 +249,13 @@ pub async fn backup_export(
     Ok(output_path.to_string_lossy().to_string())
 }
 
-/// Helper to add a directory recursively to zip
+/// Helper to add a directory recursively to zip (with optional encryption)
 fn add_directory_to_zip<W: Write + std::io::Seek>(
     zip: &mut ZipWriter<W>,
     dir: &PathBuf,
     prefix: &str,
     options: SimpleFileOptions,
+    encryption: Option<&([u8; 16], [u8; 24], [u8; 32])>,
 ) -> Result<(), String> {
     for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -238,12 +264,22 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(
                 .strip_prefix(dir)
                 .map_err(|e| e.to_string())?
                 .to_string_lossy();
-            let zip_path = format!("{}/{}", prefix, relative);
 
             let bytes = fs::read(path).map_err(|e| e.to_string())?;
-            zip.start_file(&zip_path, options)
-                .map_err(|e| e.to_string())?;
-            zip.write_all(&bytes).map_err(|e| e.to_string())?;
+
+            if let Some((_, nonce, key)) = encryption {
+                // Encrypt the file content
+                let encrypted = encrypt_data(&bytes, key, nonce)?;
+                let zip_path = format!("{}/{}.enc", prefix, relative);
+                zip.start_file(&zip_path, options)
+                    .map_err(|e| e.to_string())?;
+                zip.write_all(&encrypted).map_err(|e| e.to_string())?;
+            } else {
+                let zip_path = format!("{}/{}", prefix, relative);
+                zip.start_file(&zip_path, options)
+                    .map_err(|e| e.to_string())?;
+                zip.write_all(&bytes).map_err(|e| e.to_string())?;
+            }
         }
     }
     Ok(())
@@ -394,7 +430,7 @@ pub async fn backup_import(
     password: Option<String>,
 ) -> Result<(), String> {
     let storage = storage_root(&app)?;
-    
+
     // First, read and validate manifest
     let manifest: BackupManifest = {
         let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
@@ -419,9 +455,11 @@ pub async fn backup_import(
         format!("Starting backup import from {:?}", backup_path),
     );
 
-    // Verify password if encrypted
-    if manifest.encrypted {
-        let pwd = password.as_ref().ok_or_else(|| "Password required for encrypted backup".to_string())?;
+    // Prepare encryption params if encrypted
+    let encryption_params: Option<([u8; 32], [u8; 24])> = if manifest.encrypted {
+        let pwd = password
+            .as_ref()
+            .ok_or_else(|| "Password required for encrypted backup".to_string())?;
 
         let salt_b64 = manifest
             .salt
@@ -446,24 +484,31 @@ pub async fn backup_import(
 
         let key = derive_key_from_password(pwd, &salt);
 
-        // Verify marker in a separate scope
+        // Verify marker BEFORE proceeding - this validates the password
         let file = File::open(&backup_path).map_err(|e| e.to_string())?;
         let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
-        
+
         let mut marker_file = archive
             .by_name("encrypted_marker.bin")
-            .map_err(|e| format!("Invalid backup: missing marker: {}", e))?;
+            .map_err(|e| format!("Invalid backup: missing encryption marker: {}", e))?;
 
         let mut encrypted_marker = Vec::new();
         marker_file
             .read_to_end(&mut encrypted_marker)
             .map_err(|e| e.to_string())?;
 
-        let decrypted = decrypt_data(&encrypted_marker, &key, &nonce)?;
+        let decrypted = decrypt_data(&encrypted_marker, &key, &nonce)
+            .map_err(|_| "Invalid password - decryption failed".to_string())?;
+
         if decrypted != b"LETTUCE_BACKUP_VERIFIED" {
-            return Err("Invalid password".to_string());
+            return Err("Invalid password - verification marker mismatch".to_string());
         }
-    }
+
+        log_info(&app, "backup", "Password verified successfully");
+        Some((key, nonce))
+    } else {
+        None
+    };
 
     // Now extract the archive
     let file = File::open(&backup_path).map_err(|e| e.to_string())?;
@@ -476,29 +521,60 @@ pub async fn backup_import(
     }
     fs::create_dir_all(&staging_dir).map_err(|e| e.to_string())?;
 
-    log_info(&app, "backup", "Extracting backup files...");
+    log_info(&app, "backup", "Extracting and decrypting backup files...");
 
-    // Extract all files to staging
+    // Extract all files to staging, decrypting as needed
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-        let outpath = staging_dir.join(file.name());
+        let file_name = file.name().to_string();
+
+        // Skip manifest and marker
+        if file_name == "manifest.json" || file_name == "encrypted_marker.bin" {
+            continue;
+        }
 
         if file.is_dir() {
+            let outpath = staging_dir.join(&file_name);
             fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
         } else {
+            // Read file contents
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).map_err(|e| e.to_string())?;
+
+            // Determine output path and whether to decrypt
+            // In version 1 backups, only the marker was encrypted, not the actual files
+            // In version 2+, encrypted files have .enc extension
+            let (outpath, final_contents) = if let Some((ref key, ref nonce)) = encryption_params {
+                // Only decrypt files with .enc extension
+                // This supports version 1 backups where files weren't encrypted
+                if file_name.ends_with(".enc") {
+                    let decrypted = decrypt_data(&contents, key, nonce)
+                        .map_err(|e| format!("Failed to decrypt {}: {}", file_name, e))?;
+
+                    // Strip .enc extension from filename
+                    let out_name = file_name[..file_name.len() - 4].to_string();
+                    (staging_dir.join(out_name), decrypted)
+                } else {
+                    // File without .enc extension - use as-is (version 1 format)
+                    (staging_dir.join(&file_name), contents)
+                }
+            } else {
+                // Unencrypted backup - use as-is
+                (staging_dir.join(&file_name), contents)
+            };
+
             if let Some(parent) = outpath.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
+
             let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
-            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+            outfile
+                .write_all(&final_contents)
+                .map_err(|e| e.to_string())?;
         }
     }
 
     log_info(&app, "backup", "Extraction complete. Applying backup...");
-
-    // Close the current database connection pool before replacing
-    // Note: We need to be careful here - the pool is managed by Tauri state
-    // The safest approach is to close connections, replace file, then app needs restart
 
     // Backup current data in case of failure
     let backup_current = storage.join(".current_backup");
@@ -538,11 +614,9 @@ pub async fn backup_import(
         fs::remove_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
     }
 
-    // Copy new data from staging
+    // Copy new data from staging - database is at database/app.db (or decrypted from app.db.enc)
     let staged_db = staging_dir.join("database/app.db");
     if staged_db.exists() {
-        // For the database, we need to be more careful
-        // Copy to a temp location first
         let temp_db = storage.join("app_new.db");
         fs::copy(&staged_db, &temp_db).map_err(|e| e.to_string())?;
 
@@ -586,7 +660,9 @@ pub async fn backup_import(
     fs::remove_dir_all(&staging_dir).ok();
     fs::remove_dir_all(&backup_current).ok();
 
-    log_info(&app, "backup", "Backup import complete. App restart required.");
+    super::db::reload_database(&app)?;
+
+    log_info(&app, "backup", "Backup import complete!");
 
     Ok(())
 }
@@ -613,20 +689,48 @@ fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
 
 /// List available backups in downloads directory
 #[tauri::command]
-pub fn backup_list() -> Result<Vec<serde_json::Value>, String> {
+pub fn backup_list(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
     let downloads = get_downloads_dir()?;
     let mut backups = Vec::new();
 
+    log_info(
+        &app,
+        "backup",
+        format!("Looking for backups in: {:?}", downloads),
+    );
+
     if !downloads.exists() {
+        log_info(
+            &app,
+            "backup",
+            format!("Downloads directory does not exist: {:?}", downloads),
+        );
         return Ok(backups);
     }
 
-    for entry in fs::read_dir(&downloads).map_err(|e| e.to_string())? {
+    let read_result = fs::read_dir(&downloads);
+    match &read_result {
+        Ok(_) => log_info(
+            &app,
+            "backup",
+            "Successfully opened downloads directory".to_string(),
+        ),
+        Err(e) => log_info(
+            &app,
+            "backup",
+            format!("Failed to read downloads directory: {}", e),
+        ),
+    }
+
+    for entry in read_result.map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
 
+        log_info(&app, "backup", format!("Found file: {:?}", path));
+
         if let Some(ext) = path.extension() {
             if ext == "lettuce" {
+                log_info(&app, "backup", format!("Found .lettuce backup: {:?}", path));
                 if let Ok(info) = backup_get_info(path.to_string_lossy().to_string()) {
                     let mut info_obj = info;
                     if let Some(obj) = info_obj.as_object_mut() {
@@ -649,6 +753,12 @@ pub fn backup_list() -> Result<Vec<serde_json::Value>, String> {
         }
     }
 
+    log_info(
+        &app,
+        "backup",
+        format!("Found {} backups total", backups.len()),
+    );
+
     // Sort by creation date descending
     backups.sort_by(|a, b| {
         let a_time = a.get("createdAt").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -663,4 +773,387 @@ pub fn backup_list() -> Result<Vec<serde_json::Value>, String> {
 #[tauri::command]
 pub fn backup_delete(backup_path: String) -> Result<(), String> {
     fs::remove_file(&backup_path).map_err(|e| format!("Failed to delete backup: {}", e))
+}
+
+/// Get backup info from bytes (for Android content URI support)
+#[tauri::command]
+pub fn backup_get_info_from_bytes(data: Vec<u8>) -> Result<serde_json::Value, String> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to read backup archive: {}", e))?;
+
+    // Read manifest
+    let mut manifest_file = archive
+        .by_name("manifest.json")
+        .map_err(|e| format!("Invalid backup: missing manifest: {}", e))?;
+
+    let mut manifest_str = String::new();
+    manifest_file
+        .read_to_string(&mut manifest_str)
+        .map_err(|e| e.to_string())?;
+
+    let manifest: BackupManifest =
+        serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?;
+
+    // Count files
+    drop(manifest_file);
+    let mut total_files = 0;
+    let mut image_count = 0;
+    let mut avatar_count = 0;
+    let mut attachment_count = 0;
+
+    for i in 0..archive.len() {
+        if let Ok(file) = archive.by_index(i) {
+            let name = file.name();
+            if !file.is_dir() {
+                total_files += 1;
+                if name.starts_with("images/") {
+                    image_count += 1;
+                } else if name.starts_with("avatars/") {
+                    avatar_count += 1;
+                } else if name.starts_with("attachments/") {
+                    attachment_count += 1;
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "version": manifest.version,
+        "createdAt": manifest.created_at,
+        "appVersion": manifest.app_version,
+        "encrypted": manifest.encrypted,
+        "totalFiles": total_files,
+        "imageCount": image_count,
+        "avatarCount": avatar_count,
+        "attachmentCount": attachment_count,
+    }))
+}
+
+/// Check if backup is encrypted from bytes
+#[tauri::command]
+pub fn backup_check_encrypted_from_bytes(data: Vec<u8>) -> Result<bool, String> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to read backup archive: {}", e))?;
+
+    let mut manifest_file = archive
+        .by_name("manifest.json")
+        .map_err(|e| format!("Invalid backup: missing manifest: {}", e))?;
+
+    let mut manifest_str = String::new();
+    manifest_file
+        .read_to_string(&mut manifest_str)
+        .map_err(|e| e.to_string())?;
+
+    let manifest: BackupManifest =
+        serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?;
+
+    Ok(manifest.encrypted)
+}
+
+/// Verify password for backup from bytes
+#[tauri::command]
+pub fn backup_verify_password_from_bytes(data: Vec<u8>, password: String) -> Result<bool, String> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to read backup archive: {}", e))?;
+
+    let mut manifest_file = archive
+        .by_name("manifest.json")
+        .map_err(|e| format!("Invalid backup: missing manifest: {}", e))?;
+
+    let mut manifest_str = String::new();
+    manifest_file
+        .read_to_string(&mut manifest_str)
+        .map_err(|e| e.to_string())?;
+
+    let manifest: BackupManifest =
+        serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?;
+
+    if !manifest.encrypted {
+        return Ok(true);
+    }
+
+    let salt_b64 = manifest
+        .salt
+        .ok_or_else(|| "Missing salt in encrypted backup".to_string())?;
+    let nonce_b64 = manifest
+        .nonce
+        .ok_or_else(|| "Missing nonce in encrypted backup".to_string())?;
+
+    let salt_vec = general_purpose::STANDARD
+        .decode(&salt_b64)
+        .map_err(|e| e.to_string())?;
+    let nonce_vec = general_purpose::STANDARD
+        .decode(&nonce_b64)
+        .map_err(|e| e.to_string())?;
+
+    let mut salt = [0u8; 16];
+    let mut nonce = [0u8; 24];
+    salt.copy_from_slice(&salt_vec);
+    nonce.copy_from_slice(&nonce_vec);
+
+    let key = derive_key_from_password(&password, &salt);
+
+    drop(manifest_file);
+    let mut marker_file = archive
+        .by_name("encrypted_marker.bin")
+        .map_err(|e| format!("Invalid backup: missing marker: {}", e))?;
+
+    let mut encrypted_marker = Vec::new();
+    marker_file
+        .read_to_end(&mut encrypted_marker)
+        .map_err(|e| e.to_string())?;
+
+    match decrypt_data(&encrypted_marker, &key, &nonce) {
+        Ok(decrypted) => Ok(decrypted == b"LETTUCE_BACKUP_VERIFIED"),
+        Err(_) => Ok(false),
+    }
+}
+
+/// Import backup from bytes (for Android content URI support)
+#[tauri::command]
+pub async fn backup_import_from_bytes(
+    app: tauri::AppHandle,
+    data: Vec<u8>,
+    password: Option<String>,
+) -> Result<(), String> {
+    let storage = storage_root(&app)?;
+
+    log_info(&app, "backup", "Starting backup import from bytes...");
+
+    // Read manifest
+    let manifest: BackupManifest = {
+        let cursor = std::io::Cursor::new(&data);
+        let mut archive =
+            ZipArchive::new(cursor).map_err(|e| format!("Failed to read backup archive: {}", e))?;
+
+        let mut manifest_file = archive
+            .by_name("manifest.json")
+            .map_err(|e| format!("Invalid backup: missing manifest: {}", e))?;
+
+        let mut manifest_str = String::new();
+        manifest_file
+            .read_to_string(&mut manifest_str)
+            .map_err(|e| e.to_string())?;
+
+        serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?
+    };
+
+    // Prepare encryption params if encrypted
+    let encryption_params: Option<([u8; 32], [u8; 24])> = if manifest.encrypted {
+        let pwd = password
+            .as_ref()
+            .ok_or_else(|| "Password required for encrypted backup".to_string())?;
+
+        let salt_b64 = manifest
+            .salt
+            .as_ref()
+            .ok_or_else(|| "Missing salt".to_string())?;
+        let nonce_b64 = manifest
+            .nonce
+            .as_ref()
+            .ok_or_else(|| "Missing nonce".to_string())?;
+
+        let salt_vec = general_purpose::STANDARD
+            .decode(salt_b64)
+            .map_err(|e| e.to_string())?;
+        let nonce_vec = general_purpose::STANDARD
+            .decode(nonce_b64)
+            .map_err(|e| e.to_string())?;
+
+        let mut salt = [0u8; 16];
+        let mut nonce = [0u8; 24];
+        salt.copy_from_slice(&salt_vec);
+        nonce.copy_from_slice(&nonce_vec);
+
+        let key = derive_key_from_password(pwd, &salt);
+
+        // Verify marker BEFORE proceeding - this validates the password
+        let cursor = std::io::Cursor::new(&data);
+        let mut archive = ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+
+        let mut marker_file = archive
+            .by_name("encrypted_marker.bin")
+            .map_err(|e| format!("Invalid backup: missing encryption marker: {}", e))?;
+
+        let mut encrypted_marker = Vec::new();
+        marker_file
+            .read_to_end(&mut encrypted_marker)
+            .map_err(|e| e.to_string())?;
+
+        let decrypted = decrypt_data(&encrypted_marker, &key, &nonce)
+            .map_err(|_| "Invalid password - decryption failed".to_string())?;
+
+        if decrypted != b"LETTUCE_BACKUP_VERIFIED" {
+            return Err("Invalid password - verification marker mismatch".to_string());
+        }
+
+        log_info(&app, "backup", "Password verified successfully");
+        Some((key, nonce))
+    } else {
+        None
+    };
+
+    // Create a staging directory
+    let staging_dir = storage.join(".import_staging");
+    if staging_dir.exists() {
+        fs::remove_dir_all(&staging_dir).map_err(|e| e.to_string())?;
+    }
+    fs::create_dir_all(&staging_dir).map_err(|e| e.to_string())?;
+
+    log_info(&app, "backup", "Extracting and decrypting backup files...");
+
+    // Extract all files to staging, decrypting as needed
+    let cursor = std::io::Cursor::new(&data);
+    let mut archive = ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let file_name = file.name().to_string();
+
+        // Skip manifest and marker
+        if file_name == "manifest.json" || file_name == "encrypted_marker.bin" {
+            continue;
+        }
+
+        if file.is_dir() {
+            let outpath = staging_dir.join(&file_name);
+            fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            // Read file contents
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).map_err(|e| e.to_string())?;
+
+            // Determine output path and whether to decrypt
+            // In version 1 backups, only the marker was encrypted, not the actual files
+            // In version 2+, encrypted files have .enc extension
+            let (outpath, final_contents) = if let Some((ref key, ref nonce)) = encryption_params {
+                // Only decrypt files with .enc extension
+                // This supports version 1 backups where files weren't encrypted
+                if file_name.ends_with(".enc") {
+                    let decrypted = decrypt_data(&contents, key, nonce)
+                        .map_err(|e| format!("Failed to decrypt {}: {}", file_name, e))?;
+
+                    // Strip .enc extension from filename
+                    let out_name = file_name[..file_name.len() - 4].to_string();
+                    (staging_dir.join(out_name), decrypted)
+                } else {
+                    // File without .enc extension - use as-is (version 1 format)
+                    (staging_dir.join(&file_name), contents)
+                }
+            } else {
+                // Unencrypted backup - use as-is
+                (staging_dir.join(&file_name), contents)
+            };
+
+            if let Some(parent) = outpath.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+
+            let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
+            outfile
+                .write_all(&final_contents)
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
+    log_info(&app, "backup", "Extraction complete. Applying backup...");
+
+    // Apply the backup - database is at database/app.db (decrypted from app.db.enc if encrypted)
+    let staging_db = staging_dir.join("database/app.db");
+    let target_db = db_path(&app)?;
+
+    log_info(
+        &app,
+        "backup",
+        format!(
+            "Staging DB: {:?} (exists: {})",
+            staging_db,
+            staging_db.exists()
+        ),
+    );
+
+    if staging_db.exists() {
+        log_info(&app, "backup", "Restoring database...");
+
+        // Get the staging DB size for logging
+        if let Ok(metadata) = fs::metadata(&staging_db) {
+            log_info(
+                &app,
+                "backup",
+                format!("Staging DB size: {} bytes", metadata.len()),
+            );
+        }
+
+        // Delete the existing database files first
+        if target_db.exists() {
+            fs::remove_file(&target_db)
+                .map_err(|e| format!("Failed to remove old database: {}", e))?;
+        }
+        let wal = target_db.with_extension("db-wal");
+        if wal.exists() {
+            let _ = fs::remove_file(&wal);
+        }
+        let shm = target_db.with_extension("db-shm");
+        if shm.exists() {
+            let _ = fs::remove_file(&shm);
+        }
+
+        // Copy the staging database to the target location
+        fs::copy(&staging_db, &target_db).map_err(|e| format!("Failed to copy database: {}", e))?;
+
+        log_info(
+            &app,
+            "backup",
+            format!("Database restored to {:?}", target_db),
+        );
+    } else {
+        log_info(
+            &app,
+            "backup",
+            "WARNING: No database found in backup staging area!",
+        );
+    }
+
+    // Copy images, avatars, attachments
+    for dir_name in &["images", "avatars", "attachments"] {
+        let staging_subdir = staging_dir.join(dir_name);
+        let target_subdir = storage.join(dir_name);
+
+        if staging_subdir.exists() {
+            log_info(&app, "backup", format!("Restoring {}...", dir_name));
+            fs::create_dir_all(&target_subdir).map_err(|e| e.to_string())?;
+
+            for entry in WalkDir::new(&staging_subdir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                let path = entry.path();
+                if path.is_file() {
+                    let relative = path
+                        .strip_prefix(&staging_subdir)
+                        .map_err(|e| e.to_string())?;
+                    let target_path = target_subdir.join(relative);
+
+                    if let Some(parent) = target_path.parent() {
+                        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    }
+
+                    fs::copy(path, &target_path).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+
+    // Cleanup staging
+    fs::remove_dir_all(&staging_dir).ok();
+
+    // Hot-reload the database pool to use the new database
+    super::db::reload_database(&app)?;
+
+    log_info(&app, "backup", "Backup import complete!");
+
+    Ok(())
 }

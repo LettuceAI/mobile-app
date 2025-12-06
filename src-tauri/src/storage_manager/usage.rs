@@ -25,9 +25,6 @@ pub fn storage_clear_all(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn storage_reset_database(app: tauri::AppHandle) -> Result<(), String> {
-    use super::db::{init_db, init_pool};
-    use tauri::Manager;
-
     // Get the database path
     let db_path = db_path(&app)?;
 
@@ -47,30 +44,29 @@ pub async fn storage_reset_database(app: tauri::AppHandle) -> Result<(), String>
         let _ = fs::remove_file(&shm_path);
     }
 
+    // Delete storage directories (images, avatars, attachments)
+    let storage = storage_root(&app)?;
+    let dirs_to_clear = ["images", "avatars", "attachments"];
+    for dir_name in dirs_to_clear {
+        let dir_path = storage.join(dir_name);
+        if dir_path.exists() {
+            let _ = fs::remove_dir_all(&dir_path);
+        }
+    }
+
     // Delete embedding model files
     let lettuce_dir = crate::utils::lettuce_dir(&app)?;
     let model_dir = lettuce_dir.join("models").join("embedding");
     if model_dir.exists() {
-        fs::remove_dir_all(&model_dir)
-            .map_err(|e| format!("Failed to delete embedding models: {}", e))?;
+        let _ = fs::remove_dir_all(&model_dir);
     }
 
     // Reset the download state since we deleted the model files
     crate::embedding_model::reset_download_state().await;
 
-    // Re-initialize the database pool
-    let pool = init_pool(&app)?;
-    let conn = pool
-        .get()
-        .map_err(|e| format!("Failed to get connection: {}", e))?;
-
-    // Initialize the schema
-    init_db(&app, &conn)?;
-
-    // Update the app state with the new pool
-    {
-        let _ = app.manage(pool);
-    }
+    // Note: The database pool will be re-created automatically on next access
+    // We don't try to re-manage it here because app.manage() won't replace existing state
+    // The app should be restarted after reset for clean state
 
     Ok(())
 }
