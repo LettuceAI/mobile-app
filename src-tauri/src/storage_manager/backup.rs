@@ -10,6 +10,7 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::time::Duration;
+use tauri::Manager;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
@@ -1155,5 +1156,293 @@ pub async fn backup_import_from_bytes(
 
     log_info(&app, "backup", "Backup import complete!");
 
+    Ok(())
+}
+
+/// Check if a backup contains characters with dynamic memory enabled
+#[tauri::command]
+pub async fn backup_check_dynamic_memory(
+    app: tauri::AppHandle,
+    backup_path: String,
+    password: Option<String>,
+) -> Result<bool, String> {
+    use crate::utils::log_info;
+    
+    log_info(&app, "backup_check_dynamic_memory", format!("Checking backup at: {}", backup_path));
+    
+    let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
+
+    // Read manifest to check if encrypted
+    let manifest: BackupManifest = {
+        let mut manifest_file = archive
+            .by_name("manifest.json")
+            .map_err(|e| format!("Invalid backup: missing manifest: {}", e))?;
+
+        let mut manifest_str = String::new();
+        manifest_file
+            .read_to_string(&mut manifest_str)
+            .map_err(|e| e.to_string())?;
+
+        serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?
+    };
+
+    log_info(&app, "backup_check_dynamic_memory", format!("Manifest encrypted: {}", manifest.encrypted));
+
+    // Prepare encryption params if needed
+    let encryption_params: Option<([u8; 32], [u8; 24])> = if manifest.encrypted {
+        let pwd = password
+            .as_ref()
+            .ok_or_else(|| "Password required for encrypted backup".to_string())?;
+
+        let salt_b64 = manifest
+            .salt
+            .as_ref()
+            .ok_or_else(|| "Missing salt".to_string())?;
+        let nonce_b64 = manifest
+            .nonce
+            .as_ref()
+            .ok_or_else(|| "Missing nonce".to_string())?;
+
+        let salt_vec = general_purpose::STANDARD
+            .decode(salt_b64)
+            .map_err(|e| e.to_string())?;
+        let nonce_vec = general_purpose::STANDARD
+            .decode(nonce_b64)
+            .map_err(|e| e.to_string())?;
+
+        let mut salt = [0u8; 16];
+        let mut nonce = [0u8; 24];
+        salt.copy_from_slice(&salt_vec);
+        nonce.copy_from_slice(&nonce_vec);
+
+        let key = derive_key_from_password(pwd, &salt);
+        Some((key, nonce))
+    } else {
+        None
+    };
+
+    // Read the database file - path depends on encryption
+    let db_path = if manifest.encrypted {
+        "database/app.db.enc"
+    } else {
+        "database/app.db"
+    };
+    
+    log_info(&app, "backup_check_dynamic_memory", format!("Looking for database at: {}", db_path));
+    
+    let mut db_file = archive
+        .by_name(db_path)
+        .map_err(|e| format!("Invalid backup: missing database at {}: {}", db_path, e))?;
+
+    let mut db_data = Vec::new();
+    db_file.read_to_end(&mut db_data).map_err(|e| e.to_string())?;
+
+    log_info(&app, "backup_check_dynamic_memory", format!("Read {} bytes of database", db_data.len()));
+
+    // Decrypt if needed
+    let final_db_data = if let Some((key, nonce)) = encryption_params {
+        log_info(&app, "backup_check_dynamic_memory", "Decrypting database...".to_string());
+        decrypt_data(&db_data, &key, &nonce)?
+    } else {
+        db_data
+    };
+
+    // Write to a temporary file to query it
+    let temp_db = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("temp_backup_check.db");
+
+    fs::write(&temp_db, &final_db_data).map_err(|e| e.to_string())?;
+
+    // Query for characters with dynamic memory
+    let result = (|| -> Result<bool, String> {
+        let conn = Connection::open(&temp_db).map_err(|e| e.to_string())?;
+        
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM characters WHERE memory_type = 'dynamic'")
+            .map_err(|e| e.to_string())?;
+        
+        let count: i64 = stmt
+            .query_row([], |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+        
+        log_info(&app, "backup_check_dynamic_memory", format!("Found {} characters with dynamic memory", count));
+        
+        Ok(count > 0)
+    })();
+
+    // Clean up temp file
+    fs::remove_file(&temp_db).ok();
+
+    log_info(&app, "backup_check_dynamic_memory", format!("Result: {:?}", result));
+    result
+}
+
+/// Check if a backup (from bytes) contains characters with dynamic memory enabled
+#[tauri::command]
+pub async fn backup_check_dynamic_memory_from_bytes(
+    app: tauri::AppHandle,
+    data: Vec<u8>,
+    password: Option<String>,
+) -> Result<bool, String> {
+    use crate::utils::log_info;
+    use std::io::Cursor;
+    
+    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Checking backup from bytes ({} bytes)", data.len()));
+
+    let cursor = Cursor::new(data);
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| {
+            log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to read archive: {}", e));
+            format!("Failed to read backup archive: {}", e)
+        })?;
+
+    log_info(&app, "backup_check_dynamic_memory_from_bytes", "Successfully opened archive".to_string());
+
+    // Read manifest to check if encrypted
+    let manifest: BackupManifest = {
+        let mut manifest_file = archive
+            .by_name("manifest.json")
+            .map_err(|e| {
+                log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to read manifest: {}", e));
+                format!("Invalid backup: missing manifest: {}", e)
+            })?;
+
+        let mut manifest_str = String::new();
+        manifest_file
+            .read_to_string(&mut manifest_str)
+            .map_err(|e| e.to_string())?;
+
+        serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?
+    };
+
+    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Manifest encrypted: {}", manifest.encrypted));
+
+    // Prepare encryption params if needed
+    let encryption_params: Option<([u8; 32], [u8; 24])> = if manifest.encrypted {
+        let pwd = password
+            .as_ref()
+            .ok_or_else(|| "Password required for encrypted backup".to_string())?;
+
+        let salt_b64 = manifest
+            .salt
+            .as_ref()
+            .ok_or_else(|| "Missing salt".to_string())?;
+        let nonce_b64 = manifest
+            .nonce
+            .as_ref()
+            .ok_or_else(|| "Missing nonce".to_string())?;
+
+        let salt_vec = general_purpose::STANDARD
+            .decode(salt_b64)
+            .map_err(|e| e.to_string())?;
+        let nonce_vec = general_purpose::STANDARD
+            .decode(nonce_b64)
+            .map_err(|e| e.to_string())?;
+
+        let mut salt = [0u8; 16];
+        let mut nonce = [0u8; 24];
+        salt.copy_from_slice(&salt_vec);
+        nonce.copy_from_slice(&nonce_vec);
+
+        let key = derive_key_from_password(pwd, &salt);
+        Some((key, nonce))
+    } else {
+        None
+    };
+
+    // Read the database file - path depends on encryption
+    let db_path = if manifest.encrypted {
+        "database/app.db.enc"
+    } else {
+        "database/app.db"
+    };
+    
+    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Looking for database at: {}", db_path));
+    
+    let mut db_file = archive
+        .by_name(db_path)
+        .map_err(|e| {
+            log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to find database at {}: {}", db_path, e));
+            format!("Invalid backup: missing database at {}: {}", db_path, e)
+        })?;
+
+    let mut db_data = Vec::new();
+    db_file.read_to_end(&mut db_data).map_err(|e| e.to_string())?;
+
+    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Read {} bytes of database", db_data.len()));
+
+    // Decrypt if needed
+    let final_db_data = if let Some((key, nonce)) = encryption_params {
+        log_info(&app, "backup_check_dynamic_memory_from_bytes", "Decrypting database...".to_string());
+        decrypt_data(&db_data, &key, &nonce)?
+    } else {
+        db_data
+    };
+
+    // Write to a temporary file to query it
+    let temp_db = app.path().app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("temp_backup_check.db");
+
+    fs::write(&temp_db, &final_db_data).map_err(|e| e.to_string())?;
+
+    // Query for characters with dynamic memory
+    let result = (|| -> Result<bool, String> {
+        let conn = Connection::open(&temp_db).map_err(|e| e.to_string())?;
+        
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM characters WHERE memory_type = 'dynamic'")
+            .map_err(|e| {
+                log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to prepare statement: {}", e));
+                e.to_string()
+            })?;
+        
+        let count: i64 = stmt
+            .query_row([], |row| row.get(0))
+            .map_err(|e| {
+                log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to execute query: {}", e));
+                e.to_string()
+            })?;
+        
+        log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Found {} characters with dynamic memory", count));
+        
+        Ok(count > 0)
+    })();
+
+    // Clean up temp file
+    fs::remove_file(&temp_db).ok();
+
+    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Final result: {:?}", result));
+    result
+}
+
+/// Disable dynamic memory for all characters
+/// This is called after importing a backup when the user doesn't want to download the embedding model
+#[tauri::command]
+pub async fn backup_disable_dynamic_memory(app: tauri::AppHandle) -> Result<(), String> {
+    log_info(&app, "backup", "Disabling dynamic memory for all characters...");
+    
+    let conn = open_db(&app)?;
+    
+    // Update all characters to use manual memory
+    conn.execute(
+        "UPDATE characters SET memory_type = 'manual' WHERE memory_type = 'dynamic'",
+        [],
+    )
+    .map_err(|e| {
+        log_info(&app, "backup", format!("Failed to disable dynamic memory: {}", e));
+        e.to_string()
+    })?;
+    
+    let affected = conn.changes();
+    
+    log_info(&app, "backup", format!("Updated {} characters to manual memory", affected));
+    
+    // Reload database to ensure frontend gets updated data
+    super::db::reload_database(&app)?;
+    
     Ok(())
 }
