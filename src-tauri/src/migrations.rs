@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-const CURRENT_MIGRATION_VERSION: u32 = 15;
+pub const CURRENT_MIGRATION_VERSION: u32 = 16;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -193,6 +193,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v14_to_v15(app)?;
         version = 15;
+    }
+
+    if version < 16 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v15 -> v16: Backfill token_count for existing memory embeddings".to_string(),
+        );
+        migrate_v15_to_v16(app)?;
+        version = 16;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -1000,6 +1010,112 @@ fn migrate_v14_to_v15(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT '[]'",
             [],
         );
+    }
+
+    Ok(())
+}
+
+/// Migration v15 -> v16: backfill token_count for existing memory embeddings and add memory_summary_token_count
+fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+    use crate::tokenizer::count_tokens;
+    use serde_json::Value;
+
+    let conn = open_db(app)?;
+
+    // Add memory_summary_token_count column if it doesn't exist
+    let mut has_column = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "memory_summary_token_count" {
+            has_column = true;
+            break;
+        }
+    }
+
+    if !has_column {
+        let _ = conn.execute(
+            "ALTER TABLE sessions ADD COLUMN memory_summary_token_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+
+    // Backfill token counts for memory_embeddings
+    let mut stmt = conn
+        .prepare("SELECT id, memory_embeddings FROM sessions WHERE memory_embeddings IS NOT NULL AND memory_embeddings != '[]'")
+        .map_err(|e| e.to_string())?;
+
+    let session_rows: Vec<(String, String)> = stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    // Process each session
+    for (session_id, embeddings_json) in session_rows {
+        let mut embeddings: Vec<Value> = serde_json::from_str(&embeddings_json)
+            .map_err(|e| format!("Failed to parse memory_embeddings for session {}: {}", session_id, e))?;
+
+        let mut updated = false;
+
+        for embedding in &mut embeddings {
+            // Check if tokenCount already exists
+            if embedding.get("tokenCount").is_some() {
+                continue;
+            }
+
+            // Get the text field
+            if let Some(text) = embedding.get("text").and_then(|v| v.as_str()) {
+                // Calculate token count
+                let token_count = count_tokens(app, text).unwrap_or(0);
+                
+                // Add tokenCount field
+                if let Value::Object(map) = embedding {
+                    map.insert("tokenCount".to_string(), Value::Number(token_count.into()));
+                    updated = true;
+                }
+            }
+        }
+
+        // Update the session if any embeddings were modified
+        if updated {
+            let updated_json = serde_json::to_string(&embeddings)
+                .map_err(|e| format!("Failed to serialize updated embeddings: {}", e))?;
+
+            conn.execute(
+                "UPDATE sessions SET memory_embeddings = ?1 WHERE id = ?2",
+                [&updated_json, &session_id],
+            )
+            .map_err(|e| format!("Failed to update session {}: {}", session_id, e))?;
+        }
+    }
+
+    // Backfill token counts for memory_summary
+    let mut stmt = conn
+        .prepare("SELECT id, memory_summary FROM sessions WHERE memory_summary IS NOT NULL AND memory_summary != '' AND memory_summary_token_count = 0")
+        .map_err(|e| e.to_string())?;
+
+    let summary_rows: Vec<(String, String)> = stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    for (session_id, summary) in summary_rows {
+        let token_count = count_tokens(app, &summary).unwrap_or(0);
+        
+        conn.execute(
+            "UPDATE sessions SET memory_summary_token_count = ?1 WHERE id = ?2",
+            [&token_count.to_string(), &session_id],
+        )
+        .map_err(|e| format!("Failed to update summary token count for session {}: {}", session_id, e))?;
     }
 
     Ok(())

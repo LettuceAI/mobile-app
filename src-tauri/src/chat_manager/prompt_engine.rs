@@ -442,6 +442,7 @@ mod tests {
             advanced_model_settings: None,
             memories: vec![],
             memory_summary: None,
+            memory_summary_token_count: 0,
             memory_tool_events: vec![],
             messages: vec![],
             archived: false,

@@ -1702,6 +1702,7 @@ pub fn render_prompt_preview(
             memories: vec![],
             memory_embeddings: vec![],
             memory_summary: None,
+            memory_summary_token_count: 0,
             memory_tool_events: vec![],
         }
     };
@@ -1882,6 +1883,7 @@ async fn process_dynamic_memory_cycle(
                 "createdAt": now_millis().unwrap_or_default(),
             });
             session.memory_summary = Some(summary.clone());
+            session.memory_summary_token_count = crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
             session.memory_tool_events.push(event);
             if session.memory_tool_events.len() > 50 {
                 let excess = session.memory_tool_events.len() - 50;
@@ -1894,6 +1896,7 @@ async fn process_dynamic_memory_cycle(
     };
 
     session.memory_summary = Some(summary.clone());
+    session.memory_summary_token_count = crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
     let event = json!({
         "id": Uuid::new_v4().to_string(),
         "windowStart": total_convo_at_start.saturating_sub(window_size),
@@ -2055,12 +2058,14 @@ async fn run_memory_tool_update(
                                 None
                             }
                         };
+                    let token_count = crate::tokenizer::count_tokens(app, &text).unwrap_or(0);
                     session.memories.push(text.clone());
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
                         text,
                         embedding: embedding.unwrap_or_default(),
                         created_at: now_millis().unwrap_or_default(),
+                        token_count,
                     });
                     actions_log.push(json!({
                         "name": "create_memory",

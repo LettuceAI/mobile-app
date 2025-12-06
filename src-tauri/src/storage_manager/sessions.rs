@@ -9,10 +9,10 @@ use crate::utils::{log_error, log_warn};
 fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
         .query_row(
-            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
+            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<i64>>(7)?, r.get::<_, Option<f64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<i64>>(10)?, r.get::<_, String>(11)?, r.get::<_, String>(12)?, r.get::<_, Option<String>>(13)?, r.get::<_, String>(14)?, r.get::<_, i64>(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?
+                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<i64>>(7)?, r.get::<_, Option<f64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<i64>>(10)?, r.get::<_, String>(11)?, r.get::<_, String>(12)?, r.get::<_, Option<String>>(13)?, r.get::<_, i64>(14)?, r.get::<_, String>(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?
             )),
         )
         .optional()
@@ -32,6 +32,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         memories_json,
         memory_embeddings_json,
         memory_summary,
+        memory_summary_token_count,
         memory_tool_events_json,
         archived,
         created_at,
@@ -160,6 +161,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         "memories": memories,
         "memoryEmbeddings": memory_embeddings,
         "memorySummary": memory_summary.unwrap_or_default(),
+        "memorySummaryTokenCount": memory_summary_token_count,
         "memoryToolEvents": memory_tool_events,
         "messages": messages,
         "archived": archived != 0,
@@ -241,6 +243,10 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
         .get("memorySummary")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let memory_summary_token_count = s
+        .get("memorySummaryTokenCount")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     let memory_tool_events_json = match s.get("memoryToolEvents") {
         Some(v) => serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string()),
         None => "[]".to_string(),
@@ -268,8 +274,8 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
-        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_tool_events, archived, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               character_id=excluded.character_id,
               title=excluded.title,
@@ -285,10 +291,11 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
               memories=excluded.memories,
               memory_embeddings=excluded.memory_embeddings,
               memory_summary=excluded.memory_summary,
+              memory_summary_token_count=excluded.memory_summary_token_count,
               memory_tool_events=excluded.memory_tool_events,
               archived=excluded.archived,
               updated_at=excluded.updated_at"#,
-        params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, &memories_json, &memory_embeddings_json, memory_summary, &memory_tool_events_json, archived, created_at, updated_at],
+        params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, &memories_json, &memory_embeddings_json, memory_summary, memory_summary_token_count, &memory_tool_events_json, archived, created_at, updated_at],
     ).map_err(|e| e.to_string())?;
 
     // Replace messages
@@ -486,11 +493,15 @@ pub async fn session_add_memory(
         }
     };
 
+    // Count tokens (best-effort)
+    let token_count = crate::tokenizer::count_tokens(&app, &memory).unwrap_or(0);
+
     memory_embeddings.push(serde_json::json!({
         "id": uuid::Uuid::new_v4().to_string(),
         "text": memory.clone(),
         "embedding": embedding,
-        "createdAt": now_ms() as i64
+        "createdAt": now_ms() as i64,
+        "tokenCount": token_count,
     }));
 
     // Save back

@@ -413,8 +413,10 @@ export const SessionSchema = z.object({
     text: z.string(),
     embedding: z.array(z.number()),
     createdAt: z.number().int(),
+    tokenCount: z.number().int().nonnegative().default(0),
   })).default([]).optional(),
   memorySummary: z.string().default("").optional(),
+  memorySummaryTokenCount: z.number().default(0),
   memoryToolEvents: z.array(z.object({
     id: z.string(),
     windowStart: z.number().int(),

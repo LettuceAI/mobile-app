@@ -11,6 +11,7 @@ mod pricing_cache;
 mod providers;
 mod serde_utils;
 mod storage_manager;
+mod tokenizer;
 mod transport;
 mod usage;
 mod utils;

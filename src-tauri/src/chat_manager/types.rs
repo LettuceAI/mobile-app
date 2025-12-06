@@ -194,6 +194,8 @@ pub struct MemoryEmbedding {
     pub embedding: Vec<f32>,
     #[serde(default)]
     pub created_at: u64,
+    #[serde(default)]
+    pub token_count: u32,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -238,6 +240,8 @@ pub struct Session {
     pub memory_embeddings: Vec<MemoryEmbedding>,
     #[serde(default)]
     pub memory_summary: Option<String>,
+    #[serde(default)]
+    pub memory_summary_token_count: u32,
     #[serde(default)]
     pub memory_tool_events: Vec<serde_json::Value>,
     #[serde(default)]

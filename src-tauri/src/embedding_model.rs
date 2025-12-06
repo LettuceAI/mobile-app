@@ -52,7 +52,7 @@ lazy_static::lazy_static! {
 }
 
 /// Get the embedding model directory path
-fn embedding_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn embedding_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let lettuce_dir = crate::utils::lettuce_dir(app)?;
     let model_dir = lettuce_dir.join("models").join("embedding");
     Ok(model_dir)
