@@ -22,7 +22,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -129,6 +128,9 @@ pub fn run() {
             storage_manager::backup::backup_check_encrypted_from_bytes,
             storage_manager::backup::backup_verify_password_from_bytes,
             storage_manager::backup::backup_import_from_bytes,
+            storage_manager::backup::backup_check_dynamic_memory,
+            storage_manager::backup::backup_check_dynamic_memory_from_bytes,
+            storage_manager::backup::backup_disable_dynamic_memory,
             storage_manager::importer::legacy_backup_and_remove,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,

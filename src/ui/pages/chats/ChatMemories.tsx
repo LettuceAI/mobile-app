@@ -478,7 +478,6 @@ export function ChatMemoriesPage() {
                 <>
                   <span className="text-white/20">·</span>
                   <span className="flex items-center gap-1">
-                    <span className="text-[10px]">⚡</span>
                     {stats.totalTokens.toLocaleString()} tokens
                   </span>
                 </>
@@ -525,7 +524,6 @@ export function ChatMemoriesPage() {
                           radius.md,
                           "bg-emerald-400/20 text-emerald-200"
                         )}>
-                          <span className="text-[10px]">⚡</span>
                           {session.memorySummaryTokenCount.toLocaleString()} tokens
                         </span>
                       )}
@@ -751,7 +749,6 @@ export function ChatMemoriesPage() {
                                     radius.md,
                                     "bg-white/5 text-white/50"
                                   )}>
-                                    <span className="text-[10px]">⚡</span>
                                     {item.tokenCount.toLocaleString()} tokens
                                   </span>
                                 </div>

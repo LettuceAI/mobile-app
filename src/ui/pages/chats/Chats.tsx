@@ -2,6 +2,7 @@ import { useEffect, useState, memo } from "react";
 import { Edit2, Trash2, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 import { listCharacters, createSession, listSessionIds, getSession, deleteCharacter } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
@@ -20,6 +21,15 @@ export function ChatPage() {
   const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
 
+  const loadCharacters = async () => {
+    try {
+      let list = await listCharacters();
+      setCharacters(list);
+    } catch (err) {
+      console.error("Failed to load characters:", err);
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -29,16 +39,21 @@ export function ChatPage() {
         setLoading(false);
       }
     })();
+
+    // Listen for database reload events to refresh data
+    let unlisten: UnlistenFn | null = null;
+    (async () => {
+      unlisten = await listen("database-reloaded", () => {
+        console.log("Database reloaded, refreshing characters...");
+        loadCharacters();
+      });
+    })();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
-  const loadCharacters = async () => {
-    try {
-      let list = await listCharacters();
-      setCharacters(list);
-    } catch (err) {
-      console.error("Failed to load characters:", err);
-    }
-  };
 
   const startChat = async (character: Character) => {
     try {

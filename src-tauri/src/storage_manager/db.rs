@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 use super::legacy::storage_root;
+use crate::migrations;
 use crate::utils::{log_info, log_warn, now_millis};
 
 pub fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -12,7 +13,7 @@ pub fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type DbConnection = r2d2::PooledConnection<SqliteConnectionManager>;
@@ -85,6 +86,14 @@ pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
         format!("Reloading database from {:?}", path),
     );
 
+    // First, checkpoint the current database to ensure all WAL data is written to the main file
+    {
+        let conn = open_db(app)?;
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            .map_err(|e| format!("WAL checkpoint failed before reload: {}", e))?;
+        log_info(app, "database", "WAL checkpoint completed before reload");
+    }
+
     // Create a new pool for the database path
     let new_pool = create_pool_for_path(&path)?;
 
@@ -101,7 +110,14 @@ pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
     let swappable = app.state::<SwappablePool>();
     swappable.swap(new_pool)?;
 
+    // Ensure the restored database is on the latest schema
+    migrations::run_migrations(app)?;
+
     log_info(app, "database", "Database pool reloaded successfully");
+    
+    // Emit event to frontend so it can refetch data
+    let _ = app.emit("database-reloaded", ());
+    
     Ok(())
 }
 
@@ -318,6 +334,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           selected_variant_id TEXT,
           is_pinned INTEGER NOT NULL DEFAULT 0,
           memory_refs TEXT NOT NULL DEFAULT '[]',
+          attachments TEXT NOT NULL DEFAULT '[]',
           FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
 

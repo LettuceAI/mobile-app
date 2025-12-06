@@ -205,7 +205,7 @@ export function useBackupRestore() {
     }
   }, [state.exportPassword, state.confirmPassword, loadBackups]);
 
-  const handleImport = useCallback(async () => {
+  const handleImport = useCallback(async (skipDynamicMemoryCheck = false) => {
     const { selectedBackup, importPassword, isPickedFile } = state;
     if (!selectedBackup) return;
 
@@ -216,36 +216,62 @@ export function useBackupRestore() {
 
     try {
       dispatch({ type: "SET_ERROR", payload: null });
+      
+      // Verify password first for encrypted backups
+      if (selectedBackup.encrypted) {
+        const valid = isPickedFile && pickedFileDataRef.current
+          ? await storageBridge.backupVerifyPasswordFromBytes(pickedFileDataRef.current, importPassword)
+          : await storageBridge.backupVerifyPassword(selectedBackup.path, importPassword);
+          
+        if (!valid) {
+          dispatch({ type: "SET_ERROR", payload: "Incorrect password" });
+          return;
+        }
+      }
+      
+      // Check for dynamic memory if not skipping
+      if (!skipDynamicMemoryCheck) {
+        console.log('[useBackupRestore] Checking for dynamic memory in backup...');
+        const hasDynamicMemory = isPickedFile && pickedFileDataRef.current
+          ? await storageBridge.backupCheckDynamicMemoryFromBytes(
+              pickedFileDataRef.current,
+              selectedBackup.encrypted ? importPassword : undefined
+            )
+          : await storageBridge.backupCheckDynamicMemory(
+              selectedBackup.path,
+              selectedBackup.encrypted ? importPassword : undefined
+            );
+
+        console.log('[useBackupRestore] hasDynamicMemory:', hasDynamicMemory);
+
+        if (hasDynamicMemory) {
+          // Check if embedding model exists
+          console.log('[useBackupRestore] Checking if embedding model exists...');
+          const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
+          console.log('[useBackupRestore] hasEmbeddingModel:', hasEmbeddingModel);
+          
+          if (!hasEmbeddingModel) {
+            // Return a special value to trigger the prompt in the UI
+            console.log('[useBackupRestore] Returning needsEmbeddingModel=true');
+            return { needsEmbeddingModel: true };
+          }
+        }
+      }
+
       dispatch({ type: "SET_IMPORTING", payload: true });
 
       if (isPickedFile && pickedFileDataRef.current) {
         // Use byte-based import for picked files (Android content URI workaround)
         const data = pickedFileDataRef.current;
 
-        if (selectedBackup.encrypted) {
-          const valid = await storageBridge.backupVerifyPasswordFromBytes(data, importPassword);
-          if (!valid) {
-            dispatch({ type: "SET_ERROR", payload: "Incorrect password" });
-            dispatch({ type: "SET_IMPORTING", payload: false });
-            return;
-          }
-        }
-
+        // Password already verified above
         await storageBridge.backupImportFromBytes(
           data,
           selectedBackup.encrypted ? importPassword : undefined
         );
       } else {
         // Use path-based import for auto-detected backups
-        if (selectedBackup.encrypted) {
-          const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, importPassword);
-          if (!valid) {
-            dispatch({ type: "SET_ERROR", payload: "Incorrect password" });
-            dispatch({ type: "SET_IMPORTING", payload: false });
-            return;
-          }
-        }
-
+        // Password already verified above
         await storageBridge.backupImport(
           selectedBackup.path,
           selectedBackup.encrypted ? importPassword : undefined
@@ -257,11 +283,13 @@ export function useBackupRestore() {
 
       dispatch({ type: "IMPORT_COMPLETE" });
 
-      // Database has been hot-reloaded - show success and let user navigate
-      alert("Backup restored successfully! Your data has been imported.");
+      // Data is now in the DB via the existing pool connection
+      // No reload needed - UI can fetch fresh data on navigation
+      return { success: true };
     } catch (e) {
       dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "Import failed" });
       dispatch({ type: "SET_IMPORTING", payload: false });
+      return { error: true };
     }
   }, [state]);
 

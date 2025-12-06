@@ -44,7 +44,6 @@ image = { version = "0.25", default-features = false, features = ["webp", "png",
 rusqlite = { version = "0.31", features = ["bundled", "backup"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.24"
-tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 zip = "2"
 walkdir = "2"
 dirs = "5"

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, Image, HardDrive, FileCode } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
@@ -95,23 +95,31 @@ export function SettingsPage() {
   const {
     state: { providers, models, characterCount, isLoading },
   } = useSettingsSummary();
-  const [version, setVersion] = useState<string>('unknown');
-
-  const appVersion: () => Promise<string> = useCallback(async () => {
-    try {
-      const appversion = await invoke("get_app_version");
-      return appversion as string;
-    } catch (error) {
-      console.error("Failed to get app version:", error);
-      return "unknown";
-    }
-  }, []);
+  const [version, setVersion] = useState<string>('loading...');
 
   useEffect(() => {
-    (async () => {
-      setVersion(await appVersion());
-    })();
-  }, [appVersion]);
+    let cancelled = false;
+
+    const loadVersion = async () => {
+      try {
+        const appversion = await invoke<string>("get_app_version");
+        if (!cancelled) {
+          setVersion(appversion);
+        }
+      } catch (error) {
+        console.error("Failed to get app version:", error);
+        if (!cancelled) {
+          setVersion("unknown");
+        }
+      }
+    };
+    
+    loadVersion();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const providerCount = providers.length;
   const modelCount = models.length;
@@ -262,7 +270,7 @@ export function SettingsPage() {
       tone: 'default' as const,
       onClick: () => navigate('/settings/developer')
     }] : [])
-  ]), [providerCount, modelCount, characterCount, navigate]);
+  ]), [providerCount, modelCount, characterCount, navigate, version]);
 
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">

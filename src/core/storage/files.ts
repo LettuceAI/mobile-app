@@ -147,6 +147,9 @@ export const storageBridge = {
   backupCheckEncryptedFromBytes: (data: Uint8Array) => invoke<boolean>("backup_check_encrypted_from_bytes", { data: Array.from(data) }),
   backupVerifyPasswordFromBytes: (data: Uint8Array, password: string) => invoke<boolean>("backup_verify_password_from_bytes", { data: Array.from(data), password }),
   backupImportFromBytes: (data: Uint8Array, password?: string) => invoke("backup_import_from_bytes", { data: Array.from(data), password: password ?? null }) as Promise<void>,
+  backupCheckDynamicMemory: (backupPath: string, password?: string) => invoke<boolean>("backup_check_dynamic_memory", { backupPath, password: password ?? null }),
+  backupCheckDynamicMemoryFromBytes: (data: Uint8Array, password?: string) => invoke<boolean>("backup_check_dynamic_memory_from_bytes", { data: Array.from(data), password: password ?? null }),
+  backupDisableDynamicMemory: () => invoke("backup_disable_dynamic_memory") as Promise<void>,
 
   backupPickFile: async (): Promise<{ data: Uint8Array; filename: string } | null> => {
     try {

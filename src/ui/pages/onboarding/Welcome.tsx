@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, Upload, FileArchive, Lock, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, Upload, FileArchive, Lock, Loader2, Eye, EyeOff, CheckCircle, HardDrive, Download } from "lucide-react";
 import { motion } from "framer-motion";
 
 import {
@@ -23,7 +23,9 @@ export function WelcomePage() {
   const handleConfirmSkip = async () => {
     await setOnboardingCompleted(true);
     await setOnboardingSkipped(true);
-    navigate("/chat");
+    // Small delay to ensure state is persisted before navigation
+    await new Promise(resolve => setTimeout(resolve, 100));
+    navigate("/");
   };
 
   const handleRestoreComplete = async () => {
@@ -356,7 +358,7 @@ interface BackupInfo {
 
 function RestoreBackupModal({
   onClose,
-  onComplete,
+  onComplete: _onComplete,
 }: {
   onClose: () => void;
   onComplete: () => void | Promise<void>;
@@ -371,6 +373,8 @@ function RestoreBackupModal({
   const [showPassword, setShowPassword] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEmbeddingPrompt, setShowEmbeddingPrompt] = useState(false);
+  const navigate = useNavigate();
 
   // Load backups on mount
   useEffect(() => {
@@ -425,7 +429,7 @@ function RestoreBackupModal({
     setTimeout(onClose, 200);
   };
 
-  const handleRestore = async () => {
+  const handleRestore = async (skipDynamicMemoryCheck = false) => {
     if (!selectedBackup) return;
 
     if (selectedBackup.encrypted && password.length < 1) {
@@ -435,36 +439,56 @@ function RestoreBackupModal({
 
     try {
       setError(null);
+      
+      // Verify password first for encrypted backups
+      if (selectedBackup.encrypted) {
+        const valid = isPickedFile && pickedFileDataRef.current
+          ? await storageBridge.backupVerifyPasswordFromBytes(pickedFileDataRef.current, password)
+          : await storageBridge.backupVerifyPassword(selectedBackup.path, password);
+          
+        if (!valid) {
+          setError("Incorrect password");
+          return;
+        }
+      }
+      
+      // Check for dynamic memory if not skipping
+      if (!skipDynamicMemoryCheck) {
+        const hasDynamicMemory = isPickedFile && pickedFileDataRef.current
+          ? await storageBridge.backupCheckDynamicMemoryFromBytes(
+              pickedFileDataRef.current,
+              selectedBackup.encrypted ? password : undefined
+            )
+          : await storageBridge.backupCheckDynamicMemory(
+              selectedBackup.path,
+              selectedBackup.encrypted ? password : undefined
+            );
+
+        if (hasDynamicMemory) {
+          // Check if embedding model exists
+          const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
+          if (!hasEmbeddingModel) {
+            // Show the prompt
+            setShowEmbeddingPrompt(true);
+            return;
+          }
+        }
+      }
+      
       setRestoring(true);
 
       if (isPickedFile && pickedFileDataRef.current) {
         // Use byte-based import for picked files
         const data = pickedFileDataRef.current;
         
-        if (selectedBackup.encrypted) {
-          const valid = await storageBridge.backupVerifyPasswordFromBytes(data, password);
-          if (!valid) {
-            setError("Incorrect password");
-            setRestoring(false);
-            return;
-          }
-        }
-
+        // Password already verified above
         await storageBridge.backupImportFromBytes(
           data,
           selectedBackup.encrypted ? password : undefined
         );
       } else {
         // Use path-based import
-        if (selectedBackup.encrypted) {
-          const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, password);
-          if (!valid) {
-            setError("Incorrect password");
-            setRestoring(false);
-            return;
-          }
-        }
-
+        // Password already verified above
         await storageBridge.backupImport(
           selectedBackup.path,
           selectedBackup.encrypted ? password : undefined
@@ -474,11 +498,52 @@ function RestoreBackupModal({
       pickedFileDataRef.current = null;
       setIsExiting(true);
       setTimeout(() => {
-        alert("Backup restored! The app will now reload.");
-        void onComplete();
+        navigate("/");
       }, 200);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Restore failed");
+      console.log(e)
+      setError(e instanceof Error ? e.message : "Failed to restore backup");
+      setRestoring(false);
+    }
+  };
+
+  const handleDownloadModel = () => {
+    setShowEmbeddingPrompt(false);
+    handleClose();
+    navigate("/settings/embedding-download");
+  };
+
+  const handleDisableAndContinue = async () => {
+    setShowEmbeddingPrompt(false);
+    setRestoring(true);
+    
+    try {
+      // Import the backup first
+      const backupData = isPickedFile ? pickedFileDataRef.current : null;
+      
+      if (backupData) {
+        // Mobile/picked file path
+        await storageBridge.backupImportFromBytes(
+          backupData,
+          password || undefined
+        );
+      } else if (selectedBackup) {
+        // Desktop path
+        if (selectedBackup.encrypted && !password) {
+          setError("Password required for encrypted backup");
+          return;
+        }
+        await storageBridge.backupImport(selectedBackup.path, password || undefined);
+      }
+      
+      // After successful import, disable dynamic memory for all characters
+      await storageBridge.backupDisableDynamicMemory();
+      
+      navigate("/");
+    } catch (error) {
+      console.error("Failed to restore and disable dynamic memory:", error);
+      setError(error instanceof Error ? error.message : "Failed to restore backup");
+    } finally {
       setRestoring(false);
     }
   };
@@ -670,7 +735,7 @@ function RestoreBackupModal({
           {selectedBackup ? (
             <>
               <button
-                onClick={handleRestore}
+                onClick={() => void handleRestore()}
                 disabled={restoring || (selectedBackup.encrypted && password.length < 1)}
                 className={cn(
                   "flex items-center justify-center gap-2 px-6 py-3",
@@ -731,6 +796,83 @@ function RestoreBackupModal({
           )}
         </div>
       </motion.div>
+
+      {/* Dynamic Memory Model Required Modal */}
+      {showEmbeddingPrompt && (
+        <motion.div
+          className="absolute inset-0 z-10 flex items-end justify-center bg-black/60"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <motion.div
+            className={cn(
+              "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6",
+              "rounded-t-3xl",
+              shadows.xl
+            )}
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 350 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-4")}>
+              Embedding Model Required
+            </h3>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
+                <HardDrive className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-amber-200">Dynamic Memory Detected</p>
+                  <p className="mt-1 text-xs text-amber-200/70">
+                    This backup contains characters with dynamic memory enabled, which requires the embedding model (~260MB).
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-sm text-white/60">
+                You can download the model now to enable dynamic memory, or continue without it (dynamic memory will be disabled for affected characters).
+              </p>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  onClick={handleDownloadModel}
+                  className={cn(
+                    "flex items-center justify-center gap-2 px-6 py-3",
+                    radius.md,
+                    "border border-blue-400/40 bg-blue-400/20 text-blue-100",
+                    typography.body.size,
+                    typography.h3.weight,
+                    interactive.transition.fast,
+                    "hover:border-blue-400/60 hover:bg-blue-400/30"
+                  )}
+                >
+                  <Download className="h-4 w-4" />
+                  Download Model
+                </button>
+                <button
+                  onClick={handleDisableAndContinue}
+                  className={cn(
+                    "px-6 py-3",
+                    radius.md,
+                    "border border-white/10 bg-white/5 text-white/60",
+                    typography.body.size,
+                    interactive.transition.fast,
+                    "hover:border-white/20 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  Continue Without Dynamic Memory
+                </button>
+              </div>
+
+              <p className="text-xs text-white/40 text-center">
+                You can re-enable dynamic memory later in character settings after downloading the model.
+              </p>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

@@ -10,7 +10,6 @@
     "opener:default",
     "app-events:default",
     "process:default",
-    "sql:default",
     "dialog:default",
     "fs:default",
     "fs:read-all",

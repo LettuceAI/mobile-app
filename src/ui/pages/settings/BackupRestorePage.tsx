@@ -9,10 +9,14 @@ import {
   Eye,
   EyeOff,
   Lock,
+  HardDrive,
 } from "lucide-react";
 import { interactive, radius, cn } from "../../design-tokens";
 import { BottomMenu } from "../../components/BottomMenu";
 import { useBackupRestore, type BackupInfo } from "./hooks/useBackupRestore";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { storageBridge } from "../../../core/storage/files";
 
 function formatDate(timestamp: number) {
   const date = new Date(timestamp);
@@ -21,6 +25,42 @@ function formatDate(timestamp: number) {
 
 export function BackupRestorePage() {
   const { state, actions } = useBackupRestore();
+  const [showEmbeddingPrompt, setShowEmbeddingPrompt] = useState(false);
+  const navigate = useNavigate();
+
+  const handleRestoreClick = async () => {
+    const result = await actions.handleImport();
+    if (result?.needsEmbeddingModel) {
+      setShowEmbeddingPrompt(true);
+    } else if (result?.success) {
+      // Import complete - navigate to chat, data is ready in DB
+      navigate("/");
+    }
+  };
+
+  const handleDownloadModel = () => {
+    setShowEmbeddingPrompt(false);
+    actions.closeModal();
+    navigate("/settings/embedding-download");
+  };
+
+  const handleDisableAndContinue = async () => {
+    setShowEmbeddingPrompt(false);
+    // Pass true to skip the dynamic memory check and import the backup
+    const result = await actions.handleImport(true);
+    
+    // If import was successful, disable dynamic memory for all characters using backend command
+    if (result?.success) {
+      try {
+        await storageBridge.backupDisableDynamicMemory();
+      } catch (error) {
+        console.error("Failed to disable dynamic memory:", error);
+        // Don't show error to user - the import was successful
+      }
+      // Navigate to chat after successful import
+      navigate("/");
+    }
+  };
 
   return (
     <div className="flex h-full flex-col pb-16">
@@ -290,7 +330,7 @@ export function BackupRestorePage() {
                   Cancel
                 </button>
                 <button
-                  onClick={actions.handleImport}
+                  onClick={handleRestoreClick}
                   disabled={state.importing || (state.selectedBackup.encrypted && state.importPassword.length < 1)}
                   className={cn(
                     "flex flex-1 items-center justify-center gap-2 bg-blue-500 px-4 py-3 text-sm font-medium text-white",
@@ -354,6 +394,57 @@ export function BackupRestorePage() {
               </div>
             </>
           )}
+        </div>
+      </BottomMenu>
+
+      {/* Dynamic Memory Model Required Modal */}
+      <BottomMenu 
+        isOpen={showEmbeddingPrompt} 
+        onClose={() => setShowEmbeddingPrompt(false)} 
+        title="Embedding Model Required"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
+            <HardDrive className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-amber-200">Dynamic Memory Detected</p>
+              <p className="mt-1 text-xs text-amber-200/70">
+                This backup contains characters with dynamic memory enabled, which requires the embedding model (~260MB).
+              </p>
+            </div>
+          </div>
+
+          <p className="text-sm text-white/60">
+            You can download the model now to enable dynamic memory, or continue without it (dynamic memory will be disabled for affected characters).
+          </p>
+
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={handleDownloadModel}
+              className={cn(
+                "flex items-center justify-center gap-2 bg-blue-500 px-4 py-3 text-sm font-medium text-white",
+                radius.lg,
+                "hover:bg-blue-600"
+              )}
+            >
+              <Download className="h-4 w-4" />
+              Download Model
+            </button>
+            <button
+              onClick={handleDisableAndContinue}
+              className={cn(
+                "border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/70",
+                radius.lg,
+                "hover:bg-white/10"
+              )}
+            >
+              Continue Without Dynamic Memory
+            </button>
+          </div>
+
+          <p className="text-xs text-white/40 text-center">
+            You can re-enable dynamic memory later in character settings after downloading the model.
+          </p>
         </div>
       </BottomMenu>
     </div>

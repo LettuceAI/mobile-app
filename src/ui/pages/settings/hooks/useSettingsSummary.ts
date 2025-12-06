@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer } from "react";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 import { readSettings, listCharacters, listPersonas } from "../../../../core/storage/repo";
 import type { Model, ProviderCredential } from "../../../../core/storage/schemas";
@@ -78,6 +79,19 @@ export function useSettingsSummary() {
 
   useEffect(() => {
     void reload();
+
+    // Listen for database reload events to refresh data
+    let unlisten: UnlistenFn | null = null;
+    (async () => {
+      unlisten = await listen("database-reloaded", () => {
+        console.log("Database reloaded, refreshing settings summary...");
+        reload();
+      });
+    })();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, [reload]);
 
   return { state, reload };
