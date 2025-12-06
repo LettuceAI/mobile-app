@@ -321,7 +321,8 @@ export function ChatMemoriesPage() {
       const emb = session.memoryEmbeddings?.[index];
       const id = emb?.id || `mem-${index}`;
       const isAi = id.length <= 6;
-      return { text, index, isAi, id };
+      const tokenCount = emb?.tokenCount || 0;
+      return { text, index, isAi, id, tokenCount };
     });
   }, [session]);
 
@@ -336,8 +337,11 @@ export function ChatMemoriesPage() {
     const total = memoryItems.length;
     const ai = memoryItems.filter(m => m.isAi).length;
     const user = total - ai;
-    return { total, ai, user };
-  }, [memoryItems]);
+    const totalMemoryTokens = memoryItems.reduce((sum, m) => sum + m.tokenCount, 0);
+    const summaryTokens = session?.memorySummaryTokenCount || 0;
+    const totalTokens = totalMemoryTokens + summaryTokens;
+    return { total, ai, user, totalMemoryTokens, summaryTokens, totalTokens };
+  }, [memoryItems, session?.memorySummaryTokenCount]);
 
   const pinnedMessages = useMemo(() => {
     return session?.messages.filter(m => m.isPinned) || [];
@@ -466,8 +470,19 @@ export function ChatMemoriesPage() {
             <div className={cn(typography.body.size, typography.body.weight, colors.text.primary, "truncate")}>
               {character.name}
             </div>
-            <div className={cn(typography.caption.size, colors.text.tertiary)}>
-              {stats.total} {stats.total === 1 ? 'memory' : 'memories'}
+            <div className={cn(typography.caption.size, colors.text.tertiary, "flex items-center gap-2")}>
+              <span>
+                {stats.total} {stats.total === 1 ? 'memory' : 'memories'}
+              </span>
+              {stats.totalTokens > 0 && (
+                <>
+                  <span className="text-white/20">·</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-[10px]">⚡</span>
+                    {stats.totalTokens.toLocaleString()} tokens
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -503,6 +518,17 @@ export function ChatMemoriesPage() {
                       <span className={cn(typography.body.size, typography.body.weight, "text-emerald-100")}>
                         AI Summary
                       </span>
+                      {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 && (
+                        <span className={cn(
+                          typography.caption.size,
+                          "inline-flex items-center gap-1 px-2 py-0.5 ml-1",
+                          radius.md,
+                          "bg-emerald-400/20 text-emerald-200"
+                        )}>
+                          <span className="text-[10px]">⚡</span>
+                          {session.memorySummaryTokenCount.toLocaleString()} tokens
+                        </span>
+                      )}
                     </div>
                     {summaryDraft !== session?.memorySummary && (
                       <button
@@ -717,6 +743,19 @@ export function ChatMemoriesPage() {
                               )}>
                                 {item.text}
                               </p>
+                              {item.tokenCount > 0 && (
+                                <div className="mt-1.5">
+                                  <span className={cn(
+                                    typography.caption.size,
+                                    "inline-flex items-center gap-1 px-2 py-0.5",
+                                    radius.md,
+                                    "bg-white/5 text-white/50"
+                                  )}>
+                                    <span className="text-[10px]">⚡</span>
+                                    {item.tokenCount.toLocaleString()} tokens
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-4 mt-3 pl-11">

@@ -27,6 +27,10 @@ export interface RequestUsage {
   completionTokens?: number;
   totalTokens?: number;
   
+  // Token breakdown for prompt analysis
+  memoryTokens?: number;  // Tokens from memory embeddings
+  summaryTokens?: number; // Tokens from memory summary
+  
   cost?: RequestCost;
   
   success: boolean;

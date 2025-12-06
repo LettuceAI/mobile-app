@@ -21,6 +21,10 @@ pub struct RequestUsage {
     pub completion_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
 
+    // Token breakdown for prompt analysis
+    pub memory_tokens: Option<u64>,  // Tokens from memory embeddings
+    pub summary_tokens: Option<u64>, // Tokens from memory summary
+
     pub cost: Option<RequestCost>, // Calculated cost (only for OpenRouter for now)
 
     pub success: bool,

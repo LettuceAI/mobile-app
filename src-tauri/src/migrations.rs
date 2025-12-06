@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 16;
+pub const CURRENT_MIGRATION_VERSION: u32 = 17;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -199,10 +199,20 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v15 -> v16: Backfill token_count for existing memory embeddings".to_string(),
+            "Running migration v15 -> v16: Backfill token_count for existing memory embeddings and add usage token breakdown".to_string(),
         );
         migrate_v15_to_v16(app)?;
         version = 16;
+    }
+
+    if version < 17 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v16 -> v17: Add memory_tokens and summary_tokens to usage_records".to_string(),
+        );
+        migrate_v16_to_v17(app)?;
+        version = 17;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -1018,7 +1028,6 @@ fn migrate_v14_to_v15(app: &AppHandle) -> Result<(), String> {
 /// Migration v15 -> v16: backfill token_count for existing memory embeddings and add memory_summary_token_count
 fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
     use crate::storage_manager::db::open_db;
-    use crate::tokenizer::count_tokens;
     use serde_json::Value;
 
     let conn = open_db(app)?;
@@ -1046,6 +1055,23 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
             [],
         );
     }
+
+    // Try to backfill token counts only if tokenizer is available
+    // If tokenizer isn't available (embedding model not downloaded), skip backfill
+    // Token counts will be calculated when memories/summaries are created
+    let tokenizer_available = {
+        use crate::embedding_model::embedding_model_dir;
+        let model_dir = embedding_model_dir(app).ok();
+        model_dir.map(|dir| dir.join("tokenizer.json").exists()).unwrap_or(false)
+    };
+
+    if !tokenizer_available {
+        // Skip backfill - token counts will be 0 for existing memories
+        // They'll get proper counts when edited or when new memories are added
+        return Ok(());
+    }
+
+    use crate::tokenizer::count_tokens;
 
     // Backfill token counts for memory_embeddings
     let mut stmt = conn
@@ -1116,6 +1142,49 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
             [&token_count.to_string(), &session_id],
         )
         .map_err(|e| format!("Failed to update summary token count for session {}: {}", session_id, e))?;
+    }
+
+    Ok(())
+}
+
+/// Migration v16 -> v17: add memory_tokens and summary_tokens columns to usage_records
+fn migrate_v16_to_v17(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if memory_tokens column exists
+    let mut has_memory_tokens = false;
+    let mut has_summary_tokens = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(usage_records)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "memory_tokens" {
+            has_memory_tokens = true;
+        }
+        if name == "summary_tokens" {
+            has_summary_tokens = true;
+        }
+    }
+
+    if !has_memory_tokens {
+        let _ = conn.execute(
+            "ALTER TABLE usage_records ADD COLUMN memory_tokens INTEGER",
+            [],
+        );
+    }
+
+    if !has_summary_tokens {
+        let _ = conn.execute(
+            "ALTER TABLE usage_records ADD COLUMN summary_tokens INTEGER",
+            [],
+        );
     }
 
     Ok(())

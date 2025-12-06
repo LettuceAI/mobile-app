@@ -136,11 +136,29 @@ pub async fn record_usage_if_available(
         prompt_tokens: usage_info.prompt_tokens,
         completion_tokens: usage_info.completion_tokens,
         total_tokens: usage_info.total_tokens,
+        memory_tokens: None,  // Will be calculated below
+        summary_tokens: None, // Will be calculated below
         cost: None,
         success: true,
         error_message: None,
         metadata: Default::default(),
     };
+
+    // Calculate memory and summary token counts
+    let mut memory_token_count = 0u64;
+    for emb in &session.memory_embeddings {
+        memory_token_count += emb.token_count as u64;
+    }
+    
+    let summary_token_count = session.memory_summary_token_count as u64;
+
+    if memory_token_count > 0 {
+        request_usage.memory_tokens = Some(memory_token_count);
+    }
+    
+    if summary_token_count > 0 {
+        request_usage.summary_tokens = Some(summary_token_count);
+    }
 
     if provider_cred.provider_id.eq_ignore_ascii_case("openrouter") {
         match get_model_pricing(

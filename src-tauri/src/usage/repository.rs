@@ -40,8 +40,8 @@ impl UsageRepository {
         tx.execute(
             r#"INSERT OR REPLACE INTO usage_records (
                 id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label,
-                operation_type, prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                operation_type, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, prompt_cost, completion_cost, total_cost, success, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             rusqlite::params![
                 usage.id,
                 usage.timestamp as i64,
@@ -56,6 +56,8 @@ impl UsageRepository {
                 usage.prompt_tokens.map(|v| v as i64),
                 usage.completion_tokens.map(|v| v as i64),
                 usage.total_tokens.map(|v| v as i64),
+                usage.memory_tokens.map(|v| v as i64),
+                usage.summary_tokens.map(|v| v as i64),
                 usage.cost.as_ref().map(|c| c.prompt_cost),
                 usage.cost.as_ref().map(|c| c.completion_cost),
                 usage.cost.as_ref().map(|c| c.total_cost),
@@ -115,7 +117,7 @@ impl UsageRepository {
         }
 
         let sql = format!(
-            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens, completion_tokens, total_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
+            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
             if where_clauses.is_empty() { String::new() } else { format!("WHERE {}", where_clauses.join(" AND ")) }
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -135,11 +137,13 @@ impl UsageRepository {
                     r.get::<_, Option<i64>>(10)?,
                     r.get::<_, Option<i64>>(11)?,
                     r.get::<_, Option<i64>>(12)?,
-                    r.get::<_, Option<f64>>(13)?,
-                    r.get::<_, Option<f64>>(14)?,
+                    r.get::<_, Option<i64>>(13)?,
+                    r.get::<_, Option<i64>>(14)?,
                     r.get::<_, Option<f64>>(15)?,
-                    r.get::<_, i64>(16)?,
-                    r.get::<_, Option<String>>(17)?,
+                    r.get::<_, Option<f64>>(16)?,
+                    r.get::<_, Option<f64>>(17)?,
+                    r.get::<_, i64>(18)?,
+                    r.get::<_, Option<String>>(19)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -161,6 +165,8 @@ impl UsageRepository {
                 pt,
                 ct,
                 tt,
+                mt,
+                st,
                 pc,
                 cc,
                 tc,
@@ -195,6 +201,8 @@ impl UsageRepository {
                 prompt_tokens: pt.map(|v| v as u64),
                 completion_tokens: ct.map(|v| v as u64),
                 total_tokens: tt.map(|v| v as u64),
+                memory_tokens: mt.map(|v| v as u64),
+                summary_tokens: st.map(|v| v as u64),
                 cost,
                 success: success != 0,
                 error_message: err,
@@ -409,11 +417,11 @@ fn accumulate_usage_stats(stats: &mut UsageStats, record: &RequestUsage) {
 }
 
 fn build_csv(records: &[RequestUsage]) -> String {
-    let mut csv = String::from("timestamp,session_id,character_name,model_name,provider_label,operation_type,prompt_tokens,completion_tokens,total_tokens,total_cost,success,error_message\n");
+    let mut csv = String::from("timestamp,session_id,character_name,model_name,provider_label,operation_type,prompt_tokens,completion_tokens,total_tokens,memory_tokens,summary_tokens,total_cost,success,error_message\n");
 
     for record in records {
         let line = format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
             record.timestamp,
             record.session_id,
             record.character_name,
@@ -423,6 +431,8 @@ fn build_csv(records: &[RequestUsage]) -> String {
             record.prompt_tokens.unwrap_or(0),
             record.completion_tokens.unwrap_or(0),
             record.total_tokens.unwrap_or(0),
+            record.memory_tokens.unwrap_or(0),
+            record.summary_tokens.unwrap_or(0),
             record.cost.as_ref().map(|c| c.total_cost).unwrap_or(0.0),
             if record.success { "yes" } else { "no" },
             record.error_message.as_deref().unwrap_or("")
