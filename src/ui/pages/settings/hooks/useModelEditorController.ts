@@ -13,7 +13,6 @@ import type {
   Model,
   ProviderCredential,
 } from "../../../../core/storage/schemas";
-import { detectModelType } from "../../../../core/storage/modelTypeDetection";
 import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
 import {
   createDefaultAdvancedModelSettings,
@@ -212,28 +211,8 @@ export function useModelEditorController(): ControllerReturn {
         type: "update_editor_model",
         payload: { name },
       });
-
-      // Only auto-detect model type for NEW models when user hasn't manually set it yet
-      // For existing models, respect the saved modelType
-      if (isNew && state.editorModel.providerId && state.editorModel.modelType === "chat") {
-        try {
-          const detectedType = await detectModelType(
-            state.editorModel.providerId,
-            name,
-          );
-          // Only update if detection found something specific (not just default chat)
-          if (detectedType !== "chat") {
-            dispatch({
-              type: "update_editor_model",
-              payload: { modelType: detectedType },
-            });
-          }
-        } catch (error) {
-          console.warn("Failed to detect model type:", error);
-        }
-      }
     },
-    [dispatch, state.editorModel?.providerId, state.editorModel?.modelType, isNew],
+    [dispatch, state.editorModel],
   );
 
   const handleProviderSelection = useCallback(
@@ -247,26 +226,8 @@ export function useModelEditorController(): ControllerReturn {
           providerLabel,
         },
       });
-
-      // Only auto-detect for new models when type is still default
-      if (isNew && state.editorModel.name && state.editorModel.modelType === "chat") {
-        try {
-          const detectedType = await detectModelType(
-            providerId,
-            state.editorModel.name,
-          );
-          if (detectedType !== "chat") {
-            dispatch({
-              type: "update_editor_model",
-              payload: { modelType: detectedType },
-            });
-          }
-        } catch (error) {
-          console.warn("Failed to detect model type:", error);
-        }
-      }
     },
-    [dispatch, state.editorModel?.name, state.editorModel?.modelType, isNew],
+    [dispatch, state.editorModel],
   );
 
   const setModelAdvancedDraft = useCallback(
