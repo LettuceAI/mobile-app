@@ -1,7 +1,7 @@
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Filter, Search, Settings, Plus } from "lucide-react";
+import { ArrowLeft, Filter, Search, Settings, Plus, Check, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { typography, interactive, cn } from "../../design-tokens";
 
@@ -69,6 +69,35 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
   const isCenteredTitle = useMemo(() => {
     return basePath.startsWith("/settings");
   }, [basePath]);
+
+  // Check if we're on a character edit page
+  const showSaveButton = useMemo(() => {
+    return /^\/settings\/characters\/[^/]+\/edit$/.test(basePath);
+  }, [basePath]);
+
+  // Track save button state from window globals
+  const [canSave, setCanSave] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!showSaveButton) return;
+
+    const checkGlobals = () => {
+      const globalWindow = window as any;
+      const newCanSave = !!globalWindow.__saveCharacterCanSave;
+      const newIsSaving = !!globalWindow.__saveCharacterSaving;
+
+      // Only update state if values actually changed
+      setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
+      setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+    };
+
+    // Check immediately and on interval
+    checkGlobals();
+    const interval = setInterval(checkGlobals, 200);
+
+    return () => clearInterval(interval);
+  }, [showSaveButton]);
 
   const handleBack = () => {
     if (onBackOverride) {
@@ -211,6 +240,32 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
               aria-label="Open filters"
             >
               <Filter size={20} strokeWidth={2.5} className="text-white" />
+            </button>
+          )}
+          {showSaveButton && (
+            <button
+              onClick={() => {
+                const globalWindow = window as any;
+                if (typeof globalWindow.__saveCharacter === "function") {
+                  globalWindow.__saveCharacter();
+                }
+              }}
+              disabled={!canSave || isSaving}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5",
+                interactive.transition.fast,
+                canSave && !isSaving
+                  ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 hover:bg-emerald-500/30"
+                  : "bg-white/5 border border-white/10 text-white/40 cursor-not-allowed"
+              )}
+              aria-label="Save"
+            >
+              {isSaving ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Check size={14} />
+              )}
+              <span className="text-xs font-medium">Save</span>
             </button>
           )}
         </div>

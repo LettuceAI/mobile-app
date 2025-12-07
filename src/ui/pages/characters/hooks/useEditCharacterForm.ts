@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, type ChangeEvent } from "react";
+import { useCallback, useEffect, useReducer, useRef, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { listCharacters, saveCharacter, readSettings } from "../../../../core/storage/repo";
 import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
@@ -96,6 +96,21 @@ export function useEditCharacterForm(characterId: string | undefined) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const avatarInitial = state.name.trim().charAt(0).toUpperCase() || "?";
 
+  // Track initial state for change detection
+  const initialStateRef = useRef<{
+    name: string;
+    description: string;
+    avatarPath: string;
+    backgroundImagePath: string;
+    scenes: string;
+    defaultSceneId: string | null;
+    selectedModelId: string | null;
+    disableAvatarGradient: boolean;
+    customGradientEnabled: boolean;
+    customGradientColors: string;
+    memoryType: string;
+  } | null>(null);
+
   const setError = useCallback((value: string | null) => dispatch({ type: "SET_ERROR", payload: value }), []);
   const setSaving = useCallback((value: boolean) => dispatch({ type: "SET_SAVING", payload: value }), []);
   const setExporting = useCallback((value: boolean) => dispatch({ type: "SET_EXPORTING", payload: value }), []);
@@ -171,6 +186,21 @@ export function useEditCharacterForm(characterId: string | undefined) {
         customTextSecondary: character.customTextSecondary || "",
         memoryType: character.memoryType === "dynamic" ? "dynamic" : "manual",
       });
+
+      // Store initial state for change detection
+      initialStateRef.current = {
+        name: character.name,
+        description: character.description || "",
+        avatarPath: loadedAvatarPath,
+        backgroundImagePath: backgroundImage,
+        scenes: JSON.stringify(character.scenes || []),
+        defaultSceneId: character.defaultSceneId || null,
+        selectedModelId: character.defaultModelId || null,
+        disableAvatarGradient: character.disableAvatarGradient || false,
+        customGradientEnabled: character.customGradientEnabled || false,
+        customGradientColors: JSON.stringify(character.customGradientColors || []),
+        memoryType: character.memoryType === "dynamic" ? "dynamic" : "manual",
+      };
       setError(null);
     } catch (err) {
       console.error("Failed to load character:", err);
@@ -178,7 +208,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [characterId, navigate, setError, setFields, setLoading]);
+  }, [characterId, setError, setFields, setLoading]);
 
   const loadModels = useCallback(async () => {
     try {
@@ -188,14 +218,13 @@ export function useEditCharacterForm(characterId: string | undefined) {
       setFields({
         models: settings.models,
         dynamicMemoryEnabled: dynamicEnabled,
-        memoryType: dynamicEnabled ? state.memoryType : "manual",
       });
     } catch (err) {
       console.error("Failed to load models:", err);
     } finally {
       setFields({ loadingModels: false });
     }
-  }, [setFields, state.memoryType]);
+  }, [setFields]);
 
   const loadPromptTemplates = useCallback(async () => {
     try {
@@ -219,7 +248,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
     void loadCharacter();
     void loadModels();
     void loadPromptTemplates();
-  }, [characterId, loadCharacter, loadModels, loadPromptTemplates, navigate]);
+  }, [characterId, loadCharacter, loadModels, loadPromptTemplates]);
 
   const handleSave = useCallback(async () => {
     if (!characterId || !state.name.trim() || !state.description.trim()) return;
@@ -267,14 +296,34 @@ export function useEditCharacterForm(characterId: string | undefined) {
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
       });
 
-      navigate("/chat");
+      // Sync only name/description with trimmed values
+      setFields({
+        name: state.name.trim(),
+        description: state.description.trim(),
+      });
+
+      // Update initial state ref to match current state (for change detection)
+      initialStateRef.current = {
+        name: state.name.trim(),
+        description: state.description.trim(),
+        avatarPath: state.avatarPath,
+        backgroundImagePath: state.backgroundImagePath,
+        scenes: JSON.stringify(state.scenes),
+        defaultSceneId: state.defaultSceneId,
+        selectedModelId: state.selectedModelId,
+        disableAvatarGradient: state.disableAvatarGradient,
+        customGradientEnabled: state.customGradientEnabled,
+        customGradientColors: JSON.stringify(state.customGradientColors),
+        memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
+      };
+
     } catch (err: any) {
       console.error("Failed to save character:", err);
       setError(err?.message || "Failed to save character");
     } finally {
       setSaving(false);
     }
-  }, [characterId, navigate, setError, setSaving, state]);
+  }, [characterId, setError, setFields, setSaving, state]);
 
   const handleExport = useCallback(async () => {
     if (!characterId) return;
@@ -393,7 +442,30 @@ export function useEditCharacterForm(characterId: string | undefined) {
     },
     computed: {
       avatarInitial,
-      canSave: state.name.trim().length > 0 && state.description.trim().length > 0 && !state.saving,
+      canSave: (() => {
+        // Must have name and description
+        if (!state.name.trim() || !state.description.trim() || state.saving) return false;
+
+        // If initial state not yet loaded, don't allow save
+        const initial = initialStateRef.current;
+        if (!initial) return false;
+
+        // Check for actual changes
+        const hasChanges =
+          state.name !== initial.name ||
+          state.description !== initial.description ||
+          state.avatarPath !== initial.avatarPath ||
+          state.backgroundImagePath !== initial.backgroundImagePath ||
+          JSON.stringify(state.scenes) !== initial.scenes ||
+          state.defaultSceneId !== initial.defaultSceneId ||
+          state.selectedModelId !== initial.selectedModelId ||
+          state.disableAvatarGradient !== initial.disableAvatarGradient ||
+          state.customGradientEnabled !== initial.customGradientEnabled ||
+          JSON.stringify(state.customGradientColors) !== initial.customGradientColors ||
+          state.memoryType !== initial.memoryType;
+
+        return hasChanges;
+      })(),
     },
   };
 }
