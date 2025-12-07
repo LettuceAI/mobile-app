@@ -83,6 +83,11 @@ export function AdvancedPage() {
             if (!settings.advancedSettings.dynamicMemory) {
                 settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50 };
             }
+
+            if (newValue && !settings.advancedSettings.summarisationModelId && settings.defaultModelId) {
+                settings.advancedSettings.summarisationModelId = settings.defaultModelId;
+            }
+
             settings.advancedSettings.dynamicMemory.enabled = newValue;
             await saveAdvancedSettings(settings.advancedSettings);
         } catch (err) {
