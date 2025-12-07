@@ -425,7 +425,6 @@ pub async fn chat_completion(
         }
     };
 
-    // Prefer session's persona_id, fallback to explicitly passed persona_id
     let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
     let persona = context.choose_persona(effective_persona_id.map(|id| id.as_str()));
 
@@ -579,7 +578,6 @@ pub async fn chat_completion(
         );
     }
 
-    // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
 
@@ -595,7 +593,6 @@ pub async fn chat_completion(
         );
     }
 
-    // Then include recent unpinned messages from sliding window
     for msg in &recent_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
@@ -606,7 +603,6 @@ pub async fn chat_completion(
         );
     }
 
-    // Final guard: sanitize any remaining placeholders in messages (including system)
     crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
         &mut messages_for_api,
         char_name,
@@ -896,8 +892,6 @@ pub async fn chat_regenerate(
     }
 
     let preceding_index = target_index - 1;
-    // Allow regeneration of continue messages (assistant messages that follow other assistant messages)
-    // or normal assistant messages (that follow user messages)
     let preceding_message = &session.messages[preceding_index];
     if preceding_message.role != "user"
         && preceding_message.role != "assistant"
@@ -956,6 +950,20 @@ pub async fn chat_regenerate(
     let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
     let dynamic_window = dynamic_window_size(settings);
 
+    let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
+        let preceding_user_content = session
+            .messages
+            .iter()
+            .take(target_index)
+            .rev()
+            .find(|m| m.role == "user")
+            .map(|m| m.content.as_str())
+            .unwrap_or("");
+        select_relevant_memories(&app, &session, preceding_user_content, 5).await
+    } else {
+        Vec::new()
+    };
+
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
     let system_role = super::request_builder::system_role_for(provider_cred);
@@ -963,11 +971,9 @@ pub async fn chat_regenerate(
         let mut out = Vec::new();
         crate::chat_manager::messages::push_system_message(&mut out, system_role, system_prompt);
 
-        // Dynamic placeholder values
         let char_name = &character.name;
         let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
 
-        // Messages up to (but not including) the target message being regenerated
         let messages_before_target: Vec<StoredMessage> = session
             .messages
             .iter()
@@ -976,12 +982,10 @@ pub async fn chat_regenerate(
             .map(|(_, msg)| msg.clone())
             .collect();
 
-        // Use dynamic memory's pinned message system when enabled
         if dynamic_memory_enabled {
             let (pinned_msgs, recent_msgs) =
                 conversation_window_with_pinned(&messages_before_target, dynamic_window);
 
-            // Include pinned messages first
             for msg in &pinned_msgs {
                 let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
@@ -992,7 +996,6 @@ pub async fn chat_regenerate(
                 );
             }
 
-            // Then include recent unpinned messages
             for msg in &recent_msgs {
                 let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
@@ -1003,7 +1006,6 @@ pub async fn chat_regenerate(
                 );
             }
         } else {
-            // Manual memory: include all messages before target
             for (idx, msg) in session.messages.iter().enumerate() {
                 if idx > target_index {
                     break;
@@ -1020,7 +1022,7 @@ pub async fn chat_regenerate(
                 );
             }
         }
-        // Final guard for system + built messages
+
         crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
             &mut out,
             char_name,
@@ -1170,6 +1172,11 @@ pub async fn chat_regenerate(
         if let Some(last) = assistant_message.variants.last() {
             assistant_message.selected_variant_id = Some(last.id.clone());
         }
+
+        if dynamic_memory_enabled {
+            assistant_message.memory_refs =
+                relevant_memories.iter().map(|m| m.text.clone()).collect();
+        }
         assistant_message.clone()
     };
 
@@ -1282,7 +1289,6 @@ pub async fn chat_continue(
         }
     };
 
-    // Prefer session's persona_id, fallback to explicitly passed persona_id
     let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
     let persona = context.choose_persona(effective_persona_id.map(|id| id.as_str()));
 
@@ -1314,9 +1320,21 @@ pub async fn chat_continue(
     let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
     let dynamic_window = dynamic_window_size(settings);
 
+    let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
+        let last_user_content = session
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == "user")
+            .map(|m| m.content.as_str())
+            .unwrap_or("");
+        select_relevant_memories(&app, &session, last_user_content, 5).await
+    } else {
+        Vec::new()
+    };
+
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
-    // Use dynamic memory's pinned message system when enabled
     let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
         let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
         (pinned, unpinned)
@@ -1332,11 +1350,9 @@ pub async fn chat_continue(
         system_prompt,
     );
 
-    // Dynamic placeholder values
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
 
-    // Include pinned messages first (if dynamic memory is enabled)
     for msg in &pinned_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
@@ -1347,7 +1363,6 @@ pub async fn chat_continue(
         );
     }
 
-    // Then include recent unpinned messages from sliding window
     for msg in &recent_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
@@ -1521,7 +1536,11 @@ pub async fn chat_continue(
         usage: usage.clone(),
         variants: vec![variant],
         selected_variant_id: Some(variant_id),
-        memory_refs: Vec::new(),
+        memory_refs: if dynamic_memory_enabled {
+            relevant_memories.iter().map(|m| m.text.clone()).collect()
+        } else {
+            Vec::new()
+        },
         is_pinned: false,
         attachments: Vec::new(),
     };
@@ -1849,7 +1868,6 @@ async fn process_dynamic_memory_cycle(
             summary.len()
         ),
     );
-
     let actions = match run_memory_tool_update(
         app,
         summary_provider,
@@ -1860,8 +1878,7 @@ async fn process_dynamic_memory_cycle(
         &summary,
         &convo_window,
         character,
-    )
-    .await
+    ) .await
     {
         Ok(actions) => actions,
         Err(err) => {
@@ -1870,7 +1887,7 @@ async fn process_dynamic_memory_cycle(
                 "dynamic_memory",
                 format!("memory tool update failed: {}", err),
             );
-            // Record a failure event so the window advances and we don't retry every turn.
+
             let event = json!({
                 "id": Uuid::new_v4().to_string(),
                 "windowStart": total_convo_at_start.saturating_sub(window_size),
@@ -2013,7 +2030,6 @@ async fn run_memory_tool_update(
         });
     }
 
-    // Extract and record usage for memory manager operation only on success
     let usage = extract_usage(api_response.data());
     let context = ChatContext::initialize(app.clone())?;
     record_usage_if_available(
@@ -2077,7 +2093,6 @@ async fn run_memory_tool_update(
             }
             "delete_memory" => {
                 if let Some(text) = extract_text_argument(&call) {
-                    // Support deletion by ID or text
                     let target_idx = if text.len() == 6 && text.chars().all(|c| c.is_ascii_digit())
                     {
                         session.memory_embeddings.iter().position(|m| m.id == text)
@@ -2127,7 +2142,6 @@ async fn run_memory_tool_update(
         }
     }
 
-    // Enforce max entries by trimming oldest
     if session.memories.len() > max_entries {
         let excess = session.memories.len() - max_entries;
         session.memories.drain(0..excess);
@@ -2237,7 +2251,6 @@ async fn summarize_messages(
     let mut messages_for_api = Vec::new();
     let system_role = super::request_builder::system_role_for(provider_cred);
 
-    // Use dynamic summary template if available
     let summary_template = prompts::get_template(app, APP_DYNAMIC_SUMMARY_TEMPLATE_ID)
         .ok()
         .flatten()
@@ -2246,7 +2259,6 @@ async fn summarize_messages(
             "Summarize the recent conversation window into a concise paragraph capturing key facts and decisions. Avoid adding new information.".to_string()
         });
 
-    // Render with context and optional prior summary placeholder
     let mut rendered = prompt_engine::render_with_context(
         app,
         &summary_template,
@@ -2270,7 +2282,7 @@ async fn summarize_messages(
             "content": msg.content
         }));
     }
-    // Mistral requires the last turn to be a user/tool message; append an explicit user ask.
+
     messages_for_api.push(json!({
         "role": "user",
         "content": "Return only the concise summary for the above conversation window. Use the write_summary tool."
@@ -2307,7 +2319,6 @@ async fn summarize_messages(
 
     let api_response = api_request(app.clone(), api_request_payload).await?;
 
-    // Extract and record usage for summary operation
     let usage = extract_usage(api_response.data());
     let context = ChatContext::initialize(app.clone())?;
     record_usage_if_available(
@@ -2334,7 +2345,6 @@ async fn summarize_messages(
         });
     }
 
-    // Prefer tool call output
     let calls = parse_tool_calls(&provider_cred.provider_id, api_response.data());
     for call in calls {
         if call.name == "write_summary" {
