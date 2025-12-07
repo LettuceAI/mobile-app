@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
-import { cn, typography, spacing } from "../../design-tokens";
-import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn, typography } from "../../design-tokens";
+import { useState, useEffect, useMemo } from "react";
 import { BottomMenu } from "../../components";
+import { Sparkles, Zap, Bug, AlertTriangle, ChevronRight, Calendar, Hash, ArrowRight } from "lucide-react";
 
 interface ChangelogEntry {
     version: string;
@@ -357,40 +358,158 @@ const changelog: ChangelogEntry[] = [
 const typeConfig = {
     feature: {
         label: "New",
+        icon: Sparkles,
         color: "text-emerald-300",
-        bg: "bg-emerald-400/10",
-        border: "border-emerald-400/30"
+        iconColor: "text-emerald-400",
+        bg: "bg-emerald-500/10",
+        glow: "shadow-[0_0_20px_-5px_rgba(52,211,153,0.3)]",
+        gradient: "from-emerald-500/20 to-emerald-500/5"
     },
     improvement: {
         label: "Improved",
+        icon: Zap,
         color: "text-blue-300",
-        bg: "bg-blue-400/10",
-        border: "border-blue-400/30"
+        iconColor: "text-blue-400",
+        bg: "bg-blue-500/10",
+        glow: "shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)]",
+        gradient: "from-blue-500/20 to-blue-500/5"
     },
     bugfix: {
         label: "Fixed",
-        color: "text-orange-300",
-        bg: "bg-orange-400/10",
-        border: "border-orange-400/30"
+        icon: Bug,
+        color: "text-amber-300",
+        iconColor: "text-amber-400",
+        bg: "bg-amber-500/10",
+        glow: "shadow-[0_0_20px_-5px_rgba(245,158,11,0.3)]",
+        gradient: "from-amber-500/20 to-amber-500/5"
     },
     breaking: {
         label: "Breaking",
+        icon: AlertTriangle,
         color: "text-red-300",
-        bg: "bg-red-400/10",
-        border: "border-red-400/30"
+        iconColor: "text-red-400",
+        bg: "bg-red-500/10",
+        glow: "shadow-[0_0_20px_-5px_rgba(239,68,68,0.3)]",
+        gradient: "from-red-500/20 to-red-500/5"
     }
 };
+
+interface ChangeGroupProps {
+    type: 'feature' | 'improvement' | 'bugfix' | 'breaking';
+    changes: { type: string; description: string }[];
+    defaultExpanded?: boolean;
+}
+
+function ChangeGroup({ type, changes, defaultExpanded = true }: ChangeGroupProps) {
+    const [expanded, setExpanded] = useState(defaultExpanded);
+    const config = typeConfig[type];
+    const Icon = config.icon;
+
+    if (changes.length === 0) return null;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="overflow-hidden"
+        >
+            {/* Group Header */}
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl",
+                    "bg-white/[0.03] border border-white/[0.06]",
+                    "hover:bg-white/[0.05] transition-all duration-200",
+                    "group"
+                )}
+            >
+                <div className={cn(
+                    "flex items-center justify-center w-8 h-8 rounded-lg",
+                    config.bg,
+                )}>
+                    <Icon className={cn("w-4 h-4", config.iconColor)} />
+                </div>
+                <div className="flex-1 flex items-center gap-2">
+                    <span className={cn(typography.h3.size, typography.h3.weight, "text-white")}>
+                        {config.label}
+                    </span>
+                    <span className={cn(
+                        "px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                        config.bg, config.color
+                    )}>
+                        {changes.length}
+                    </span>
+                </div>
+                <motion.div
+                    animate={{ rotate: expanded ? 90 : 0 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white/60 transition-colors" />
+                </motion.div>
+            </button>
+
+            {/* Changes List */}
+            <AnimatePresence>
+                {expanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                    >
+                        <div className="pt-2 pl-4 space-y-2">
+                            {changes.map((change, idx) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: idx * 0.03 }}
+                                    className={cn(
+                                        "relative flex gap-3 pl-4 pr-4 py-3",
+                                        "rounded-xl",
+                                        "bg-gradient-to-r", config.gradient,
+                                        "group/item"
+                                    )}
+                                >
+                                    {/* Accent line */}
+                                    <div className={cn(
+                                        "absolute left-0 top-3 bottom-3 w-[2px] rounded-full",
+                                        config.bg.replace("/10", "/40")
+                                    )} />
+                                    <p className={cn(
+                                        typography.body.size,
+                                        "text-white/80 leading-relaxed"
+                                    )}>
+                                        {change.description}
+                                    </p>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+}
 
 export function ChangelogPage() {
     const [selectedVersion, setSelectedVersion] = useState<string>(changelog[0].version);
     const [showVersionMenu, setShowVersionMenu] = useState(false);
 
     const selectedEntry = changelog.find(entry => entry.version === selectedVersion) || changelog[0];
+    const currentIndex = changelog.findIndex(e => e.version === selectedVersion);
+    const isLatest = currentIndex === 0;
 
-    const sortedChanges = [...selectedEntry.changes].sort((a, b) => {
-        const order = { breaking: 0, feature: 1, bugfix: 2, improvement: 3 };
-        return order[a.type] - order[b.type];
-    });
+    const groupedChanges = useMemo(() => {
+        const groups = {
+            breaking: selectedEntry.changes.filter(c => c.type === 'breaking'),
+            feature: selectedEntry.changes.filter(c => c.type === 'feature'),
+            improvement: selectedEntry.changes.filter(c => c.type === 'improvement'),
+            bugfix: selectedEntry.changes.filter(c => c.type === 'bugfix'),
+        };
+        return groups;
+    }, [selectedEntry]);
 
     useEffect(() => {
         const handleOpenVersionSelector = () => {
@@ -403,93 +522,148 @@ export function ChangelogPage() {
         };
     }, []);
 
+    const formatDate = (dateStr: string) => {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
+
     return (
         <div className="flex h-full flex-col pb-16 text-gray-200">
-            <main className="flex-1 overflow-y-auto px-4 pt-4">
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className={spacing.section}
-                >
-                    {/* Version Header with Filter Button */}
-                    <div className="mb-4 flex items-center justify-between">
-                        <div className="flex items-baseline gap-3">
-                            <h2 className={cn(
-                                typography.h1.size,
-                                typography.h1.weight,
-                                "text-white"
-                            )}>
-                                v{selectedEntry.version}
-                            </h2>
-                            <span className={cn(
-                                typography.caption.size,
-                                "text-white/40"
-                            )}>
-                                {new Date(selectedEntry.date).toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                })}
-                            </span>
+            <main className="flex-1 overflow-y-auto">
+                {/* Hero Header */}
+                <div className="relative px-4 pt-4 pb-6">
+                    {/* Background gradient */}
+                    <div className="absolute inset-0 pointer-events-none" />
+
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        className="relative"
+                    >
+                        {/* Version Badge */}
+
+
+                        {/* Version Number */}
+                        <div className="flex items-baseline gap-1 mb-3">
+                            <span className="text-white/30 text-2xl font-bold">v</span>
+                            <h1 className="text-4xl font-black text-white tracking-tight">
+                                {selectedEntry.version}
+                                {isLatest && (
+                                    <motion.span
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        className={cn(
+                                            "inline-flex items-center ml-2 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                            "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                        )}
+                                    >
+                                        Latest
+                                    </motion.span>
+                                )}
+                            </h1>
                         </div>
 
-                        {/* Filter button removed - now in TopNav */}
-                    </div>
+                        {/* Meta info */}
+                        <div className="flex flex-wrap items-center gap-4 text-white/40">
+                            <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5" />
+                                <span className="text-xs font-medium">
+                                    {formatDate(selectedEntry.date)}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Hash className="w-3.5 h-3.5" />
+                                <span className="text-xs font-medium">
+                                    {selectedEntry.changes.length} changes
+                                </span>
+                            </div>
+                        </div>
 
-                    {/* Changes List */}
-                    <div className="space-y-3">
-                        {sortedChanges.map((change, changeIndex) => {
-                            const config = typeConfig[change.type];
-                            return (
-                                <div
-                                    key={changeIndex}
-                                    className={cn(
-                                        "relative overflow-hidden rounded-2xl border px-5 py-4",
-                                        config.border,
-                                        config.bg
-                                    )}
-                                >
-                                    <div className="flex flex-col items-start gap-2">
-                                        <span className={cn(
-                                            "shrink-0 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide",
-                                            config.color,
-                                            "bg-black/20"
-                                        )}>
-                                            {config.label}
-                                        </span>
-                                        <p className={cn(
-                                            typography.body.size,
-                                            "text-white/90 leading-relaxed pt-0.5"
-                                        )}>
-                                            {change.description}
-                                        </p>
-                                    </div>
+                        {/* Quick Stats */}
+                        <div className="flex gap-2 mt-5">
+                            {groupedChanges.feature.length > 0 && (
+                                <div className={cn(
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg",
+                                    "bg-emerald-500/10 border border-emerald-500/20"
+                                )}>
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span className="text-xs font-semibold text-emerald-300">
+                                        {groupedChanges.feature.length} new
+                                    </span>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            )}
+                            {groupedChanges.improvement.length > 0 && (
+                                <div className={cn(
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg",
+                                    "bg-blue-500/10 border border-blue-500/20"
+                                )}>
+                                    <Zap className="w-3.5 h-3.5 text-blue-400" />
+                                    <span className="text-xs font-semibold text-blue-300">
+                                        {groupedChanges.improvement.length} improved
+                                    </span>
+                                </div>
+                            )}
+                            {groupedChanges.bugfix.length > 0 && (
+                                <div className={cn(
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg",
+                                    "bg-amber-500/10 border border-amber-500/20"
+                                )}>
+                                    <Bug className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="text-xs font-semibold text-amber-300">
+                                        {groupedChanges.bugfix.length} fixed
+                                    </span>
+                                </div>
+                            )}
+                            {groupedChanges.breaking.length > 0 && (
+                                <div className={cn(
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg",
+                                    "bg-red-500/10 border border-red-500/20"
+                                )}>
+                                    <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                                    <span className="text-xs font-semibold text-red-300">
+                                        {groupedChanges.breaking.length} breaking
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                </div>
 
-                    {/* Footer */}
-                    <div className={cn(
-                        "mt-8 rounded-xl border border-white/10 bg-white/5 px-4 py-3",
-                        "text-center"
-                    )}>
-                        <p className={cn(
-                            typography.caption.size,
-                            "text-white/50"
-                        )}>
-                            Follow development on{" "}
-                            <a
-                                href="https://github.com/LettuceAI/mobile-app"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 transition-colors underline"
-                            >
-                                GitHub
-                            </a>
-                        </p>
-                    </div>
+                {/* Changes Content */}
+                <div className="px-4 space-y-3">
+                    <ChangeGroup type="breaking" changes={groupedChanges.breaking} />
+                    <ChangeGroup type="feature" changes={groupedChanges.feature} />
+                    <ChangeGroup type="improvement" changes={groupedChanges.improvement} />
+                    <ChangeGroup type="bugfix" changes={groupedChanges.bugfix} />
+                </div>
+
+                {/* Footer */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="px-4 pt-8 pb-4"
+                >
+                    <a
+                        href="https://github.com/LettuceAI/mobile-app"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                            "flex items-center justify-center gap-2 w-full py-3 rounded-xl",
+                            "bg-white/[0.03] border border-white/[0.06]",
+                            "hover:bg-white/[0.06] hover:border-white/[0.1]",
+                            "transition-all duration-200 group"
+                        )}
+                    >
+                        <span className="text-sm text-white/50 group-hover:text-white/70 transition-colors">
+                            Follow development on GitHub
+                        </span>
+                        <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all" />
+                    </a>
                 </motion.div>
             </main>
 
@@ -499,12 +673,13 @@ export function ChangelogPage() {
                 onClose={() => setShowVersionMenu(false)}
                 title="Version History"
             >
-                <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                    {changelog.map((entry) => {
+                <div className="space-y-2.5 max-h-[60vh] overflow-y-auto">
+                    {changelog.map((entry, idx) => {
                         const isSelected = selectedVersion === entry.version;
                         const featureCount = entry.changes.filter(c => c.type === 'feature').length;
                         const improvementCount = entry.changes.filter(c => c.type === 'improvement').length;
                         const bugfixCount = entry.changes.filter(c => c.type === 'bugfix').length;
+                        const breakingCount = entry.changes.filter(c => c.type === 'breaking').length;
 
                         return (
                             <button
@@ -514,54 +689,84 @@ export function ChangelogPage() {
                                     setShowVersionMenu(false);
                                 }}
                                 className={cn(
-                                    "group flex w-full flex-col rounded-xl border px-4 py-3 text-left transition",
+                                    "group relative flex w-full items-start gap-3 rounded-xl px-4 py-3.5 text-left transition-all duration-200",
                                     isSelected
-                                        ? "border-emerald-400/40 bg-emerald-400/10"
-                                        : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
+                                        ? "bg-emerald-500/10 border border-emerald-500/30"
+                                        : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.05] hover:border-white/[0.08]"
                                 )}
                             >
-                                <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-baseline gap-2">
+                                {/* Timeline dot */}
+                                <div className="flex flex-col items-center pt-1.5">
+                                    <div className={cn(
+                                        "w-2.5 h-2.5 rounded-full",
+                                        isSelected ? "bg-emerald-400" : "bg-white/20"
+                                    )} />
+                                    {idx < changelog.length - 1 && (
+                                        <div className={cn(
+                                            "w-px flex-1 mt-2 min-h-[20px]",
+                                            "bg-gradient-to-b",
+                                            isSelected ? "from-emerald-400/40 to-transparent" : "from-white/10 to-transparent"
+                                        )} />
+                                    )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
                                         <span className={cn(
-                                            typography.h3.size,
-                                            typography.h3.weight,
+                                            "text-base font-bold",
                                             isSelected ? "text-emerald-200" : "text-white"
                                         )}>
                                             v{entry.version}
                                         </span>
-                                        {isSelected && (
+                                        {idx === 0 && (
                                             <span className={cn(
-                                                typography.caption.size,
-                                                "px-1.5 py-0.5 rounded",
-                                                "bg-emerald-400/20 text-emerald-300",
-                                                "border border-emerald-400/30"
+                                                "px-1.5 rounded text-[9px] font-bold uppercase",
+                                                "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                                             )}>
-                                                Current
+                                                Latest
                                             </span>
                                         )}
                                     </div>
-                                    <span className={cn(
-                                        typography.caption.size,
-                                        isSelected ? "text-emerald-300/70" : "text-white/50"
+
+                                    <div className={cn(
+                                        "text-[11px] mb-2",
+                                        isSelected ? "text-emerald-300/60" : "text-white/40"
                                     )}>
-                                        {new Date(entry.date).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric'
-                                        })}
-                                    </span>
+                                        {formatDate(entry.date)}
+                                    </div>
+
+                                    {/* Mini stats */}
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {featureCount > 0 && (
+                                            <span className="flex items-center gap-1 text-[10px] text-emerald-300/70">
+                                                <Sparkles className="w-3 h-3" />{featureCount}
+                                            </span>
+                                        )}
+                                        {improvementCount > 0 && (
+                                            <span className="flex items-center gap-1 text-[10px] text-blue-300/70">
+                                                <Zap className="w-3 h-3" />{improvementCount}
+                                            </span>
+                                        )}
+                                        {bugfixCount > 0 && (
+                                            <span className="flex items-center gap-1 text-[10px] text-amber-300/70">
+                                                <Bug className="w-3 h-3" />{bugfixCount}
+                                            </span>
+                                        )}
+                                        {breakingCount > 0 && (
+                                            <span className="flex items-center gap-1 text-[10px] text-red-300/70">
+                                                <AlertTriangle className="w-3 h-3" />{breakingCount}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
-                                <p className={cn(
-                                    typography.caption.size,
-                                    isSelected ? "text-emerald-200/60" : "text-white/40"
-                                )}>
-                                    {featureCount > 0 && `${featureCount} new`}
-                                    {featureCount > 0 && (improvementCount > 0 || bugfixCount > 0) && " · "}
-                                    {improvementCount > 0 && `${improvementCount} improved`}
-                                    {improvementCount > 0 && bugfixCount > 0 && " · "}
-                                    {bugfixCount > 0 && `${bugfixCount} fixed`}
-                                </p>
+                                {isSelected && (
+                                    <div className="pt-1">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                                        </div>
+                                    </div>
+                                )}
                             </button>
                         );
                     })}
