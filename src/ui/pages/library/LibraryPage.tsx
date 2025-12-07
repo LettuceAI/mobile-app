@@ -342,7 +342,7 @@ const LibraryCard = memo(({
             layoutId={`library-${item.itemType}-${item.id}`}
             onClick={() => onSelect(item)}
             className={cn(
-                "group relative flex aspect-[3/4] w-full flex-col justify-end overflow-hidden rounded-2xl text-left",
+                "group relative flex aspect-3/4 w-full flex-col justify-end overflow-hidden rounded-2xl text-left",
                 "border border-white/10",
                 interactive.active.scale
             )}
@@ -354,10 +354,10 @@ const LibraryCard = memo(({
             </div>
 
             {/* Gradient Overlay */}
-            <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+            <div className="absolute inset-0 z-10 bg-linear-to-t from-black/90 via-black/40 to-transparent" />
 
             {/* Type Badge */}
-            <div className="absolute left-2 top-2 z-30">
+            <div className="absolute left-2 top-2 z-20">
                 <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/80 backdrop-blur-md shadow-sm shadow-black/30">
                     <span className={cn("h-2 w-2 rounded-full", badge.dotClass)} />
                     {badge.label}
