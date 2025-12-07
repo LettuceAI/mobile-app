@@ -229,19 +229,19 @@ function CharacterList({
   onSelect: (character: Character) => void | Promise<void>;
   onLongPress: (character: Character) => void;
 }) {
-  const [visibleCount, setVisibleCount] = useState(5);
+  const [visibleCount, setVisibleCount] = useState(10);
 
   useEffect(() => {
     if (visibleCount < characters.length) {
       const timer = setTimeout(() => {
-        setVisibleCount(prev => Math.min(prev + 5, characters.length));
+        setVisibleCount(prev => Math.min(prev + 10, characters.length));
       }, 50);
       return () => clearTimeout(timer);
     }
   }, [visibleCount, characters.length]);
 
   useEffect(() => {
-    setVisibleCount(5);
+    setVisibleCount(10);
   }, [characters]);
 
   return (
