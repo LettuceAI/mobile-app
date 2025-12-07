@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, Settings, Brain, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Brain, Loader2, AlertTriangle, Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Character, Session } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
@@ -53,92 +53,109 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
     };
   }, [onSessionUpdate]);
 
-  const avatarDisplay = useMemo(() => {
-    if (avatarUrl && isImageLike(avatarUrl)) {
-      return (
-        <img
-          src={avatarUrl}
-          alt={character?.name ?? "avatar"}
-          className="h-10 w-10 rounded-xl object-cover"
-        />
-      );
-    }
+  const avatarImageUrl = useMemo(() => {
+    if (avatarUrl && isImageLike(avatarUrl)) return avatarUrl;
+    return null;
+  }, [avatarUrl]);
 
-    const initials = character?.name ? character.name.slice(0, 2).toUpperCase() : "?";
-    return (
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold text-white">
-        {initials}
-      </div>
-    );
-  }, [character, avatarUrl]);
+  const initials = useMemo(() => {
+    return character?.name
+      ? character.name.slice(0, 2).toUpperCase()
+      : "?";
+  }, [character]);
+
+  const avatarFallback = (
+    <div className="flex h-full w-full items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">
+      {initials}
+    </div>
+  );
 
   const headerTitle = useMemo(() => character?.name ?? "Unknown", [character?.name]);
 
   return (
     <>
-      <header className={`z-20 flex-shrink-0 border-b border-white/10 px-3 pb-3 pt-10 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+      <header className={`z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-10 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 items-center">
             <button
               onClick={() => navigate("/chat")}
-              className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+              className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
               aria-label="Back"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={14} strokeWidth={2.5} />
             </button>
-            {avatarDisplay}
+
             <button
               onClick={() => {
                 if (!characterId) return;
                 const settingsUrl = `/chat/${characterId}/settings?sessionId=${sessionId}`;
-                console.log("Navigating to:", settingsUrl);
                 navigate(settingsUrl);
               }}
               className="min-w-0 flex-1 text-left"
               aria-label="Open chat settings"
             >
-              <p className="truncate text-sm font-semibold text-white">{headerTitle}</p>
-              {character.description && (
-                <p className="truncate text-xs text-gray-400">{character.description}</p>
-              )}
+              <p className="truncate text-xl font-bold text-white/90">{headerTitle}</p>
             </button>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+
+          <div className="flex shrink-0 items-center gap-1 ml-auto">
+            {/* Memory Button */}
             {session && (
               <button
                 onClick={() => {
                   if (!characterId || !sessionId) return;
                   navigate(`/chat/${characterId}/memories?sessionId=${sessionId}`);
                 }}
-                className="relative flex items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+                className="relative flex items-center justify-center text-white/80 transition hover:text-white"
                 aria-label="Manage memories"
               >
                 {memoryBusy ? (
-                  <Loader2 size={14} className="animate-spin text-emerald-400" />
+                  <Loader2 size={14} strokeWidth={2.5} className="animate-spin text-emerald-400" />
                 ) : memoryError ? (
-                  <AlertTriangle size={14} className="text-red-400" />
+                  <AlertTriangle size={14} strokeWidth={2.5} className="text-red-400" />
                 ) : (
-                  <Brain size={14} />
+                  <Brain size={14} strokeWidth={2.5} />
                 )}
                 {!memoryBusy && !memoryError && session.memories && session.memories.length > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-                    {session.memories.length}
-                  </span>
+                  <span className="absolute right-1 top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-[#050505]" />
                 )}
               </button>
             )}
+
+            {/* Search Button */}
+            {session && (
+              <button
+                onClick={() => {
+                  if (!characterId || !sessionId) return;
+                  navigate(`/chat/${characterId}/search?sessionId=${sessionId}`);
+                }}
+                className="flex items-center justify-center text-white/80 transition hover:text-white"
+                aria-label="Search messages"
+              >
+                <Search size={14} strokeWidth={2.5} />
+              </button>
+            )}
+
+            {/* Avatar (Settings) Button */}
             <button
               onClick={() => {
                 if (!characterId) return;
-                const settingsUrl = sessionId 
-                  ? `/chat/${characterId}/settings?sessionId=${sessionId}`
-                  : `/chat/${characterId}/settings`;
-                navigate(settingsUrl);
+                navigate(`/chat/${characterId}/settings?sessionId=${sessionId}`);
               }}
-              className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/25"
+              className="relative shrink-0 rounded-full overflow-hidden ring-1 ring-white/20 transition hover:ring-white/40"
+              style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', flexShrink: 0 }}
               aria-label="Conversation settings"
             >
-              <Settings size={14} />
+              {avatarImageUrl ? (
+                <img
+                  src={avatarImageUrl}
+                  alt={character?.name || "Avatar"}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  style={{ width: '36px', height: '36px' }}
+                />
+              ) : (
+                avatarFallback
+              )}
             </button>
           </div>
         </div>
