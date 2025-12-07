@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, Image, HardDrive, FileCode } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -140,13 +140,13 @@ export function SettingsPage() {
       count: modelCount,
       onClick: () => toModelsList()
     },
-    {
+    /*{
       key: 'image-generation',
       icon: <Image />,
       title: 'Image Generation',
       subtitle: 'Generate images with AI',
       onClick: () => navigate('/settings/image-generation')
-    },
+    },*/
     /*{
       key: 'characters',
       icon: <Sparkles />,
