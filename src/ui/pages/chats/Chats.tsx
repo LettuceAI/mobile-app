@@ -335,7 +335,7 @@ const CharacterAvatar = memo(({ character, className }: { character: Character, 
     <div
       className={cn(
         "flex h-full w-full items-center justify-center",
-        "bg-gradient-to-br from-white/20 to-white/5",
+        "bg-linear-to-br from-white/20 to-white/5",
         className
       )}
     >
@@ -360,7 +360,13 @@ const CharacterCard = memo(({
     "character",
     character.id,
     character.avatarPath,
-    character.disableAvatarGradient
+    character.disableAvatarGradient,
+    // Pass custom colors if enabled
+    character.customGradientEnabled && character.customGradientColors?.length ? {
+      colors: character.customGradientColors,
+      textColor: character.customTextColor,
+      textSecondary: character.customTextSecondary,
+    } : undefined
   );
 
   const handleClick = () => {

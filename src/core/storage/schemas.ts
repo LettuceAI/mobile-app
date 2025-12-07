@@ -390,6 +390,10 @@ export const CharacterSchema = z.object({
   defaultModelId: z.string().uuid().nullable().optional(),
   memoryType: z.enum(["manual", "dynamic"]).default("manual"),
   disableAvatarGradient: z.boolean().default(false).optional(),
+  customGradientEnabled: z.boolean().default(false).optional(),
+  customGradientColors: z.array(z.string()).optional(), // Array of hex colors, e.g. ["#ff6b6b", "#4ecdc4"]
+  customTextColor: z.string().optional(), // Custom text color hex
+  customTextSecondary: z.string().optional(), // Custom secondary text color hex
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

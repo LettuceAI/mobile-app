@@ -192,6 +192,10 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     defaultModelId: c.defaultModelId ?? null,
     memoryType: c.memoryType ?? "manual",
     disableAvatarGradient: c.disableAvatarGradient ?? false,
+    customGradientEnabled: c.customGradientEnabled ?? false,
+    customGradientColors: c.customGradientColors,
+    customTextColor: c.customTextColor,
+    customTextSecondary: c.customTextSecondary,
     createdAt: c.createdAt ?? timestamp,
     updatedAt: timestamp,
   } as Character;

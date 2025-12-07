@@ -24,6 +24,10 @@ type EditCharacterState = {
   selectedModelId: string | null;
 
   disableAvatarGradient: boolean;
+  customGradientEnabled: boolean;
+  customGradientColors: string[];
+  customTextColor: string;
+  customTextSecondary: string;
   memoryType: "manual" | "dynamic";
   dynamicMemoryEnabled: boolean;
   models: Model[];
@@ -56,6 +60,10 @@ const initialState: EditCharacterState = {
   selectedModelId: null,
 
   disableAvatarGradient: false,
+  customGradientEnabled: false,
+  customGradientColors: [],
+  customTextColor: "",
+  customTextSecondary: "",
   memoryType: "manual",
   dynamicMemoryEnabled: false,
   models: [],
@@ -157,6 +165,10 @@ export function useEditCharacterForm(characterId: string | undefined) {
         selectedModelId: character.defaultModelId || null,
 
         disableAvatarGradient: character.disableAvatarGradient || false,
+        customGradientEnabled: character.customGradientEnabled || false,
+        customGradientColors: character.customGradientColors || [],
+        customTextColor: character.customTextColor || "",
+        customTextSecondary: character.customTextSecondary || "",
         memoryType: character.memoryType === "dynamic" ? "dynamic" : "manual",
       });
       setError(null);
@@ -248,6 +260,10 @@ export function useEditCharacterForm(characterId: string | undefined) {
         defaultModelId: state.selectedModelId,
 
         disableAvatarGradient: state.disableAvatarGradient,
+        customGradientEnabled: state.customGradientEnabled,
+        customGradientColors: state.customGradientColors.length > 0 ? state.customGradientColors : undefined,
+        customTextColor: state.customTextColor || undefined,
+        customTextSecondary: state.customTextSecondary || undefined,
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
       });
 

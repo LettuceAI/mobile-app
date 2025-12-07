@@ -114,10 +114,10 @@ pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
     migrations::run_migrations(app)?;
 
     log_info(app, "database", "Database pool reloaded successfully");
-    
+
     // Emit event to frontend so it can refetch data
     let _ = app.emit("database-reloaded", ());
-    
+
     Ok(())
 }
 
@@ -425,6 +425,50 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             [],
         )
         .map_err(|e| e.to_string())?;
+    }
+
+    // Migrations: add custom gradient columns to characters if missing
+    let mut stmt2 = conn
+        .prepare("PRAGMA table_info(characters)")
+        .map_err(|e| e.to_string())?;
+    let mut has_custom_gradient_enabled = false;
+    let mut has_custom_gradient_colors = false;
+    let mut has_custom_text_color = false;
+    let mut has_custom_text_secondary = false;
+    let mut rows2 = stmt2.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows2.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        match col_name.as_str() {
+            "custom_gradient_enabled" => has_custom_gradient_enabled = true,
+            "custom_gradient_colors" => has_custom_gradient_colors = true,
+            "custom_text_color" => has_custom_text_color = true,
+            "custom_text_secondary" => has_custom_text_secondary = true,
+            _ => {}
+        }
+    }
+    if !has_custom_gradient_enabled {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_gradient_enabled INTEGER DEFAULT 0",
+            [],
+        );
+    }
+    if !has_custom_gradient_colors {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_gradient_colors TEXT",
+            [],
+        );
+    }
+    if !has_custom_text_color {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_text_color TEXT",
+            [],
+        );
+    }
+    if !has_custom_text_secondary {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
+            [],
+        );
     }
 
     let default_content = crate::chat_manager::prompt_engine::default_system_prompt_template();

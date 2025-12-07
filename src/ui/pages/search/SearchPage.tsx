@@ -257,7 +257,7 @@ const CharacterAvatar = memo(({ character }: { character: Character }) => {
 
   const initials = character.name.slice(0, 2).toUpperCase();
   return (
-    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/20 to-white/5">
+    <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-white/20 to-white/5">
       <span className="text-base font-bold text-white/80">{initials}</span>
     </div>
   );
@@ -278,7 +278,13 @@ const CharacterCard = memo(({
     "character",
     character.id,
     character.avatarPath,
-    character.disableAvatarGradient
+    character.disableAvatarGradient,
+    // Pass custom colors if enabled
+    character.customGradientEnabled && character.customGradientColors?.length ? {
+      colors: character.customGradientColors,
+      textColor: character.customTextColor,
+      textSecondary: character.customTextSecondary,
+    } : undefined
   );
 
   return (
@@ -392,7 +398,7 @@ const PersonaCard = memo(({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500/30 to-purple-500/20">
+          <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500/30 to-purple-500/20">
             <User size={24} className="text-white/60" />
           </div>
         )}

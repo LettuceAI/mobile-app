@@ -1,5 +1,67 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getCachedGradient, type AvatarGradient, type EntityType } from "../../core/storage/avatars";
+
+/**
+ * Custom gradient colors configuration
+ */
+export interface CustomGradientColors {
+    colors?: string[]; // Array of hex colors
+    textColor?: string; // Custom text color hex
+    textSecondary?: string; // Custom secondary text color hex
+}
+
+/**
+ * Generate gradient CSS from an array of hex colors
+ * Array order: [start, end] or [start, end, middle]
+ * Gradient order: start -> middle (if exists) -> end
+ */
+function generateGradientFromColors(colors: string[]): string {
+    if (!colors || colors.length === 0) return "";
+    if (colors.length === 1) {
+        return colors[0];
+    }
+    if (colors.length === 2) {
+        return `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`;
+    }
+    // 3+ colors: reorder as start, middle, end
+    const orderedColors = [colors[0], colors[2], colors[1]];
+    return `linear-gradient(135deg, ${orderedColors.join(", ")})`;
+}
+
+/**
+ * Calculate if text should be light or dark based on background color
+ */
+function calculateTextColorFromGradient(colors: string[]): { textColor: string; textSecondary: string } {
+    if (!colors || colors.length === 0) {
+        return { textColor: "#ffffff", textSecondary: "rgba(255, 255, 255, 0.7)" };
+    }
+
+    // Average the luminance of all colors
+    let totalLuminance = 0;
+    for (const hex of colors) {
+        const rgb = hexToRgb(hex);
+        if (rgb) {
+            const luminance = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+            totalLuminance += luminance;
+        }
+    }
+    const avgLuminance = totalLuminance / colors.length;
+
+    // If bright background, use dark text
+    if (avgLuminance > 140) {
+        return { textColor: "#1a1a1a", textSecondary: "rgba(0, 0, 0, 0.6)" };
+    }
+    return { textColor: "#ffffff", textSecondary: "rgba(255, 255, 255, 0.7)" };
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
 
 /**
  * Hook to generate and use gradient colors from avatar images
@@ -9,19 +71,44 @@ import { getCachedGradient, type AvatarGradient, type EntityType } from "../../c
  * @param entityId - The entity ID
  * @param avatarPath - Optional avatar path from the entity
  * @param disabled - If true, gradient generation is disabled
+ * @param customColors - Optional custom colors to override auto-detected gradient
  * @returns Object with gradient data and loading state
  */
 export function useAvatarGradient(
     type: EntityType,
     entityId: string,
     avatarPath?: string,
-    disabled?: boolean
+    disabled?: boolean,
+    customColors?: CustomGradientColors
 ) {
     const [gradient, setGradient] = useState<AvatarGradient | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Check if we have custom colors
+    const hasCustomColors = customColors?.colors && customColors.colors.length > 0;
+
+    // Custom gradient - memoized to avoid recalculation
+    const customGradient = useMemo(() => {
+        if (!hasCustomColors || !customColors?.colors) return null;
+
+        const gradientCss = generateGradientFromColors(customColors.colors);
+        const autoTextColors = calculateTextColorFromGradient(customColors.colors);
+
+        return {
+            gradientCss,
+            textColor: customColors.textColor || autoTextColors.textColor,
+            textSecondary: customColors.textSecondary || autoTextColors.textSecondary,
+        };
+    }, [hasCustomColors, customColors?.colors, customColors?.textColor, customColors?.textSecondary]);
+
     useEffect(() => {
+        // If using custom colors, no need to fetch gradient
+        if (hasCustomColors) {
+            setGradient(null);
+            return;
+        }
+
         if (!entityId || !avatarPath || disabled) {
             setGradient(null);
             return;
@@ -44,32 +131,49 @@ export function useAvatarGradient(
         };
 
         generateGradient();
-    }, [type, entityId, avatarPath, disabled]);
+    }, [type, entityId, avatarPath, disabled, hasCustomColors]);
 
     // Calculate average brightness from gradient colors
     const calculateAverageBrightness = (): number => {
         if (!gradient || !gradient.colors || gradient.colors.length === 0) {
             return 0.5; // Default mid brightness
         }
-        
+
         let totalBrightness = 0;
         for (const color of gradient.colors) {
             const r = color.r / 255.0;
             const g = color.g / 255.0;
             const b = color.b / 255.0;
-            
+
             const rLin = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
             const gLin = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
             const bLin = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-            
+
             const luminance = 0.2126 * rLin + 0.7152 * gLin + 0.0722 * bLin;
             totalBrightness += luminance;
         }
-        
+
         return totalBrightness / gradient.colors.length;
     };
 
     const averageBrightness = calculateAverageBrightness();
+
+    // Return custom gradient if available, otherwise auto-detected
+    if (hasCustomColors && customGradient) {
+        return {
+            gradient: null,
+            isLoading: false,
+            error: null,
+            hasGradient: true,
+            gradientCss: customGradient.gradientCss,
+            colors: [],
+            dominantHue: 0,
+            textColor: customGradient.textColor,
+            textSecondary: customGradient.textSecondary,
+            averageBrightness: 0.5,
+            isCustom: true,
+        };
+    }
 
     return {
         gradient,
@@ -82,6 +186,7 @@ export function useAvatarGradient(
         textColor: gradient?.text_color || "#ffffff",
         textSecondary: gradient?.text_secondary || "rgba(255, 255, 255, 0.7)",
         averageBrightness,
+        isCustom: false,
     };
 }
 

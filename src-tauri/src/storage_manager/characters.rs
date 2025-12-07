@@ -4,12 +4,12 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use super::db::{now_ms, open_db};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = conn
+    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get::<_, i64>(9)?, r.get(10)?, r.get(11)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get::<_, i64>(9)?, r.get::<_, i64>(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -104,6 +104,22 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
         "disableAvatarGradient".into(),
         JsonValue::Bool(disable_avatar_gradient != 0),
     );
+    // Custom gradient fields
+    root.insert(
+        "customGradientEnabled".into(),
+        JsonValue::Bool(custom_gradient_enabled != 0),
+    );
+    if let Some(colors_json) = custom_gradient_colors {
+        if let Ok(colors) = serde_json::from_str::<Vec<String>>(&colors_json) {
+            root.insert("customGradientColors".into(), serde_json::json!(colors));
+        }
+    }
+    if let Some(tc) = custom_text_color {
+        root.insert("customTextColor".into(), JsonValue::String(tc));
+    }
+    if let Some(ts) = custom_text_secondary {
+        root.insert("customTextSecondary".into(), JsonValue::String(ts));
+    }
     root.insert("createdAt".into(), JsonValue::from(created_at));
     root.insert("updatedAt".into(), JsonValue::from(updated_at));
     Ok(JsonValue::Object(root))
@@ -171,6 +187,23 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .get("disableAvatarGradient")
         .and_then(|v| v.as_bool())
         .unwrap_or(false) as i64;
+    // Custom gradient fields
+    let custom_gradient_enabled = c
+        .get("customGradientEnabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false) as i64;
+    let custom_gradient_colors: Option<String> = c
+        .get("customGradientColors")
+        .and_then(|v| v.as_array())
+        .map(|arr| serde_json::to_string(arr).unwrap_or_else(|_| "[]".to_string()));
+    let custom_text_color = c
+        .get("customTextColor")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let custom_text_secondary = c
+        .get("customTextSecondary")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let now = now_ms() as i64;
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -185,8 +218,8 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               avatar_path=excluded.avatar_path,
@@ -197,8 +230,12 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               system_prompt=excluded.system_prompt,
               memory_type=excluded.memory_type,
               disable_avatar_gradient=excluded.disable_avatar_gradient,
+              custom_gradient_enabled=excluded.custom_gradient_enabled,
+              custom_gradient_colors=excluded.custom_gradient_colors,
+              custom_text_color=excluded.custom_text_color,
+              custom_text_secondary=excluded.custom_text_secondary,
               updated_at=excluded.updated_at"#,
-        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, now],
+        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, now],
     ).map_err(|e| e.to_string())?;
 
     // Replace rules

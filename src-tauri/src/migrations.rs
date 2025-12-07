@@ -209,10 +209,21 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v16 -> v17: Add memory_tokens and summary_tokens to usage_records".to_string(),
+            "Running migration v16 -> v17: Add memory_tokens and summary_tokens to usage_records"
+                .to_string(),
         );
         migrate_v16_to_v17(app)?;
         version = 17;
+    }
+
+    if version < 18 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v17 -> v18: Add custom gradient columns to characters".to_string(),
+        );
+        migrate_v17_to_v18(app)?;
+        version = 18;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -1062,7 +1073,9 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
     let tokenizer_available = {
         use crate::embedding_model::embedding_model_dir;
         let model_dir = embedding_model_dir(app).ok();
-        model_dir.map(|dir| dir.join("tokenizer.json").exists()).unwrap_or(false)
+        model_dir
+            .map(|dir| dir.join("tokenizer.json").exists())
+            .unwrap_or(false)
     };
 
     if !tokenizer_available {
@@ -1079,15 +1092,21 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let session_rows: Vec<(String, String)> = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
     // Process each session
     for (session_id, embeddings_json) in session_rows {
-        let mut embeddings: Vec<Value> = serde_json::from_str(&embeddings_json)
-            .map_err(|e| format!("Failed to parse memory_embeddings for session {}: {}", session_id, e))?;
+        let mut embeddings: Vec<Value> = serde_json::from_str(&embeddings_json).map_err(|e| {
+            format!(
+                "Failed to parse memory_embeddings for session {}: {}",
+                session_id, e
+            )
+        })?;
 
         let mut updated = false;
 
@@ -1101,7 +1120,7 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
             if let Some(text) = embedding.get("text").and_then(|v| v.as_str()) {
                 // Calculate token count
                 let token_count = count_tokens(app, text).unwrap_or(0);
-                
+
                 // Add tokenCount field
                 if let Value::Object(map) = embedding {
                     map.insert("tokenCount".to_string(), Value::Number(token_count.into()));
@@ -1129,19 +1148,26 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let summary_rows: Vec<(String, String)> = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
     for (session_id, summary) in summary_rows {
         let token_count = count_tokens(app, &summary).unwrap_or(0);
-        
+
         conn.execute(
             "UPDATE sessions SET memory_summary_token_count = ?1 WHERE id = ?2",
             [&token_count.to_string(), &session_id],
         )
-        .map_err(|e| format!("Failed to update summary token count for session {}: {}", session_id, e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to update summary token count for session {}: {}",
+                session_id, e
+            )
+        })?;
     }
 
     Ok(())
@@ -1187,5 +1213,91 @@ fn migrate_v16_to_v17(app: &AppHandle) -> Result<(), String> {
         );
     }
 
+    Ok(())
+}
+
+/// Migration v17 -> v18: add custom gradient columns to characters table
+fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+    use crate::utils::log_info;
+
+    log_info(app, "migrations", "Starting v17->v18 migration".to_string());
+
+    let conn = open_db(app)?;
+
+    // Check which columns exist
+    let mut has_custom_gradient_colors = false;
+    let mut has_custom_text_color = false;
+    let mut has_custom_text_secondary = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(characters)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        match name.as_str() {
+            "custom_gradient_colors" => has_custom_gradient_colors = true,
+            "custom_text_color" => has_custom_text_color = true,
+            "custom_text_secondary" => has_custom_text_secondary = true,
+            _ => {}
+        }
+    }
+
+    log_info(
+        app,
+        "migrations",
+        format!(
+        "Column check: custom_gradient_colors={}, custom_text_color={}, custom_text_secondary={}",
+        has_custom_gradient_colors, has_custom_text_color, has_custom_text_secondary
+    ),
+    );
+
+    if !has_custom_gradient_colors {
+        log_info(
+            app,
+            "migrations",
+            "Adding custom_gradient_colors column".to_string(),
+        );
+        conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_gradient_colors TEXT",
+            [],
+        )
+        .map_err(|e| format!("Failed to add custom_gradient_colors: {}", e))?;
+    }
+
+    if !has_custom_text_color {
+        log_info(
+            app,
+            "migrations",
+            "Adding custom_text_color column".to_string(),
+        );
+        conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_text_color TEXT",
+            [],
+        )
+        .map_err(|e| format!("Failed to add custom_text_color: {}", e))?;
+    }
+
+    if !has_custom_text_secondary {
+        log_info(
+            app,
+            "migrations",
+            "Adding custom_text_secondary column".to_string(),
+        );
+        conn.execute(
+            "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
+            [],
+        )
+        .map_err(|e| format!("Failed to add custom_text_secondary: {}", e))?;
+    }
+
+    log_info(
+        app,
+        "migrations",
+        "v17->v18 migration completed".to_string(),
+    );
     Ok(())
 }
