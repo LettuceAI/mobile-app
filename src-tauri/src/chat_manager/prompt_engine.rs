@@ -21,6 +21,13 @@ pub fn default_system_prompt_template() -> String {
     
     # Roleplay Guidelines
     {{rules}}
+
+    # Context Summary
+    {{context_summary}}
+
+    # Key Memories
+    Important facts to remember in this conversation:
+    {{key_memories}}
     
     # Core Instructions
     - Write as {{char.name}} from their perspective
@@ -128,16 +135,32 @@ pub fn build_system_prompt(
 
     let rendered = render_with_context(app, &base_template, character, persona, session, settings);
 
-    let final_prompt = if !session.memories.is_empty() {
+    let final_prompt = {
         let mut result = rendered;
-        result.push_str("\n\n# Key Memories\n");
-        result.push_str("Important facts to remember in this conversation:\n");
-        for memory in &session.memories {
-            result.push_str(&format!("- {}\n", memory));
+
+        // Legacy Support: If placeholders were NOT present in the template, append content automatically.
+        // If they WERE present, they have already been replaced (populated or removed) in `render_with_context`.
+
+        if !base_template.contains("{{context_summary}}") {
+            if let Some(summary) = &session.memory_summary {
+                if !summary.trim().is_empty() {
+                    result.push_str("\n\n# Context Summary\n");
+                    result.push_str(summary);
+                }
+            }
         }
+
+        if !base_template.contains("{{key_memories}}") {
+            if !session.memories.is_empty() {
+                result.push_str("\n\n# Key Memories\n");
+                result.push_str("Important facts to remember in this conversation:\n");
+                for memory in &session.memories {
+                    result.push_str(&format!("- {}\n", memory));
+                }
+            }
+        }
+
         result
-    } else {
-        rendered
     };
 
     debug_parts.push(json!({
@@ -214,7 +237,7 @@ fn render_with_context_internal(
     base_template: &str,
     character: &Character,
     persona: Option<&Persona>,
-    _session: &Session,
+    session: &Session,
     settings: &Settings,
 ) -> String {
     let char_name = &character.name;
@@ -232,7 +255,7 @@ fn render_with_context_internal(
         .filter(|s| !s.is_empty())
         .unwrap_or("");
 
-    let scene_id_to_use = _session
+    let scene_id_to_use = session
         .selected_scene_id
         .as_ref()
         .or_else(|| character.default_scene_id.as_ref())
@@ -352,8 +375,29 @@ fn render_with_context_internal(
     result = result.replace("{{persona.desc}}", persona_desc);
     result = result.replace("{{rules}}", &rules_formatted);
 
+    let context_summary_text = session
+        .memory_summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+
+    result = result.replace("{{context_summary}}", context_summary_text);
+
+    let key_memories_text = if session.memories.is_empty() {
+        String::new()
+    } else {
+        session
+            .memories
+            .iter()
+            .map(|m| format!("- {}", m))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    result = result.replace("{{key_memories}}", &key_memories_text);
+
     // Global fallback replacements in entire template for simple placeholders
-    // Allows users to use {{char}} and {{persona}} anywhere in templates
     result = result.replace("{{char}}", char_name);
     result = result.replace("{{persona}}", persona_name);
 

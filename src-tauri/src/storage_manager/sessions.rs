@@ -243,6 +243,18 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
         .get("memorySummary")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+
+    // Debug log
+    log_warn(
+        &app,
+        "session_upsert",
+        format!(
+            "Saving session {}. Memory summary present: {}, value: {:?}",
+            id,
+            memory_summary.is_some(),
+            memory_summary
+        ),
+    );
     let memory_summary_token_count = s
         .get("memorySummaryTokenCount")
         .and_then(|v| v.as_i64())

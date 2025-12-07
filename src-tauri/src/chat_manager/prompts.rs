@@ -21,6 +21,8 @@ pub fn get_required_variables(template_id: &str) -> Vec<String> {
             "{{scene}}".to_string(),
             "{{char.name}}".to_string(),
             "{{char.desc}}".to_string(),
+            "{{context_summary}}".to_string(),
+            "{{key_memories}}".to_string(),
         ],
         APP_DYNAMIC_SUMMARY_TEMPLATE_ID => vec!["{{prev_summary}}".to_string()],
         APP_DYNAMIC_MEMORY_TEMPLATE_ID => vec!["{{max_entries}}".to_string()],
