@@ -104,9 +104,14 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
               <button
                 onClick={() => {
                   if (!characterId || !sessionId) return;
-                  navigate(`/chat/${characterId}/memories?sessionId=${sessionId}`);
+                  const params = new URLSearchParams();
+                  params.set("sessionId", sessionId);
+                  if (memoryError) {
+                    params.set("error", memoryError);
+                  }
+                  navigate(`/chat/${characterId}/memories?${params.toString()}`);
                 }}
-                className="relative flex items-center justify-center text-white/80 transition hover:text-white"
+                className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
                 aria-label="Manage memories"
               >
                 {memoryBusy ? (

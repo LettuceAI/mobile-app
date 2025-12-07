@@ -294,7 +294,7 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
 export function ChatMemoriesPage() {
   const { go, backOrReplace } = useNavigationManager();
   const { characterId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const { session, setSession, character, loading, error, reload } = useSessionData(characterId, sessionId);
   const { handleAdd, handleRemove, handleUpdate, handleSaveSummary } = useMemoryActions(session, reload, (s) => setSession(s));
@@ -307,11 +307,7 @@ export function ChatMemoriesPage() {
   const [newMemory, setNewMemory] = useState("");
   const [isSavingSummary, setIsSavingSummary] = useState(false);
 
-  // Error state for manual actions or passed from URL
   const [actionError, setActionError] = useState<string | null>(searchParams.get("error"));
-
-  // Clear URL error param on mount so it doesn't persist on refresh if we want (optional, but good UX to clear it from URL eventually)
-  // For now we just initialize state with it.
 
   useEffect(() => {
     setSummaryDraft(session?.memorySummary ?? "");
@@ -358,7 +354,6 @@ export function ChatMemoriesPage() {
     try {
       await toggleMessagePin(session.id, messageId);
       await reload();
-      await reload();
       setActionError(null);
     } catch (err: any) {
       console.error("Failed to unpin message:", err);
@@ -367,7 +362,6 @@ export function ChatMemoriesPage() {
   }, [session, reload]);
 
   const handleScrollToMessage = useCallback((messageId: string) => {
-    // Navigate back to chat with a message ID parameter
     const extra = messageId ? { highlightMessage: messageId } : undefined;
     go(Routes.chatSession(characterId!, session?.id || undefined, extra));
   }, [go, characterId, session?.id]);
