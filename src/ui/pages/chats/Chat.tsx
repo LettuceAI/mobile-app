@@ -2,10 +2,10 @@ import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import type { Character, StoredMessage } from "../../../core/storage/schemas";
+import type { Character, Model, StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
-import { getSession, listCharacters } from "../../../core/storage";
+import { getSession, listCharacters, readSettings } from "../../../core/storage";
 
 import { useChatController } from "./hooks/useChatController";
 import { replacePlaceholders } from "../../../core/utils/placeholders";
@@ -39,6 +39,7 @@ export function ChatConversationPage() {
   const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
   const [messageToBranch, setMessageToBranch] = useState<StoredMessage | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
+  const [isMultimodelModel, setIsMultimodelModel] = useState(false);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
     setSelectedImage({ src, alt });
@@ -49,6 +50,7 @@ export function ChatConversationPage() {
       listCharacters().then(setAvailableCharacters).catch(console.error);
     }
   }, [showCharacterSelector]);
+
 
   // Reload session data when memories change
   const handleSessionUpdate = useCallback(async () => {
@@ -104,6 +106,25 @@ export function ChatConversationPage() {
 
   const backgroundImageData = useImageData(character?.backgroundImagePath);
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
+
+  useEffect(() => {
+    const checkModelType = async () => {
+      if (!character) {
+        setIsMultimodelModel(false);
+        return;
+      }
+      try {
+        const settings = await readSettings();
+        const effectiveModelId = character.defaultModelId || settings.defaultModelId;
+        const currentModel = settings.models.find((m: Model) => m.id === effectiveModelId);
+        setIsMultimodelModel(currentModel?.modelType === "multimodel");
+      } catch (err) {
+        console.error("Failed to check model type:", err);
+        setIsMultimodelModel(false);
+      }
+    };
+    checkModelType();
+  }, [character]);
 
   useEffect(() => {
     if (character) {
@@ -162,24 +183,24 @@ export function ChatConversationPage() {
 
   const handlePressStart = useCallback((message: StoredMessage) => (event: React.MouseEvent | React.TouchEvent) => {
     if (message.id.startsWith("placeholder")) return;
-    
+
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
     pressStartPosition.current = { x: clientX, y: clientY };
-    
+
     setHeldMessageId(message.id);
     scheduleLongPress(message);
   }, [scheduleLongPress, setHeldMessageId]);
 
   const handlePressMove = useCallback((event: React.MouseEvent | React.TouchEvent) => {
     if (!pressStartPosition.current) return;
-    
+
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-    
+
     const deltaX = Math.abs(clientX - pressStartPosition.current.x);
     const deltaY = Math.abs(clientY - pressStartPosition.current.y);
-    
+
     if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
       initializeLongPressTimer(null);
       setHeldMessageId(null);
@@ -213,7 +234,7 @@ export function ChatConversationPage() {
     setError(null);
 
     const hasContent = draft.trim().length > 0 || pendingAttachments.length > 0;
-    
+
     if (hasContent) {
       const content = draft.trim();
       setDraft("");
@@ -256,9 +277,9 @@ export function ChatConversationPage() {
 
       {/* Header */}
       <div className="relative z-20">
-        <ChatHeader 
-          character={character} 
-          sessionId={sessionId} 
+        <ChatHeader
+          character={character}
+          sessionId={sessionId}
           session={sessionForHeader}
           hasBackgroundImage={!!backgroundImageData}
           onSessionUpdate={handleSessionUpdate}
@@ -332,8 +353,8 @@ export function ChatConversationPage() {
           onAbort={handleAbort}
           hasBackgroundImage={!!backgroundImageData}
           pendingAttachments={pendingAttachments}
-          onAddAttachment={addPendingAttachment}
-          onRemoveAttachment={removePendingAttachment}
+          onAddAttachment={isMultimodelModel ? addPendingAttachment : undefined}
+          onRemoveAttachment={isMultimodelModel ? removePendingAttachment : undefined}
         />
       </div>
 
@@ -414,14 +435,14 @@ export function ChatConversationPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4"
+            className="fixed inset-0 z-100 flex items-center justify-center bg-black/95 p-4"
             onClick={() => setSelectedImage(null)}
           >
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="absolute right-6 top-10 z-[101] flex h-10 w-11 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-400"
+              className="absolute right-6 top-10 z-101 flex h-10 w-11 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-400"
               onClick={() => setSelectedImage(null)}
             >
               <X size={24} />
@@ -445,7 +466,7 @@ export function ChatConversationPage() {
 
 function CharacterOption({ character, onClick }: { character: Character; onClick: () => void }) {
   const avatarUrl = useAvatar("character", character.id, character.avatarPath);
-  
+
   return (
     <button
       onClick={onClick}
@@ -457,7 +478,7 @@ function CharacterOption({ character, onClick }: { character: Character; onClick
         "active:scale-[0.99]"
       )}
     >
-      <div className={cn("h-10 w-10 overflow-hidden flex-shrink-0", radius.full, "bg-white/10")}>
+      <div className={cn("h-10 w-10 overflow-hidden shrink-0", radius.full, "bg-white/10")}>
         {avatarUrl ? (
           <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
         ) : (
