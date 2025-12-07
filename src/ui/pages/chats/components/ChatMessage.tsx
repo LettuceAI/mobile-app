@@ -48,7 +48,7 @@ const MessageAvatar = React.memo(function MessageAvatar({
 
   if (role === "user") {
     return (
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-white/5 to-white/10">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {personaAvatar ? (
           <img src={personaAvatar} alt="User" className="h-full w-full object-cover" />
         ) : (
@@ -60,7 +60,7 @@ const MessageAvatar = React.memo(function MessageAvatar({
 
   if (role === "assistant" || role === "scene") {
     return (
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-white/5 to-white/10">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {characterAvatar ? (
           <img src={characterAvatar} alt="Assistant" className="h-full w-full object-cover" />
         ) : (

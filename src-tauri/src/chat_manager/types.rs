@@ -437,3 +437,12 @@ impl From<String> for ProviderId {
         ProviderId(value)
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageSearchResult {
+    pub message_id: String,
+    pub content: String,
+    pub created_at: u64,
+    pub role: String,
+}

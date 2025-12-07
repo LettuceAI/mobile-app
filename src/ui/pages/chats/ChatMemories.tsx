@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare } from "lucide-react";
+import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X } from "lucide-react";
 import type { Character, Session } from "../../../core/storage/schemas";
 import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
@@ -294,7 +294,7 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
 export function ChatMemoriesPage() {
   const { go, backOrReplace } = useNavigationManager();
   const { characterId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const { session, setSession, character, loading, error, reload } = useSessionData(characterId, sessionId);
   const { handleAdd, handleRemove, handleUpdate, handleSaveSummary } = useMemoryActions(session, reload, (s) => setSession(s));
@@ -306,6 +306,12 @@ export function ChatMemoriesPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [newMemory, setNewMemory] = useState("");
   const [isSavingSummary, setIsSavingSummary] = useState(false);
+
+  // Error state for manual actions or passed from URL
+  const [actionError, setActionError] = useState<string | null>(searchParams.get("error"));
+
+  // Clear URL error param on mount so it doesn't persist on refresh if we want (optional, but good UX to clear it from URL eventually)
+  // For now we just initialize state with it.
 
   useEffect(() => {
     setSummaryDraft(session?.memorySummary ?? "");
@@ -352,8 +358,11 @@ export function ChatMemoriesPage() {
     try {
       await toggleMessagePin(session.id, messageId);
       await reload();
-    } catch (err) {
+      await reload();
+      setActionError(null);
+    } catch (err: any) {
       console.error("Failed to unpin message:", err);
+      setActionError(err?.message || "Failed to unpin message");
     }
   }, [session, reload]);
 
@@ -370,8 +379,10 @@ export function ChatMemoriesPage() {
       try {
         await handleAdd(trimmed);
         setNewMemory("");
-      } catch (err) {
+        setActionError(null);
+      } catch (err: any) {
         console.error("Failed to add memory:", err);
+        setActionError(err?.message || "Failed to add memory");
       } finally {
         setIsAdding(false);
       }
@@ -395,8 +406,10 @@ export function ChatMemoriesPage() {
         await handleUpdate(index, trimmed);
         setEditingIndex(null);
         setEditingValue("");
-      } catch (err) {
+        setActionError(null);
+      } catch (err: any) {
         console.error("Failed to update memory:", err);
+        setActionError(err?.message || "Failed to update memory");
       }
     } else {
       setEditingIndex(null);
@@ -409,8 +422,9 @@ export function ChatMemoriesPage() {
     setIsSavingSummary(true);
     try {
       await handleSaveSummary(summaryDraft);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save summary:", err);
+      setActionError(err?.message || "Failed to save summary");
     } finally {
       setIsSavingSummary(false);
     }
@@ -489,6 +503,28 @@ export function ChatMemoriesPage() {
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-16">
+        {/* Error Banner */}
+        {actionError && (
+          <div className="px-3 pt-3">
+            <div className={cn(
+              radius.md,
+              "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3"
+            )}>
+              <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+              <div className="flex-1 text-sm text-red-200">
+                <p className="font-semibold mb-1">Memory System Error</p>
+                <p className="opacity-90">{actionError}</p>
+              </div>
+              <button
+                onClick={() => setActionError(null)}
+                className="text-red-400 hover:text-red-300"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {activeTab === "memories" ? (
           <div className={cn("px-3 py-4", spacing.section)}>
 
@@ -772,8 +808,10 @@ export function ChatMemoriesPage() {
                               onClick={async () => {
                                 try {
                                   await handleRemove(item.index);
-                                } catch (err) {
+                                  setActionError(null);
+                                } catch (err: any) {
                                   console.error("Failed to remove memory:", err);
+                                  setActionError(err?.message || "Failed to remove memory");
                                 }
                               }}
                               className={cn(
@@ -851,7 +889,7 @@ export function ChatMemoriesPage() {
                   const isUser = msg.role === "user";
                   const isAssistant = msg.role === "assistant";
                   const timestamp = new Date(msg.createdAt).toLocaleString();
-                  
+
                   return (
                     <div
                       key={msg.id}
@@ -951,25 +989,25 @@ export function ChatMemoriesPage() {
           colors.surface.elevated
         )}>
           {[
-        { id: "memories" as const, icon: Bot, label: "Memories" },
-        { id: "pinned" as const, icon: Pin, label: "Pinned" },
-        { id: "tools" as const, icon: Clock, label: "Activity" }
+            { id: "memories" as const, icon: Bot, label: "Memories" },
+            { id: "pinned" as const, icon: Pin, label: "Pinned" },
+            { id: "tools" as const, icon: Clock, label: "Activity" }
           ].map(({ id, icon: Icon, label }) => (
-        <button
-          key={id}
-          onClick={() => setActiveTab(id)}
-          className={cn(
-            radius.md,
-            "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
-            interactive.active.scale,
-            activeTab === id
-          ? "bg-white/10 text-white"
-          : cn(colors.text.tertiary, "hover:text-white")
-          )}
-        >
-          <Icon size={16} />
-          {label}
-        </button>
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={cn(
+                radius.md,
+                "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
+                interactive.active.scale,
+                activeTab === id
+                  ? "bg-white/10 text-white"
+                  : cn(colors.text.tertiary, "hover:text-white")
+              )}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
           ))}
         </div>
       </div>

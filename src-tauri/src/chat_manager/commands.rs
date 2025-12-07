@@ -1878,7 +1878,8 @@ async fn process_dynamic_memory_cycle(
         &summary,
         &convo_window,
         character,
-    ) .await
+    )
+    .await
     {
         Ok(actions) => actions,
         Err(err) => {
@@ -1900,7 +1901,8 @@ async fn process_dynamic_memory_cycle(
                 "createdAt": now_millis().unwrap_or_default(),
             });
             session.memory_summary = Some(summary.clone());
-            session.memory_summary_token_count = crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
+            session.memory_summary_token_count =
+                crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
             session.memory_tool_events.push(event);
             if session.memory_tool_events.len() > 50 {
                 let excess = session.memory_tool_events.len() - 50;
@@ -2386,4 +2388,36 @@ fn find_model_and_credential<'a>(
                 .find(|cred| cred.provider_id == model.provider_id)
         })?;
     Some((model, provider_cred))
+}
+
+#[tauri::command]
+pub async fn search_messages(
+    app: AppHandle,
+    session_id: String,
+    query: String,
+) -> Result<Vec<super::types::MessageSearchResult>, String> {
+    let context = ChatContext::initialize(app.clone())?;
+
+    let session = match context.load_session(&session_id)? {
+        Some(s) => s,
+        None => return Err("Session not found".to_string()),
+    };
+
+    let query_lower = query.to_lowercase();
+    let results: Vec<super::types::MessageSearchResult> = session
+        .messages
+        .iter()
+        .filter(|msg| {
+            msg.content.to_lowercase().contains(&query_lower)
+                && (msg.role == "user" || msg.role == "assistant")
+        })
+        .map(|msg| super::types::MessageSearchResult {
+            message_id: msg.id.clone(),
+            content: msg.content.clone(),
+            created_at: msg.created_at,
+            role: msg.role.clone(),
+        })
+        .collect();
+
+    Ok(results)
 }

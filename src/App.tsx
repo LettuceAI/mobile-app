@@ -23,7 +23,7 @@ import { AdvancedPage } from "./ui/pages/settings/AdvancedPage";
 import { DynamicMemoryPage } from "./ui/pages/settings/DynamicMemoryPage";
 import { EmbeddingDownloadPage } from "./ui/pages/settings/EmbeddingDownloadPage";
 import { EmbeddingTestPage } from "./ui/pages/settings/EmbeddingTestPage";
-import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage, ChatMemoriesPage } from "./ui/pages/chats";
+import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage, ChatMemoriesPage, SearchMessagesPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
 import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
@@ -51,7 +51,7 @@ function App() {
     };
 
     const handleBeforeUnload = () => {
-      storageBridge.dbCheckpoint().catch(() => {});
+      storageBridge.dbCheckpoint().catch(() => { });
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -269,6 +269,7 @@ function AppContent() {
               <Route path="/settings/backup" element={<BackupRestorePage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
+              <Route path="/chat/:characterId/search" element={<SearchMessagesPage />} />
               <Route path="/chat/:characterId/settings" element={<ChatSettingsPage />} />
               <Route path="/chat/:characterId/history" element={<ChatHistoryPage />} />
               <Route path="/chat/:characterId/memories" element={<ChatMemoriesPage />} />
@@ -283,28 +284,28 @@ function AppContent() {
           </motion.div>
         </main>
 
-          {showBottomNav && (
-            <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
-          )}
-        </div>
-
         {showBottomNav && (
-          <CreateMenu isOpen={showCreateMenu} onClose={() => setShowCreateMenu(false)} />
-        )}
-
-        {isChatRoute && showBottomNav && (showDelayedTooltip || showCreateTooltip) && (
-          <Tooltip
-            isVisible={true}
-            message="Create custom AI characters and personas here!"
-            onClose={() => {
-              dismissCreateTooltip();
-              setShowDelayedTooltip(false);
-            }}
-            position="bottom"
-            className="bottom-[88px] right-4"
-          />
+          <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
         )}
       </div>
+
+      {showBottomNav && (
+        <CreateMenu isOpen={showCreateMenu} onClose={() => setShowCreateMenu(false)} />
+      )}
+
+      {isChatRoute && showBottomNav && (showDelayedTooltip || showCreateTooltip) && (
+        <Tooltip
+          isVisible={true}
+          message="Create custom AI characters and personas here!"
+          onClose={() => {
+            dismissCreateTooltip();
+            setShowDelayedTooltip(false);
+          }}
+          position="bottom"
+          className="bottom-[88px] right-4"
+        />
+      )}
+    </div>
   );
 }
 

@@ -101,6 +101,14 @@ export const storageBridge = {
     lastUpdatedMs: number | null;
   }>,
 
+  // Search
+  searchMessages: (sessionId: string, query: string) => invoke<{
+    messageId: string;
+    content: string;
+    createdAt: number;
+    role: string;
+  }[]>("search_messages", { sessionId, query }),
+
   dbCheckpoint: () => invoke("db_checkpoint") as Promise<void>,
   dbOptimize: () => invoke("db_optimize") as Promise<void>,
 

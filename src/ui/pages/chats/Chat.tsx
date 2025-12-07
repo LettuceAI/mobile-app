@@ -29,6 +29,7 @@ export function ChatConversationPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const sessionId = searchParams.get("sessionId") || undefined;
+  const jumpToMessageId = searchParams.get("jumpToMessage");
 
   const chatController = useChatController(characterId, { sessionId });
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -257,6 +258,21 @@ export function ChatConversationPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [messages]);
 
+  useEffect(() => {
+    if (jumpToMessageId && !loading && messages.length > 0) {
+      setTimeout(() => {
+        const element = document.getElementById(`message-${jumpToMessageId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('bg-white/10', 'rounded-lg', 'transition-colors', 'duration-1000');
+          setTimeout(() => {
+            element.classList.remove('bg-white/10');
+          }, 2000);
+        }
+      }, 500); 
+    }
+  }, [jumpToMessageId, loading, messages.length]);
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -317,25 +333,31 @@ export function ChatConversationPage() {
               : {};
 
             return (
-              <ChatMessage
+              <div
                 key={message.id}
-                message={message}
-                index={index}
-                messagesLength={messages.length}
-                heldMessageId={heldMessageId}
-                regeneratingMessageId={regeneratingMessageId}
-                sending={sending}
-                eventHandlers={eventHandlers}
-                getVariantState={getVariantState}
-                handleVariantDrag={handleVariantDrag}
-                handleRegenerate={handleRegenerate}
-                isStartingSceneMessage={isStartingSceneMessage(message)}
-                theme={theme}
-                displayContent={displayContent}
-                character={character}
-                persona={persona}
-                onImageClick={handleImageClick}
-              />
+                id={`message-${message.id}`}
+                className="scroll-mt-24 transition-colors duration-500"
+              >
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  index={index}
+                  messagesLength={messages.length}
+                  heldMessageId={heldMessageId}
+                  regeneratingMessageId={regeneratingMessageId}
+                  sending={sending}
+                  eventHandlers={eventHandlers}
+                  getVariantState={getVariantState}
+                  handleVariantDrag={handleVariantDrag}
+                  handleRegenerate={handleRegenerate}
+                  isStartingSceneMessage={isStartingSceneMessage(message)}
+                  theme={theme}
+                  displayContent={displayContent}
+                  character={character}
+                  persona={persona}
+                  onImageClick={handleImageClick}
+                />
+              </div>
             );
           })}
         </div>
