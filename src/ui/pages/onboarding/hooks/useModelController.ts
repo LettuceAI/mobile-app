@@ -5,7 +5,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { readSettings, addOrUpdateModel } from "../../../../core/storage/repo";
 import {
     setModelSetupCompleted,
-    setOnboardingCompleted,
 } from "../../../../core/storage/appState";
 import type { ProviderCredential, Model } from "../../../../core/storage/schemas";
 
