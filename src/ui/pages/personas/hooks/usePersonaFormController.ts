@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { getPersona, savePersona } from "../../../../core/storage/repo";
@@ -50,6 +50,14 @@ export function usePersonaFormController(personaId: string | undefined) {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // Track initial state for change detection
+  const initialStateRef = useRef<{
+    title: string;
+    description: string;
+    isDefault: boolean;
+    avatarPath: string | null;
+  } | null>(null);
+
   const loadPersona = useCallback(async () => {
     if (!personaId) {
       navigate("/personas");
@@ -80,6 +88,14 @@ export function usePersonaFormController(personaId: string | undefined) {
           avatarPath: avatarDataUrl,
         },
       });
+
+      // Store initial state for change detection
+      initialStateRef.current = {
+        title: persona.title,
+        description: persona.description,
+        isDefault: persona.isDefault ?? false,
+        avatarPath: avatarDataUrl,
+      };
       dispatch({ type: "set_error", payload: null });
     } catch (error) {
       console.error("Failed to load persona:", error);
@@ -145,7 +161,22 @@ export function usePersonaFormController(personaId: string | undefined) {
         avatarPath: avatarFilename,
       });
 
-      navigate("/personas");
+      // Update initial state to match current (for change detection)
+      initialStateRef.current = {
+        title: title.trim(),
+        description: description.trim(),
+        isDefault,
+        avatarPath,
+      };
+
+      // Sync trimmed values
+      dispatch({
+        type: "set_fields",
+        payload: {
+          title: title.trim(),
+          description: description.trim(),
+        },
+      });
     } catch (error: any) {
       console.error("Failed to save persona:", error);
       dispatch({
@@ -157,6 +188,25 @@ export function usePersonaFormController(personaId: string | undefined) {
     }
   }, [personaId, state, navigate]);
 
+  // Compute canSave based on changes from initial state
+  const canSave = (() => {
+    // Must have name and description
+    if (!state.title.trim() || !state.description.trim() || state.saving) return false;
+
+    // If initial state not yet loaded, don't allow save
+    const initial = initialStateRef.current;
+    if (!initial) return false;
+
+    // Check for actual changes
+    const hasChanges =
+      state.title !== initial.title ||
+      state.description !== initial.description ||
+      state.isDefault !== initial.isDefault ||
+      state.avatarPath !== initial.avatarPath;
+
+    return hasChanges;
+  })();
+
   return {
     state,
     setTitle,
@@ -164,5 +214,6 @@ export function usePersonaFormController(personaId: string | undefined) {
     setIsDefault,
     setAvatarPath,
     handleSave,
+    canSave,
   };
 }

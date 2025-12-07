@@ -16,30 +16,40 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
   const hasAdvancedView = useMemo(() => currentPath.includes("view=advanced"), [currentPath]);
 
   const title = useMemo(() => {
-    if (basePath === "/settings/providers") return "Providers";
-    if (hasAdvancedView) return "Response Style";
-    if (basePath === "/settings/models" || basePath.startsWith("/settings/models/")) return "Models";
-    if (basePath === "/settings/security") return "Security";
-    if (basePath === "/settings/reset") return "Reset";
-    if (basePath === "/settings/backup") return "Backup & Restore";
-    if (basePath === "/settings/usage") return "Usage Analytics";
-    if (basePath === "/settings/changelog") return "Changelog";
-    if (basePath === "/settings/prompts/new") return "Create Template";
-    if (basePath.startsWith("/settings/prompts/")) return "Edit Template";
-    if (basePath === "/settings/prompts") return "Prompt Templates";
-    if (basePath === "/settings/developer") return "Developer";
-    if (basePath === "/settings/advanced") return "Advanced";
-    if (basePath === "/settings/characters") return "Characters";
-    if (basePath === "/settings/personas") return "Personas";
-    if (basePath === "/settings/advanced/memory") return "Dynamic Memory";
-    if (basePath.startsWith("/settings")) return "Settings";
-    if (basePath.startsWith("/create")) return "Create";
-    if (basePath.startsWith("/onboarding")) return "Setup";
-    if (basePath.startsWith("/welcome")) return "Welcome";
-    if (basePath.startsWith("/chat/")) return "Conversation";
-    if (basePath === "/library") return "Library";
-    return "Chats";
-  }, [basePath, hasAdvancedView]);
+    const rules: Array<{
+      match: (path: string) => boolean;
+      title: string;
+    }> = [
+        { match: p => p === "/settings/providers", title: "Providers" },
+        { match: p => p.includes("view=advanced"), title: "Response Style" },
+        { match: p => p === "/settings/models" || p.startsWith("/settings/models/"), title: "Models" },
+        { match: p => p === "/settings/security", title: "Security" },
+        { match: p => p === "/settings/reset", title: "Reset" },
+        { match: p => p === "/settings/backup", title: "Backup & Restore" },
+        { match: p => p === "/settings/usage", title: "Usage Analytics" },
+        { match: p => p === "/settings/changelog", title: "Changelog" },
+        { match: p => p === "/settings/prompts/new", title: "Create Template" },
+        { match: p => p.startsWith("/settings/prompts/"), title: "Edit Template" },
+        { match: p => p === "/settings/prompts", title: "Prompt Templates" },
+        { match: p => p === "/settings/developer", title: "Developer" },
+        { match: p => p === "/settings/advanced", title: "Advanced" },
+        { match: p => p === "/settings/characters", title: "Characters" },
+        { match: p => p === "/settings/personas", title: "Personas" },
+        { match: p => p === "/settings/advanced/memory", title: "Dynamic Memory" },
+        { match: p => p.startsWith("/settings/personas/") && p.endsWith("/edit"), title: "Edit Persona" },
+        { match: p => p.startsWith("/settings/characters/") && p.endsWith("/edit"), title: "Edit Character" },
+        { match: p => p.startsWith("/settings"), title: "Settings" },
+        { match: p => p.startsWith("/create"), title: "Create" },
+        { match: p => p.startsWith("/onboarding"), title: "Setup" },
+        { match: p => p.startsWith("/welcome"), title: "Welcome" },
+        { match: p => p.startsWith("/chat/"), title: "Conversation" },
+        { match: p => p === "/library", title: "Library" },
+      ];
+
+    const rule = rules.find(r => r.match(basePath));
+    return rule?.title ?? "Chats";
+  }, [basePath]);
+
 
   const showBackButton = useMemo(() => {
     if (basePath.startsWith("/settings/") || basePath === "/settings") return true;
@@ -70,10 +80,9 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
     return basePath.startsWith("/settings");
   }, [basePath]);
 
-  // Check if we're on a character edit page
-  const showSaveButton = useMemo(() => {
-    return /^\/settings\/characters\/[^/]+\/edit$/.test(basePath);
-  }, [basePath]);
+  const isCharacterEdit = useMemo(() => /^\/settings\/characters\/[^/]+\/edit$/.test(basePath), [basePath]);
+  const isPersonaEdit = useMemo(() => /^\/settings\/personas\/[^/]+\/edit$/.test(basePath), [basePath]);
+  const showSaveButton = isCharacterEdit || isPersonaEdit;
 
   // Track save button state from window globals
   const [canSave, setCanSave] = useState(false);
@@ -84,12 +93,18 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
 
     const checkGlobals = () => {
       const globalWindow = window as any;
-      const newCanSave = !!globalWindow.__saveCharacterCanSave;
-      const newIsSaving = !!globalWindow.__saveCharacterSaving;
 
-      // Only update state if values actually changed
-      setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
-      setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+      if (isCharacterEdit) {
+        const newCanSave = !!globalWindow.__saveCharacterCanSave;
+        const newIsSaving = !!globalWindow.__saveCharacterSaving;
+        setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
+        setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+      } else if (isPersonaEdit) {
+        const newCanSave = !!globalWindow.__savePersonaCanSave;
+        const newIsSaving = !!globalWindow.__savePersonaSaving;
+        setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
+        setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+      }
     };
 
     // Check immediately and on interval
@@ -97,7 +112,7 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
     const interval = setInterval(checkGlobals, 200);
 
     return () => clearInterval(interval);
-  }, [showSaveButton]);
+  }, [showSaveButton, isCharacterEdit, isPersonaEdit]);
 
   const handleBack = () => {
     if (onBackOverride) {
@@ -246,8 +261,10 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
             <button
               onClick={() => {
                 const globalWindow = window as any;
-                if (typeof globalWindow.__saveCharacter === "function") {
+                if (isCharacterEdit && typeof globalWindow.__saveCharacter === "function") {
                   globalWindow.__saveCharacter();
+                } else if (isPersonaEdit && typeof globalWindow.__savePersona === "function") {
+                  globalWindow.__savePersona();
                 }
               }}
               disabled={!canSave || isSaving}

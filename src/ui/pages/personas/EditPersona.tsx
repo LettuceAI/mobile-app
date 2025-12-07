@@ -1,9 +1,9 @@
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Camera, X, Download } from "lucide-react";
+import { Loader2, X, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePersonaFormController } from "./hooks/usePersonaFormController";
 import { exportPersona, downloadJson, generateExportFilename } from "../../../core/storage/personaTransfer";
-import { useState } from "react";
 import { AvatarPicker } from "../../components/AvatarPicker";
 
 const wordCount = (text: string) => {
@@ -21,11 +21,22 @@ export function EditPersonaPage() {
     setIsDefault,
     setAvatarPath,
     handleSave,
+    canSave,
   } = usePersonaFormController(personaId);
 
   const [exporting, setExporting] = useState(false);
 
-  const canSave = title.trim().length > 0 && description.trim().length > 0 && !saving;
+  useEffect(() => {
+    const globalWindow = window as any;
+    globalWindow.__savePersona = handleSave;
+    globalWindow.__savePersonaCanSave = canSave;
+    globalWindow.__savePersonaSaving = saving;
+    return () => {
+      delete globalWindow.__savePersona;
+      delete globalWindow.__savePersonaCanSave;
+      delete globalWindow.__savePersonaSaving;
+    };
+  }, [handleSave, canSave, saving]);
 
   const handleExport = async () => {
     if (!personaId) return;
@@ -73,12 +84,8 @@ export function EditPersonaPage() {
           )}
 
           {/* Avatar Section */}
-          <div className="space-y-3">
-            <label className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/70">
-              Avatar
-            </label>
-            <div className="flex items-center gap-4">
-              {/* Avatar Picker with Generation Support */}
+          <div className="flex flex-col items-center py-4">
+            <div className="relative">
               <AvatarPicker
                 currentAvatarPath={avatarPath ?? ""}
                 onAvatarChange={handleAvatarChange}
@@ -91,7 +98,9 @@ export function EditPersonaPage() {
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <Camera className="text-white/30" size={32} />
+                      <span className="text-4xl font-bold text-white/30">
+                        {title.trim().charAt(0).toUpperCase() || "?"}
+                      </span>
                     </div>
                   )
                 }
@@ -100,15 +109,16 @@ export function EditPersonaPage() {
               {/* Remove Button */}
               {avatarPath && (
                 <button
+                  type="button"
                   onClick={() => setAvatarPath(null)}
-                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 backdrop-blur-xl transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300 active:scale-95"
+                  className="absolute -top-1 -left-1 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
                 >
-                  <X size={20} strokeWidth={3} />
+                  <X size={14} strokeWidth={2.5} />
                 </button>
               )}
             </div>
-            <p className="text-xs text-white/40">
-              Optional: Add a visual identity for this persona
+            <p className="mt-3 text-xs text-white/40">
+              Tap to add or generate avatar
             </p>
           </div>
 
@@ -170,8 +180,8 @@ export function EditPersonaPage() {
                 <label
                   htmlFor="set-as-default"
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${isDefault
-                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                      : 'bg-white/20'
+                    ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                    : 'bg-white/20'
                     }`}
                 >
                   <span
@@ -202,28 +212,6 @@ export function EditPersonaPage() {
               </span>
             )}
           </motion.button>
-
-          {/* Save Button */}
-          <button
-            onClick={handleSave}
-            disabled={!canSave}
-            className={`w-full rounded-xl px-4 py-3 text-sm font-medium transition active:scale-[0.99] ${canSave
-                ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
-                : "border border-white/10 bg-white/5 text-white/30"
-              }`}
-          >
-            {saving ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                <Save className="h-4 w-4" />
-                Save Changes
-              </span>
-            )}
-          </button>
         </motion.div>
       </main>
     </div>
