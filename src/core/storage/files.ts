@@ -95,6 +95,7 @@ export const storageBridge = {
 
   clearAll: () => invoke("storage_clear_all"),
   resetDatabase: () => invoke("storage_reset_database") as Promise<void>,
+  retryDynamicMemory: (sessionId: string) => invoke("retry_dynamic_memory", { sessionId }) as Promise<void>,
   usageSummary: () => invoke("storage_usage_summary") as Promise<{
     fileCount: number;
     estimatedSessions: number;

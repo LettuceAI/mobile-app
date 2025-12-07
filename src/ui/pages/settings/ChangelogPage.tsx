@@ -16,6 +16,92 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
     {
+        version: "1.0-beta_5",
+        date: "2025-12-08",
+        changes: [
+            {
+                type: "feature",
+                description: "Added gradient overwrite customization. users can now define up to 3 custom colors for avatar gradients"
+            },
+            {
+                type: "feature",
+                description: "Introduced multimodel support, allowing users to mix different LLMs within the same environment"
+            },
+            {
+                type: "feature",
+                description: "Users can now generate images for avatars directly through supported image models"
+            },
+            {
+                type: "feature",
+                description: "Users can now send images in chat when using models that support image input"
+            },
+            {
+                type: "feature",
+                description: "Added session-level message search for quickly locating past messages"
+            },
+            {
+                type: "feature",
+                description: "Users can now reposition and resize their character/persona avatars, and also crop/adjust chat background images"
+            },
+            {
+                type: "feature",
+                description: "Encrypted backup system added. users can now export and restore their data securely"
+            },
+            {
+                type: "feature",
+                description: "Added empty-state UI to the Library page for better feedback when no content exists"
+            },
+            {
+                type: "feature",
+                description: "Chat branching added. users can create alternate timeline conversations and branches with different characters"
+            },
+            {
+                type: "improvement",
+                description: "Added new template placeholders {{context_summary}} and {{key_memories}} to improve prompt customization"
+            },
+            {
+                type: "improvement",
+                description: "Redesigned the Chat Character Card layout for clarity and better hierarchy"
+            },
+            {
+                type: "improvement",
+                description: "Redesigned the Edit Character page using a tabbed layout for more structured navigation"
+            },
+            {
+                type: "improvement",
+                description: "Revamped the Character/Persona Avatar editor for more intuitive customization"
+            },
+            {
+                type: "improvement",
+                description: "Persona creation page redesigned to match the Create Character page’s visual language"
+            },
+            {
+                type: "improvement",
+                description: "Dynamic memory system is now significantly more responsive and less prone to stalling"
+            },
+            {
+                type: "improvement",
+                description: "Navigation state handling rewritten — now more predictable, stable, and resistant to edge-case desyncs"
+            },
+            {
+                type: "improvement",
+                description: "Large internal performance pass: reduced unnecessary re-renders, optimized SQLite queries, minimized prop-drilling overhead, and improved store subscription batching"
+            },
+            {
+                type: "bugfix",
+                description: "Fixed a bug where skipping the welcome page could cause a database panic during initialization"
+            },
+            {
+                type: "bugfix",
+                description: "Summaries are now correctly included in API requests as intended"
+            },
+            {
+                type: "bugfix",
+                description: "Chat branches now generate proper unique IDs"
+            }
+        ]
+    },
+    {
         version: "1.0-beta_4",
         date: "2025-11-23",
         changes: [
@@ -418,8 +504,8 @@ function ChangeGroup({ type, changes, defaultExpanded = true }: ChangeGroupProps
                 onClick={() => setExpanded(!expanded)}
                 className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl",
-                    "bg-white/[0.03] border border-white/[0.06]",
-                    "hover:bg-white/[0.05] transition-all duration-200",
+                    "bg-white/3 border border-white/6",
+                    "hover:bg-white/5 transition-all duration-200",
                     "group"
                 )}
             >
@@ -468,7 +554,7 @@ function ChangeGroup({ type, changes, defaultExpanded = true }: ChangeGroupProps
                                     className={cn(
                                         "relative flex gap-3 pl-4 pr-4 py-3",
                                         "rounded-xl",
-                                        "bg-gradient-to-r", config.gradient,
+                                        "bg-linear-to-r", config.gradient,
                                         "group/item"
                                     )}
                                 >
@@ -654,8 +740,8 @@ export function ChangelogPage() {
                         rel="noopener noreferrer"
                         className={cn(
                             "flex items-center justify-center gap-2 w-full py-3 rounded-xl",
-                            "bg-white/[0.03] border border-white/[0.06]",
-                            "hover:bg-white/[0.06] hover:border-white/[0.1]",
+                            "bg-white/3 border border-white/6",
+                            "hover:bg-white/6 hover:border-white/10",
                             "transition-all duration-200 group"
                         )}
                     >
@@ -692,7 +778,7 @@ export function ChangelogPage() {
                                     "group relative flex w-full items-start gap-3 rounded-xl px-4 py-3.5 text-left transition-all duration-200",
                                     isSelected
                                         ? "bg-emerald-500/10 border border-emerald-500/30"
-                                        : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.05] hover:border-white/[0.08]"
+                                        : "bg-white/2 border border-white/4 hover:bg-white/5 hover:border-white/8"
                                 )}
                             >
                                 {/* Timeline dot */}
@@ -704,7 +790,7 @@ export function ChangelogPage() {
                                     {idx < changelog.length - 1 && (
                                         <div className={cn(
                                             "w-px flex-1 mt-2 min-h-[20px]",
-                                            "bg-gradient-to-b",
+                                            "bg-linear-to-b",
                                             isSelected ? "from-emerald-400/40 to-transparent" : "from-white/10 to-transparent"
                                         )} />
                                     )}

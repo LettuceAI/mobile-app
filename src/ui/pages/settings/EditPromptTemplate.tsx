@@ -75,11 +75,11 @@ export function EditPromptTemplate() {
         if (template) {
           setName(template.name);
           setContent(template.content);
-          const isProtected = template.id === appDefaultId || 
-                             template.id === DYNAMIC_SUMMARY_TEMPLATE_ID || 
-                             template.id === DYNAMIC_MEMORY_TEMPLATE_ID;
+          const isProtected = template.id === appDefaultId ||
+            template.id === DYNAMIC_SUMMARY_TEMPLATE_ID ||
+            template.id === DYNAMIC_MEMORY_TEMPLATE_ID;
           setIsAppDefault(isProtected);
-          
+
           // Detect prompt type
           if (template.id === appDefaultId) {
             setPromptType("system");
@@ -138,12 +138,12 @@ export function EditPromptTemplate() {
 
   async function handleReset() {
     if (!isAppDefault || !promptType) return;
-    
-    const promptTypeName = 
+
+    const promptTypeName =
       promptType === "system" ? "main system prompt" :
-      promptType === "summary" ? "dynamic summary prompt" :
-      "dynamic memory prompt";
-    
+        promptType === "summary" ? "dynamic summary prompt" :
+          "dynamic memory prompt";
+
     if (!confirm(`Reset to the original default ${promptTypeName}? This cannot be undone.`)) {
       return;
     }
@@ -192,10 +192,10 @@ export function EditPromptTemplate() {
   }
 
   const charCount = content.length;
-  const charCountColor = 
+  const charCountColor =
     charCount > 8000 ? "text-red-400" :
-    charCount > 5000 ? "text-amber-400" :
-    "text-white/40";
+      charCount > 5000 ? "text-amber-400" :
+        "text-white/40";
 
   const variables = promptType === "system" ? [
     { var: "{{char.name}}", label: "Character Name", desc: "Character's name" },
@@ -204,6 +204,8 @@ export function EditPromptTemplate() {
     { var: "{{persona.name}}", label: "User Name", desc: "User persona name" },
     { var: "{{persona.desc}}", label: "User Desc", desc: "User persona description" },
     { var: "{{rules}}", label: "Rules", desc: "Character behavioral rules" },
+    { var: "{{context_summary}}", label: "Context Summary", desc: "Dynamic conversation summary" },
+    { var: "{{key_memories}}", label: "Key Memories", desc: "List of relevant memories" },
   ] : promptType === "summary" ? [
     { var: "{{prev_summary}}", label: "Previous Summary", desc: "The cumulative summary from before" },
     { var: "{{character}}", label: "Character", desc: "Character placeholder" },
@@ -217,6 +219,8 @@ export function EditPromptTemplate() {
     { var: "{{persona.name}}", label: "User Name", desc: "User persona name" },
     { var: "{{persona.desc}}", label: "User Desc", desc: "User persona description" },
     { var: "{{rules}}", label: "Rules", desc: "Character behavioral rules" },
+    { var: "{{context_summary}}", label: "Context Summary", desc: "Dynamic conversation summary" },
+    { var: "{{key_memories}}", label: "Key Memories", desc: "List of relevant memories" },
   ];
 
   if (loading) {
@@ -304,7 +308,7 @@ export function EditPromptTemplate() {
                 rows={18}
                 className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 font-mono text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-blue-400/40 focus:bg-black/40 focus:outline-none"
               />
-              
+
               <div className="flex items-center justify-between text-xs">
                 <span className={cn("font-medium", charCountColor)}>
                   {charCount.toLocaleString()} characters
@@ -315,108 +319,108 @@ export function EditPromptTemplate() {
 
             {/* Preview Section - Only for system prompts */}
             {promptType === "system" && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                  Preview
-                </label>
-                <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-0.5">
-                  <button
-                    onClick={() => setPreviewMode("rendered")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition",
-                      previewMode === "rendered"
-                        ? "bg-blue-400/20 text-blue-200"
-                        : "text-white/50"
-                    )}
-                  >
-                    <Eye className="h-3 w-3" />
-                    Rendered
-                  </button>
-                  <button
-                    onClick={() => setPreviewMode("raw")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition",
-                      previewMode === "raw"
-                        ? "bg-blue-400/20 text-blue-200"
-                        : "text-white/50"
-                    )}
-                  >
-                    <Code2 className="h-3 w-3" />
-                    Raw
-                  </button>
-                </div>
-              </div>
-
-              {previewMode === "rendered" && (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={previewCharacterId ?? ""}
-                      onChange={(e) => setPreviewCharacterId(e.target.value || null)}
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white transition focus:border-blue-400/40 focus:outline-none"
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                    Preview
+                  </label>
+                  <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-0.5">
+                    <button
+                      onClick={() => setPreviewMode("rendered")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition",
+                        previewMode === "rendered"
+                          ? "bg-blue-400/20 text-blue-200"
+                          : "text-white/50"
+                      )}
                     >
-                      <option value="">Character…</option>
-                      {characters.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={previewPersonaId ?? ""}
-                      onChange={(e) => setPreviewPersonaId(e.target.value || null)}
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white transition focus:border-blue-400/40 focus:outline-none"
+                      <Eye className="h-3 w-3" />
+                      Rendered
+                    </button>
+                    <button
+                      onClick={() => setPreviewMode("raw")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition",
+                        previewMode === "raw"
+                          ? "bg-blue-400/20 text-blue-200"
+                          : "text-white/50"
+                      )}
                     >
-                      <option value="">Persona…</option>
-                      {personas.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
-                        </option>
-                      ))}
-                    </select>
+                      <Code2 className="h-3 w-3" />
+                      Raw
+                    </button>
                   </div>
-
-                  <button
-                    onClick={handlePreview}
-                    disabled={!previewCharacterId || previewing}
-                    className={cn(
-                      "w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition",
-                      !previewCharacterId || previewing
-                        ? "border-white/10 bg-white/5 text-white/30"
-                        : "border-blue-400/40 bg-blue-400/15 text-blue-100 hover:bg-blue-400/25 active:scale-[0.99]"
-                    )}
-                  >
-                    {previewing ? "Rendering…" : "Generate Preview"}
-                  </button>
-                </>
-              )}
-
-              {/* Preview Output */}
-              {previewMode === "rendered" && preview && (
-                <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-white/80">
-                    {preview}
-                  </pre>
                 </div>
-              )}
 
-              {previewMode === "raw" && content && (
-                <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-white/80">
-                    {content}
-                  </pre>
-                </div>
-              )}
+                {previewMode === "rendered" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={previewCharacterId ?? ""}
+                        onChange={(e) => setPreviewCharacterId(e.target.value || null)}
+                        className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white transition focus:border-blue-400/40 focus:outline-none"
+                      >
+                        <option value="">Character…</option>
+                        {characters.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
 
-              {!preview && previewMode === "rendered" && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
-                  <p className="text-sm text-white/50">No preview yet</p>
-                  <p className="mt-1 text-xs text-white/30">Select character & generate</p>
-                </div>
-              )}
-            </div>
+                      <select
+                        value={previewPersonaId ?? ""}
+                        onChange={(e) => setPreviewPersonaId(e.target.value || null)}
+                        className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white transition focus:border-blue-400/40 focus:outline-none"
+                      >
+                        <option value="">Persona…</option>
+                        {personas.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={handlePreview}
+                      disabled={!previewCharacterId || previewing}
+                      className={cn(
+                        "w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition",
+                        !previewCharacterId || previewing
+                          ? "border-white/10 bg-white/5 text-white/30"
+                          : "border-blue-400/40 bg-blue-400/15 text-blue-100 hover:bg-blue-400/25 active:scale-[0.99]"
+                      )}
+                    >
+                      {previewing ? "Rendering…" : "Generate Preview"}
+                    </button>
+                  </>
+                )}
+
+                {/* Preview Output */}
+                {previewMode === "rendered" && preview && (
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-white/80">
+                      {preview}
+                    </pre>
+                  </div>
+                )}
+
+                {previewMode === "raw" && content && (
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-white/80">
+                      {content}
+                    </pre>
+                  </div>
+                )}
+
+                {!preview && previewMode === "rendered" && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
+                    <p className="text-sm text-white/50">No preview yet</p>
+                    <p className="mt-1 text-xs text-white/30">Select character & generate</p>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Actions */}
@@ -464,41 +468,41 @@ export function EditPromptTemplate() {
             const isRequired = requiredVariables.includes(item.var);
             const isMissing = missingVariables.includes(item.var);
             return (
-            <button
-              key={item.var}
-              onClick={() => copyVariable(item.var)}
-              className={cn(
-                "w-full rounded-xl border p-4 text-left transition-colors",
-                isMissing 
-                  ? "border-red-400/40 bg-red-400/10 active:bg-red-400/20"
-                  : isRequired
-                  ? "border-amber-400/30 bg-amber-400/10 active:bg-amber-400/15"
-                  : "border-purple-400/20 bg-purple-400/5 active:bg-purple-400/10"
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    {isRequired && (
-                      <span className={cn("text-sm", isMissing ? "text-red-400" : "text-amber-400")}>★</span>
-                    )}
-                    <code className={cn(
-                      "text-sm font-semibold",
-                      isMissing ? "text-red-300" : "text-emerald-300"
-                    )}>{item.var}</code>
-                    {copiedVar === item.var && (
-                      <span className="flex items-center gap-1 text-xs text-emerald-400">
-                        <Check className="h-3 w-3" />
-                        Copied
-                      </span>
-                    )}
+              <button
+                key={item.var}
+                onClick={() => copyVariable(item.var)}
+                className={cn(
+                  "w-full rounded-xl border p-4 text-left transition-colors",
+                  isMissing
+                    ? "border-red-400/40 bg-red-400/10 active:bg-red-400/20"
+                    : isRequired
+                      ? "border-amber-400/30 bg-amber-400/10 active:bg-amber-400/15"
+                      : "border-purple-400/20 bg-purple-400/5 active:bg-purple-400/10"
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      {isRequired && (
+                        <span className={cn("text-sm", isMissing ? "text-red-400" : "text-amber-400")}>★</span>
+                      )}
+                      <code className={cn(
+                        "text-sm font-semibold",
+                        isMissing ? "text-red-300" : "text-emerald-300"
+                      )}>{item.var}</code>
+                      {copiedVar === item.var && (
+                        <span className="flex items-center gap-1 text-xs text-emerald-400">
+                          <Check className="h-3 w-3" />
+                          Copied
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-white/90">{item.label}</p>
+                    <p className="text-xs text-white/50">{item.desc}</p>
                   </div>
-                  <p className="text-sm font-medium text-white/90">{item.label}</p>
-                  <p className="text-xs text-white/50">{item.desc}</p>
                 </div>
-              </div>
-            </button>
-          );
+              </button>
+            );
           })}
         </div>
       </BottomMenu>

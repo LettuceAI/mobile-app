@@ -1736,6 +1736,22 @@ pub fn render_prompt_preview(
     Ok(rendered)
 }
 
+#[tauri::command]
+pub async fn retry_dynamic_memory(app: AppHandle, session_id: String) -> Result<(), String> {
+    log_info(
+        &app,
+        "dynamic_memory",
+        format!("retry requested for session {}", session_id),
+    );
+    let context = ChatContext::initialize(app.clone())?;
+    let mut session = context
+        .load_session(&session_id)?
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let character = context.find_character(&session.character_id)?;
+    process_dynamic_memory_cycle(&app, &mut session, &context.settings, &character).await
+}
+
 async fn process_dynamic_memory_cycle(
     app: &AppHandle,
     session: &mut Session,

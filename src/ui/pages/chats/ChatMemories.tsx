@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X } from "lucide-react";
+import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw } from "lucide-react";
 import type { Character, Session } from "../../../core/storage/schemas";
 import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
+import { storageBridge } from "../../../core/storage/files";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
 
@@ -306,6 +307,7 @@ export function ChatMemoriesPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [newMemory, setNewMemory] = useState("");
   const [isSavingSummary, setIsSavingSummary] = useState(false);
+  const [retryStatus, setRetryStatus] = useState<"idle" | "retrying" | "success">("idle");
 
   const [actionError, setActionError] = useState<string | null>(searchParams.get("error"));
 
@@ -424,6 +426,22 @@ export function ChatMemoriesPage() {
     }
   };
 
+  const handleRetry = async () => {
+    if (!session?.id) return;
+    setRetryStatus("retrying");
+    try {
+      await storageBridge.retryDynamicMemory(session.id);
+      await reload();
+      setRetryStatus("success");
+      setActionError(null);
+      setTimeout(() => setRetryStatus("idle"), 3000);
+    } catch (err: any) {
+      console.error("Failed to retry memory processing:", err);
+      setActionError(err?.message || "Failed to retry memory processing");
+      setRetryStatus("idle");
+    }
+  };
+
   if (loading) {
     return (
       <div className={cn("flex h-screen items-center justify-center", colors.surface.base)}>
@@ -498,24 +516,63 @@ export function ChatMemoriesPage() {
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-16">
         {/* Error Banner */}
-        {actionError && (
+        {/* Status Banner (Error / Retry / Success) */}
+        {(actionError || retryStatus !== "idle") && (
           <div className="px-3 pt-3">
-            <div className={cn(
-              radius.md,
-              "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3"
-            )}>
-              <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-              <div className="flex-1 text-sm text-red-200">
-                <p className="font-semibold mb-1">Memory System Error</p>
-                <p className="opacity-90">{actionError}</p>
+            {retryStatus === "retrying" ? (
+              <div className={cn(
+                radius.md,
+                "bg-blue-500/10 border border-blue-500/20 p-3 flex items-center gap-3 animate-pulse"
+              )}>
+                <RefreshCw className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
+                <div className="flex-1 text-sm text-blue-200">
+                  <p className="font-semibold">Retrying Memory Cycle...</p>
+                </div>
               </div>
-              <button
-                onClick={() => setActionError(null)}
-                className="text-red-400 hover:text-red-300"
-              >
-                <X size={16} />
-              </button>
-            </div>
+            ) : retryStatus === "success" ? (
+              <div className={cn(
+                radius.md,
+                "bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3"
+              )}>
+                <Check className="h-5 w-5 text-emerald-400 shrink-0" />
+                <div className="flex-1 text-sm text-emerald-200">
+                  <p className="font-semibold">Memory Cycle Processed Successfully!</p>
+                </div>
+                <button
+                  onClick={() => setRetryStatus("idle")}
+                  className="text-emerald-400 hover:text-emerald-300"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : actionError ? (
+              <div className={cn(
+                radius.md,
+                "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3"
+              )}>
+                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+                <div className="flex-1 text-sm text-red-200">
+                  <p className="font-semibold mb-1">Memory System Error</p>
+                  <p className="opacity-90">{actionError}</p>
+                  {/* Retry Button for Memory Errors */}
+                  {(actionError.toLowerCase().includes("status") || actionError.toLowerCase().includes("limit") || true) && (
+                    <button
+                      onClick={handleRetry}
+                      className="mt-2 flex items-center gap-1.5 rounded-md bg-red-500/20 px-2.5 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95"
+                    >
+                      <RefreshCw size={12} />
+                      Try Again
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setActionError(null)}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
 

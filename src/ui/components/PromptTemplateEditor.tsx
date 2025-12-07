@@ -15,10 +15,10 @@ interface PromptTemplateEditorProps {
 
 export function PromptTemplateEditor({ template, onClose, onSave }: PromptTemplateEditorProps) {
   const isEditing = !!template;
-  
+
   const [name, setName] = useState(template?.name || "");
   const [content, setContent] = useState(template?.content || "");
-  
+
   const [characters, setCharacters] = useState<Character[]>([]);
   const [saving, setSaving] = useState(false);
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -39,13 +39,13 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
       const chars = await listCharacters();
       setCharacters(chars);
       setPreviewCharacterId(chars[0]?.id ?? null);
-      
+
       const pers = await listPersonas();
       setPersonas(pers);
       setPreviewPersonaId(pers.find(p => p.isDefault)?.id ?? null);
     } catch (error) {
       console.error("Failed to load data:", error);
-    } finally {}
+    } finally { }
   }
 
   async function handleSave() {
@@ -64,7 +64,7 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
       } else {
         await createPromptTemplate(name.trim(), "appWide" as any, [], content.trim());
       }
-      
+
       onSave();
       onClose();
     } catch (error) {
@@ -99,10 +99,10 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
   }
 
   const charCount = content.length;
-  const charCountColor = 
+  const charCountColor =
     charCount > 8000 ? "text-red-400" :
-    charCount > 5000 ? "text-amber-400" :
-    "text-white/40";
+      charCount > 5000 ? "text-amber-400" :
+        "text-white/40";
 
   const variables = [
     { var: "{{char.name}}", label: "Character Name", desc: "Character's name" },
@@ -111,6 +111,8 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
     { var: "{{persona.name}}", label: "User Name", desc: "User persona name" },
     { var: "{{persona.desc}}", label: "User Desc", desc: "User persona description" },
     { var: "{{rules}}", label: "Rules", desc: "Character behavioral rules" },
+    { var: "{{context_summary}}", label: "Context Summary", desc: "Dynamic conversation summary" },
+    { var: "{{key_memories}}", label: "Key Memories", desc: "List of relevant memories" },
   ];
 
   return (
@@ -168,7 +170,7 @@ export function PromptTemplateEditor({ template, onClose, onSave }: PromptTempla
                 rows={12}
                 className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-blue-400/40 focus:bg-black/40 focus:outline-none"
               />
-              
+
               <span className={cn("text-xs font-medium", charCountColor)}>
                 {charCount.toLocaleString()} characters
               </span>
