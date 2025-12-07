@@ -1,10 +1,11 @@
 import React from "react";
 import { useParams } from "react-router-dom";
-import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Image, Download, Layers, Edit2, ChevronDown } from "lucide-react";
+import { Save, Loader2, Plus, X, Sparkles, BookOpen, Cpu, Image, Download, Layers, Edit2, ChevronDown, Crop, Upload } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 import { AvatarPicker } from "../../components/AvatarPicker";
 import { BottomMenu } from "../../components/BottomMenu";
+import { BackgroundPositionModal } from "../../components/BackgroundPositionModal";
 import { cn, radius } from "../../design-tokens";
 
 const wordCount = (text: string) => {
@@ -17,6 +18,11 @@ export function EditCharacterPage() {
   const { characterId } = useParams();
   const { state, actions, computed } = useEditCharacterForm(characterId);
   const [expandedSceneId, setExpandedSceneId] = React.useState<string | null>(null);
+
+  // Background image positioning state
+  const [pendingBackgroundSrc, setPendingBackgroundSrc] = React.useState<string | null>(null);
+  const [showBackgroundChoiceMenu, setShowBackgroundChoiceMenu] = React.useState(false);
+  const [showBackgroundPositionModal, setShowBackgroundPositionModal] = React.useState(false);
 
   const {
     loading,
@@ -55,7 +61,6 @@ export function EditCharacterPage() {
     startEditingScene,
     saveEditedScene,
     cancelEditingScene,
-    handleBackgroundImageUpload,
   } = actions;
 
   const { avatarInitial, canSave } = computed;
@@ -374,7 +379,18 @@ export function EditCharacterPage() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handleBackgroundImageUpload}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const dataUrl = reader.result as string;
+                        setPendingBackgroundSrc(dataUrl);
+                        setShowBackgroundChoiceMenu(true);
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = "";
+                    }}
                     className="hidden"
                   />
                 </label>
@@ -752,6 +768,78 @@ export function EditCharacterPage() {
           </div>
         </div>
       </BottomMenu>
+
+      {/* Background Upload Choice Menu */}
+      <BottomMenu
+        isOpen={showBackgroundChoiceMenu}
+        onClose={() => {
+          setShowBackgroundChoiceMenu(false);
+          setPendingBackgroundSrc(null);
+        }}
+        title=""
+      >
+        <div className="space-y-4 p-2">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-white">Background Image</h3>
+            <p className="text-sm text-white/50">Choose how to add your image</p>
+          </div>
+
+          <div className="space-y-2">
+            {/* Quick Upload Option */}
+            <button
+              onClick={() => {
+                if (pendingBackgroundSrc) {
+                  setFields({ backgroundImagePath: pendingBackgroundSrc });
+                }
+                setShowBackgroundChoiceMenu(false);
+                setPendingBackgroundSrc(null);
+              }}
+              className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-2 transition hover:bg-white/10 active:scale-[0.98]"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-emerald-300">
+                <Upload size={20} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-medium text-white">Quick Upload</p>
+                <p className="text-xs text-white/50">Use full image without cropping</p>
+              </div>
+            </button>
+
+            {/* Position & Crop Option */}
+            <button
+              onClick={() => {
+                setShowBackgroundChoiceMenu(false);
+                setShowBackgroundPositionModal(true);
+              }}
+              className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 transition hover:bg-white/10 active:scale-[0.98]"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-500/15 text-cyan-300">
+                <Crop size={20} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-medium text-white">Position & Crop</p>
+                <p className="text-xs text-white/50">Adjust to fit portrait view</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </BottomMenu>
+
+      {/* Background Position Modal */}
+      {pendingBackgroundSrc && (
+        <BackgroundPositionModal
+          isOpen={showBackgroundPositionModal}
+          onClose={() => {
+            setShowBackgroundPositionModal(false);
+            setPendingBackgroundSrc(null);
+          }}
+          imageSrc={pendingBackgroundSrc}
+          onConfirm={(croppedDataUrl) => {
+            setFields({ backgroundImagePath: croppedDataUrl });
+            setPendingBackgroundSrc(null);
+          }}
+        />
+      )}
     </div>
   );
 }

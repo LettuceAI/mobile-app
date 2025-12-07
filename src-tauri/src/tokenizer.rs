@@ -37,6 +37,7 @@ pub fn count_tokens(app: &AppHandle, text: &str) -> Result<u32, String> {
 }
 
 /// Count tokens for multiple texts
+#[allow(dead_code)]
 pub fn count_tokens_batch(app: &AppHandle, texts: &[String]) -> Result<Vec<u32>, String> {
     texts.iter()
         .map(|text| count_tokens(app, text))
