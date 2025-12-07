@@ -375,13 +375,13 @@ export function ChatConversationPage() {
         handleBranchFromMessage={async (message) => {
           const newSessionId = await chatController.handleBranchFromMessage(message);
           if (newSessionId && characterId) {
-            navigate(`/chats/${characterId}?sessionId=${newSessionId}`);
+            navigate(`/chat/${characterId}?sessionId=${newSessionId}`);
           }
           return newSessionId;
         }}
         onBranchToCharacter={(message) => {
           setMessageToBranch(message);
-          closeMessageActions(true); // Close the message actions sheet first
+          closeMessageActions(true);
           setShowCharacterSelector(true);
         }}
         handleTogglePin={chatController.handleTogglePin}
@@ -414,7 +414,7 @@ export function ChatConversationPage() {
                   if (result) {
                     setShowCharacterSelector(false);
                     setMessageToBranch(null);
-                    navigate(`/chats/${result.characterId}?sessionId=${result.sessionId}`);
+                    navigate(`/chat/${result.characterId}?sessionId=${result.sessionId}`);
                   }
                 }}
               />
