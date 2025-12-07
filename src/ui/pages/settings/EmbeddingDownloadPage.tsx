@@ -3,10 +3,12 @@ import { motion } from "framer-motion";
 import { Download, X, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { storageBridge } from "../../../core/storage/files";
 import { updateAdvancedSetting } from "../../../core/storage/advanced";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export function EmbeddingDownloadPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const returnTo = searchParams.get("returnTo");
     const [progress, setProgress] = useState<{
         downloaded: number;
         total: number;
@@ -47,7 +49,11 @@ export function EmbeddingDownloadPage() {
                 const currentProgress = await storageBridge.getEmbeddingDownloadProgress();
 
                 if (currentProgress.status === "completed") {
-                    navigate("/settings/advanced", { replace: true });
+                    if (returnTo) {
+                        navigate(returnTo, { replace: true });
+                    } else {
+                        navigate("/settings/advanced/memory", { replace: true });
+                    }
                     return;
                 }
 
@@ -57,7 +63,6 @@ export function EmbeddingDownloadPage() {
                         setProgress(progressData);
 
                         if (progressData.status === "completed") {
-                            // Download complete - run test
                             setIsDownloading(false);
                             runTest();
                         } else if (progressData.status === "failed" || progressData.status === "cancelled") {
@@ -137,7 +142,11 @@ export function EmbeddingDownloadPage() {
                 setCountdown((prev) => {
                     if (prev <= 1) {
                         clearInterval(timer);
-                        navigate("/settings/advanced", { replace: true });
+                        if (returnTo) {
+                            navigate(returnTo, { replace: true });
+                        } else {
+                            navigate("/settings/advanced", { replace: true });
+                        }
                         return 0;
                     }
                     return prev - 1;
@@ -156,7 +165,11 @@ export function EmbeddingDownloadPage() {
                 summaryMessageInterval: 20,
                 maxEntries: 50,
             });
-            navigate("/settings/advanced");
+            if (returnTo) {
+                navigate(returnTo);
+            } else {
+                navigate("/settings/advanced");
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         }

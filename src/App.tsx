@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-route
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { WelcomePage, ProviderSetupPage, ModelSetupPage, ModelRecommendationsPage } from "./ui/pages/onboarding";
+import { WelcomePage, ProviderSetupPage, ModelSetupPage, ModelRecommendationsPage, MemorySystemIntro } from "./ui/pages/onboarding";
 import { WhereToFindPage } from "./ui/pages/onboarding/WhereToFind";
 import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
@@ -244,6 +244,7 @@ function AppContent() {
               <Route path="/onboarding/provider" element={<ProviderSetupPage />} />
               <Route path="/onboarding/models" element={<ModelSetupPage />} />
               <Route path="/onboarding/model-recommendations" element={<ModelRecommendationsPage />} />
+              <Route path="/onboarding/memory" element={<MemorySystemIntro />} />
               <Route path="/wheretofind" element={<WhereToFindPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/library" element={<LibraryPage />} />

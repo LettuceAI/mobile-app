@@ -5,14 +5,19 @@ import { useNavigate } from "react-router-dom";
 interface EmbeddingDownloadPromptProps {
     isOpen: boolean;
     onClose: () => void;
+    returnTo?: string;
 }
 
-export function EmbeddingDownloadPrompt({ isOpen, onClose }: EmbeddingDownloadPromptProps) {
+export function EmbeddingDownloadPrompt({ isOpen, onClose, returnTo }: EmbeddingDownloadPromptProps) {
     const navigate = useNavigate();
 
     const handleDownload = () => {
         onClose();
-        navigate("/settings/embedding-download");
+        if (returnTo) {
+            navigate(`/settings/embedding-download?returnTo=${encodeURIComponent(returnTo)}`);
+        } else {
+            navigate("/settings/embedding-download");
+        }
     };
 
     const handleCancel = () => {

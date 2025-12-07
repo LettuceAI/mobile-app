@@ -149,10 +149,9 @@ export function useModelController(): ControllerReturn {
 
             await addOrUpdateModel(model);
 
-            await setOnboardingCompleted(true);
             await setModelSetupCompleted(true);
 
-            navigate("/chat?firstTime=true");
+            navigate("/onboarding/memory");
         } catch (error: any) {
             console.error("Failed to save model:", error);
             dispatch({
@@ -165,8 +164,7 @@ export function useModelController(): ControllerReturn {
     }, [navigate, selectedProvider, modelName, displayName]);
 
     const handleSkip = useCallback(async () => {
-        await setOnboardingCompleted(true);
-        navigate("/chat");
+        navigate("/onboarding/memory");
     }, [navigate]);
 
     const goToProviderSetup = useCallback(() => {
