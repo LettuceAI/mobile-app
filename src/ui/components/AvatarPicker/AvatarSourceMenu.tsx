@@ -54,7 +54,7 @@ export function AvatarSourceMenu({
         <>
           {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 z-[90]"
+            className="fixed inset-0 z-90"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -65,7 +65,7 @@ export function AvatarSourceMenu({
           <motion.div
             ref={menuRef}
             className={cn(
-              "absolute z-[100] w-56 overflow-hidden rounded-2xl",
+              "absolute z-100 w-56 overflow-hidden rounded-2xl",
               "border border-white/15 bg-[#0f1014]/95 backdrop-blur-xl",
               "shadow-xl shadow-black/40",
               "left-0 top-full mt-2"
