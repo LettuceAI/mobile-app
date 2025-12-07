@@ -57,23 +57,23 @@ export async function readSettings(): Promise<Settings> {
   const parsed = SettingsSchema.safeParse(data);
   if (parsed.success) {
     const settings = parsed.data;
-    
+
     const modelsWithoutProviderLabel = settings.models.filter(m => !m.providerLabel);
     const missingAdvancedSettings = !settings.advancedModelSettings;
-    
+
     for (const model of modelsWithoutProviderLabel) {
       const providerCred = settings.providerCredentials.find((p) => p.providerId === model.providerId);
       if (providerCred) {
         (model as any).providerLabel = providerCred.label;
       }
     }
-    
+
     if (missingAdvancedSettings) {
       settings.advancedModelSettings = createDefaultAdvancedModelSettings();
       console.log("[repo] readSettings: Initializing default advanced model settings");
       await saveAdvancedModelSettings(settings.advancedModelSettings);
     }
-    
+
     return settings;
   }
 
@@ -191,6 +191,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     rules: defaultRules,
     defaultModelId: c.defaultModelId ?? null,
     memoryType: c.memoryType ?? "manual",
+    disableAvatarGradient: c.disableAvatarGradient ?? false,
     createdAt: c.createdAt ?? timestamp,
     updatedAt: timestamp,
   } as Character;
@@ -327,7 +328,7 @@ export async function createBranchedSession(
     title: `${sourceSession.title} (branch)`,
     selectedSceneId: sourceSession.selectedSceneId,
     personaId: sourceSession.personaId,
-    memories: [...sourceSession.memories], 
+    memories: [...sourceSession.memories],
     memorySummaryTokenCount: 0,
     messages: branchedMessages,
     archived: false,

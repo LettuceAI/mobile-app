@@ -127,7 +127,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full flex-col pb-6 text-gray-200">
-      <main className="flex-1 overflow-y-auto px-4 pt-4">
+      <main className="flex-1 overflow-y-auto px-1 pt-4">
         {loading ? (
           <CharacterSkeleton />
         ) : characters.length ? (
@@ -265,18 +265,17 @@ function CharacterSkeleton() {
         <div
           key={index}
           className={cn(
-            "h-[72px] animate-pulse px-4 py-3",
-            radius.md,
+            "h-16 animate-pulse p-2 pr-4",
+            "rounded-full",
             "border border-white/5 bg-white/5"
           )}
         >
           <div className="flex items-center gap-3">
-            <div className={cn("h-12 w-12", radius.md, "bg-white/10")} />
+            <div className="h-12 w-12 rounded-full bg-white/10" />
             <div className="flex-1 space-y-2">
               <div className="h-3.5 w-1/3 rounded-full bg-white/10" />
-              <div className="h-3 w-full rounded-full bg-white/5" />
+              <div className="h-3 w-2/3 rounded-full bg-white/5" />
             </div>
-            <div className={cn("h-8 w-8", radius.full, "border border-white/10 bg-white/5")} />
           </div>
         </div>
       ))}
@@ -330,8 +329,19 @@ const CharacterAvatar = memo(({ character, className }: { character: Character, 
     );
   }
 
+  // Fallback: initials with a subtle gradient
   const initials = character.name.slice(0, 2).toUpperCase();
-  return <span className={cn("flex h-full w-full items-center justify-center text-2xl font-bold", className)}>{initials}</span>;
+  return (
+    <div
+      className={cn(
+        "flex h-full w-full items-center justify-center",
+        "bg-gradient-to-br from-white/20 to-white/5",
+        className
+      )}
+    >
+      <span className="text-lg font-bold text-white/80">{initials}</span>
+    </div>
+  );
 });
 
 CharacterAvatar.displayName = 'CharacterAvatar';
@@ -368,28 +378,28 @@ const CharacterCard = memo(({
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       className={cn(
-        "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl text-left bg-white/5",
+        "group relative flex w-full items-center gap-3.5 p-3.5 text-left",
+        "rounded-2xl",
         interactive.transition.default,
-        "hover:border-white/20 hover:bg-white/8",
         interactive.active.scale,
-        hasGradient ? "" : "border border-white/10"
+        hasGradient ? "" : "bg-[#1a1b23] hover:bg-[#22232d]"
       )}
       style={hasGradient ? { background: gradientCss } : {}}
     >
-      {/* Avatar */}
+      {/* Circular Avatar */}
       <div className={cn(
-        "relative h-14 w-14 shrink-0 overflow-hidden rounded-xl",
-        "border border-white/10 bg-white/10",
+        "relative h-14 w-14 shrink-0 overflow-hidden rounded-full",
+        hasGradient ? "ring-2 ring-white/20" : "ring-1 ring-white/10",
         "shadow-lg"
       )}>
         <CharacterAvatar character={character} />
       </div>
 
       {/* Content */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
         <h3
           className={cn(
-            "truncate font-bold text-base",
+            "truncate font-semibold text-[15px] leading-tight",
             hasGradient ? "" : "text-white"
           )}
           style={hasGradient ? { color: textColor } : {}}
@@ -398,8 +408,8 @@ const CharacterCard = memo(({
         </h3>
         <p
           className={cn(
-            "line-clamp-1 text-sm",
-            hasGradient ? "" : "text-white/60"
+            "line-clamp-1 text-[13px] leading-tight",
+            hasGradient ? "" : "text-white/50"
           )}
           style={hasGradient ? { color: textSecondary } : {}}
         >
@@ -407,18 +417,26 @@ const CharacterCard = memo(({
         </p>
       </div>
 
-      {/* Arrow indicator */}
-      <div className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-        "border border-white/10 bg-white/5 text-white/40",
-        "transition-colors group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white/80"
-      )}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-      </div>
+      {/* Subtle chevron */}
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={cn(
+          "shrink-0 transition-all",
+          hasGradient ? "" : "text-white/30 group-hover:text-white/60"
+        )}
+        style={hasGradient ? { color: textSecondary } : {}}
+      >
+        <path d="m9 18 6-6-6-6" />
+      </svg>
     </motion.button>
   );
 });
 
-
+CharacterCard.displayName = 'CharacterCard';
