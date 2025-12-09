@@ -15,6 +15,7 @@ export function DynamicMemoryPage() {
     const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
     const [summaryMessageInterval, setSummaryMessageInterval] = useState(20);
     const [maxMemoryEntries, setMaxMemoryEntries] = useState(50);
+    const [minSimilarityThreshold, setMinSimilarityThreshold] = useState(0.35);
 
     useEffect(() => {
         readSettings()
@@ -23,6 +24,7 @@ export function DynamicMemoryPage() {
                 setSummarisationModelId(settings.advancedSettings?.summarisationModelId || "");
                 setSummaryMessageInterval(settings.advancedSettings?.dynamicMemory?.summaryMessageInterval ?? 20);
                 setMaxMemoryEntries(settings.advancedSettings?.dynamicMemory?.maxEntries ?? 50);
+                setMinSimilarityThreshold(settings.advancedSettings?.dynamicMemory?.minSimilarityThreshold ?? 0.35);
                 setModels(settings.models.map((m: Model) => ({ id: m.id, name: m.name })));
                 setIsLoading(false);
             })
@@ -40,7 +42,7 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
                 };
             }
             settings.advancedSettings.summarisationModelId = modelId;
@@ -58,11 +60,11 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 };
             }
             settings.advancedSettings.dynamicMemory.summaryMessageInterval = value;
             await saveAdvancedSettings(settings.advancedSettings);
@@ -79,16 +81,37 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 };
             }
             settings.advancedSettings.dynamicMemory.maxEntries = value;
             await saveAdvancedSettings(settings.advancedSettings);
         } catch (err) {
             console.error("Failed to save max entries:", err);
+        }
+    };
+
+    const handleMinSimilarityChange = async (value: number) => {
+        setMinSimilarityThreshold(value);
+
+        try {
+            const settings = await readSettings();
+            if (!settings.advancedSettings) {
+                settings.advancedSettings = {
+                    creationHelperEnabled: false,
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
+                };
+            }
+            if (!settings.advancedSettings.dynamicMemory) {
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 };
+            }
+            settings.advancedSettings.dynamicMemory.minSimilarityThreshold = value;
+            await saveAdvancedSettings(settings.advancedSettings);
+        } catch (err) {
+            console.error("Failed to save min similarity threshold:", err);
         }
     };
 
@@ -252,6 +275,46 @@ export function DynamicMemoryPage() {
                                     <div className="mt-1 flex justify-between text-[10px] text-white/30">
                                         <span>10</span>
                                         <span>200</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Min Similarity Threshold */}
+                        <div className={cn(
+                            "rounded-xl border border-white/10 bg-white/5 px-4 py-3",
+                            !enabled && "opacity-50 pointer-events-none"
+                        )}>
+                            <div className="flex items-start gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-sm font-medium text-white">Memory Relevance Threshold</span>
+                                        <span className={cn(
+                                            "rounded-md border border-white/10 bg-white/10 px-2 py-1",
+                                            typography.caption.size,
+                                            "text-white/70"
+                                        )}>
+                                            {minSimilarityThreshold.toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <div className="mt-0.5 text-[11px] text-white/45 leading-relaxed">
+                                        Minimum similarity score for memory retrieval (higher = more relevant)
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-3">
+                                        <input
+                                            type="range"
+                                            min="0.1"
+                                            max="0.8"
+                                            step="0.05"
+                                            value={minSimilarityThreshold}
+                                            onChange={(e) => handleMinSimilarityChange(Number(e.target.value))}
+                                            disabled={!enabled}
+                                            className="flex-1 accent-blue-500"
+                                        />
+                                    </div>
+                                    <div className="mt-1 flex justify-between text-[10px] text-white/30">
+                                        <span>0.1 (loose)</span>
+                                        <span>0.8 (strict)</span>
                                     </div>
                                 </div>
                             </div>

@@ -111,6 +111,12 @@ pub struct DynamicMemorySettings {
     pub summary_message_interval: u32,
     #[serde(default)]
     pub max_entries: u32,
+    #[serde(default = "default_min_similarity")]
+    pub min_similarity_threshold: f32,
+}
+
+fn default_min_similarity() -> f32 {
+    0.35 // Default threshold - memories below this score are excluded
 }
 
 #[derive(Deserialize, Serialize, Clone)]

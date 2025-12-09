@@ -23,7 +23,8 @@ export function MemorySystemIntro() {
                 const dynamicMemory = advancedSettings.dynamicMemory || {
                     enabled: false,
                     summaryMessageInterval: 20,
-                    maxEntries: 50
+                    maxEntries: 50,
+                    minSimilarityThreshold: 0.35
                 };
 
                 dynamicMemory.enabled = enableDynamic;

@@ -9,6 +9,7 @@ export interface AdvancedSettings {
         enabled: boolean;
         summaryMessageInterval: number;
         maxEntries: number;
+        minSimilarityThreshold: number;
     };
 }
 

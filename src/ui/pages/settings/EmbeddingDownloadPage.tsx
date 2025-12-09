@@ -124,6 +124,7 @@ export function EmbeddingDownloadPage() {
                     enabled: true,
                     summaryMessageInterval: 20,
                     maxEntries: 50,
+                    minSimilarityThreshold: 0.35,
                 });
             } else {
                 setTestStatus("failed");
@@ -164,6 +165,7 @@ export function EmbeddingDownloadPage() {
                 enabled: false,
                 summaryMessageInterval: 20,
                 maxEntries: 50,
+                minSimilarityThreshold: 0.35,
             });
             if (returnTo) {
                 navigate(returnTo);

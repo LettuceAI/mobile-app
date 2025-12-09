@@ -355,6 +355,7 @@ export const SettingsSchema = z.object({
       enabled: z.boolean().default(false),
       summaryMessageInterval: z.number().int().min(1).default(20),
       maxEntries: z.number().int().min(1).default(50),
+      minSimilarityThreshold: z.number().min(0).max(1).default(0.35),
     }).optional(),
   }).optional(),
   promptTemplateId: z.string().nullish().optional(),

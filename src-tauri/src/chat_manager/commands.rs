@@ -71,6 +71,17 @@ fn dynamic_max_entries(settings: &Settings) -> usize {
         .unwrap_or(FALLBACK_DYNAMIC_MAX_ENTRIES) as usize
 }
 
+const FALLBACK_MIN_SIMILARITY: f32 = 0.35;
+
+fn dynamic_min_similarity(settings: &Settings) -> f32 {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.min_similarity_threshold)
+        .unwrap_or(FALLBACK_MIN_SIMILARITY)
+}
+
 fn conversation_window(messages: &[StoredMessage], limit: usize) -> Vec<StoredMessage> {
     let mut convo: Vec<StoredMessage> = messages
         .iter()
@@ -252,6 +263,7 @@ async fn select_relevant_memories(
     session: &Session,
     query: &str,
     limit: usize,
+    min_similarity: f32,
 ) -> Vec<MemoryEmbedding> {
     if query.is_empty() || session.memory_embeddings.is_empty() {
         return Vec::new();
@@ -280,7 +292,7 @@ async fn select_relevant_memories(
     scored
         .into_iter()
         .take(limit)
-        .filter(|(score, _)| *score > 0.0)
+        .filter(|(score, _)| *score >= min_similarity)
         .map(|(_, m)| m.clone())
         .collect()
 }
@@ -529,7 +541,14 @@ pub async fn chat_completion(
     // - Dynamic memory: use semantic search over memory embeddings
     // - Manual memory: memories are injected via system prompt (see below)
     let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
-        select_relevant_memories(&app, &session, &user_message, 5).await
+        select_relevant_memories(
+            &app,
+            &session,
+            &user_message,
+            5,
+            dynamic_min_similarity(settings),
+        )
+        .await
     } else {
         Vec::new()
     };
@@ -959,7 +978,14 @@ pub async fn chat_regenerate(
             .find(|m| m.role == "user")
             .map(|m| m.content.as_str())
             .unwrap_or("");
-        select_relevant_memories(&app, &session, preceding_user_content, 5).await
+        select_relevant_memories(
+            &app,
+            &session,
+            preceding_user_content,
+            5,
+            dynamic_min_similarity(&context.settings),
+        )
+        .await
     } else {
         Vec::new()
     };
@@ -1328,7 +1354,14 @@ pub async fn chat_continue(
             .find(|m| m.role == "user")
             .map(|m| m.content.as_str())
             .unwrap_or("");
-        select_relevant_memories(&app, &session, last_user_content, 5).await
+        select_relevant_memories(
+            &app,
+            &session,
+            last_user_content,
+            5,
+            dynamic_min_similarity(&context.settings),
+        )
+        .await
     } else {
         Vec::new()
     };
