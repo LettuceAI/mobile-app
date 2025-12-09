@@ -119,7 +119,6 @@ export function EmbeddingDownloadPage() {
 
             if (results.success) {
                 setTestStatus("passed");
-                // Enable dynamic memory
                 await updateAdvancedSetting("dynamicMemory", {
                     enabled: true,
                     summaryMessageInterval: 20,
