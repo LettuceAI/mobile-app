@@ -113,10 +113,30 @@ pub struct DynamicMemorySettings {
     pub max_entries: u32,
     #[serde(default = "default_min_similarity")]
     pub min_similarity_threshold: f32,
+    #[serde(default = "default_hot_memory_token_budget")]
+    pub hot_memory_token_budget: u32,
+    /// Score reduction per memory cycle (0.05-0.15 recommended)
+    #[serde(default = "default_decay_rate")]
+    pub decay_rate: f32,
+    /// Score below which memories are demoted to cold (0.2-0.4 recommended)
+    #[serde(default = "default_cold_threshold")]
+    pub cold_threshold: f32,
 }
 
 fn default_min_similarity() -> f32 {
     0.35 // Default threshold - memories below this score are excluded
+}
+
+fn default_hot_memory_token_budget() -> u32 {
+    2000 // Default token budget for hot memories
+}
+
+fn default_decay_rate() -> f32 {
+    0.08 // Score reduction per memory cycle
+}
+
+fn default_cold_threshold() -> f32 {
+    0.3 // Memories below this score are demoted to cold
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -202,6 +222,25 @@ pub struct MemoryEmbedding {
     pub created_at: u64,
     #[serde(default)]
     pub token_count: u32,
+    /// If true, this memory is in cold storage (not injected into context)
+    #[serde(default)]
+    pub is_cold: bool,
+    /// Last time this memory was accessed/retrieved (for demotion scoring)
+    #[serde(default)]
+    pub last_accessed_at: u64,
+    /// Importance score (0.0-1.0) - decays over time, memories below threshold go cold
+    #[serde(default = "default_importance_score")]
+    pub importance_score: f32,
+    /// If true, this memory never decays (user/LLM marked as critical)
+    #[serde(default)]
+    pub is_pinned: bool,
+    /// Number of times this memory was retrieved for context
+    #[serde(default)]
+    pub access_count: u32,
+}
+
+fn default_importance_score() -> f32 {
+    1.0
 }
 
 #[derive(Deserialize, Serialize, Clone)]

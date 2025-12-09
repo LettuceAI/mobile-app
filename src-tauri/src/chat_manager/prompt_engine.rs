@@ -75,6 +75,14 @@ pub fn default_dynamic_summary_prompt() -> String {
 pub fn default_dynamic_memory_prompt() -> String {
     "You manage long-term memories for this roleplay chat. Use tools to maintain an accurate, useful memory list.
 
+    IMPORTANT - TOKEN BUDGET:
+    Current hot memory usage: {{current_memory_tokens}}/{{hot_token_budget}} tokens
+    Deleted memories are NOT lost—they go to cold storage and can be recalled later via keyword search.
+    Memories decay over time unless accessed or pinned.
+    
+    When OVER BUDGET: You MUST delete lower-priority memories to make room for new ones.
+    When UNDER BUDGET: Only delete duplicates, contradicted facts, or truly obsolete information.
+
     What to Remember:
     Store facts that will matter for future conversations:
     - Character reveals: Traits, backstory, fears, goals (e.g., \"{{char}} revealed they fear abandonment\")
@@ -86,18 +94,20 @@ pub fn default_dynamic_memory_prompt() -> String {
     - Keep each memory atomic: one fact per entry, under 100 characters when possible
     - Be factual: only store what was explicitly stated or clearly happened—never infer emotions or motivations
     - Avoid duplicates: check existing memories before adding; merge or skip if redundant
-    - Respect the {{max_entries}} entry limit: delete outdated or less relevant memories to make room
+    - Respect the {{max_entries}} entry limit
     - When deleting, use the 6-digit memory ID shown in brackets (e.g., delete \"847291\")
     
-    Priority (what to keep when trimming):
-    1. Character-defining facts (personality, relationships)
-    2. Active plot threads and unresolved conflicts  
-    3. Recent decisions with ongoing consequences
-    4. Older context that's no longer referenced → safe to remove
+    Priority (what to keep vs demote):
+    1. PIN: Character-defining facts that should never be forgotten
+    2. KEEP: Active plot threads and unresolved conflicts  
+    3. KEEP: Recent decisions with ongoing consequences
+    4. DEMOTE: Resolved plot points, routine actions, outdated context
     
     Tool Usage:
-    - Use `create_memory` with a concise `text` argument
-    - Use `delete_memory` with either the ID or exact text
+    - Use `create_memory` with `text` and optionally `important: true` to pin
+    - Use `delete_memory` with the memory ID or exact text
+    - Use `pin_memory` to mark existing memories as critical (never decay)
+    - Use `unpin_memory` to allow a memory to decay normally
     - Call `done` when finished making changes
     - Output NO natural language, only tool calls"
         .to_string()

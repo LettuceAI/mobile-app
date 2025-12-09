@@ -42,7 +42,7 @@ export function AdvancedPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
                 };
             }
             settings.advancedSettings.creationHelperEnabled = newValue;
@@ -77,11 +77,11 @@ export function AdvancedPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
             }
 
             if (newValue && !settings.advancedSettings.summarisationModelId && settings.defaultModelId) {
@@ -104,7 +104,7 @@ export function AdvancedPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
                 };
             }
             settings.advancedSettings.creationHelperModelId = modelId;

@@ -24,7 +24,10 @@ export function MemorySystemIntro() {
                     enabled: false,
                     summaryMessageInterval: 20,
                     maxEntries: 50,
-                    minSimilarityThreshold: 0.35
+                    minSimilarityThreshold: 0.35,
+                    hotMemoryTokenBudget: 2000,
+                    decayRate: 0.08,
+                    coldThreshold: 0.3
                 };
 
                 dynamicMemory.enabled = enableDynamic;

@@ -82,6 +82,135 @@ fn dynamic_min_similarity(settings: &Settings) -> f32 {
         .unwrap_or(FALLBACK_MIN_SIMILARITY)
 }
 
+const FALLBACK_HOT_MEMORY_TOKEN_BUDGET: u32 = 2000;
+
+fn dynamic_hot_memory_token_budget(settings: &Settings) -> u32 {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.hot_memory_token_budget)
+        .unwrap_or(FALLBACK_HOT_MEMORY_TOKEN_BUDGET)
+}
+
+/// Calculate total tokens used by hot (non-cold) memories
+fn calculate_hot_memory_tokens(session: &Session) -> u32 {
+    session
+        .memory_embeddings
+        .iter()
+        .filter(|m| !m.is_cold)
+        .map(|m| m.token_count)
+        .sum()
+}
+
+/// Enforce the hot memory token budget by demoting oldest memories to cold storage.
+/// Returns the number of memories demoted.
+fn enforce_hot_memory_budget(app: &AppHandle, session: &mut Session, budget: u32) -> usize {
+    let mut current_tokens = calculate_hot_memory_tokens(session);
+
+    if current_tokens <= budget {
+        return 0;
+    }
+
+    // Sort hot memories by last_accessed_at (oldest first) for demotion
+    let mut hot_indices: Vec<(usize, u64)> = session
+        .memory_embeddings
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| !m.is_cold)
+        .map(|(i, m)| (i, m.last_accessed_at))
+        .collect();
+
+    // Sort by last_accessed_at ascending (oldest first)
+    hot_indices.sort_by_key(|(_, accessed)| *accessed);
+
+    let mut demoted_count = 0;
+
+    for (idx, _) in hot_indices {
+        if current_tokens <= budget {
+            break;
+        }
+
+        let memory = &mut session.memory_embeddings[idx];
+        let tokens_freed = memory.token_count;
+        memory.is_cold = true;
+        current_tokens = current_tokens.saturating_sub(tokens_freed);
+        demoted_count += 1;
+
+        log_info(
+            app,
+            "dynamic_memory",
+            format!(
+                "Demoted memory {} to cold storage (freed {} tokens)",
+                memory.id, tokens_freed
+            ),
+        );
+    }
+
+    demoted_count
+}
+
+const FALLBACK_DECAY_RATE: f32 = 0.08;
+const FALLBACK_COLD_THRESHOLD: f32 = 0.3;
+
+fn dynamic_decay_rate(settings: &Settings) -> f32 {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.decay_rate)
+        .unwrap_or(FALLBACK_DECAY_RATE)
+}
+
+fn dynamic_cold_threshold(settings: &Settings) -> f32 {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.cold_threshold)
+        .unwrap_or(FALLBACK_COLD_THRESHOLD)
+}
+
+/// Apply importance decay to all hot, unpinned memories.
+/// Memories that fall below cold_threshold are demoted to cold storage.
+/// Returns (decayed_count, demoted_count)
+fn apply_memory_decay(
+    app: &AppHandle,
+    session: &mut Session,
+    decay_rate: f32,
+    cold_threshold: f32,
+) -> (usize, usize) {
+    let mut decayed = 0;
+    let mut demoted = 0;
+
+    for mem in session.memory_embeddings.iter_mut() {
+        // Skip cold or pinned memories
+        if mem.is_cold || mem.is_pinned {
+            continue;
+        }
+
+        // Apply decay
+        mem.importance_score = (mem.importance_score - decay_rate).max(0.0);
+        decayed += 1;
+
+        // Check if should demote
+        if mem.importance_score < cold_threshold {
+            mem.is_cold = true;
+            demoted += 1;
+            log_info(
+                app,
+                "dynamic_memory",
+                format!(
+                    "Memory {} demoted to cold (score: {:.2} < threshold: {:.2})",
+                    mem.id, mem.importance_score, cold_threshold
+                ),
+            );
+        }
+    }
+
+    (decayed, demoted)
+}
+
 fn conversation_window(messages: &[StoredMessage], limit: usize) -> Vec<StoredMessage> {
     let mut convo: Vec<StoredMessage> = messages
         .iter()
@@ -282,19 +411,110 @@ async fn select_relevant_memories(
             }
         };
 
+    // Only search hot (non-cold) memories
     let mut scored: Vec<(f32, &MemoryEmbedding)> = session
         .memory_embeddings
         .iter()
-        .filter(|m| !m.embedding.is_empty())
+        .filter(|m| !m.embedding.is_empty() && !m.is_cold)
         .map(|m| (cosine_similarity(&query_embedding, &m.embedding), m))
         .collect();
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored
+    let hot_results: Vec<MemoryEmbedding> = scored
         .into_iter()
         .take(limit)
         .filter(|(score, _)| *score >= min_similarity)
         .map(|(_, m)| m.clone())
-        .collect()
+        .collect();
+
+    // If hot results are empty or sparse, search cold memories by keyword
+    if hot_results.is_empty() {
+        let cold_matches = search_cold_memories_by_keyword(session, query, limit);
+        if !cold_matches.is_empty() {
+            log_info(
+                app,
+                "memory_retrieval",
+                format!(
+                    "Found {} cold memories via keyword search",
+                    cold_matches.len()
+                ),
+            );
+        }
+        return cold_matches;
+    }
+
+    hot_results
+}
+
+/// Search cold memories using simple keyword matching.
+/// Returns matching cold memories (caller should promote them to hot).
+fn search_cold_memories_by_keyword(
+    session: &Session,
+    query: &str,
+    limit: usize,
+) -> Vec<MemoryEmbedding> {
+    let query_lower = query.to_lowercase();
+    // Extract keywords (words 3+ chars)
+    let keywords: Vec<&str> = query_lower
+        .split_whitespace()
+        .filter(|w| w.len() >= 3)
+        .collect();
+
+    if keywords.is_empty() {
+        return Vec::new();
+    }
+
+    let mut matches: Vec<(usize, MemoryEmbedding)> = session
+        .memory_embeddings
+        .iter()
+        .filter(|m| m.is_cold)
+        .filter_map(|m| {
+            let text_lower = m.text.to_lowercase();
+            let match_count = keywords
+                .iter()
+                .filter(|kw| text_lower.contains(*kw))
+                .count();
+            if match_count > 0 {
+                Some((match_count, m.clone()))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Sort by match count descending
+    matches.sort_by(|a, b| b.0.cmp(&a.0));
+    matches.into_iter().take(limit).map(|(_, m)| m).collect()
+}
+
+/// Promote cold memories to hot (called when they match a keyword search)
+fn promote_cold_memories(app: &AppHandle, session: &mut Session, memory_ids: &[String]) {
+    let now = now_millis().unwrap_or_default();
+    for mem in session.memory_embeddings.iter_mut() {
+        if memory_ids.contains(&mem.id) && mem.is_cold {
+            mem.is_cold = false;
+            mem.importance_score = 0.7; // Moderate score for promoted memories
+            mem.last_accessed_at = now;
+            mem.access_count += 1;
+            log_info(
+                app,
+                "dynamic_memory",
+                format!("Promoted cold memory {} to hot", mem.id),
+            );
+        }
+    }
+}
+
+/// Update last_accessed_at, boost importance_score, and increment access_count for retrieved memories
+fn mark_memories_accessed(session: &mut Session, memory_ids: &[String]) {
+    let now = now_millis().unwrap_or_default();
+    for mem in session.memory_embeddings.iter_mut() {
+        if memory_ids.contains(&mem.id) {
+            mem.last_accessed_at = now;
+            mem.access_count += 1;
+            // Boost importance score back to 1.0 when accessed
+            mem.importance_score = 1.0;
+        }
+    }
 }
 
 use super::types::ImageAttachment;
@@ -552,6 +772,14 @@ pub async fn chat_completion(
     } else {
         Vec::new()
     };
+
+    // Update access tracking for retrieved memories
+    if !relevant_memories.is_empty() {
+        let memory_ids: Vec<String> = relevant_memories.iter().map(|m| m.id.clone()).collect();
+        // Promote any cold memories that were recalled via keyword search
+        promote_cold_memories(&app, &mut session, &memory_ids);
+        mark_memories_accessed(&mut session, &memory_ids);
+    }
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
@@ -990,6 +1218,13 @@ pub async fn chat_regenerate(
         Vec::new()
     };
 
+    // Update access tracking for retrieved memories
+    if !relevant_memories.is_empty() {
+        let memory_ids: Vec<String> = relevant_memories.iter().map(|m| m.id.clone()).collect();
+        promote_cold_memories(&app, &mut session, &memory_ids);
+        mark_memories_accessed(&mut session, &memory_ids);
+    }
+
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
     let system_role = super::request_builder::system_role_for(provider_cred);
@@ -1365,6 +1600,13 @@ pub async fn chat_continue(
     } else {
         Vec::new()
     };
+
+    // Update access tracking for retrieved memories
+    if !relevant_memories.is_empty() {
+        let memory_ids: Vec<String> = relevant_memories.iter().map(|m| m.id.clone()).collect();
+        promote_cold_memories(&app, &mut session, &memory_ids);
+        mark_memories_accessed(&mut session, &memory_ids);
+    }
 
     let system_prompt = context.build_system_prompt(&character, model, persona, &session);
 
@@ -1873,6 +2115,21 @@ async fn process_dynamic_memory_cycle(
         return Ok(());
     }
 
+    // Apply importance decay to all hot, unpinned memories
+    let decay_rate = dynamic_decay_rate(settings);
+    let cold_threshold = dynamic_cold_threshold(settings);
+    let (decayed, demoted) = apply_memory_decay(app, session, decay_rate, cold_threshold);
+    if decayed > 0 || demoted > 0 {
+        log_info(
+            app,
+            "dynamic_memory",
+            format!(
+                "Memory decay applied: {} memories decayed, {} demoted to cold",
+                decayed, demoted
+            ),
+        );
+    }
+
     let summarisation_model_id = match advanced.summarisation_model_id.as_ref() {
         Some(id) => id,
         None => {
@@ -2023,9 +2280,15 @@ async fn run_memory_tool_update(
         .unwrap_or_else(|| {
             "You maintain long-term memories for this chat. Use tools to add or delete concise factual memories. Keep the list tidy and capped at {{max_entries}} entries. Prefer deleting by ID when removing items. When finished, call the done tool.".to_string()
         });
+
+    let current_tokens = calculate_hot_memory_tokens(session);
+    let token_budget = dynamic_hot_memory_token_budget(settings);
+
     let rendered =
         prompt_engine::render_with_context(app, &base_template, character, None, session, settings)
-            .replace("{{max_entries}}", &max_entries.to_string());
+            .replace("{{max_entries}}", &max_entries.to_string())
+            .replace("{{current_memory_tokens}}", &current_tokens.to_string())
+            .replace("{{hot_token_budget}}", &token_budget.to_string());
 
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
@@ -2129,6 +2392,12 @@ async fn run_memory_tool_update(
                             }
                         };
                     let token_count = crate::tokenizer::count_tokens(app, &text).unwrap_or(0);
+                    // Check if memory should be pinned
+                    let is_pinned = call
+                        .arguments
+                        .get("important")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     session.memories.push(text.clone());
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
@@ -2136,6 +2405,11 @@ async fn run_memory_tool_update(
                         embedding: embedding.unwrap_or_default(),
                         created_at: now_millis().unwrap_or_default(),
                         token_count,
+                        is_cold: false,
+                        last_accessed_at: now_millis().unwrap_or_default(),
+                        importance_score: 1.0,
+                        is_pinned,
+                        access_count: 0,
                     });
                     actions_log.push(json!({
                         "name": "create_memory",
@@ -2184,6 +2458,45 @@ async fn run_memory_tool_update(
                     }
                 }
             }
+            "pin_memory" => {
+                if let Some(id) = call.arguments.get("id").and_then(|v| v.as_str()) {
+                    if let Some(mem) = session.memory_embeddings.iter_mut().find(|m| m.id == id) {
+                        mem.is_pinned = true;
+                        mem.importance_score = 1.0; // Reset score when pinned
+                        actions_log.push(json!({
+                            "name": "pin_memory",
+                            "arguments": call.arguments,
+                            "timestamp": now_millis().unwrap_or_default(),
+                        }));
+                        log_info(app, "dynamic_memory", format!("Pinned memory {}", id));
+                    } else {
+                        log_warn(
+                            app,
+                            "dynamic_memory",
+                            format!("pin_memory could not find: {}", id),
+                        );
+                    }
+                }
+            }
+            "unpin_memory" => {
+                if let Some(id) = call.arguments.get("id").and_then(|v| v.as_str()) {
+                    if let Some(mem) = session.memory_embeddings.iter_mut().find(|m| m.id == id) {
+                        mem.is_pinned = false;
+                        actions_log.push(json!({
+                            "name": "unpin_memory",
+                            "arguments": call.arguments,
+                            "timestamp": now_millis().unwrap_or_default(),
+                        }));
+                        log_info(app, "dynamic_memory", format!("Unpinned memory {}", id));
+                    } else {
+                        log_warn(
+                            app,
+                            "dynamic_memory",
+                            format!("unpin_memory could not find: {}", id),
+                        );
+                    }
+                }
+            }
             "done" => {
                 actions_log.push(json!({
                     "name": "done",
@@ -2203,6 +2516,20 @@ async fn run_memory_tool_update(
             let excess_embed = session.memory_embeddings.len() - max_entries;
             session.memory_embeddings.drain(0..excess_embed);
         }
+    }
+
+    // Enforce token budget - demote oldest memories to cold storage if over budget
+    let token_budget = dynamic_hot_memory_token_budget(settings);
+    let demoted = enforce_hot_memory_budget(app, session, token_budget);
+    if demoted > 0 {
+        log_info(
+            app,
+            "dynamic_memory",
+            format!(
+                "Demoted {} memories to cold storage (budget: {} tokens)",
+                demoted, token_budget
+            ),
+        );
     }
 
     session.updated_at = now_millis()?;
@@ -2234,6 +2561,7 @@ fn build_memory_tool_config() -> ToolConfig {
                     "type": "object",
                     "properties": {
                         "text": { "type": "string", "description": "Concise memory to store" },
+                        "important": { "type": "boolean", "description": "If true, memory will be pinned (never decays)" },
                         "updatedMemories": { "type": "array", "items": { "type": "string" }, "description": "Optional list of all memories after this change" }
                     },
                     "required": ["text"]
@@ -2251,6 +2579,31 @@ fn build_memory_tool_config() -> ToolConfig {
                         "updatedMemories": { "type": "array", "items": { "type": "string" }, "description": "Updated list of memories after deletion" }
                     },
                     "required": ["text"]
+                }),
+            },
+            ToolDefinition {
+                name: "pin_memory".to_string(),
+                description: Some(
+                    "Pin a critical memory so it never decays. Use for character-defining facts."
+                        .to_string(),
+                ),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "6-digit memory ID to pin" }
+                    },
+                    "required": ["id"]
+                }),
+            },
+            ToolDefinition {
+                name: "unpin_memory".to_string(),
+                description: Some("Unpin a memory, allowing it to decay normally.".to_string()),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "6-digit memory ID to unpin" }
+                    },
+                    "required": ["id"]
                 }),
             },
             ToolDefinition {

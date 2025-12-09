@@ -10,6 +10,9 @@ export interface AdvancedSettings {
         summaryMessageInterval: number;
         maxEntries: number;
         minSimilarityThreshold: number;
+        hotMemoryTokenBudget: number;
+        decayRate: number;
+        coldThreshold: number;
     };
 }
 

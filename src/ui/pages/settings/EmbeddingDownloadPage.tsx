@@ -125,6 +125,9 @@ export function EmbeddingDownloadPage() {
                     summaryMessageInterval: 20,
                     maxEntries: 50,
                     minSimilarityThreshold: 0.35,
+                    hotMemoryTokenBudget: 2000,
+                    decayRate: 0.08,
+                    coldThreshold: 0.3,
                 });
             } else {
                 setTestStatus("failed");
@@ -166,6 +169,9 @@ export function EmbeddingDownloadPage() {
                 summaryMessageInterval: 20,
                 maxEntries: 50,
                 minSimilarityThreshold: 0.35,
+                hotMemoryTokenBudget: 2000,
+                decayRate: 0.08,
+                coldThreshold: 0.3,
             });
             if (returnTo) {
                 navigate(returnTo);
