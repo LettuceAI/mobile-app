@@ -9,6 +9,7 @@ use serde_json::Value as JsonValue;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use tauri::Emitter;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
@@ -81,10 +82,16 @@ fn get_downloads_dir() -> Result<PathBuf, String> {
 
 fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
     let conn = open_db(app)?;
-    
+
     let row: Option<(
-        Option<String>, Option<String>, String, Option<String>,
-        Option<String>, Option<String>, i64, Option<String>
+        Option<String>,
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        i64,
+        Option<String>,
     )> = conn
         .query_row(
             "SELECT default_provider_credential_id, default_model_id, app_state, 
@@ -92,18 +99,33 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
                     migration_version, advanced_settings 
              FROM settings WHERE id = 1",
             [],
-            |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?,
-                r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?
-            )),
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                ))
+            },
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    
+
     if let Some((
-        default_provider, default_model, app_state, advanced_model,
-        prompt_template, system_prompt, migration_version, advanced_settings
-    )) = row {
+        default_provider,
+        default_model,
+        app_state,
+        advanced_model,
+        prompt_template,
+        system_prompt,
+        migration_version,
+        advanced_settings,
+    )) = row
+    {
         Ok(serde_json::json!({
             "default_provider_credential_id": default_provider,
             "default_model_id": default_model,
@@ -124,20 +146,23 @@ fn export_provider_credentials(app: &tauri::AppHandle) -> Result<Vec<JsonValue>,
     let mut stmt = conn
         .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials")
         .map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], |r| {
-        Ok(serde_json::json!({
-            "id": r.get::<_, String>(0)?,
-            "provider_id": r.get::<_, String>(1)?,
-            "label": r.get::<_, String>(2)?,
-            "api_key": r.get::<_, Option<String>>(3)?,
-            "base_url": r.get::<_, Option<String>>(4)?,
-            "default_model": r.get::<_, Option<String>>(5)?,
-            "headers": r.get::<_, Option<String>>(6)?,
-        }))
-    }).map_err(|e| e.to_string())?;
-    
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, String>(0)?,
+                "provider_id": r.get::<_, String>(1)?,
+                "label": r.get::<_, String>(2)?,
+                "api_key": r.get::<_, Option<String>>(3)?,
+                "base_url": r.get::<_, Option<String>>(4)?,
+                "default_model": r.get::<_, Option<String>>(5)?,
+                "headers": r.get::<_, Option<String>>(6)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 fn export_models(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
@@ -145,23 +170,26 @@ fn export_models(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let mut stmt = conn
         .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt FROM models")
         .map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], |r| {
-        Ok(serde_json::json!({
-            "id": r.get::<_, String>(0)?,
-            "name": r.get::<_, String>(1)?,
-            "provider_id": r.get::<_, String>(2)?,
-            "provider_label": r.get::<_, String>(3)?,
-            "display_name": r.get::<_, String>(4)?,
-            "created_at": r.get::<_, i64>(5)?,
-            "model_type": r.get::<_, Option<String>>(6)?,
-            "advanced_model_settings": r.get::<_, Option<String>>(7)?,
-            "prompt_template_id": r.get::<_, Option<String>>(8)?,
-            "system_prompt": r.get::<_, Option<String>>(9)?,
-        }))
-    }).map_err(|e| e.to_string())?;
-    
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, String>(0)?,
+                "name": r.get::<_, String>(1)?,
+                "provider_id": r.get::<_, String>(2)?,
+                "provider_label": r.get::<_, String>(3)?,
+                "display_name": r.get::<_, String>(4)?,
+                "created_at": r.get::<_, i64>(5)?,
+                "model_type": r.get::<_, Option<String>>(6)?,
+                "advanced_model_settings": r.get::<_, Option<String>>(7)?,
+                "prompt_template_id": r.get::<_, Option<String>>(8)?,
+                "system_prompt": r.get::<_, Option<String>>(9)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 fn export_secrets(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
@@ -169,18 +197,21 @@ fn export_secrets(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let mut stmt = conn
         .prepare("SELECT service, account, value, created_at, updated_at FROM secrets")
         .map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], |r| {
-        Ok(serde_json::json!({
-            "service": r.get::<_, String>(0)?,
-            "account": r.get::<_, String>(1)?,
-            "value": r.get::<_, String>(2)?,
-            "created_at": r.get::<_, i64>(3)?,
-            "updated_at": r.get::<_, i64>(4)?,
-        }))
-    }).map_err(|e| e.to_string())?;
-    
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "service": r.get::<_, String>(0)?,
+                "account": r.get::<_, String>(1)?,
+                "value": r.get::<_, String>(2)?,
+                "created_at": r.get::<_, i64>(3)?,
+                "updated_at": r.get::<_, i64>(4)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
@@ -188,20 +219,23 @@ fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, Str
     let mut stmt = conn
         .prepare("SELECT id, name, scope, target_ids, content, created_at, updated_at FROM prompt_templates")
         .map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], |r| {
-        Ok(serde_json::json!({
-            "id": r.get::<_, String>(0)?,
-            "name": r.get::<_, String>(1)?,
-            "scope": r.get::<_, String>(2)?,
-            "target_ids": r.get::<_, String>(3)?,
-            "content": r.get::<_, String>(4)?,
-            "created_at": r.get::<_, i64>(5)?,
-            "updated_at": r.get::<_, i64>(6)?,
-        }))
-    }).map_err(|e| e.to_string())?;
-    
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, String>(0)?,
+                "name": r.get::<_, String>(1)?,
+                "scope": r.get::<_, String>(2)?,
+                "target_ids": r.get::<_, String>(3)?,
+                "content": r.get::<_, String>(4)?,
+                "created_at": r.get::<_, i64>(5)?,
+                "updated_at": r.get::<_, i64>(6)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 fn export_personas(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
@@ -209,51 +243,57 @@ fn export_personas(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let mut stmt = conn
         .prepare("SELECT id, title, description, avatar_path, is_default, created_at, updated_at FROM personas")
         .map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], |r| {
-        Ok(serde_json::json!({
-            "id": r.get::<_, String>(0)?,
-            "title": r.get::<_, String>(1)?,
-            "description": r.get::<_, String>(2)?,
-            "avatar_path": r.get::<_, Option<String>>(3)?,
-            "is_default": r.get::<_, i64>(4)? != 0,
-            "created_at": r.get::<_, i64>(5)?,
-            "updated_at": r.get::<_, i64>(6)?,
-        }))
-    }).map_err(|e| e.to_string())?;
-    
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, String>(0)?,
+                "title": r.get::<_, String>(1)?,
+                "description": r.get::<_, String>(2)?,
+                "avatar_path": r.get::<_, Option<String>>(3)?,
+                "is_default": r.get::<_, i64>(4)? != 0,
+                "created_at": r.get::<_, i64>(5)?,
+                "updated_at": r.get::<_, i64>(6)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
-    
+
     // Get all characters
     let mut stmt = conn
         .prepare("SELECT id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at FROM characters")
         .map_err(|e| e.to_string())?;
-    
-    let characters: Vec<(String, JsonValue)> = stmt.query_map([], |r| {
-        let id: String = r.get(0)?;
-        let json = serde_json::json!({
-            "id": id.clone(),
-            "name": r.get::<_, String>(1)?,
-            "avatar_path": r.get::<_, Option<String>>(2)?,
-            "background_image_path": r.get::<_, Option<String>>(3)?,
-            "description": r.get::<_, Option<String>>(4)?,
-            "default_scene_id": r.get::<_, Option<String>>(5)?,
-            "default_model_id": r.get::<_, Option<String>>(6)?,
-            "memory_type": r.get::<_, String>(7)?,
-            "prompt_template_id": r.get::<_, Option<String>>(8)?,
-            "system_prompt": r.get::<_, Option<String>>(9)?,
-            "disable_avatar_gradient": r.get::<_, i64>(10)? != 0,
-            "created_at": r.get::<_, i64>(11)?,
-            "updated_at": r.get::<_, i64>(12)?,
-        });
-        Ok((id, json))
-    }).map_err(|e| e.to_string())?
-    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-    
+
+    let characters: Vec<(String, JsonValue)> = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let json = serde_json::json!({
+                "id": id.clone(),
+                "name": r.get::<_, String>(1)?,
+                "avatar_path": r.get::<_, Option<String>>(2)?,
+                "background_image_path": r.get::<_, Option<String>>(3)?,
+                "description": r.get::<_, Option<String>>(4)?,
+                "default_scene_id": r.get::<_, Option<String>>(5)?,
+                "default_model_id": r.get::<_, Option<String>>(6)?,
+                "memory_type": r.get::<_, String>(7)?,
+                "prompt_template_id": r.get::<_, Option<String>>(8)?,
+                "system_prompt": r.get::<_, Option<String>>(9)?,
+                "disable_avatar_gradient": r.get::<_, i64>(10)? != 0,
+                "created_at": r.get::<_, i64>(11)?,
+                "updated_at": r.get::<_, i64>(12)?,
+            });
+            Ok((id, json))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
     // For each character, get rules and scenes
     let mut result = Vec::new();
     for (char_id, mut char_json) in characters {
@@ -261,24 +301,29 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
         let mut rules_stmt = conn
             .prepare("SELECT rule FROM character_rules WHERE character_id = ? ORDER BY idx")
             .map_err(|e| e.to_string())?;
-        let rules: Vec<String> = rules_stmt.query_map([&char_id], |r| r.get(0))
+        let rules: Vec<String> = rules_stmt
+            .query_map([&char_id], |r| r.get(0))
             .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-        
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
         // Get scenes with variants
         let mut scenes_stmt = conn
             .prepare("SELECT id, content, created_at, selected_variant_id FROM scenes WHERE character_id = ?")
             .map_err(|e| e.to_string())?;
-        let scenes: Vec<JsonValue> = scenes_stmt.query_map([&char_id], |r| {
-            Ok(serde_json::json!({
-                "id": r.get::<_, String>(0)?,
-                "content": r.get::<_, String>(1)?,
-                "created_at": r.get::<_, i64>(2)?,
-                "selected_variant_id": r.get::<_, Option<String>>(3)?,
-            }))
-        }).map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-        
+        let scenes: Vec<JsonValue> = scenes_stmt
+            .query_map([&char_id], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "content": r.get::<_, String>(1)?,
+                    "created_at": r.get::<_, i64>(2)?,
+                    "selected_variant_id": r.get::<_, Option<String>>(3)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
         // Get scene variants for each scene
         let mut scenes_with_variants = Vec::new();
         for mut scene in scenes {
@@ -286,30 +331,33 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
             let mut variants_stmt = conn
                 .prepare("SELECT id, content, created_at FROM scene_variants WHERE scene_id = ?")
                 .map_err(|e| e.to_string())?;
-            let variants: Vec<JsonValue> = variants_stmt.query_map([scene_id], |r| {
-                Ok(serde_json::json!({
-                    "id": r.get::<_, String>(0)?,
-                    "content": r.get::<_, String>(1)?,
-                    "created_at": r.get::<_, i64>(2)?,
-                }))
-            }).map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-            
+            let variants: Vec<JsonValue> = variants_stmt
+                .query_map([scene_id], |r| {
+                    Ok(serde_json::json!({
+                        "id": r.get::<_, String>(0)?,
+                        "content": r.get::<_, String>(1)?,
+                        "created_at": r.get::<_, i64>(2)?,
+                    }))
+                })
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+
             scene["variants"] = serde_json::json!(variants);
             scenes_with_variants.push(scene);
         }
-        
+
         char_json["rules"] = serde_json::json!(rules);
         char_json["scenes"] = serde_json::json!(scenes_with_variants);
         result.push(char_json);
     }
-    
+
     Ok(result)
 }
 
 fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
-    
+
     // Get all sessions
     let mut stmt = conn
         .prepare("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, 
@@ -317,35 +365,38 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                          memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events,
                          archived, created_at, updated_at FROM sessions")
         .map_err(|e| e.to_string())?;
-    
-    let sessions: Vec<(String, JsonValue)> = stmt.query_map([], |r| {
-        let id: String = r.get(0)?;
-        let json = serde_json::json!({
-            "id": id.clone(),
-            "character_id": r.get::<_, String>(1)?,
-            "title": r.get::<_, String>(2)?,
-            "system_prompt": r.get::<_, Option<String>>(3)?,
-            "selected_scene_id": r.get::<_, Option<String>>(4)?,
-            "persona_id": r.get::<_, Option<String>>(5)?,
-            "temperature": r.get::<_, Option<f64>>(6)?,
-            "top_p": r.get::<_, Option<f64>>(7)?,
-            "max_output_tokens": r.get::<_, Option<i64>>(8)?,
-            "frequency_penalty": r.get::<_, Option<f64>>(9)?,
-            "presence_penalty": r.get::<_, Option<f64>>(10)?,
-            "top_k": r.get::<_, Option<i64>>(11)?,
-            "memories": r.get::<_, String>(12)?,
-            "memory_embeddings": r.get::<_, String>(13)?,
-            "memory_summary": r.get::<_, Option<String>>(14)?,
-            "memory_summary_token_count": r.get::<_, i64>(15)?,
-            "memory_tool_events": r.get::<_, String>(16)?,
-            "archived": r.get::<_, i64>(17)? != 0,
-            "created_at": r.get::<_, i64>(18)?,
-            "updated_at": r.get::<_, i64>(19)?,
-        });
-        Ok((id, json))
-    }).map_err(|e| e.to_string())?
-    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-    
+
+    let sessions: Vec<(String, JsonValue)> = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let json = serde_json::json!({
+                "id": id.clone(),
+                "character_id": r.get::<_, String>(1)?,
+                "title": r.get::<_, String>(2)?,
+                "system_prompt": r.get::<_, Option<String>>(3)?,
+                "selected_scene_id": r.get::<_, Option<String>>(4)?,
+                "persona_id": r.get::<_, Option<String>>(5)?,
+                "temperature": r.get::<_, Option<f64>>(6)?,
+                "top_p": r.get::<_, Option<f64>>(7)?,
+                "max_output_tokens": r.get::<_, Option<i64>>(8)?,
+                "frequency_penalty": r.get::<_, Option<f64>>(9)?,
+                "presence_penalty": r.get::<_, Option<f64>>(10)?,
+                "top_k": r.get::<_, Option<i64>>(11)?,
+                "memories": r.get::<_, String>(12)?,
+                "memory_embeddings": r.get::<_, String>(13)?,
+                "memory_summary": r.get::<_, Option<String>>(14)?,
+                "memory_summary_token_count": r.get::<_, i64>(15)?,
+                "memory_tool_events": r.get::<_, String>(16)?,
+                "archived": r.get::<_, i64>(17)? != 0,
+                "created_at": r.get::<_, i64>(18)?,
+                "updated_at": r.get::<_, i64>(19)?,
+            });
+            Ok((id, json))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
     // For each session, get messages
     let mut result = Vec::new();
     for (session_id, mut session_json) in sessions {
@@ -354,26 +405,29 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                              selected_variant_id, is_pinned, memory_refs, attachments FROM messages 
                       WHERE session_id = ? ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
-        
-        let messages: Vec<(String, JsonValue)> = messages_stmt.query_map([&session_id], |r| {
-            let msg_id: String = r.get(0)?;
-            let json = serde_json::json!({
-                "id": msg_id.clone(),
-                "role": r.get::<_, String>(1)?,
-                "content": r.get::<_, String>(2)?,
-                "created_at": r.get::<_, i64>(3)?,
-                "prompt_tokens": r.get::<_, Option<i64>>(4)?,
-                "completion_tokens": r.get::<_, Option<i64>>(5)?,
-                "total_tokens": r.get::<_, Option<i64>>(6)?,
-                "selected_variant_id": r.get::<_, Option<String>>(7)?,
-                "is_pinned": r.get::<_, i64>(8)? != 0,
-                "memory_refs": r.get::<_, String>(9)?,
-                "attachments": r.get::<_, String>(10)?,
-            });
-            Ok((msg_id, json))
-        }).map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-        
+
+        let messages: Vec<(String, JsonValue)> = messages_stmt
+            .query_map([&session_id], |r| {
+                let msg_id: String = r.get(0)?;
+                let json = serde_json::json!({
+                    "id": msg_id.clone(),
+                    "role": r.get::<_, String>(1)?,
+                    "content": r.get::<_, String>(2)?,
+                    "created_at": r.get::<_, i64>(3)?,
+                    "prompt_tokens": r.get::<_, Option<i64>>(4)?,
+                    "completion_tokens": r.get::<_, Option<i64>>(5)?,
+                    "total_tokens": r.get::<_, Option<i64>>(6)?,
+                    "selected_variant_id": r.get::<_, Option<String>>(7)?,
+                    "is_pinned": r.get::<_, i64>(8)? != 0,
+                    "memory_refs": r.get::<_, String>(9)?,
+                    "attachments": r.get::<_, String>(10)?,
+                });
+                Ok((msg_id, json))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
         // Get variants for each message
         let mut messages_with_variants = Vec::new();
         for (msg_id, mut msg_json) in messages {
@@ -381,33 +435,36 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 .prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens 
                           FROM message_variants WHERE message_id = ?")
                 .map_err(|e| e.to_string())?;
-            
-            let variants: Vec<JsonValue> = variants_stmt.query_map([&msg_id], |r| {
-                Ok(serde_json::json!({
-                    "id": r.get::<_, String>(0)?,
-                    "content": r.get::<_, String>(1)?,
-                    "created_at": r.get::<_, i64>(2)?,
-                    "prompt_tokens": r.get::<_, Option<i64>>(3)?,
-                    "completion_tokens": r.get::<_, Option<i64>>(4)?,
-                    "total_tokens": r.get::<_, Option<i64>>(5)?,
-                }))
-            }).map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-            
+
+            let variants: Vec<JsonValue> = variants_stmt
+                .query_map([&msg_id], |r| {
+                    Ok(serde_json::json!({
+                        "id": r.get::<_, String>(0)?,
+                        "content": r.get::<_, String>(1)?,
+                        "created_at": r.get::<_, i64>(2)?,
+                        "prompt_tokens": r.get::<_, Option<i64>>(3)?,
+                        "completion_tokens": r.get::<_, Option<i64>>(4)?,
+                        "total_tokens": r.get::<_, Option<i64>>(5)?,
+                    }))
+                })
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+
             msg_json["variants"] = serde_json::json!(variants);
             messages_with_variants.push(msg_json);
         }
-        
+
         session_json["messages"] = serde_json::json!(messages_with_variants);
         result.push(session_json);
     }
-    
+
     Ok(result)
 }
 
 fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
-    
+
     // Get all usage records
     let mut stmt = conn
         .prepare("SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, 
@@ -415,54 +472,60 @@ fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String
                   memory_tokens, summary_tokens, prompt_cost, completion_cost, total_cost, success, error_message 
                   FROM usage_records")
         .map_err(|e| e.to_string())?;
-    
-    let records: Vec<(String, JsonValue)> = stmt.query_map([], |r| {
-        let id: String = r.get(0)?;
-        let json = serde_json::json!({
-            "id": id.clone(),
-            "timestamp": r.get::<_, i64>(1)?,
-            "session_id": r.get::<_, String>(2)?,
-            "character_id": r.get::<_, String>(3)?,
-            "character_name": r.get::<_, String>(4)?,
-            "model_id": r.get::<_, String>(5)?,
-            "model_name": r.get::<_, String>(6)?,
-            "provider_id": r.get::<_, String>(7)?,
-            "provider_label": r.get::<_, String>(8)?,
-            "operation_type": r.get::<_, Option<String>>(9)?,
-            "prompt_tokens": r.get::<_, Option<i64>>(10)?,
-            "completion_tokens": r.get::<_, Option<i64>>(11)?,
-            "total_tokens": r.get::<_, Option<i64>>(12)?,
-            "memory_tokens": r.get::<_, Option<i64>>(13)?,
-            "summary_tokens": r.get::<_, Option<i64>>(14)?,
-            "prompt_cost": r.get::<_, Option<f64>>(15)?,
-            "completion_cost": r.get::<_, Option<f64>>(16)?,
-            "total_cost": r.get::<_, Option<f64>>(17)?,
-            "success": r.get::<_, i64>(18)? != 0,
-            "error_message": r.get::<_, Option<String>>(19)?,
-        });
-        Ok((id, json))
-    }).map_err(|e| e.to_string())?
-    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-    
+
+    let records: Vec<(String, JsonValue)> = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let json = serde_json::json!({
+                "id": id.clone(),
+                "timestamp": r.get::<_, i64>(1)?,
+                "session_id": r.get::<_, String>(2)?,
+                "character_id": r.get::<_, String>(3)?,
+                "character_name": r.get::<_, String>(4)?,
+                "model_id": r.get::<_, String>(5)?,
+                "model_name": r.get::<_, String>(6)?,
+                "provider_id": r.get::<_, String>(7)?,
+                "provider_label": r.get::<_, String>(8)?,
+                "operation_type": r.get::<_, Option<String>>(9)?,
+                "prompt_tokens": r.get::<_, Option<i64>>(10)?,
+                "completion_tokens": r.get::<_, Option<i64>>(11)?,
+                "total_tokens": r.get::<_, Option<i64>>(12)?,
+                "memory_tokens": r.get::<_, Option<i64>>(13)?,
+                "summary_tokens": r.get::<_, Option<i64>>(14)?,
+                "prompt_cost": r.get::<_, Option<f64>>(15)?,
+                "completion_cost": r.get::<_, Option<f64>>(16)?,
+                "total_cost": r.get::<_, Option<f64>>(17)?,
+                "success": r.get::<_, i64>(18)? != 0,
+                "error_message": r.get::<_, Option<String>>(19)?,
+            });
+            Ok((id, json))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
     // For each record, get metadata
     let mut result = Vec::new();
     for (record_id, mut record_json) in records {
         let mut meta_stmt = conn
             .prepare("SELECT key, value FROM usage_metadata WHERE usage_id = ?")
             .map_err(|e| e.to_string())?;
-        
-        let metadata: Vec<JsonValue> = meta_stmt.query_map([&record_id], |r| {
-            Ok(serde_json::json!({
-                "key": r.get::<_, String>(0)?,
-                "value": r.get::<_, String>(1)?,
-            }))
-        }).map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
-        
+
+        let metadata: Vec<JsonValue> = meta_stmt
+            .query_map([&record_id], |r| {
+                Ok(serde_json::json!({
+                    "key": r.get::<_, String>(0)?,
+                    "value": r.get::<_, String>(1)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
         record_json["metadata"] = serde_json::json!(metadata);
         result.push(record_json);
     }
-    
+
     Ok(result)
 }
 
@@ -486,7 +549,10 @@ pub async fn backup_export(
     log_info(
         &app,
         "backup",
-        format!("Starting backup export (v2 JSON format) to {:?}", output_path),
+        format!(
+            "Starting backup export (v2 JSON format) to {:?}",
+            output_path
+        ),
     );
 
     // Prepare encryption if password provided
@@ -507,14 +573,22 @@ pub async fn backup_export(
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
     // Helper to add JSON data to zip (with optional encryption)
-    let add_json_to_zip = |zip: &mut ZipWriter<File>, name: &str, data: &JsonValue, enc: &Option<([u8; 16], [u8; 24], [u8; 32])>| -> Result<(), String> {
-        let json_bytes = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?.into_bytes();
+    let add_json_to_zip = |zip: &mut ZipWriter<File>,
+                           name: &str,
+                           data: &JsonValue,
+                           enc: &Option<([u8; 16], [u8; 24], [u8; 32])>|
+     -> Result<(), String> {
+        let json_bytes = serde_json::to_string_pretty(data)
+            .map_err(|e| e.to_string())?
+            .into_bytes();
         if let Some((_, nonce, key)) = enc {
             let encrypted = encrypt_data(&json_bytes, key, nonce)?;
-            zip.start_file(format!("data/{}.json.enc", name), options).map_err(|e| e.to_string())?;
+            zip.start_file(format!("data/{}.json.enc", name), options)
+                .map_err(|e| e.to_string())?;
             zip.write_all(&encrypted).map_err(|e| e.to_string())?;
         } else {
-            zip.start_file(format!("data/{}.json", name), options).map_err(|e| e.to_string())?;
+            zip.start_file(format!("data/{}.json", name), options)
+                .map_err(|e| e.to_string())?;
             zip.write_all(&json_bytes).map_err(|e| e.to_string())?;
         }
         Ok(())
@@ -527,7 +601,12 @@ pub async fn backup_export(
 
     log_info(&app, "backup", "Exporting provider credentials...");
     let providers = export_provider_credentials(&app)?;
-    add_json_to_zip(&mut zip, "provider_credentials", &serde_json::json!(providers), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "provider_credentials",
+        &serde_json::json!(providers),
+        &encryption,
+    )?;
 
     log_info(&app, "backup", "Exporting models...");
     let models = export_models(&app)?;
@@ -535,27 +614,57 @@ pub async fn backup_export(
 
     log_info(&app, "backup", "Exporting secrets...");
     let secrets = export_secrets(&app)?;
-    add_json_to_zip(&mut zip, "secrets", &serde_json::json!(secrets), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "secrets",
+        &serde_json::json!(secrets),
+        &encryption,
+    )?;
 
     log_info(&app, "backup", "Exporting prompt templates...");
     let templates = export_prompt_templates(&app)?;
-    add_json_to_zip(&mut zip, "prompt_templates", &serde_json::json!(templates), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "prompt_templates",
+        &serde_json::json!(templates),
+        &encryption,
+    )?;
 
     log_info(&app, "backup", "Exporting personas...");
     let personas = export_personas(&app)?;
-    add_json_to_zip(&mut zip, "personas", &serde_json::json!(personas), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "personas",
+        &serde_json::json!(personas),
+        &encryption,
+    )?;
 
     log_info(&app, "backup", "Exporting characters...");
     let characters = export_characters(&app)?;
-    add_json_to_zip(&mut zip, "characters", &serde_json::json!(characters), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "characters",
+        &serde_json::json!(characters),
+        &encryption,
+    )?;
 
     log_info(&app, "backup", "Exporting sessions...");
     let sessions = export_sessions(&app)?;
-    add_json_to_zip(&mut zip, "sessions", &serde_json::json!(sessions), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "sessions",
+        &serde_json::json!(sessions),
+        &encryption,
+    )?;
 
     log_info(&app, "backup", "Exporting usage records...");
     let usage_data = export_usage_records(&app)?;
-    add_json_to_zip(&mut zip, "usage_records", &serde_json::json!(usage_data), &encryption)?;
+    add_json_to_zip(
+        &mut zip,
+        "usage_records",
+        &serde_json::json!(usage_data),
+        &encryption,
+    )?;
 
     // Add images directory
     if images_dir.exists() {
@@ -695,19 +804,31 @@ fn import_settings(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    
-    let app_state = data.get("app_state")
+
+    let app_state = data
+        .get("app_state")
         .map(|v| serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string()))
         .unwrap_or_else(|| "{}".to_string());
-    
-    let advanced_model = data.get("advanced_model_settings")
-        .and_then(|v| if v.is_null() { None } else { Some(serde_json::to_string(v).ok()?) });
-    
-    let advanced_settings = data.get("advanced_settings")
-        .and_then(|v| if v.is_null() { None } else { Some(serde_json::to_string(v).ok()?) });
-    
+
+    let advanced_model = data.get("advanced_model_settings").and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            Some(serde_json::to_string(v).ok()?)
+        }
+    });
+
+    let advanced_settings = data.get("advanced_settings").and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            Some(serde_json::to_string(v).ok()?)
+        }
+    });
+
     // Delete existing and insert new
-    conn.execute("DELETE FROM settings", []).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM settings", [])
+        .map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, 
          advanced_model_settings, prompt_template_id, system_prompt, migration_version, 
@@ -724,14 +845,15 @@ fn import_settings(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
             now,
         ],
     ).map_err(|e| e.to_string())?;
-    
+
     Ok(())
 }
 
 fn import_provider_credentials(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    conn.execute("DELETE FROM provider_credentials", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM provider_credentials", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
@@ -754,8 +876,9 @@ fn import_provider_credentials(app: &tauri::AppHandle, data: &JsonValue) -> Resu
 
 fn import_models(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    conn.execute("DELETE FROM models", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM models", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
@@ -782,8 +905,9 @@ fn import_models(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String>
 
 fn import_secrets(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    conn.execute("DELETE FROM secrets", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM secrets", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
@@ -796,7 +920,8 @@ fn import_secrets(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
-            ).map_err(|e| e.to_string())?;
+            )
+            .map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -805,13 +930,19 @@ fn import_secrets(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String
 fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
     // Don't delete the default template
-    conn.execute("DELETE FROM prompt_templates WHERE id != 'prompt_app_default'", []).map_err(|e| e.to_string())?;
-    
+    conn.execute(
+        "DELETE FROM prompt_templates WHERE id != 'prompt_app_default'",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            if id == "prompt_app_default" { continue; } // Skip default
-            
+            if id == "prompt_app_default" {
+                continue;
+            } // Skip default
+
             conn.execute(
                 "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) 
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -832,8 +963,9 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
 
 fn import_personas(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    conn.execute("DELETE FROM personas", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM personas", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
@@ -856,17 +988,21 @@ fn import_personas(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
 
 fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    
+
     // Delete in correct order due to foreign keys
-    conn.execute("DELETE FROM scene_variants", []).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM scenes", []).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM character_rules", []).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM characters", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM scene_variants", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM scenes", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM character_rules", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM characters", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             let char_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            
+
             // Insert character
             conn.execute(
                 "INSERT INTO characters (id, name, avatar_path, background_image_path, description, 
@@ -889,7 +1025,7 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
             ).map_err(|e| e.to_string())?;
-            
+
             // Insert rules
             if let Some(rules) = item.get("rules").and_then(|v| v.as_array()) {
                 for (idx, rule) in rules.iter().enumerate() {
@@ -901,12 +1037,12 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                     }
                 }
             }
-            
+
             // Insert scenes
             if let Some(scenes) = item.get("scenes").and_then(|v| v.as_array()) {
                 for scene in scenes {
                     let scene_id = scene.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                    
+
                     conn.execute(
                         "INSERT INTO scenes (id, character_id, content, created_at, selected_variant_id) 
                          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -918,7 +1054,7 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                             scene.get("selected_variant_id").and_then(|v| v.as_str()),
                         ],
                     ).map_err(|e| e.to_string())?;
-                    
+
                     // Insert scene variants
                     if let Some(variants) = scene.get("variants").and_then(|v| v.as_array()) {
                         for variant in variants {
@@ -931,7 +1067,8 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                                     variant.get("content").and_then(|v| v.as_str()),
                                     variant.get("created_at").and_then(|v| v.as_i64()),
                                 ],
-                            ).map_err(|e| e.to_string())?;
+                            )
+                            .map_err(|e| e.to_string())?;
                         }
                     }
                 }
@@ -943,16 +1080,19 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
 
 fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    
+
     // Delete in correct order due to foreign keys
-    conn.execute("DELETE FROM message_variants", []).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM messages", []).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM sessions", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM message_variants", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM messages", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM sessions", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             let session_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            
+
             // Insert session
             conn.execute(
                 "INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id,
@@ -983,12 +1123,12 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
             ).map_err(|e| e.to_string())?;
-            
+
             // Insert messages
             if let Some(messages) = item.get("messages").and_then(|v| v.as_array()) {
                 for msg in messages {
                     let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                    
+
                     conn.execute(
                         "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, 
                          completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments) 
@@ -1008,7 +1148,7 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                             msg.get("attachments").and_then(|v| v.as_str()).unwrap_or("[]"),
                         ],
                     ).map_err(|e| e.to_string())?;
-                    
+
                     // Insert message variants
                     if let Some(variants) = msg.get("variants").and_then(|v| v.as_array()) {
                         for variant in variants {
@@ -1037,15 +1177,17 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
 
 fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    
+
     // Delete in correct order due to foreign keys
-    conn.execute("DELETE FROM usage_metadata", []).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM usage_records", []).map_err(|e| e.to_string())?;
-    
+    conn.execute("DELETE FROM usage_metadata", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM usage_records", [])
+        .map_err(|e| e.to_string())?;
+
     if let Some(arr) = data.as_array() {
         for item in arr {
             let record_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            
+
             // Insert usage record
             conn.execute(
                 "INSERT INTO usage_records (id, timestamp, session_id, character_id, character_name, 
@@ -1076,7 +1218,7 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
                     item.get("error_message").and_then(|v| v.as_str()),
                 ],
             ).map_err(|e| e.to_string())?;
-            
+
             // Insert metadata
             if let Some(metadata) = item.get("metadata").and_then(|v| v.as_array()) {
                 for meta in metadata {
@@ -1087,7 +1229,8 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
                             meta.get("key").and_then(|v| v.as_str()),
                             meta.get("value").and_then(|v| v.as_str()),
                         ],
-                    ).map_err(|e| e.to_string())?;
+                    )
+                    .map_err(|e| e.to_string())?;
                 }
             }
         }
@@ -1329,10 +1472,13 @@ pub async fn backup_import(
     };
 
     // Helper to read and optionally decrypt a file from the archive
-    let read_backup_file = |archive: &mut ZipArchive<File>, path: &str, enc_params: &Option<([u8; 32], [u8; 24])>| -> Result<Option<Vec<u8>>, String> {
+    let read_backup_file = |archive: &mut ZipArchive<File>,
+                            path: &str,
+                            enc_params: &Option<([u8; 32], [u8; 24])>|
+     -> Result<Option<Vec<u8>>, String> {
         // Try encrypted version first if we have encryption params
         let encrypted_path = format!("{}.enc", path);
-        
+
         if let Some((ref key, ref nonce)) = enc_params {
             if let Ok(mut file) = archive.by_name(&encrypted_path) {
                 let mut contents = Vec::new();
@@ -1342,14 +1488,14 @@ pub async fn backup_import(
                 return Ok(Some(decrypted));
             }
         }
-        
+
         // Try unencrypted version
         if let Ok(mut file) = archive.by_name(path) {
             let mut contents = Vec::new();
             file.read_to_end(&mut contents).map_err(|e| e.to_string())?;
             return Ok(Some(contents));
         }
-        
+
         Ok(None)
     };
 
@@ -1361,14 +1507,24 @@ pub async fn backup_import(
 
     // Read all JSON data files
     let settings_data = read_backup_file(&mut archive, "data/settings.json", &encryption_params)?;
-    let provider_credentials_data = read_backup_file(&mut archive, "data/provider_credentials.json", &encryption_params)?;
+    let provider_credentials_data = read_backup_file(
+        &mut archive,
+        "data/provider_credentials.json",
+        &encryption_params,
+    )?;
     let models_data = read_backup_file(&mut archive, "data/models.json", &encryption_params)?;
     let secrets_data = read_backup_file(&mut archive, "data/secrets.json", &encryption_params)?;
-    let prompt_templates_data = read_backup_file(&mut archive, "data/prompt_templates.json", &encryption_params)?;
+    let prompt_templates_data = read_backup_file(
+        &mut archive,
+        "data/prompt_templates.json",
+        &encryption_params,
+    )?;
     let personas_data = read_backup_file(&mut archive, "data/personas.json", &encryption_params)?;
-    let characters_data = read_backup_file(&mut archive, "data/characters.json", &encryption_params)?;
+    let characters_data =
+        read_backup_file(&mut archive, "data/characters.json", &encryption_params)?;
     let sessions_data = read_backup_file(&mut archive, "data/sessions.json", &encryption_params)?;
-    let usage_records_data = read_backup_file(&mut archive, "data/usage_records.json", &encryption_params)?;
+    let usage_records_data =
+        read_backup_file(&mut archive, "data/usage_records.json", &encryption_params)?;
 
     log_info(&app, "backup", "Importing data to database...");
 
@@ -1473,10 +1629,10 @@ pub async fn backup_import(
         let file_name = file.name().to_string();
 
         // Only process media directories
-        let is_media = file_name.starts_with("images/") 
+        let is_media = file_name.starts_with("images/")
             || file_name.starts_with("avatars/")
             || file_name.starts_with("attachments/");
-        
+
         if !is_media {
             continue;
         }
@@ -1507,7 +1663,9 @@ pub async fn backup_import(
             }
 
             let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
-            outfile.write_all(&final_contents).map_err(|e| e.to_string())?;
+            outfile
+                .write_all(&final_contents)
+                .map_err(|e| e.to_string())?;
         }
     }
 
@@ -1545,13 +1703,24 @@ pub async fn backup_import(
         log_info(&app, "backup", "Attachments restored");
     }
 
-    // Cleanup staging
     fs::remove_dir_all(&staging_dir).ok();
 
-    // NOTE: No reload_database() call - data is already in the current connection pool
-    // This is the key improvement over v1 - no pool swap means no state desync
+    // Cleanup temporary file if it was created by the frontend (Android content URI)
+    if backup_path.ends_with("backup_import_temp.lettuce") {
+        if let Err(e) = fs::remove_file(&backup_path) {
+            log_info(
+                &app,
+                "backup",
+                &format!("Failed to delete temp backup file: {}", e),
+            );
+        } else {
+            log_info(&app, "backup", "Deleted temp backup file");
+        }
+    }
 
     log_info(&app, "backup", "Backup import v2 complete!");
+
+    app.emit("database-reloaded", ()).ok();
 
     Ok(())
 }
@@ -1894,13 +2063,16 @@ pub async fn backup_import_from_bytes(
     };
 
     // Helper to read and optionally decrypt a file from the archive (bytes version)
-    let read_backup_file_bytes = |data: &[u8], path: &str, enc_params: &Option<([u8; 32], [u8; 24])>| -> Result<Option<Vec<u8>>, String> {
+    let read_backup_file_bytes = |data: &[u8],
+                                  path: &str,
+                                  enc_params: &Option<([u8; 32], [u8; 24])>|
+     -> Result<Option<Vec<u8>>, String> {
         let cursor = std::io::Cursor::new(data);
         let mut archive = ZipArchive::new(cursor).map_err(|e| e.to_string())?;
-        
+
         // Try encrypted version first if we have encryption params
         let encrypted_path = format!("{}.enc", path);
-        
+
         if let Some((ref key, ref nonce)) = enc_params {
             if let Ok(mut file) = archive.by_name(&encrypted_path) {
                 let mut contents = Vec::new();
@@ -1910,14 +2082,14 @@ pub async fn backup_import_from_bytes(
                 return Ok(Some(decrypted));
             }
         }
-        
+
         // Try unencrypted version
         if let Ok(mut file) = archive.by_name(path) {
             let mut contents = Vec::new();
             file.read_to_end(&mut contents).map_err(|e| e.to_string())?;
             return Ok(Some(contents));
         }
-        
+
         Ok(None)
     };
 
@@ -1925,14 +2097,18 @@ pub async fn backup_import_from_bytes(
 
     // Read all JSON data files
     let settings_data = read_backup_file_bytes(&data, "data/settings.json", &encryption_params)?;
-    let provider_credentials_data = read_backup_file_bytes(&data, "data/provider_credentials.json", &encryption_params)?;
+    let provider_credentials_data =
+        read_backup_file_bytes(&data, "data/provider_credentials.json", &encryption_params)?;
     let models_data = read_backup_file_bytes(&data, "data/models.json", &encryption_params)?;
     let secrets_data = read_backup_file_bytes(&data, "data/secrets.json", &encryption_params)?;
-    let prompt_templates_data = read_backup_file_bytes(&data, "data/prompt_templates.json", &encryption_params)?;
+    let prompt_templates_data =
+        read_backup_file_bytes(&data, "data/prompt_templates.json", &encryption_params)?;
     let personas_data = read_backup_file_bytes(&data, "data/personas.json", &encryption_params)?;
-    let characters_data = read_backup_file_bytes(&data, "data/characters.json", &encryption_params)?;
+    let characters_data =
+        read_backup_file_bytes(&data, "data/characters.json", &encryption_params)?;
     let sessions_data = read_backup_file_bytes(&data, "data/sessions.json", &encryption_params)?;
-    let usage_records_data = read_backup_file_bytes(&data, "data/usage_records.json", &encryption_params)?;
+    let usage_records_data =
+        read_backup_file_bytes(&data, "data/usage_records.json", &encryption_params)?;
 
     log_info(&app, "backup", "Importing data to database...");
 
@@ -2027,10 +2203,10 @@ pub async fn backup_import_from_bytes(
         let file_name = file.name().to_string();
 
         // Only process media directories
-        let is_media = file_name.starts_with("images/") 
+        let is_media = file_name.starts_with("images/")
             || file_name.starts_with("avatars/")
             || file_name.starts_with("attachments/");
-        
+
         if !is_media {
             continue;
         }
@@ -2061,7 +2237,9 @@ pub async fn backup_import_from_bytes(
             }
 
             let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
-            outfile.write_all(&final_contents).map_err(|e| e.to_string())?;
+            outfile
+                .write_all(&final_contents)
+                .map_err(|e| e.to_string())?;
         }
     }
 
@@ -2102,7 +2280,8 @@ pub async fn backup_import_from_bytes(
     // Cleanup staging
     fs::remove_dir_all(&staging_dir).ok();
 
-    // NOTE: No reload_database() call - data is already in the current connection pool
+    // Emit event to notify frontend to reload
+    app.emit("database-reloaded", ()).ok();
 
     log_info(&app, "backup", "Backup import v2 from bytes complete!");
 
@@ -2117,9 +2296,13 @@ pub async fn backup_check_dynamic_memory(
     password: Option<String>,
 ) -> Result<bool, String> {
     use crate::utils::log_info;
-    
-    log_info(&app, "backup_check_dynamic_memory", format!("Checking backup at: {}", backup_path));
-    
+
+    log_info(
+        &app,
+        "backup_check_dynamic_memory",
+        format!("Checking backup at: {}", backup_path),
+    );
+
     let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
@@ -2138,7 +2321,14 @@ pub async fn backup_check_dynamic_memory(
         serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?
     };
 
-    log_info(&app, "backup_check_dynamic_memory", format!("Manifest encrypted: {}, version: {}", manifest.encrypted, manifest.version));
+    log_info(
+        &app,
+        "backup_check_dynamic_memory",
+        format!(
+            "Manifest encrypted: {}, version: {}",
+            manifest.encrypted, manifest.version
+        ),
+    );
 
     // Prepare encryption params if needed
     let encryption_params: Option<([u8; 32], [u8; 24])> = if manifest.encrypted {
@@ -2179,21 +2369,35 @@ pub async fn backup_check_dynamic_memory(
     } else {
         "data/characters.json"
     };
-    
-    log_info(&app, "backup_check_dynamic_memory", format!("Looking for characters at: {}", json_path));
-    
+
+    log_info(
+        &app,
+        "backup_check_dynamic_memory",
+        format!("Looking for characters at: {}", json_path),
+    );
+
     let mut json_file = archive
         .by_name(json_path)
         .map_err(|e| format!("Invalid backup: missing characters at {}: {}", json_path, e))?;
 
     let mut json_data = Vec::new();
-    json_file.read_to_end(&mut json_data).map_err(|e| e.to_string())?;
+    json_file
+        .read_to_end(&mut json_data)
+        .map_err(|e| e.to_string())?;
 
-    log_info(&app, "backup_check_dynamic_memory", format!("Read {} bytes of characters JSON", json_data.len()));
+    log_info(
+        &app,
+        "backup_check_dynamic_memory",
+        format!("Read {} bytes of characters JSON", json_data.len()),
+    );
 
     // Decrypt if needed
     let final_json_data = if let Some((key, nonce)) = encryption_params {
-        log_info(&app, "backup_check_dynamic_memory", "Decrypting characters JSON...".to_string());
+        log_info(
+            &app,
+            "backup_check_dynamic_memory",
+            "Decrypting characters JSON...".to_string(),
+        );
         decrypt_data(&json_data, &key, &nonce)?
     } else {
         json_data
@@ -2204,11 +2408,16 @@ pub async fn backup_check_dynamic_memory(
     let characters: Vec<serde_json::Value> = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse characters JSON: {}", e))?;
 
-    let dynamic_count = characters.iter()
+    let dynamic_count = characters
+        .iter()
         .filter(|c| c.get("memory_type").and_then(|v| v.as_str()) == Some("dynamic"))
         .count();
 
-    log_info(&app, "backup_check_dynamic_memory", format!("Found {} characters with dynamic memory", dynamic_count));
+    log_info(
+        &app,
+        "backup_check_dynamic_memory",
+        format!("Found {} characters with dynamic memory", dynamic_count),
+    );
 
     Ok(dynamic_count > 0)
 }
@@ -2222,26 +2431,39 @@ pub async fn backup_check_dynamic_memory_from_bytes(
 ) -> Result<bool, String> {
     use crate::utils::log_info;
     use std::io::Cursor;
-    
-    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Checking backup from bytes ({} bytes)", data.len()));
+
+    log_info(
+        &app,
+        "backup_check_dynamic_memory_from_bytes",
+        format!("Checking backup from bytes ({} bytes)", data.len()),
+    );
 
     let cursor = Cursor::new(&data);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| {
-            log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to read archive: {}", e));
-            format!("Failed to read backup archive: {}", e)
-        })?;
+    let mut archive = ZipArchive::new(cursor).map_err(|e| {
+        log_info(
+            &app,
+            "backup_check_dynamic_memory_from_bytes",
+            format!("Failed to read archive: {}", e),
+        );
+        format!("Failed to read backup archive: {}", e)
+    })?;
 
-    log_info(&app, "backup_check_dynamic_memory_from_bytes", "Successfully opened archive".to_string());
+    log_info(
+        &app,
+        "backup_check_dynamic_memory_from_bytes",
+        "Successfully opened archive".to_string(),
+    );
 
     // Read manifest to check if encrypted
     let manifest: BackupManifest = {
-        let mut manifest_file = archive
-            .by_name("manifest.json")
-            .map_err(|e| {
-                log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to read manifest: {}", e));
-                format!("Invalid backup: missing manifest: {}", e)
-            })?;
+        let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+            log_info(
+                &app,
+                "backup_check_dynamic_memory_from_bytes",
+                format!("Failed to read manifest: {}", e),
+            );
+            format!("Invalid backup: missing manifest: {}", e)
+        })?;
 
         let mut manifest_str = String::new();
         manifest_file
@@ -2251,7 +2473,14 @@ pub async fn backup_check_dynamic_memory_from_bytes(
         serde_json::from_str(&manifest_str).map_err(|e| format!("Invalid manifest: {}", e))?
     };
 
-    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Manifest encrypted: {}, version: {}", manifest.encrypted, manifest.version));
+    log_info(
+        &app,
+        "backup_check_dynamic_memory_from_bytes",
+        format!(
+            "Manifest encrypted: {}, version: {}",
+            manifest.encrypted, manifest.version
+        ),
+    );
 
     // Prepare encryption params if needed
     let encryption_params: Option<([u8; 32], [u8; 24])> = if manifest.encrypted {
@@ -2292,28 +2521,44 @@ pub async fn backup_check_dynamic_memory_from_bytes(
     } else {
         "data/characters.json"
     };
-    
-    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Looking for characters at: {}", json_path));
-    
+
+    log_info(
+        &app,
+        "backup_check_dynamic_memory_from_bytes",
+        format!("Looking for characters at: {}", json_path),
+    );
+
     // Re-open archive to read characters file
     let cursor = Cursor::new(&data);
     let mut archive = ZipArchive::new(cursor).map_err(|e| e.to_string())?;
-    
-    let mut json_file = archive
-        .by_name(json_path)
-        .map_err(|e| {
-            log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Failed to find characters at {}: {}", json_path, e));
-            format!("Invalid backup: missing characters at {}: {}", json_path, e)
-        })?;
+
+    let mut json_file = archive.by_name(json_path).map_err(|e| {
+        log_info(
+            &app,
+            "backup_check_dynamic_memory_from_bytes",
+            format!("Failed to find characters at {}: {}", json_path, e),
+        );
+        format!("Invalid backup: missing characters at {}: {}", json_path, e)
+    })?;
 
     let mut json_data = Vec::new();
-    json_file.read_to_end(&mut json_data).map_err(|e| e.to_string())?;
+    json_file
+        .read_to_end(&mut json_data)
+        .map_err(|e| e.to_string())?;
 
-    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Read {} bytes of characters JSON", json_data.len()));
+    log_info(
+        &app,
+        "backup_check_dynamic_memory_from_bytes",
+        format!("Read {} bytes of characters JSON", json_data.len()),
+    );
 
     // Decrypt if needed
     let final_json_data = if let Some((key, nonce)) = encryption_params {
-        log_info(&app, "backup_check_dynamic_memory_from_bytes", "Decrypting characters JSON...".to_string());
+        log_info(
+            &app,
+            "backup_check_dynamic_memory_from_bytes",
+            "Decrypting characters JSON...".to_string(),
+        );
         decrypt_data(&json_data, &key, &nonce)?
     } else {
         json_data
@@ -2324,11 +2569,16 @@ pub async fn backup_check_dynamic_memory_from_bytes(
     let characters: Vec<serde_json::Value> = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse characters JSON: {}", e))?;
 
-    let dynamic_count = characters.iter()
+    let dynamic_count = characters
+        .iter()
         .filter(|c| c.get("memory_type").and_then(|v| v.as_str()) == Some("dynamic"))
         .count();
 
-    log_info(&app, "backup_check_dynamic_memory_from_bytes", format!("Found {} characters with dynamic memory", dynamic_count));
+    log_info(
+        &app,
+        "backup_check_dynamic_memory_from_bytes",
+        format!("Found {} characters with dynamic memory", dynamic_count),
+    );
 
     Ok(dynamic_count > 0)
 }
@@ -2337,24 +2587,36 @@ pub async fn backup_check_dynamic_memory_from_bytes(
 /// This is called after importing a backup when the user doesn't want to download the embedding model
 #[tauri::command]
 pub async fn backup_disable_dynamic_memory(app: tauri::AppHandle) -> Result<(), String> {
-    log_info(&app, "backup", "Disabling dynamic memory for all characters...");
-    
+    log_info(
+        &app,
+        "backup",
+        "Disabling dynamic memory for all characters...",
+    );
+
     let conn = open_db(&app)?;
-    
+
     // Update all characters to use manual memory
     conn.execute(
         "UPDATE characters SET memory_type = 'manual' WHERE memory_type = 'dynamic'",
         [],
     )
     .map_err(|e| {
-        log_info(&app, "backup", format!("Failed to disable dynamic memory: {}", e));
+        log_info(
+            &app,
+            "backup",
+            format!("Failed to disable dynamic memory: {}", e),
+        );
         e.to_string()
     })?;
-    
+
     let affected = conn.changes();
-    
-    log_info(&app, "backup", format!("Updated {} characters to manual memory", affected));
-    
+
+    log_info(
+        &app,
+        "backup",
+        format!("Updated {} characters to manual memory", affected),
+    );
+
     // Update global settings to disable dynamic memory
     let advanced_settings_json: Option<String> = conn
         .query_row(
@@ -2385,17 +2647,18 @@ pub async fn backup_disable_dynamic_memory(app: tauri::AppHandle) -> Result<(), 
                 "maxEntries": 50
             }),
         );
-        
+
         let new_json = serde_json::to_string(&settings).map_err(|e| e.to_string())?;
         conn.execute(
             "UPDATE settings SET advanced_settings = ? WHERE id = 1",
             [&new_json],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         log_info(&app, "backup", "Disabled dynamic memory in global settings");
     }
 
     // Reload database to ensure frontend gets updated data
     super::db::reload_database(&app)?;
-    
+
     Ok(())
 }

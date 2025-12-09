@@ -3,7 +3,7 @@ pub mod character_transfer;
 pub mod characters;
 pub mod db;
 pub mod importer;
-mod legacy;
+pub mod legacy;
 pub mod media;
 pub mod models;
 pub mod personas;

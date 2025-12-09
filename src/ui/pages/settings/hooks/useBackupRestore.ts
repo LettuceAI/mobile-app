@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect, useRef } from "react";
+import { useReducer, useCallback, useEffect } from "react";
 import { storageBridge } from "../../../../core/storage/files";
 
 export interface BackupInfo {
@@ -164,9 +164,6 @@ function reducer(state: State, action: Action): State {
 export function useBackupRestore() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Store picked file data in a ref (not state, to avoid re-renders with large data)
-  const pickedFileDataRef = useRef<Uint8Array | null>(null);
-
   const loadBackups = useCallback(async () => {
     try {
       dispatch({ type: "SET_LOADING", payload: true });
@@ -206,7 +203,7 @@ export function useBackupRestore() {
   }, [state.exportPassword, state.confirmPassword, loadBackups]);
 
   const handleImport = useCallback(async (skipDynamicMemoryCheck = false) => {
-    const { selectedBackup, importPassword, isPickedFile } = state;
+    const { selectedBackup, importPassword } = state;
     if (!selectedBackup) return;
 
     if (selectedBackup.encrypted && importPassword.length < 1) {
@@ -216,42 +213,31 @@ export function useBackupRestore() {
 
     try {
       dispatch({ type: "SET_ERROR", payload: null });
-      
-      // Verify password first for encrypted backups
+
       if (selectedBackup.encrypted) {
-        const valid = isPickedFile && pickedFileDataRef.current
-          ? await storageBridge.backupVerifyPasswordFromBytes(pickedFileDataRef.current, importPassword)
-          : await storageBridge.backupVerifyPassword(selectedBackup.path, importPassword);
-          
+        const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, importPassword);
         if (!valid) {
           dispatch({ type: "SET_ERROR", payload: "Incorrect password" });
           return;
         }
       }
-      
+
       // Check for dynamic memory if not skipping
       if (!skipDynamicMemoryCheck) {
         console.log('[useBackupRestore] Checking for dynamic memory in backup...');
-        const hasDynamicMemory = isPickedFile && pickedFileDataRef.current
-          ? await storageBridge.backupCheckDynamicMemoryFromBytes(
-              pickedFileDataRef.current,
-              selectedBackup.encrypted ? importPassword : undefined
-            )
-          : await storageBridge.backupCheckDynamicMemory(
-              selectedBackup.path,
-              selectedBackup.encrypted ? importPassword : undefined
-            );
+        const hasDynamicMemory = await storageBridge.backupCheckDynamicMemory(
+          selectedBackup.path,
+          selectedBackup.encrypted ? importPassword : undefined
+        );
 
         console.log('[useBackupRestore] hasDynamicMemory:', hasDynamicMemory);
 
         if (hasDynamicMemory) {
-          // Check if embedding model exists
           console.log('[useBackupRestore] Checking if embedding model exists...');
           const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
           console.log('[useBackupRestore] hasEmbeddingModel:', hasEmbeddingModel);
-          
+
           if (!hasEmbeddingModel) {
-            // Return a special value to trigger the prompt in the UI
             console.log('[useBackupRestore] Returning needsEmbeddingModel=true');
             return { needsEmbeddingModel: true };
           }
@@ -260,31 +246,13 @@ export function useBackupRestore() {
 
       dispatch({ type: "SET_IMPORTING", payload: true });
 
-      if (isPickedFile && pickedFileDataRef.current) {
-        // Use byte-based import for picked files (Android content URI workaround)
-        const data = pickedFileDataRef.current;
-
-        // Password already verified above
-        await storageBridge.backupImportFromBytes(
-          data,
-          selectedBackup.encrypted ? importPassword : undefined
-        );
-      } else {
-        // Use path-based import for auto-detected backups
-        // Password already verified above
-        await storageBridge.backupImport(
-          selectedBackup.path,
-          selectedBackup.encrypted ? importPassword : undefined
-        );
-      }
-
-      // Clear picked file data
-      pickedFileDataRef.current = null;
+      await storageBridge.backupImport(
+        selectedBackup.path,
+        selectedBackup.encrypted ? importPassword : undefined
+      );
 
       dispatch({ type: "IMPORT_COMPLETE" });
 
-      // Data is now in the DB via the existing pool connection
-      // No reload needed - UI can fetch fresh data on navigation
       return { success: true };
     } catch (e) {
       dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "Import failed" });
@@ -306,28 +274,22 @@ export function useBackupRestore() {
     }
   }, [state.selectedBackup, loadBackups]);
 
-  // Browse for backup file using system file picker (Android scoped storage workaround)
   const handleBrowseForBackup = useCallback(async () => {
     try {
       const result = await storageBridge.backupPickFile();
-      if (!result) return; // User cancelled
+      if (!result) return;
 
-      const { data, filename } = result;
+      const { path, filename } = result;
 
-      // Store the file data in the ref for later import
-      pickedFileDataRef.current = data;
-
-      // Get info about the selected backup using bytes
-      const info = await storageBridge.backupGetInfoFromBytes(data);
+      const info = await storageBridge.backupGetInfo(path);
 
       const backupInfo: BackupInfo = {
         ...info,
-        path: "", // Not a real path for picked files
+        path,
         filename,
       };
 
-      // Open import modal with the picked file (marked as picked)
-      dispatch({ type: "OPEN_IMPORT_MODAL_PICKED", payload: backupInfo });
+      dispatch({ type: "OPEN_IMPORT_MODAL", payload: backupInfo });
     } catch (e) {
       console.error("Failed to browse for backup:", e);
       dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "Failed to open file" });
@@ -339,7 +301,6 @@ export function useBackupRestore() {
     openImportModal: (backup: BackupInfo) => dispatch({ type: "OPEN_IMPORT_MODAL", payload: backup }),
     openDeleteModal: (backup: BackupInfo) => dispatch({ type: "OPEN_DELETE_MODAL", payload: backup }),
     closeModal: () => {
-      pickedFileDataRef.current = null; // Clear picked file data on close
       dispatch({ type: "CLOSE_MODAL" });
     },
     setExportPassword: (value: string) => dispatch({ type: "SET_EXPORT_PASSWORD", payload: value }),

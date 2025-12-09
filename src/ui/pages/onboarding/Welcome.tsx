@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, Upload, FileArchive, Lock, Loader2, Eye, EyeOff, CheckCircle, HardDrive, Download } from "lucide-react";
 import { motion } from "framer-motion";
@@ -112,7 +112,7 @@ export function WelcomePage() {
           transition={{ duration: 0.4, delay: 0.25 }}
         >
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
             <div>
               <h3 className={cn(typography.bodySmall.size, typography.body.weight, "text-amber-200")}>
                 Beta Build
@@ -157,7 +157,7 @@ export function WelcomePage() {
               typography.body.size,
               interactive.transition.default,
               interactive.active.scale,
-              "hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80"
+              "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
             )}
             onClick={() => setShowSkipWarning(true)}
           >
@@ -172,7 +172,7 @@ export function WelcomePage() {
               typography.body.size,
               interactive.transition.default,
               interactive.active.scale,
-              "hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80"
+              "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
             )}
             onClick={() => setShowRestoreBackup(true)}
           >
@@ -367,8 +367,6 @@ function RestoreBackupModal({
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBackup, setSelectedBackup] = useState<BackupInfo | null>(null);
-  const [isPickedFile, setIsPickedFile] = useState(false);
-  const pickedFileDataRef = useRef<Uint8Array | null>(null);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -396,40 +394,37 @@ function RestoreBackupModal({
   const handleBrowseForBackup = async () => {
     try {
       setError(null);
+      setLoading(true);
       const result = await storageBridge.backupPickFile();
-      if (!result) return; // User cancelled
-      
-      const { data, filename } = result;
-      
-      // Store file data in ref
-      pickedFileDataRef.current = data;
-      
-      // Get info using bytes
-      const info = await storageBridge.backupGetInfoFromBytes(data);
-      
+      if (!result) return;
+
+      const { path, filename } = result;
+
+      const info = await storageBridge.backupGetInfo(path);
+
       const backupInfo: BackupInfo = {
         ...info,
-        path: "",
+        path,
         filename,
       };
-      
+
       setSelectedBackup(backupInfo);
-      setIsPickedFile(true);
       setPassword("");
     } catch (e) {
       console.error("Failed to browse for backup:", e);
       setError(e instanceof Error ? e.message : "Failed to open file");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleClose = () => {
     if (restoring) return;
-    pickedFileDataRef.current = null;
     setIsExiting(true);
     setTimeout(onClose, 200);
   };
 
-  const handleRestore = async (skipDynamicMemoryCheck = false) => {
+  const handleRestore = async () => {
     if (!selectedBackup) return;
 
     if (selectedBackup.encrypted && password.length < 1) {
@@ -439,63 +434,38 @@ function RestoreBackupModal({
 
     try {
       setError(null);
-      
-      // Verify password first for encrypted backups
+
       if (selectedBackup.encrypted) {
-        const valid = isPickedFile && pickedFileDataRef.current
-          ? await storageBridge.backupVerifyPasswordFromBytes(pickedFileDataRef.current, password)
-          : await storageBridge.backupVerifyPassword(selectedBackup.path, password);
-          
+        const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, password);
         if (!valid) {
           setError("Incorrect password");
           return;
         }
       }
-      
-      // Check for dynamic memory if not skipping
-      if (!skipDynamicMemoryCheck) {
-        const hasDynamicMemory = isPickedFile && pickedFileDataRef.current
-          ? await storageBridge.backupCheckDynamicMemoryFromBytes(
-              pickedFileDataRef.current,
-              selectedBackup.encrypted ? password : undefined
-            )
-          : await storageBridge.backupCheckDynamicMemory(
-              selectedBackup.path,
-              selectedBackup.encrypted ? password : undefined
-            );
 
-        if (hasDynamicMemory) {
-          // Check if embedding model exists
-          const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
-          if (!hasEmbeddingModel) {
-            // Show the prompt
-            setShowEmbeddingPrompt(true);
-            return;
-          }
-        }
-      }
-      
       setRestoring(true);
 
-      if (isPickedFile && pickedFileDataRef.current) {
-        // Use byte-based import for picked files
-        const data = pickedFileDataRef.current;
-        
-        // Password already verified above
-        await storageBridge.backupImportFromBytes(
-          data,
-          selectedBackup.encrypted ? password : undefined
-        );
-      } else {
-        // Use path-based import
-        // Password already verified above
-        await storageBridge.backupImport(
-          selectedBackup.path,
-          selectedBackup.encrypted ? password : undefined
-        );
+      const hasDynamicMemory = await storageBridge.backupCheckDynamicMemory(
+        selectedBackup.path,
+        selectedBackup.encrypted ? password : undefined
+      );
+
+      await storageBridge.backupImport(
+        selectedBackup.path,
+        selectedBackup.encrypted ? password : undefined
+      );
+
+      await setOnboardingCompleted(true);
+
+      if (hasDynamicMemory) {
+        const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
+        if (!hasEmbeddingModel) {
+          setRestoring(false);
+          setShowEmbeddingPrompt(true);
+          return;
+        }
       }
 
-      pickedFileDataRef.current = null;
       setIsExiting(true);
       setTimeout(() => {
         navigate("/");
@@ -510,39 +480,21 @@ function RestoreBackupModal({
   const handleDownloadModel = () => {
     setShowEmbeddingPrompt(false);
     handleClose();
-    navigate("/settings/embedding-download");
+    navigate("/settings/embedding-download?returnTo=/");
   };
 
   const handleDisableAndContinue = async () => {
     setShowEmbeddingPrompt(false);
     setRestoring(true);
-    
+
     try {
-      // Import the backup first
-      const backupData = isPickedFile ? pickedFileDataRef.current : null;
-      
-      if (backupData) {
-        // Mobile/picked file path
-        await storageBridge.backupImportFromBytes(
-          backupData,
-          password || undefined
-        );
-      } else if (selectedBackup) {
-        // Desktop path
-        if (selectedBackup.encrypted && !password) {
-          setError("Password required for encrypted backup");
-          return;
-        }
-        await storageBridge.backupImport(selectedBackup.path, password || undefined);
-      }
-      
-      // After successful import, disable dynamic memory for all characters
+
       await storageBridge.backupDisableDynamicMemory();
-      
+
       navigate("/");
     } catch (error) {
-      console.error("Failed to restore and disable dynamic memory:", error);
-      setError(error instanceof Error ? error.message : "Failed to restore backup");
+      console.error("Failed to disable dynamic memory:", error);
+      setError(error instanceof Error ? error.message : "Failed to update settings");
     } finally {
       setRestoring(false);
     }
@@ -604,9 +556,28 @@ function RestoreBackupModal({
                 </button>
               </div>
 
+              {/* Error display for list view */}
+              {error && (
+                <div className={cn(
+                  "flex items-start gap-2 border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200 mb-4",
+                  radius.md
+                )}>
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
               {loading ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex flex-col items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-white/30" />
+                  <p className="mt-2 text-sm text-white/40">Processing file...</p>
+                  <p className="text-xs text-white/20 mt-1">Large backups may take a minute</p>
+                  <button
+                    onClick={() => setLoading(false)}
+                    className="mt-6 text-xs text-red-400/60 hover:text-red-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
               ) : backups.length === 0 ? (
                 <div className={cn("border border-white/10 bg-white/5 p-6 text-center", radius.md)}>
@@ -636,15 +607,13 @@ function RestoreBackupModal({
                       key={backup.path}
                       onClick={() => {
                         setSelectedBackup(backup);
-                        setIsPickedFile(false);
-                        pickedFileDataRef.current = null;
                         setPassword("");
                         setError(null);
                       }}
                       className={cn(
                         "w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left",
                         interactive.transition.default,
-                        "hover:border-white/20 hover:bg-white/[0.08]",
+                        "hover:border-white/20 hover:bg-white/8",
                         "active:scale-[0.99]"
                       )}
                     >

@@ -132,6 +132,7 @@ pub fn run() {
             storage_manager::backup::backup_check_dynamic_memory_from_bytes,
             storage_manager::backup::backup_disable_dynamic_memory,
             storage_manager::importer::legacy_backup_and_remove,
+            storage_manager::legacy::get_storage_root,
             chat_manager::chat_completion,
             chat_manager::chat_regenerate,
             chat_manager::chat_continue,

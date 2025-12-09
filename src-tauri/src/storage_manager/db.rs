@@ -74,8 +74,6 @@ pub fn create_pool_for_path(path: &PathBuf) -> Result<DbPool, String> {
         .map_err(|e| format!("Failed to create pool: {}", e))
 }
 
-/// Reload the database by creating a new pool and swapping it with the existing one.
-/// This is used after backup restore to pick up the new database without restarting.
 pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
     use crate::utils::log_info;
 
@@ -86,7 +84,6 @@ pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
         format!("Reloading database from {:?}", path),
     );
 
-    // First, checkpoint the current database to ensure all WAL data is written to the main file
     {
         let conn = open_db(app)?;
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
@@ -94,28 +91,22 @@ pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
         log_info(app, "database", "WAL checkpoint completed before reload");
     }
 
-    // Create a new pool for the database path
     let new_pool = create_pool_for_path(&path)?;
 
-    // Get a connection to verify it works and init schema
     let conn = new_pool
         .get()
         .map_err(|e| format!("Failed to get connection from new pool: {}", e))?;
     init_db(app, &conn)?;
 
-    // Drop the connection before swapping
     drop(conn);
 
-    // Swap the pool
     let swappable = app.state::<SwappablePool>();
     swappable.swap(new_pool)?;
 
-    // Ensure the restored database is on the latest schema
     migrations::run_migrations(app)?;
 
     log_info(app, "database", "Database pool reloaded successfully");
 
-    // Emit event to frontend so it can refetch data
     let _ = app.emit("database-reloaded", ());
 
     Ok(())

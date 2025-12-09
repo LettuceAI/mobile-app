@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readFile } from "@tauri-apps/plugin-fs";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 
 async function readJsonCommand<T>(command: string, args?: Record<string, unknown>, fallback?: T): Promise<T | null> {
   try {
@@ -160,44 +160,51 @@ export const storageBridge = {
   backupCheckDynamicMemoryFromBytes: (data: Uint8Array, password?: string) => invoke<boolean>("backup_check_dynamic_memory_from_bytes", { data: Array.from(data), password: password ?? null }),
   backupDisableDynamicMemory: () => invoke("backup_disable_dynamic_memory") as Promise<void>,
 
-  backupPickFile: async (): Promise<{ data: Uint8Array; filename: string } | null> => {
+  // Get the storage root path for temp file operations
+  getStorageRoot: () => invoke<string>("get_storage_root"),
+
+  backupPickFile: async (): Promise<{ path: string; filename: string } | null> => {
     try {
       const selected = await open({
         multiple: false,
       });
 
-      if (!selected) return null;
+      if (!selected || typeof selected !== "string") return null;
 
       console.log("[backupPickFile] Selected file:", selected);
 
-      const data = await readFile(selected);
-
-      console.log("[backupPickFile] Read file, size:", data.length);
-
-      if (data.length === 0) {
-        throw new Error("File is empty or could not be read");
-      }
+      const isContentUri = selected.startsWith("content://");
 
       let filename: string;
-      console.log("[backupPickFile] Selected file type:", selected);
-      if (typeof selected === "string") {
-        const parts = selected.split("/");
-        filename = parts[parts.length - 1] || "backup.lettuce";
-        if (filename.startsWith("content:") || filename.includes("%")) {
-          filename = "backup.lettuce";
-        }
-      } else {
+      const parts = selected.split("/");
+      filename = parts[parts.length - 1] || "backup.lettuce";
+      if (filename.startsWith("content:") || filename.includes("%")) {
         filename = "backup.lettuce";
       }
 
-      // Ensure .lettuce extension
       if (!filename.endsWith(".lettuce") && !filename.endsWith(".zip")) {
         filename = filename + ".lettuce";
       }
 
-      console.log("[backupPickFile] Filename:", filename, "Data size:", data.length);
+      if (isContentUri) {
+        console.log("[backupPickFile] Android content URI detected, copying to temp file...");
+        const data = await readFile(selected);
 
-      return { data, filename };
+        if (data.length === 0) {
+          throw new Error("File is empty or could not be read");
+        }
+
+        const storageRoot = await invoke<string>("get_storage_root");
+        const tempPath = `${storageRoot}/backup_import_temp.lettuce`;
+
+        await writeFile(tempPath, data);
+        console.log("[backupPickFile] Copied to temp file:", tempPath);
+
+        return { path: tempPath, filename };
+      } else {
+        console.log("[backupPickFile] Desktop path, using directly:", selected);
+        return { path: selected, filename };
+      }
     } catch (error) {
       console.error("[backupPickFile] Error:", error);
       throw error;

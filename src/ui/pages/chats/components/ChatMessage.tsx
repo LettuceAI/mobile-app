@@ -298,7 +298,7 @@ function ChatMessageInner({
             <MarkdownRenderer 
               key={message.id + ":" + computed.selectedVariantIndex}
               content={displayContent ?? message.content} 
-              className="text-inherit" 
+              className="text-inherit select-none" 
             />
           </>
         )}

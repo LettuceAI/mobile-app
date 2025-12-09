@@ -20,6 +20,11 @@ pub fn storage_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     ensure_lettuce_dir(app)
 }
 
+#[tauri::command]
+pub fn get_storage_root(app: tauri::AppHandle) -> Result<String, String> {
+    storage_root(&app).map(|p| p.to_string_lossy().to_string())
+}
+
 pub fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(storage_root(app)?.join(SETTINGS_FILE))
 }
