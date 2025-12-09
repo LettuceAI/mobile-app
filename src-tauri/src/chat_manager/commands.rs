@@ -2256,6 +2256,21 @@ async fn process_dynamic_memory_cycle(
     Ok(())
 }
 
+fn sanitize_memory_id(id: &str) -> String {
+    id.trim()
+        .trim_matches(|c| {
+            c == '#'
+                || c == '*'
+                || c == '"'
+                || c == '\''
+                || c == '['
+                || c == ']'
+                || c == '('
+                || c == ')'
+        })
+        .to_string()
+}
+
 async fn run_memory_tool_update(
     app: &AppHandle,
     provider_cred: &ProviderCredential,
@@ -2420,22 +2435,26 @@ async fn run_memory_tool_update(
                 }
             }
             "delete_memory" => {
-                if let Some(text) = extract_text_argument(&call) {
-                    let target_idx = if text.len() == 6 && text.chars().all(|c| c.is_ascii_digit())
-                    {
-                        session.memory_embeddings.iter().position(|m| m.id == text)
-                    } else {
-                        session
-                            .memories
-                            .iter()
-                            .position(|m| m == &text)
-                            .or_else(|| {
-                                session
-                                    .memory_embeddings
-                                    .iter()
-                                    .position(|m| m.text == text)
-                            })
-                    };
+                if let Some(text) = call.arguments.get("text").and_then(|v| v.as_str()) {
+                    let sanitized = sanitize_memory_id(text);
+                    let target_idx =
+                        if sanitized.len() == 6 && sanitized.chars().all(char::is_numeric) {
+                            session
+                                .memory_embeddings
+                                .iter()
+                                .position(|m| m.id == sanitized)
+                        } else {
+                            session
+                                .memories
+                                .iter()
+                                .position(|m| m == &text)
+                                .or_else(|| {
+                                    session
+                                        .memory_embeddings
+                                        .iter()
+                                        .position(|m| m.text == text)
+                                })
+                        };
                     if let Some(idx) = target_idx {
                         session
                             .memories
@@ -2459,7 +2478,8 @@ async fn run_memory_tool_update(
                 }
             }
             "pin_memory" => {
-                if let Some(id) = call.arguments.get("id").and_then(|v| v.as_str()) {
+                if let Some(raw_id) = call.arguments.get("id").and_then(|v| v.as_str()) {
+                    let id = sanitize_memory_id(raw_id);
                     if let Some(mem) = session.memory_embeddings.iter_mut().find(|m| m.id == id) {
                         mem.is_pinned = true;
                         mem.importance_score = 1.0; // Reset score when pinned
@@ -2479,7 +2499,8 @@ async fn run_memory_tool_update(
                 }
             }
             "unpin_memory" => {
-                if let Some(id) = call.arguments.get("id").and_then(|v| v.as_str()) {
+                if let Some(raw_id) = call.arguments.get("id").and_then(|v| v.as_str()) {
+                    let id = sanitize_memory_id(raw_id);
                     if let Some(mem) = session.memory_embeddings.iter_mut().find(|m| m.id == id) {
                         mem.is_pinned = false;
                         actions_log.push(json!({
@@ -2561,8 +2582,7 @@ fn build_memory_tool_config() -> ToolConfig {
                     "type": "object",
                     "properties": {
                         "text": { "type": "string", "description": "Concise memory to store" },
-                        "important": { "type": "boolean", "description": "If true, memory will be pinned (never decays)" },
-                        "updatedMemories": { "type": "array", "items": { "type": "string" }, "description": "Optional list of all memories after this change" }
+                        "important": { "type": "boolean", "description": "If true, memory will be pinned (never decays)" }
                     },
                     "required": ["text"]
                 }),
@@ -2575,8 +2595,7 @@ fn build_memory_tool_config() -> ToolConfig {
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "text": { "type": "string", "description": "Memory ID (preferred) or exact text to remove" },
-                        "updatedMemories": { "type": "array", "items": { "type": "string" }, "description": "Updated list of memories after deletion" }
+                        "text": { "type": "string", "description": "Memory ID (preferred) or exact text to remove" }
                     },
                     "required": ["text"]
                 }),
