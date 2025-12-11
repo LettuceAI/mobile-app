@@ -53,10 +53,12 @@ ndarray = "0.16"
 lazy_static = "1.5.0"
 anyhow = "1.0.100"
 tauri-plugin-fs = "2"
+url = "2"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 machine-uid = "0.3"
 
 [target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-android-fs = "2"
 ort = { version = "2.0.0-rc.9", default-features = false, features = ["load-dynamic", "half", "nnapi", "ndarray"] }
 openssl = { version = "0.10", features = ["vendored"] }

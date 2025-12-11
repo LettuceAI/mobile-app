@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use reqwest;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex as TokioMutex;
@@ -310,10 +310,7 @@ pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
 /// Delete all embedding model files and reset state
 #[tauri::command]
 pub async fn delete_embedding_model(app: AppHandle) -> Result<(), String> {
-    // 1. Invalidate any cached inference session
-    invalidate_session_cache();
-
-    // 2. Reset download state to stop any potential downloads/usage
+    // 1. Reset download state to stop any potential downloads/usage
     reset_download_state().await;
 
     // 3. Delete files
@@ -339,30 +336,6 @@ use tokenizers::Tokenizer;
 const MAX_SEQ_LENGTH: usize = 512;
 const EMBEDDING_DIM: usize = 512;
 
-/// Cached inference session for reusing loaded model and tokenizer
-struct CachedInferenceSession {
-    session: Session,
-    tokenizer: Tokenizer,
-    model_path: PathBuf,
-}
-
-/// Global cache for the inference session - initialized once, reused for all embeddings
-static INFERENCE_CACHE: OnceLock<Mutex<Option<CachedInferenceSession>>> = OnceLock::new();
-
-/// Get or initialize the cached inference session
-fn get_or_init_cache() -> &'static Mutex<Option<CachedInferenceSession>> {
-    INFERENCE_CACHE.get_or_init(|| Mutex::new(None))
-}
-
-/// Invalidate the session cache (call when model is deleted/reinstalled)
-pub fn invalidate_session_cache() {
-    if let Some(cache) = INFERENCE_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            *guard = None;
-        }
-    }
-}
-
 /// Initialize ONNX Runtime
 async fn ensure_ort_init() -> Result<(), String> {
     if ort::init().with_name("lettuce-embedding").commit().is_err() {}
@@ -371,6 +344,12 @@ async fn ensure_ort_init() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>, String> {
+    crate::utils::log_info(
+        &app,
+        "embedding_debug",
+        format!("computing embedding for text='{}'", text),
+    );
+
     let model_dir = embedding_model_dir(&app)?;
     let model_path = model_dir.join("lettuce-emb-512d-kd-v1.onnx");
     let tokenizer_path = model_dir.join("tokenizer.json");
@@ -381,44 +360,20 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
 
     ensure_ort_init().await?;
 
-    // Use the cached session - all computation happens inside the lock
-    let cache = get_or_init_cache();
-    let mut guard = cache
-        .lock()
-        .map_err(|e| format!("Failed to acquire session lock: {}", e))?;
+    // Create new session and tokenizer (NO CACHING)
+    let mut session = Session::builder()
+        .map_err(|e| format!("Failed to create session builder: {}", e))?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(|e| format!("Failed to set optimization level: {}", e))?
+        .commit_from_file(&model_path)
+        .map_err(|e| format!("Failed to load model: {}", e))?;
 
-    // Check if we need to (re)initialize the session
-    let needs_init = match guard.as_ref() {
-        None => true,
-        Some(cached) => cached.model_path != model_path,
-    };
-
-    if needs_init {
-        // Create new session and tokenizer
-        let session = Session::builder()
-            .map_err(|e| format!("Failed to create session builder: {}", e))?
-            .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(|e| format!("Failed to set optimization level: {}", e))?
-            .commit_from_file(&model_path)
-            .map_err(|e| format!("Failed to load model: {}", e))?;
-
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e))?;
-
-        *guard = Some(CachedInferenceSession {
-            session,
-            tokenizer,
-            model_path: model_path.clone(),
-        });
-    }
-
-    // Now we have a valid cached session
-    let cached = guard.as_mut().ok_or("Session cache unexpectedly empty")?;
+    let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        .map_err(|e| format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e))?;
 
     // Tokenize input
-    let encoding = cached
-        .tokenizer
-        .encode(text, true)
+    let encoding = tokenizer
+        .encode(text.clone(), true)
         .map_err(|e| format!("Tokenization failed: {}", e))?;
 
     let input_ids = encoding.get_ids();
@@ -445,8 +400,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     let attention_mask_value = Value::from_array(attention_mask_array)
         .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
 
-    let outputs = cached
-        .session
+    let outputs = session
         .run(inputs![
             "input_ids" => input_ids_value,
             "attention_mask" => attention_mask_value

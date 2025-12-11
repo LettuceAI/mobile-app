@@ -140,7 +140,7 @@ export function ModelSetupPage() {
                 value={modelName}
                 onChange={(e) => handleModelNameChange(e.target.value)}
                 placeholder="gpt-4o, claude-3-sonnet"
-                className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
+                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
               />
               <p className="text-xs text-gray-500">Exact identifier used for API calls</p>
             </div>
@@ -152,7 +152,7 @@ export function ModelSetupPage() {
                 value={displayName}
                 onChange={(e) => handleDisplayNameChange(e.target.value)}
                 placeholder="Creative mentor"
-                className="w-full min-h-[44px] rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
+                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
               />
               <p className="text-xs text-gray-500">How this model appears in menus</p>
             </div>
@@ -168,7 +168,7 @@ export function ModelSetupPage() {
             <button
               onClick={handleSaveModel}
               disabled={!canSave || isSaving}
-              className="w-full min-h-[48px] rounded-2xl border border-emerald-400/40 bg-emerald-400/20 px-6 py-4 font-semibold text-emerald-100 transition-all duration-200 hover:border-emerald-300/80 hover:bg-emerald-400/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-emerald-400/10 disabled:bg-emerald-400/5 disabled:text-emerald-400"
+              className="w-full min-h-12 rounded-2xl border border-emerald-400/40 bg-emerald-400/20 px-6 py-4 font-semibold text-emerald-100 transition-all duration-200 hover:border-emerald-300/80 hover:bg-emerald-400/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-emerald-400/10 disabled:bg-emerald-400/5 disabled:text-emerald-400"
             >
               {isSaving ? (
                 <div className="flex items-center justify-center gap-2">
@@ -182,7 +182,7 @@ export function ModelSetupPage() {
 
             <button
               onClick={handleSkip}
-              className="w-full min-h-[44px] rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-gray-400 transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.98]"
+              className="w-full min-h-11 rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-gray-400 transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.98]"
             >
               Skip for now
             </button>

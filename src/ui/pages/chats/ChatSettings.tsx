@@ -43,7 +43,7 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "group flex w-full min-h-[56px] items-center justify-between",
+        "group flex w-full min-h-14 items-center justify-between",
         radius.md,
         "border p-4 text-left",
         interactive.transition.default,

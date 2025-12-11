@@ -30,17 +30,17 @@ interface MessageActionsBottomSheetProps {
 }
 
 // Action row component
-function ActionRow({ 
-  icon: Icon, 
-  label, 
-  onClick, 
+function ActionRow({
+  icon: Icon,
+  label,
+  onClick,
   disabled = false,
   variant = "default",
   iconBg
-}: { 
-  icon: LucideIcon; 
-  label: string; 
-  onClick: () => void; 
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
   disabled?: boolean;
   variant?: "default" | "danger";
   iconBg?: string;
@@ -150,14 +150,30 @@ export function MessageActionsBottomSheet({
               {characterMemoryType === "dynamic" &&
                 (messageAction.message.memoryRefs?.length ?? 0) > 0 && (
                   <div className="mb-3 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10">
-                    <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 mb-2">
                       <Brain size={14} className="text-emerald-400" />
                       <span className="text-xs font-medium text-emerald-300">
                         {messageAction.message.memoryRefs?.length} memories used
                       </span>
                     </div>
-                    <div className="text-xs text-emerald-200/70 line-clamp-2">
-                      {(messageAction.message.memoryRefs || []).slice(0, 2).join(" • ")}
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {(messageAction.message.memoryRefs || []).map((ref, idx) => {
+                        const match = ref.match(/^(\d+(\.\d+)?)::(.*)$/);
+                        const score = match ? parseFloat(match[1]) : null;
+                        const text = match ? match[3] : ref;
+                        return (
+                          <div key={idx} className="bg-black/20 rounded p-2 text-xs border border-emerald-500/10">
+                            {score !== null && (
+                              <div className="text-[10px] font-bold text-emerald-400 mb-1">
+                                Match: {(score * 100).toFixed(0)}%
+                              </div>
+                            )}
+                            <div className="text-emerald-100/90 leading-relaxed whitespace-pre-wrap">
+                              {text}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -176,14 +192,14 @@ export function MessageActionsBottomSheet({
                   }}
                 />
               )}
-              
+
               <ActionRow
                 icon={Copy}
                 label="Copy"
                 iconBg="bg-violet-500/20"
                 onClick={() => void handleCopy()}
               />
-              
+
               <ActionRow
                 icon={messageAction.message.isPinned ? PinOff : Pin}
                 label={messageAction.message.isPinned ? "Unpin" : "Pin"}

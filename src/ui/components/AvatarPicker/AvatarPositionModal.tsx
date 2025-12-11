@@ -425,7 +425,7 @@ export function AvatarPositionModal({
 
                 <div
                   className={cn(
-                    "flex h-12 min-w-[80px] items-center justify-center border border-white/10 bg-white/5 px-3",
+                    "flex h-12 min-w-20 items-center justify-center border border-white/10 bg-white/5 px-3",
                     radius.md
                   )}
                 >

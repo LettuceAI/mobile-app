@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::api::{api_request, ApiRequest};
@@ -419,35 +419,36 @@ async fn select_relevant_memories(
         .map(|m| (cosine_similarity(&query_embedding, &m.embedding), m))
         .collect();
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
     let hot_results: Vec<MemoryEmbedding> = scored
         .into_iter()
         .take(limit)
         .filter(|(score, _)| *score >= min_similarity)
-        .map(|(_, m)| m.clone())
+        .map(|(score, m)| {
+            let mut cloned = m.clone();
+            cloned.match_score = Some(score);
+            cloned
+        })
         .collect();
 
     // If hot results are empty or sparse, search cold memories by keyword
     if hot_results.is_empty() {
-        let cold_matches = search_cold_memories_by_keyword(session, query, limit);
-        if !cold_matches.is_empty() {
-            log_info(
+        let matches = search_memories_by_keyword(session, query, limit);
+        if !matches.is_empty() {
+            crate::utils::log_info(
                 app,
                 "memory_retrieval",
-                format!(
-                    "Found {} cold memories via keyword search",
-                    cold_matches.len()
-                ),
+                format!("Found {} memories via keyword search", matches.len()),
             );
         }
-        return cold_matches;
+        return matches;
     }
 
     hot_results
 }
 
-/// Search cold memories using simple keyword matching.
-/// Returns matching cold memories (caller should promote them to hot).
-fn search_cold_memories_by_keyword(
+/// Search memories using simple keyword matching (fallback).
+fn search_memories_by_keyword(
     session: &Session,
     query: &str,
     limit: usize,
@@ -466,7 +467,6 @@ fn search_cold_memories_by_keyword(
     let mut matches: Vec<(usize, MemoryEmbedding)> = session
         .memory_embeddings
         .iter()
-        .filter(|m| m.is_cold)
         .filter_map(|m| {
             let text_lower = m.text.to_lowercase();
             let match_count = keywords
@@ -761,10 +761,33 @@ pub async fn chat_completion(
     // - Dynamic memory: use semantic search over memory embeddings
     // - Manual memory: memories are injected via system prompt (see below)
     let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
+        // Enriched query: Context (last 300 chars of prev msg) + User Message
+        // This helps short queries like "What now?" find relevant memories.
+        let search_query = if let Some(prev_msg) = session.messages.iter().rev().nth(1) {
+            let context: String = prev_msg
+                .content
+                .chars()
+                .rev()
+                .take(300)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+            format!("{}\n{}", context, user_message)
+        } else {
+            user_message.clone()
+        };
+
+        crate::utils::log_info(
+            &app,
+            "memory_retrieval",
+            format!("Enriched query ({:?} chars)", search_query.len()),
+        );
+
         select_relevant_memories(
             &app,
             &session,
-            &user_message,
+            &search_query,
             5,
             dynamic_min_similarity(settings),
         )
@@ -1004,7 +1027,16 @@ pub async fn chat_completion(
         variants: vec![variant],
         selected_variant_id: Some(variant_id),
         memory_refs: if dynamic_memory_enabled {
-            relevant_memories.iter().map(|m| m.text.clone()).collect()
+            relevant_memories
+                .iter()
+                .map(|m| {
+                    if let Some(score) = m.match_score {
+                        format!("{}::{}", score, m.text)
+                    } else {
+                        m.text.clone()
+                    }
+                })
+                .collect()
         } else {
             Vec::new()
         },
@@ -1435,8 +1467,16 @@ pub async fn chat_regenerate(
         }
 
         if dynamic_memory_enabled {
-            assistant_message.memory_refs =
-                relevant_memories.iter().map(|m| m.text.clone()).collect();
+            assistant_message.memory_refs = relevant_memories
+                .iter()
+                .map(|m| {
+                    if let Some(score) = m.match_score {
+                        format!("{}::{}", score, m.text)
+                    } else {
+                        m.text.clone()
+                    }
+                })
+                .collect();
         }
         assistant_message.clone()
     };
@@ -1812,7 +1852,16 @@ pub async fn chat_continue(
         variants: vec![variant],
         selected_variant_id: Some(variant_id),
         memory_refs: if dynamic_memory_enabled {
-            relevant_memories.iter().map(|m| m.text.clone()).collect()
+            relevant_memories
+                .iter()
+                .map(|m| {
+                    if let Some(score) = m.match_score {
+                        format!("{}::{}", score, m.text)
+                    } else {
+                        m.text.clone()
+                    }
+                })
+                .collect()
         } else {
             Vec::new()
         },
@@ -2155,6 +2204,11 @@ async fn process_dynamic_memory_cycle(
             summary_model.name, window_size, total_convo_at_start, window_message_ids
         ),
     );
+    let _ = app.emit(
+        "dynamic-memory:processing",
+        json!({ "sessionId": session.id }),
+    );
+
     let summary = summarize_messages(
         app,
         summary_provider,
@@ -2219,6 +2273,10 @@ async fn process_dynamic_memory_cycle(
             }
             session.updated_at = now_millis()?;
             save_session(app, session)?;
+            let _ = app.emit(
+                "dynamic-memory:error",
+                json!({ "sessionId": session.id, "error": err }),
+            );
             return Ok(());
         }
     };
@@ -2242,6 +2300,7 @@ async fn process_dynamic_memory_cycle(
 
     session.updated_at = now_millis()?;
     save_session(app, session)?;
+    let _ = app.emit("dynamic-memory:success", json!({ "sessionId": session.id }));
     log_info(
         app,
         "dynamic_memory",
@@ -2425,10 +2484,12 @@ async fn run_memory_tool_update(
                         importance_score: 1.0,
                         is_pinned,
                         access_count: 0,
+                        match_score: None,
                     });
                     actions_log.push(json!({
                         "name": "create_memory",
                         "arguments": call.arguments,
+                        "memoryId": mem_id,
                         "timestamp": now_millis().unwrap_or_default(),
                         "updatedMemories": format_memories_with_ids(session),
                     }));

@@ -61,7 +61,7 @@ export function MemoryManager({
     return (
         <div className={cn("flex flex-col", scrollable ? "h-full max-h-[80vh]" : "h-auto")}>
              {/* Header & Help */}
-            <div className="flex-shrink-0 space-y-4 pb-4">
+            <div className="shrink-0 space-y-4 pb-4">
                  <div className={cn(
                     radius.lg,
                     "border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 flex items-start gap-3"
@@ -164,7 +164,7 @@ export function MemoryManager({
                                     </div>
                                 ) : (
                                     <div className="flex items-start p-4 gap-4">
-                                        <p className="flex-1 text-sm text-white/90 leading-relaxed break-words">
+                                        <p className="flex-1 text-sm text-white/90 leading-relaxed wrap-break-word">
                                             {memory}
                                         </p>
                                         <div className="flex flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">

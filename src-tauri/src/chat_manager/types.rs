@@ -237,6 +237,9 @@ pub struct MemoryEmbedding {
     /// Number of times this memory was retrieved for context
     #[serde(default)]
     pub access_count: u32,
+    /// Ephemeral match score (similarity) from retrieval
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_score: Option<f32>,
 }
 
 fn default_importance_score() -> f32 {

@@ -17,6 +17,35 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use super::db::open_db;
 use super::legacy::storage_root;
 use crate::utils::log_info;
+#[cfg(target_os = "android")]
+use tauri_plugin_android_fs::{AndroidFs, AndroidFsExt};
+#[cfg(target_os = "android")]
+use tauri_plugin_fs::FilePath;
+#[cfg(target_os = "android")]
+use url::Url;
+
+/// Helper to open a backup file (handles Android content URIs via plugin)
+fn open_backup_file(app: &tauri::AppHandle, path: &str) -> Result<File, String> {
+    #[cfg(target_os = "android")]
+    {
+        let api = app.android_fs();
+
+        // Construct FilePath from the URI string
+        // If it starts with content://, parse as URL. Otherwise fallback to Path?
+        // Actually, Android dialog returns URI strings.
+
+        let url = Url::parse(path).map_err(|e| format!("Invalid URI '{}': {}", path, e))?;
+        let file_path = FilePath::Url(url);
+
+        api.open_file(&file_path)
+            .map_err(|e| format!("Failed to open Android file: {}", e))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        File::open(path).map_err(|e| format!("Failed to open backup file: {}", e))
+    }
+}
 
 /// Backup format version 2 - JSON-based table exports (no db swapping)
 const BACKUP_VERSION: u32 = 2;
@@ -1240,8 +1269,8 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
 
 /// Check if a backup file requires a password
 #[tauri::command]
-pub fn backup_check_encrypted(backup_path: String) -> Result<bool, String> {
-    let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
+pub fn backup_check_encrypted(app: tauri::AppHandle, backup_path: String) -> Result<bool, String> {
+    let file = open_backup_file(&app, &backup_path)?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
 
@@ -1263,8 +1292,12 @@ pub fn backup_check_encrypted(backup_path: String) -> Result<bool, String> {
 
 /// Verify password for an encrypted backup
 #[tauri::command]
-pub fn backup_verify_password(backup_path: String, password: String) -> Result<bool, String> {
-    let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
+pub fn backup_verify_password(
+    app: tauri::AppHandle,
+    backup_path: String,
+    password: String,
+) -> Result<bool, String> {
+    let file = open_backup_file(&app, &backup_path)?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
 
@@ -1325,8 +1358,11 @@ pub fn backup_verify_password(backup_path: String, password: String) -> Result<b
 
 /// Get backup info without importing
 #[tauri::command]
-pub fn backup_get_info(backup_path: String) -> Result<serde_json::Value, String> {
-    let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
+pub fn backup_get_info(
+    app: tauri::AppHandle,
+    backup_path: String,
+) -> Result<serde_json::Value, String> {
+    let file = open_backup_file(&app, &backup_path)?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
 
@@ -1386,7 +1422,7 @@ pub async fn backup_import(
 
     // First, read and validate manifest
     let manifest: BackupManifest = {
-        let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
+        let file = open_backup_file(&app, &backup_path)?;
         let mut archive =
             ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
 
@@ -1446,7 +1482,7 @@ pub async fn backup_import(
         let key = derive_key_from_password(pwd, &salt);
 
         // Verify marker BEFORE proceeding - this validates the password
-        let file = File::open(&backup_path).map_err(|e| e.to_string())?;
+        let file = open_backup_file(&app, &backup_path)?;
         let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
 
         let mut marker_file = archive
@@ -1500,7 +1536,7 @@ pub async fn backup_import(
     };
 
     // Re-open archive for reading data files
-    let file = File::open(&backup_path).map_err(|e| e.to_string())?;
+    let file = open_backup_file(&app, &backup_path)?;
     let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
 
     log_info(&app, "backup", "Reading JSON data files...");
@@ -1620,7 +1656,7 @@ pub async fn backup_import(
     fs::create_dir_all(&staging_dir).map_err(|e| e.to_string())?;
 
     // Re-open archive for media extraction
-    let file = File::open(&backup_path).map_err(|e| e.to_string())?;
+    let file = open_backup_file(&app, &backup_path)?;
     let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
 
     // Extract media files (images, avatars, attachments)
@@ -1789,7 +1825,7 @@ pub fn backup_list(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Stri
         if let Some(ext) = path.extension() {
             if ext == "lettuce" {
                 log_info(&app, "backup", format!("Found .lettuce backup: {:?}", path));
-                if let Ok(info) = backup_get_info(path.to_string_lossy().to_string()) {
+                if let Ok(info) = backup_get_info(app.clone(), path.to_string_lossy().to_string()) {
                     let mut info_obj = info;
                     if let Some(obj) = info_obj.as_object_mut() {
                         obj.insert(
@@ -2303,7 +2339,7 @@ pub async fn backup_check_dynamic_memory(
         format!("Checking backup at: {}", backup_path),
     );
 
-    let file = File::open(&backup_path).map_err(|e| format!("Failed to open backup: {}", e))?;
+    let file = open_backup_file(&app, &backup_path)?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read backup archive: {}", e))?;
 

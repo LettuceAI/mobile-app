@@ -25,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_android_fs::init())
         .setup(|app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);

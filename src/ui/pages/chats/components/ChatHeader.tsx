@@ -3,6 +3,7 @@ import { ArrowLeft, Brain, Loader2, AlertTriangle, Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Character, Session } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
+import { listen } from "@tauri-apps/api/event";
 
 interface ChatHeaderProps {
   character: Character;
@@ -25,33 +26,44 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
 
-  // Listen for memory operation events
   useEffect(() => {
-    const handleMemoryBusy = (event: Event) => {
-      const customEvent = event as CustomEvent<{ busy: boolean }>;
-      setMemoryBusy(customEvent.detail?.busy ?? false);
+    let unlistenProcessing: (() => void) | undefined;
+    let unlistenSuccess: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+
+    const setupListeners = async () => {
+      unlistenProcessing = await listen("dynamic-memory:processing", (event: any) => {
+        // Check if event belongs to current session?
+        // Payload might have sessionId. 
+        // For now, assuming global or checking payload if available.
+        // User didn't specify sessionId filter strictly but it's good practice.
+        // The event payload is { sessionId }.
+        if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
+        setMemoryBusy(true);
+      });
+
+      unlistenSuccess = await listen("dynamic-memory:success", (event: any) => {
+        if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
+        setMemoryBusy(false);
+        setMemoryError(null);
+        onSessionUpdate?.();
+      });
+
+      unlistenError = await listen("dynamic-memory:error", (event: any) => {
+        if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
+        setMemoryBusy(false);
+        setMemoryError(typeof event.payload === 'string' ? event.payload : (event.payload?.error || "Unknown error"));
+      });
     };
 
-    const handleMemoryError = (event: Event) => {
-      const customEvent = event as CustomEvent<{ error: string | null }>;
-      setMemoryError(customEvent.detail?.error ?? null);
-    };
-
-    const handleMemorySuccess = () => {
-      setMemoryError(null);
-      onSessionUpdate?.();
-    };
-
-    window.addEventListener("memory:busy", handleMemoryBusy);
-    window.addEventListener("memory:error", handleMemoryError);
-    window.addEventListener("memory:success", handleMemorySuccess);
+    setupListeners();
 
     return () => {
-      window.removeEventListener("memory:busy", handleMemoryBusy);
-      window.removeEventListener("memory:error", handleMemoryError);
-      window.removeEventListener("memory:success", handleMemorySuccess);
+      unlistenProcessing?.();
+      unlistenSuccess?.();
+      unlistenError?.();
     };
-  }, [onSessionUpdate]);
+  }, [sessionId, onSessionUpdate]);
 
   const avatarImageUrl = useMemo(() => {
     if (avatarUrl && isImageLike(avatarUrl)) return avatarUrl;

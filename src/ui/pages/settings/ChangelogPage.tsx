@@ -560,7 +560,7 @@ function ChangeGroup({ type, changes, defaultExpanded = true }: ChangeGroupProps
                                 >
                                     {/* Accent line */}
                                     <div className={cn(
-                                        "absolute left-0 top-3 bottom-3 w-[2px] rounded-full",
+                                        "absolute left-0 top-3 bottom-3 w-0.5 rounded-full",
                                         config.bg.replace("/10", "/40")
                                     )} />
                                     <p className={cn(
@@ -789,7 +789,7 @@ export function ChangelogPage() {
                                     )} />
                                     {idx < changelog.length - 1 && (
                                         <div className={cn(
-                                            "w-px flex-1 mt-2 min-h-[20px]",
+                                            "w-px flex-1 mt-2 min-h-5",
                                             "bg-linear-to-b",
                                             isSelected ? "from-emerald-400/40 to-transparent" : "from-white/10 to-transparent"
                                         )} />

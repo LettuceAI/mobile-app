@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw } from "lucide-react";
+import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame } from "lucide-react";
 import type { Character, Session } from "../../../core/storage/schemas";
 import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
+// ... imports ...
+
+// ... (code omitted) ...
+
+
 import { storageBridge } from "../../../core/storage/files";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
@@ -310,6 +316,43 @@ export function ChatMemoriesPage() {
   const [retryStatus, setRetryStatus] = useState<"idle" | "retrying" | "success">("idle");
 
   const [actionError, setActionError] = useState<string | null>(searchParams.get("error"));
+  const [memoryStatus, setMemoryStatus] = useState<"idle" | "processing" | "failed">("idle");
+
+  useEffect(() => {
+    if (!session?.id) return;
+    let unlisteners: (() => void)[] = [];
+
+    const setup = async () => {
+      try {
+        const u1 = await listen("dynamic-memory:processing", (e: any) => {
+          if (e.payload?.sessionId === session.id) {
+            setMemoryStatus("processing");
+            setActionError(null);
+          }
+        });
+        const u2 = await listen("dynamic-memory:success", (e: any) => {
+          if (e.payload?.sessionId === session.id) {
+            setMemoryStatus("idle");
+            reload();
+          }
+        });
+        const u3 = await listen("dynamic-memory:error", (e: any) => {
+          if (e.payload?.sessionId === session.id) {
+            setMemoryStatus("failed");
+            setActionError(e.payload?.error || "Memory processing failed");
+          }
+        });
+        unlisteners.push(u1, u2, u3);
+      } catch (err) {
+        console.error("Failed to setup memory event listeners", err);
+      }
+    };
+
+    setup();
+    return () => {
+      unlisteners.forEach(u => u());
+    };
+  }, [session?.id, reload]);
 
   useEffect(() => {
     setSummaryDraft(session?.memorySummary ?? "");
@@ -319,6 +362,31 @@ export function ChatMemoriesPage() {
     return character?.memoryType === "dynamic";
   }, [character?.memoryType]);
 
+  const cycleMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const textMap = new Map<string, string>();
+
+    if (session?.memoryToolEvents) {
+      session.memoryToolEvents.forEach((event: any) => {
+        const cycleStr = `${event.windowStart}-${event.windowEnd}`;
+        if (event.actions) {
+          event.actions.forEach((action: any) => {
+            if (action.name === 'create_memory') {
+              if (action.memoryId) {
+                map.set(action.memoryId, cycleStr);
+              }
+              const text = action.arguments?.text;
+              if (text) {
+                textMap.set(text, cycleStr);
+              }
+            }
+          });
+        }
+      });
+    }
+    return { map, textMap };
+  }, [session?.memoryToolEvents]);
+
   const memoryItems = useMemo(() => {
     if (!session?.memories) return [];
     return session.memories.map((text, index) => {
@@ -326,9 +394,27 @@ export function ChatMemoriesPage() {
       const id = emb?.id || `mem-${index}`;
       const isAi = id.length <= 6;
       const tokenCount = emb?.tokenCount || 0;
-      return { text, index, isAi, id, tokenCount };
+
+      let cycle = cycleMap.map.get(id);
+      if (!cycle && cycleMap.textMap.has(text)) {
+        cycle = cycleMap.textMap.get(text);
+      }
+
+      return {
+        text,
+        index,
+        isAi,
+        id,
+        tokenCount,
+        isCold: emb?.isCold ?? false,
+        importanceScore: emb?.importanceScore ?? 1.0,
+        createdAt: emb?.createdAt ?? 0,
+        lastAccessedAt: emb?.lastAccessedAt ?? 0,
+        isPinned: emb?.isPinned ?? false,
+        cycle
+      };
     });
-  }, [session]);
+  }, [session, cycleMap]);
 
   const filteredMemories = useMemo(() => {
     if (!searchTerm.trim()) return memoryItems;
@@ -517,16 +603,18 @@ export function ChatMemoriesPage() {
       <main className="flex-1 overflow-y-auto pb-16">
         {/* Error Banner */}
         {/* Status Banner (Error / Retry / Success) */}
-        {(actionError || retryStatus !== "idle") && (
+        {(actionError || retryStatus !== "idle" || memoryStatus === "processing") && (
           <div className="px-3 pt-3">
-            {retryStatus === "retrying" ? (
+            {(retryStatus === "retrying" || memoryStatus === "processing") ? (
               <div className={cn(
                 radius.md,
                 "bg-blue-500/10 border border-blue-500/20 p-3 flex items-center gap-3 animate-pulse"
               )}>
                 <RefreshCw className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
                 <div className="flex-1 text-sm text-blue-200">
-                  <p className="font-semibold">Retrying Memory Cycle...</p>
+                  <p className="font-semibold">
+                    {memoryStatus === "processing" ? "AI is organizing memories..." : "Retrying Memory Cycle..."}
+                  </p>
                 </div>
               </div>
             ) : retryStatus === "success" ? (
@@ -759,6 +847,46 @@ export function ChatMemoriesPage() {
                         interactive.transition.default
                       )}
                     >
+                      {/* Metadata Header */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {isDynamic ? (
+                            item.isCold ? (
+                              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-[10px] font-medium text-blue-200 uppercase tracking-wider">
+                                <Snowflake size={10} />
+                                Cold
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-[10px] font-medium text-amber-200 uppercase tracking-wider">
+                                <Flame size={10} />
+                                Hot ({item.importanceScore.toFixed(2)})
+                              </div>
+                            )
+                          ) : null}
+                          {item.isPinned && (
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-500/20 border border-pink-500/30 text-[10px] font-medium text-pink-200 uppercase tracking-wider">
+                              <Pin size={10} />
+                              Pinned
+                            </div>
+                          )}
+                        </div>
+                        {item.createdAt > 0 && (
+                          <div className="flex items-center gap-3 text-[10px] text-white/30 font-medium">
+                            {item.cycle && (
+                              <span className="flex items-center gap-1" title="Creation Cycle">
+                                <RefreshCw size={10} />
+                                Cycle {item.cycle}
+                              </span>
+                            )}
+                            {item.lastAccessedAt > 0 && (
+                              <span title="Last Accessed">
+                                Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                       {editingIndex === item.index ? (
                         <div className={spacing.field}>
                           <textarea
