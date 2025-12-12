@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
-import { listCharacters, createSession, listSessionIds, getSession, deleteCharacter } from "../../../core/storage/repo";
+import { listCharacters, createSession, listSessionPreviews, deleteCharacter } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu } from "../../components";
@@ -57,24 +57,11 @@ export function ChatPage() {
 
   const startChat = async (character: Character) => {
     try {
-      const allSessionIds = await listSessionIds();
-
-      if (allSessionIds.length > 0) {
-        const sessions = await Promise.all(
-          allSessionIds.map((id) => getSession(id).catch(() => null))
-        );
-
-        const characterSessions = sessions
-          .filter((session): session is NonNullable<typeof session> =>
-            session !== null && session.characterId === character.id
-          )
-          .sort((a, b) => b.updatedAt - a.updatedAt);
-
-        if (characterSessions.length > 0) {
-          const latestSession = characterSessions[0];
-          navigate(`/chat/${character.id}?sessionId=${latestSession.id}`);
-          return;
-        }
+      const previews = await listSessionPreviews(character.id, 1).catch(() => []);
+      const latestSessionId = previews[0]?.id;
+      if (latestSessionId) {
+        navigate(`/chat/${character.id}?sessionId=${latestSessionId}`);
+        return;
       }
 
       const session = await createSession(

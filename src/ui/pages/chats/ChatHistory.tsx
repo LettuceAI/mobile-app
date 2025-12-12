@@ -5,8 +5,7 @@ import { useParams } from "react-router-dom";
 import type { Character } from "../../../core/storage/schemas";
 import {
   listCharacters,
-  listSessionIds,
-  getSession,
+  listSessionPreviews,
   deleteSession,
   updateSessionTitle
 } from "../../../core/storage";
@@ -44,30 +43,19 @@ export function ChatHistoryPage() {
         const char = characters.find(c => c.id === characterId);
         setCharacter(char || null);
 
-        // Load sessions
-        const sessionIds = await listSessionIds();
-        const sessionData: SessionPreview[] = [];
-
-        for (const id of sessionIds) {
-          try {
-            const session = await getSession(id);
-            if (session?.characterId === characterId) {
-              const lastMessage = session.messages?.[session.messages.length - 1]?.content || "";
-              sessionData.push({
-                id: session.id,
-                title: session.title || "Untitled Chat",
-                updatedAt: session.updatedAt,
-                lastMessage: lastMessage.slice(0, 100) + (lastMessage.length > 100 ? "..." : ""),
-                archived: session.archived || false,
-              });
-            }
-          } catch {
-            // Skip invalid sessions
-          }
-        }
-
-        sessionData.sort((a, b) => b.updatedAt - a.updatedAt);
-        setSessions(sessionData);
+        const previews = await listSessionPreviews(characterId);
+        setSessions(
+          previews.map((p) => {
+            const lastMessage = p.lastMessage || "";
+            return {
+              id: p.id,
+              title: p.title?.trim() ? p.title : "Untitled Chat",
+              updatedAt: p.updatedAt,
+              lastMessage: lastMessage.slice(0, 100) + (lastMessage.length > 100 ? "..." : ""),
+              archived: p.archived,
+            };
+          }),
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load data");
       } finally {

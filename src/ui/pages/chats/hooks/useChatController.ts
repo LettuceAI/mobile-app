@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, createBranchedSession, createBranchedSessionToCharacter, getDefaultPersona, getSession, listCharacters, listSessionIds, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
+import { createSession, createBranchedSession, createBranchedSessionToCharacter, getDefaultPersona, getSession, listCharacters, listSessionPreviews, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage, ImageAttachment } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
@@ -245,19 +245,13 @@ export function useChatController(
         }
 
         if (!targetSession) {
-          const sessionIds = await listSessionIds().catch(() => [] as string[]);
-          let latestUpdatedAt = -Infinity;
-          for (const id of sessionIds) {
-            const maybe = await getSession(id).catch((err) => {
-              console.warn("ChatController: failed to read session", { id, err });
+          const previews = await listSessionPreviews(match.id, 1).catch(() => []);
+          const latestId = previews[0]?.id;
+          if (latestId) {
+            targetSession = await getSession(latestId).catch((err) => {
+              console.warn("ChatController: failed to load latest session", { latestId, err });
               return null;
             });
-            if (maybe?.characterId === match.id) {
-              if (!targetSession || maybe.updatedAt > latestUpdatedAt) {
-                targetSession = maybe;
-                latestUpdatedAt = maybe.updatedAt;
-              }
-            }
           }
         }
 

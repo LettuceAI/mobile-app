@@ -20,13 +20,16 @@ mod utils;
 pub fn run() {
     use tauri::Manager;
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_android_fs::init())
-        .setup(|app| {
+        .plugin(tauri_plugin_dialog::init());
+
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_android_fs::init());
+
+    builder.setup(|app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
 
@@ -92,7 +95,9 @@ pub fn run() {
             storage_manager::personas::persona_delete,
             storage_manager::personas::persona_default_get,
             storage_manager::sessions::sessions_list_ids,
+            storage_manager::sessions::sessions_list_previews,
             storage_manager::sessions::session_get,
+            storage_manager::sessions::session_get_meta,
             storage_manager::sessions::session_upsert,
             storage_manager::sessions::session_delete,
             storage_manager::sessions::session_archive,

@@ -80,7 +80,13 @@ export const storageBridge = {
 
     // Sessions
     sessionsListIds: () => invoke<string>("sessions_list_ids").then((s) => JSON.parse(s) as string[]),
+    sessionsListPreviews: (characterId?: string, limit?: number) =>
+        invoke<string>("sessions_list_previews", {
+            characterId: characterId ?? null,
+            limit: limit ?? null
+        }).then((s) => JSON.parse(s) as any[]),
     sessionGet: (id: string) => invoke<string | null>("session_get", { id }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
+    sessionGetMeta: (id: string) => invoke<string | null>("session_get_meta", { id }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
     sessionUpsert: (session: unknown) => invoke("session_upsert", { sessionJson: JSON.stringify(session) }) as Promise<void>,
     sessionDelete: (id: string) => invoke("session_delete", { id }) as Promise<void>,
     sessionArchive: (id: string, archived: boolean) => invoke("session_archive", { id, archived }) as Promise<void>,

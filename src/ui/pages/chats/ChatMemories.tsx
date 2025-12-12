@@ -3,11 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame } from "lucide-react";
 import type { Character, Session } from "../../../core/storage/schemas";
-import { addMemory, removeMemory, updateMemory, getSession, listSessionIds, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
-// ... imports ...
-
-// ... (code omitted) ...
-
+import { addMemory, removeMemory, updateMemory, getSession, listSessionPreviews, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
 
 import { storageBridge } from "../../../core/storage/files";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
@@ -40,17 +36,9 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
       }
 
       if (!targetSession) {
-        const sessionIds = await listSessionIds().catch(() => [] as string[]);
-        let latest: Session | null = null;
-        for (const id of sessionIds) {
-          const maybe = await getSession(id).catch(() => null);
-          if (maybe?.characterId === characterId) {
-            if (!latest || maybe.updatedAt > latest.updatedAt) {
-              latest = maybe;
-            }
-          }
-        }
-        targetSession = latest;
+        const previews = await listSessionPreviews(characterId, 1).catch(() => []);
+        const latestId = previews[0]?.id;
+        targetSession = latestId ? await getSession(latestId).catch(() => null) : null;
       }
 
       if (targetSession) {

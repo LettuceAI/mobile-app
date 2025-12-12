@@ -4,8 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
-import { useChatController } from "./hooks/useChatController";
-import { readSettings, saveCharacter, createSession, listPersonas, getSession, saveSession, deletePersona, addMemory, removeMemory, updateMemory } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession, listCharacters, listPersonas, getSessionMeta, saveSession, deletePersona, addMemory, removeMemory, updateMemory } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -262,7 +261,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     const sessionId = urlParams.get('sessionId');
     if (sessionId) {
       try {
-        const session = await getSession(sessionId);
+        const session = await getSessionMeta(sessionId);
         setCurrentSession(session);
         const sessionAdvanced = session?.advancedModelSettings ?? null;
         setSessionAdvancedSettings(sessionAdvanced);
@@ -1078,9 +1077,34 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
 export function ChatSettingsPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const chatController = useChatController(characterId);
+  const [character, setCharacter] = useState<Character | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const { character, loading, error } = chatController;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!characterId) {
+        setLoading(false);
+        setError("Missing characterId");
+        return;
+      }
+      try {
+        setLoading(true);
+        setError(null);
+        const chars = await listCharacters();
+        const match = chars.find((c) => c.id === characterId) ?? null;
+        if (!cancelled) setCharacter(match);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [characterId]);
 
   if (loading) {
     return (

@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 
 type MarkdownRendererProps = {
   content: string;
@@ -158,122 +158,126 @@ function flushQuote(
 }
 
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
-  const normalized = content.replace(/\r\n/g, "\n");
-  const lines = normalized.split("\n");
-  const nodes: JSX.Element[] = [];
-  const paragraphBuffer: string[] = [];
-  const quoteBuffer: string[] = [];
-  let listBuffer: ListBuffer | null = null;
-  let inCodeBlock = false;
-  let codeLang = "";
-  const codeLines: string[] = [];
-  const keyIndex = { value: 0 };
+  const nodes = useMemo(() => {
+    const normalized = content.replace(/\r\n/g, "\n");
+    const lines = normalized.split("\n");
+    const out: JSX.Element[] = [];
+    const paragraphBuffer: string[] = [];
+    const quoteBuffer: string[] = [];
+    let listBuffer: ListBuffer | null = null;
+    let inCodeBlock = false;
+    let codeLang = "";
+    const codeLines: string[] = [];
+    const keyIndex = { value: 0 };
 
-  const flushAll = () => {
-    listBuffer = flushList(listBuffer, nodes, keyIndex);
-    flushQuote(quoteBuffer, nodes, keyIndex);
-    flushParagraph(paragraphBuffer, nodes, keyIndex);
-  };
+    const flushAll = () => {
+      listBuffer = flushList(listBuffer, out, keyIndex);
+      flushQuote(quoteBuffer, out, keyIndex);
+      flushParagraph(paragraphBuffer, out, keyIndex);
+    };
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const rawLine = lines[lineIndex];
-    const line = rawLine ?? "";
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const rawLine = lines[lineIndex];
+      const line = rawLine ?? "";
 
-    if (line.trim().startsWith("```") && !line.trim().endsWith("```")) {
-      flushAll();
-      inCodeBlock = true;
-      codeLang = line.trim().slice(3).trim();
-      codeLines.length = 0;
-      continue;
-    }
-
-    if (inCodeBlock) {
-      if (line.trim() === "```") {
-        nodes.push(
-          <pre key={`code-${keyIndex.value++}`} className="overflow-x-auto rounded-2xl bg-black/70 p-4 text-xs text-emerald-100">
-            <code className={`language-${codeLang}`.trim()}>{codeLines.join("\n")}</code>
-          </pre>,
-        );
-        inCodeBlock = false;
-        codeLang = "";
+      if (line.trim().startsWith("```") && !line.trim().endsWith("```")) {
+        flushAll();
+        inCodeBlock = true;
+        codeLang = line.trim().slice(3).trim();
         codeLines.length = 0;
-      } else {
-        codeLines.push(rawLine);
-      }
-      continue;
-    }
-
-    if (line.trim().startsWith("```")) {
-      if (line.trim().endsWith("````")) {
         continue;
       }
-      flushAll();
-      inCodeBlock = true;
-      codeLang = line.trim().slice(3).trim();
-      codeLines.length = 0;
-      continue;
+
+      if (inCodeBlock) {
+        if (line.trim() === "```") {
+          out.push(
+            <pre key={`code-${keyIndex.value++}`} className="overflow-x-auto rounded-2xl bg-black/70 p-4 text-xs text-emerald-100">
+              <code className={`language-${codeLang}`.trim()}>{codeLines.join("\n")}</code>
+            </pre>,
+          );
+          inCodeBlock = false;
+          codeLang = "";
+          codeLines.length = 0;
+        } else {
+          codeLines.push(rawLine);
+        }
+        continue;
+      }
+
+      if (line.trim().startsWith("```")) {
+        if (line.trim().endsWith("````")) {
+          continue;
+        }
+        flushAll();
+        inCodeBlock = true;
+        codeLang = line.trim().slice(3).trim();
+        codeLines.length = 0;
+        continue;
+      }
+
+      if (line.trim() === "") {
+        flushAll();
+        continue;
+      }
+
+      const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+      if (headingMatch) {
+        flushAll();
+        const level = headingMatch[1].length;
+        const HeadingTag = (`h${Math.min(level, 6)}` as keyof JSX.IntrinsicElements);
+        out.push(
+          <HeadingTag key={`heading-${keyIndex.value++}`} className="text-base font-semibold text-white">
+            {parseInline(headingMatch[2].trim(), `heading-${keyIndex.value}`)}
+          </HeadingTag>,
+        );
+        continue;
+      }
+
+      if (/^>\s?/.test(line)) {
+        listBuffer = flushList(listBuffer, out, keyIndex);
+        paragraphBuffer.length = 0;
+        quoteBuffer.push(line.replace(/^>\s?/, ""));
+        continue;
+      }
+
+      if (/^[-*+]\s+/.test(line)) {
+        flushQuote(quoteBuffer, out, keyIndex);
+        paragraphBuffer.length = 0;
+        const item = line.replace(/^[-*+]\s+/, "");
+        if (!listBuffer || listBuffer.type !== "unordered") {
+          listBuffer = { type: "unordered", items: [] };
+        }
+        listBuffer.items.push(item);
+        continue;
+      }
+
+      if (/^\d+\.\s+/.test(line)) {
+        flushQuote(quoteBuffer, out, keyIndex);
+        paragraphBuffer.length = 0;
+        const item = line.replace(/^\d+\.\s+/, "");
+        if (!listBuffer || listBuffer.type !== "ordered") {
+          listBuffer = { type: "ordered", items: [] };
+        }
+        listBuffer.items.push(item);
+        continue;
+      }
+
+      listBuffer = flushList(listBuffer, out, keyIndex);
+      flushQuote(quoteBuffer, out, keyIndex);
+      paragraphBuffer.push(line);
     }
 
-    if (line.trim() === "") {
-      flushAll();
-      continue;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
-    if (headingMatch) {
-      flushAll();
-      const level = headingMatch[1].length;
-      const HeadingTag = (`h${Math.min(level, 6)}` as keyof JSX.IntrinsicElements);
-      nodes.push(
-        <HeadingTag key={`heading-${keyIndex.value++}`} className="text-base font-semibold text-white">
-          {parseInline(headingMatch[2].trim(), `heading-${keyIndex.value}`)}
-        </HeadingTag>,
+    flushAll();
+    if (inCodeBlock && codeLines.length > 0) {
+      out.push(
+        <pre key={`code-${keyIndex.value++}`} className="overflow-x-auto rounded-2xl bg-black/70 p-4 text-xs text-emerald-100">
+          <code className={`language-${codeLang}`.trim()}>{codeLines.join("\n")}</code>
+        </pre>,
       );
-      continue;
     }
 
-    if (/^>\s?/.test(line)) {
-      listBuffer = flushList(listBuffer, nodes, keyIndex);
-      paragraphBuffer.length = 0;
-      quoteBuffer.push(line.replace(/^>\s?/, ""));
-      continue;
-    }
-
-    if (/^[-*+]\s+/.test(line)) {
-      flushQuote(quoteBuffer, nodes, keyIndex);
-      paragraphBuffer.length = 0;
-      const item = line.replace(/^[-*+]\s+/, "");
-      if (!listBuffer || listBuffer.type !== "unordered") {
-        listBuffer = { type: "unordered", items: [] };
-      }
-      listBuffer.items.push(item);
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(line)) {
-      flushQuote(quoteBuffer, nodes, keyIndex);
-      paragraphBuffer.length = 0;
-      const item = line.replace(/^\d+\.\s+/, "");
-      if (!listBuffer || listBuffer.type !== "ordered") {
-        listBuffer = { type: "ordered", items: [] };
-      }
-      listBuffer.items.push(item);
-      continue;
-    }
-
-    listBuffer = flushList(listBuffer, nodes, keyIndex);
-    flushQuote(quoteBuffer, nodes, keyIndex);
-    paragraphBuffer.push(line);
-  }
-
-  flushAll();
-  if (inCodeBlock && codeLines.length > 0) {
-    nodes.push(
-      <pre key={`code-${keyIndex.value++}`} className="overflow-x-auto rounded-2xl bg-black/70 p-4 text-xs text-emerald-100">
-        <code className={`language-${codeLang}`.trim()}>{codeLines.join("\n")}</code>
-      </pre>,
-    );
-  }
+    return out;
+  }, [content]);
 
   return <div className={`markdown-renderer space-y-3 text-sm leading-relaxed ${className}`}>{nodes}</div>;
 }

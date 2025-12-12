@@ -1,10 +1,118 @@
 use rusqlite::{params, OptionalExtension};
+use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use uuid;
 
 use super::db::{now_ms, open_db};
 use crate::embedding_model;
 use crate::utils::{log_error, log_warn};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionPreview {
+    id: String,
+    character_id: String,
+    title: String,
+    updated_at: i64,
+    archived: bool,
+    last_message: String,
+    message_count: i64,
+}
+
+fn session_preview_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionPreview> {
+    Ok(SessionPreview {
+        id: r.get(0)?,
+        character_id: r.get(1)?,
+        title: r.get(2)?,
+        updated_at: r.get(3)?,
+        archived: r.get::<_, i64>(4)? != 0,
+        last_message: r.get::<_, String>(5)?,
+        message_count: r.get(6)?,
+    })
+}
+
+fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
+    let row = conn
+        .query_row(
+            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
+            params![id],
+            |r| Ok((
+                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<i64>>(7)?, r.get::<_, Option<f64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<i64>>(10)?, r.get::<_, String>(11)?, r.get::<_, String>(12)?, r.get::<_, Option<String>>(13)?, r.get::<_, i64>(14)?, r.get::<_, String>(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?
+            )),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some((
+        character_id,
+        title,
+        system_prompt,
+        selected_scene_id,
+        persona_id,
+        temperature,
+        top_p,
+        max_output_tokens,
+        frequency_penalty,
+        presence_penalty,
+        top_k,
+        memories_json,
+        memory_embeddings_json,
+        memory_summary,
+        memory_summary_token_count,
+        memory_tool_events_json,
+        archived,
+        created_at,
+        updated_at,
+    )) = row
+    else {
+        return Ok(None);
+    };
+
+    let advanced = if temperature.is_some()
+        || top_p.is_some()
+        || max_output_tokens.is_some()
+        || frequency_penalty.is_some()
+        || presence_penalty.is_some()
+        || top_k.is_some()
+    {
+        Some(serde_json::json!({
+            "temperature": temperature,
+            "topP": top_p,
+            "maxOutputTokens": max_output_tokens,
+            "frequencyPenalty": frequency_penalty,
+            "presencePenalty": presence_penalty,
+            "topK": top_k,
+        }))
+    } else {
+        None
+    };
+
+    let memories: JsonValue =
+        serde_json::from_str(&memories_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
+    let memory_embeddings: JsonValue =
+        serde_json::from_str(&memory_embeddings_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
+    let memory_tool_events: JsonValue =
+        serde_json::from_str(&memory_tool_events_json).unwrap_or_else(|_| JsonValue::Array(vec![]));
+
+    let session = serde_json::json!({
+        "id": id,
+        "characterId": character_id,
+        "title": title,
+        "systemPrompt": system_prompt,
+        "selectedSceneId": selected_scene_id,
+        "personaId": persona_id,
+        "advancedModelSettings": advanced,
+        "memories": memories,
+        "memoryEmbeddings": memory_embeddings,
+        "memorySummary": memory_summary.unwrap_or_default(),
+        "memorySummaryTokenCount": memory_summary_token_count,
+        "memoryToolEvents": memory_tool_events,
+        "messages": [],
+        "archived": archived != 0,
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+    });
+    Ok(Some(session))
+}
 
 fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
@@ -187,10 +295,86 @@ pub fn sessions_list_ids(app: tauri::AppHandle) -> Result<String, String> {
     Ok(serde_json::to_string(&ids).map_err(|e| e.to_string())?)
 }
 
+/// List session previews without loading full message history.
+///
+/// This is intentionally designed to avoid `session_get` for every session when
+/// rendering chat lists and history.
+#[tauri::command]
+pub fn sessions_list_previews(
+    app: tauri::AppHandle,
+    character_id: Option<String>,
+    limit: Option<i64>,
+) -> Result<String, String> {
+    let conn = open_db(&app)?;
+
+    let mut sql = String::from(
+        r#"
+        SELECT
+          s.id,
+          s.character_id,
+          s.title,
+          s.updated_at,
+          s.archived,
+          COALESCE(
+            (
+              SELECT substr(m.content, 1, 400)
+              FROM messages m
+              WHERE m.session_id = s.id
+              ORDER BY m.created_at DESC
+              LIMIT 1
+            ),
+            ''
+          ) AS last_message,
+          (
+            SELECT COUNT(1)
+            FROM messages m
+            WHERE m.session_id = s.id
+          ) AS message_count
+        FROM sessions s
+        WHERE (?1 IS NULL OR s.character_id = ?1)
+        ORDER BY s.updated_at DESC
+        "#,
+    );
+    if limit.is_some() {
+        sql.push_str(" LIMIT ?2");
+    }
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+    let mut previews: Vec<SessionPreview> = Vec::new();
+    if limit.is_some() {
+        let rows = stmt
+            .query_map(params![character_id, limit], session_preview_from_row)
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            previews.push(row.map_err(|e| e.to_string())?);
+        }
+    } else {
+        let rows = stmt
+            .query_map(params![character_id], session_preview_from_row)
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            previews.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+
+    Ok(serde_json::to_string(&previews).map_err(|e| e.to_string())?)
+}
+
 #[tauri::command]
 pub fn session_get(app: tauri::AppHandle, id: String) -> Result<Option<String>, String> {
     let conn = open_db(&app)?;
     let v = read_session(&conn, &id)?;
+    Ok(match v {
+        Some(json) => Some(serde_json::to_string(&json).map_err(|e| e.to_string())?),
+        None => None,
+    })
+}
+
+#[tauri::command]
+pub fn session_get_meta(app: tauri::AppHandle, id: String) -> Result<Option<String>, String> {
+    let conn = open_db(&app)?;
+    let v = read_session_meta(&conn, &id)?;
     Ok(match v {
         Some(json) => Some(serde_json::to_string(&json).map_err(|e| e.to_string())?),
         None => None,

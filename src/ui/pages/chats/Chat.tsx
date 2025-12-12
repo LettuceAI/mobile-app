@@ -23,6 +23,10 @@ import { radius, cn } from "../../design-tokens";
 
 const LONG_PRESS_DELAY = 450;
 const SCROLL_THRESHOLD = 10; // pixels of movement to cancel long press
+const MESSAGE_WINDOW_SIZE = 80;
+const MESSAGE_WINDOW_PAGE = 40;
+const AUTOLOAD_TOP_THRESHOLD_PX = 120;
+const STICKY_BOTTOM_THRESHOLD_PX = 80;
 
 export function ChatConversationPage() {
   const { characterId } = useParams<{ characterId: string }>();
@@ -35,6 +39,11 @@ export function ChatConversationPage() {
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
   const [sessionForHeader, setSessionForHeader] = useState(chatController.session);
+  const [visibleStartIndex, setVisibleStartIndex] = useState(0);
+  const pendingScrollAdjustRef = useRef<{ prevScrollTop: number; prevScrollHeight: number } | null>(null);
+  const loadingOlderRef = useRef(false);
+  const isAtBottomRef = useRef(true);
+  const didInitWindowForSessionRef = useRef<string | null>(null);
 
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
@@ -215,6 +224,35 @@ export function ChatConversationPage() {
     pressStartPosition.current = null;
   }, [initializeLongPressTimer, setHeldMessageId]);
 
+  const loadOlderMessages = useCallback(() => {
+    if (visibleStartIndex <= 0) return;
+    if (loadingOlderRef.current) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    loadingOlderRef.current = true;
+    pendingScrollAdjustRef.current = {
+      prevScrollTop: container.scrollTop,
+      prevScrollHeight: container.scrollHeight,
+    };
+
+    setVisibleStartIndex((prev) => Math.max(0, prev - MESSAGE_WINDOW_PAGE));
+  }, [visibleStartIndex]);
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, clientHeight, scrollHeight } = container;
+
+    const atBottom = scrollTop + clientHeight >= scrollHeight - STICKY_BOTTOM_THRESHOLD_PX;
+    isAtBottomRef.current = atBottom;
+
+    if (scrollTop <= AUTOLOAD_TOP_THRESHOLD_PX && visibleStartIndex > 0) {
+      loadOlderMessages();
+    }
+  }, [loadOlderMessages, visibleStartIndex]);
+
   const handleContextMenu = useCallback((message: StoredMessage) => (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     initializeLongPressTimer(null);
@@ -250,28 +288,79 @@ export function ChatConversationPage() {
     if (!container) {
       return;
     }
+    if (!isAtBottomRef.current) return;
 
     const frame = window.requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [messages]);
+  }, [messages.length]);
+
+  useEffect(() => {
+    const sessionKey = session?.id ?? null;
+    if (!sessionKey) return;
+
+    if (didInitWindowForSessionRef.current !== sessionKey) {
+      didInitWindowForSessionRef.current = sessionKey;
+      setVisibleStartIndex(Math.max(0, messages.length - MESSAGE_WINDOW_SIZE));
+      return;
+    }
+
+    // Clamp when messages are deleted/rewound.
+    setVisibleStartIndex((prev) => Math.min(prev, Math.max(0, messages.length - 1)));
+  }, [messages.length, session?.id]);
+
+  useEffect(() => {
+    const adjust = pendingScrollAdjustRef.current;
+    if (!adjust) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Preserve the visible viewport position when prepending older messages.
+    const nextScrollHeight = container.scrollHeight;
+    const delta = nextScrollHeight - adjust.prevScrollHeight;
+    container.scrollTop = adjust.prevScrollTop + delta;
+    pendingScrollAdjustRef.current = null;
+    loadingOlderRef.current = false;
+  }, [visibleStartIndex]);
+
+  useEffect(() => {
+    if (!jumpToMessageId || loading || messages.length === 0) return;
+    const idx = messages.findIndex((m) => m.id === jumpToMessageId);
+    if (idx < 0) return;
+    if (idx < visibleStartIndex) {
+      setVisibleStartIndex(Math.max(0, idx - 20));
+    }
+  }, [jumpToMessageId, loading, messages, visibleStartIndex]);
 
   useEffect(() => {
     if (jumpToMessageId && !loading && messages.length > 0) {
-      setTimeout(() => {
+      let rafId: number | null = null;
+      let tries = 0;
+      const tryScroll = () => {
         const element = document.getElementById(`message-${jumpToMessageId}`);
         if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('bg-white/10', 'rounded-lg', 'transition-colors', 'duration-1000');
-          setTimeout(() => {
-            element.classList.remove('bg-white/10');
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.classList.add("bg-white/10", "rounded-lg", "transition-colors", "duration-1000");
+          window.setTimeout(() => {
+            element.classList.remove("bg-white/10");
           }, 2000);
+          return;
         }
-      }, 500); 
+
+        tries += 1;
+        if (tries < 20) {
+          rafId = window.requestAnimationFrame(tryScroll);
+        }
+      };
+
+      rafId = window.requestAnimationFrame(tryScroll);
+      return () => {
+        if (rafId !== null) window.cancelAnimationFrame(rafId);
+      };
     }
-  }, [jumpToMessageId, loading, messages.length]);
+  }, [jumpToMessageId, loading, messages.length, visibleStartIndex]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -280,6 +369,8 @@ export function ChatConversationPage() {
   if (!character || !session) {
     return <EmptyState title="Character not found" />;
   }
+
+  const visibleMessages = messages.slice(visibleStartIndex);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden" style={{ backgroundColor: backgroundImageData ? undefined : '#050505' }}>
@@ -303,14 +394,34 @@ export function ChatConversationPage() {
       </div>
 
       {/* Main content area */}
-      <main ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto">
+      <main
+        ref={scrollContainerRef}
+        className="relative z-10 flex-1 overflow-y-auto"
+        onScroll={handleScroll}
+      >
         <div
           className="space-y-6 px-3 pb-24 pt-4"
           style={{
             backgroundColor: backgroundImageData ? theme.contentOverlay : 'transparent',
           }}
         >
-          {messages.map((message, index) => {
+          {visibleStartIndex > 0 && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={loadOlderMessages}
+                className={cn(
+                  "px-3 py-1.5 text-xs text-white/70 border border-white/15 bg-white/5 hover:bg-white/10",
+                  radius.full
+                )}
+              >
+                Load earlier messages ({visibleStartIndex} hidden)
+              </button>
+            </div>
+          )}
+
+          {visibleMessages.map((message, offset) => {
+            const index = visibleStartIndex + offset;
             const isAssistant = message.role === "assistant";
             const isUser = message.role === "user";
             const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");

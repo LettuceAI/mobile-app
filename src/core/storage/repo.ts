@@ -19,6 +19,18 @@ import {
   createDefaultAdvancedModelSettings,
 } from "./schemas";
 
+const SessionPreviewSchema = z.object({
+  id: z.string(),
+  characterId: z.string(),
+  title: z.string(),
+  updatedAt: z.number(),
+  archived: z.boolean(),
+  lastMessage: z.string(),
+  messageCount: z.number(),
+});
+
+export type SessionPreview = z.infer<typeof SessionPreviewSchema>;
+
 export const SETTINGS_UPDATED_EVENT = "lettuceai:settings-updated";
 
 function broadcastSettingsUpdated() {
@@ -212,6 +224,11 @@ export async function listSessionIds(): Promise<string[]> {
   return storageBridge.sessionsListIds();
 }
 
+export async function listSessionPreviews(characterId?: string, limit?: number): Promise<SessionPreview[]> {
+  const data = await storageBridge.sessionsListPreviews(characterId, limit);
+  return z.array(SessionPreviewSchema).parse(data);
+}
+
 export async function saveAdvancedModelSettings(settings: AdvancedModelSettings): Promise<void> {
   await storageBridge.settingsSetAdvancedModelSettings(settings);
   broadcastSettingsUpdated();
@@ -224,6 +241,11 @@ export async function saveAdvancedSettings(settings: Settings["advancedSettings"
 
 export async function getSession(id: string): Promise<Session | null> {
   const data = await storageBridge.sessionGet(id);
+  return data ? SessionSchema.parse(data) : null;
+}
+
+export async function getSessionMeta(id: string): Promise<Session | null> {
+  const data = await storageBridge.sessionGetMeta(id);
   return data ? SessionSchema.parse(data) : null;
 }
 
