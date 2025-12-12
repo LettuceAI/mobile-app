@@ -71,6 +71,7 @@ pub(crate) struct OpenAIChatRequest<'a> {
 
 mod anannas;
 mod anthropic;
+mod chutes;
 mod deepseek;
 mod featherless;
 mod google_gemini;
@@ -85,6 +86,7 @@ mod zai;
 
 pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send + Sync> {
     match provider_id.0.as_str() {
+        "chutes" | "chutes.ai" => Box::new(chutes::ChutesAdapter),
         "anthropic" => Box::new(anthropic::AnthropicAdapter),
         "mistral" => Box::new(mistral::MistralAdapter),
         "groq" => Box::new(groq::GroqAdapter),

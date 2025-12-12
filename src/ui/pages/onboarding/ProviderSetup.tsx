@@ -247,6 +247,8 @@ export function ProviderSetupPage() {
 
 function getProviderDescription(providerId: string): string {
   switch (providerId) {
+    case "chutes":
+      return "OpenAI-compatible inference for top open-source models";
     case "openai":
       return "GPT-5, GPT-4.1, and GPT-4o models for expressive RP";
     case "anthropic":

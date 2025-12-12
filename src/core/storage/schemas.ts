@@ -38,6 +38,18 @@ export type AdvancedModelSettings = z.infer<typeof AdvancedModelSettingsSchema>;
  * Documents which advanced parameters are supported by each LLM provider
  */
 export const PROVIDER_PARAMETER_SUPPORT = {
+  chutes: {
+    providerId: 'chutes',
+    displayName: 'Chutes',
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+    },
+  },
   openai: {
     providerId: 'openai',
     displayName: 'OpenAI',

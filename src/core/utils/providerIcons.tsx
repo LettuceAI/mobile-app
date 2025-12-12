@@ -12,6 +12,7 @@ import MoonShotAIIcon from "../../assets/moonshot_light.svg";
 import GeminiIcon from "../../assets/gemini.svg";
 import QwenIcon from "../../assets/qwen.svg";
 import FeatherlessIcon from "../../assets/featherless.svg";
+import ChutesAIIcon from "../../assets/chutes_ai.jpeg";
 
 const ICON_MAP: Record<string, JSX.Element> = {
     openai: <img src={OpenAIIcon} alt="OpenAI" className="h-6 w-6" />,
@@ -26,6 +27,7 @@ const ICON_MAP: Record<string, JSX.Element> = {
     gemini: <img src={GeminiIcon} alt="Gemini" className="h-6 w-6" />,
     qwen: <img src={QwenIcon} alt="Qwen" className="h-6 w-6" />,
     featherless: <img src={FeatherlessIcon} alt="Featherless" className="h-6 w-6" />,
+    chutes: <img src={ChutesAIIcon} alt="Chutes" className="h-6 w-6" />,
     custom: <Settings className="h-6 w-6 text-gray-400" />,
 };
 

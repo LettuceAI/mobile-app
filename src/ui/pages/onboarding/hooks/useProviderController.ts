@@ -135,7 +135,7 @@ export function useProviderController(): ControllerReturn {
             const credentialId = crypto.randomUUID();
             const trimmedKey = apiKey.trim();
 
-            const requiresVerification = ["openai", "anthropic", "openrouter"].includes(selectedProviderId);
+            const requiresVerification = ["chutes", "openai", "anthropic", "openrouter"].includes(selectedProviderId);
 
             if (requiresVerification) {
                 try {

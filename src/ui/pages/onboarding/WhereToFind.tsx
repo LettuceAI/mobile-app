@@ -10,6 +10,16 @@ type Guide = {
 };
 
 const guides: Record<string, Guide> = {
+  chutes: {
+    title: "How to find your Chutes API key",
+    steps: [
+      "Go to chutes.ai/app and sign in.",
+      "Open your account/settings area and find API Keys.",
+      "Create a new key (or copy an existing one).",
+      "Paste the key into LettuceAI.",
+    ],
+    url: "https://chutes.ai/app",
+  },
   openai: {
     title: "How to find your OpenAI API key",
     steps: [

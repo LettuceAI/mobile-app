@@ -201,6 +201,8 @@ export function ModelSetupPage() {
 
 function getProviderDisplayName(providerId: string): string {
   switch (providerId) {
+    case "chutes":
+      return "Chutes";
     case "openai":
       return "OpenAI";
     case "anthropic":

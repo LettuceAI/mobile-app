@@ -64,6 +64,8 @@ export function providerReducer(state: ProviderState, action: ProviderAction): P
 
 export function getDefaultBaseUrl(providerId: string): string {
     switch (providerId) {
+        case "chutes":
+            return "https://api.chutes.ai";
         case "openrouter":
             return "https://openrouter.ai/api";
         case "openai":

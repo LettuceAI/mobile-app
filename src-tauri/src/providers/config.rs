@@ -35,6 +35,7 @@ fn path_from_url(url: &str) -> String {
 
 fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
     let base_configs = vec![
+        ("chutes", "Chutes", "https://api.chutes.ai"),
         ("openai", "OpenAI", "https://api.openai.com"),
         ("anthropic", "Anthropic", "https://api.anthropic.com"),
         ("openrouter", "OpenRouter", "https://openrouter.ai/api"),
@@ -45,7 +46,7 @@ fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
         (
             "gemini",
             "Google (Gemini)",
-            "https://generativelanguage.googleapis.com/v1beta",
+            "https://generativelanguage.googleapis.com/v1",
         ),
         ("zai", "zAI (GLM)", "https://api.z.ai/api/coding/paas/v4"),
         (
