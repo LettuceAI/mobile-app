@@ -2,11 +2,30 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-import { createSession, createBranchedSession, createBranchedSessionToCharacter, getDefaultPersona, getSession, listCharacters, listSessionPreviews, saveSession, listPersonas, SETTINGS_UPDATED_EVENT, toggleMessagePin } from "../../../../core/storage/repo";
+import {
+  createSession,
+  createBranchedSession,
+  createBranchedSessionToCharacter,
+  getDefaultPersona,
+  getSession,
+  getSessionMeta,
+  deleteMessage,
+  deleteMessagesAfter,
+  listCharacters,
+  listMessages,
+  listPersonas,
+  listSessionPreviews,
+  saveSession,
+  SETTINGS_UPDATED_EVENT,
+  toggleMessagePin
+} from "../../../../core/storage/repo";
 import type { Character, Persona, Session, StoredMessage, ImageAttachment } from "../../../../core/storage/schemas";
 import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage } from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 import { logManager } from "../../../../core/utils/logger";
+
+const INITIAL_MESSAGE_LIMIT = 50;
+const OLDER_MESSAGE_PAGE = 50;
 
 // Global lock to prevent concurrent session saves
 const sessionSaveQueue = new Map<string, Promise<void>>();
@@ -59,6 +78,9 @@ export interface ChatController {
   regeneratingMessageId: string | null;
   activeRequestId: string | null;
   pendingAttachments: ImageAttachment[];
+  hasMoreMessagesBefore: boolean;
+  loadOlderMessages: () => Promise<void>;
+  ensureMessageLoaded: (messageId: string) => Promise<void>;
 
   // Setters 
   setDraft: (value: string) => void;
@@ -173,23 +195,20 @@ export function useChatController(
   const { sessionId } = options;
 
   const longPressTimerRef = useRef<number | null>(null);
-  // Track if a session operation is in progress to prevent race conditions
+  const messagesRef = useRef<StoredMessage[]>([]);
+  const hasMoreMessagesBeforeRef = useRef<boolean>(true);
+  const loadingOlderRef = useRef<boolean>(false);
   const sessionOperationRef = useRef<boolean>(false);
-  // Track last known session updated_at to detect stale saves
   const lastKnownSessionTimestampRef = useRef<number>(0);
 
-  // Settings update handling - only reload character info, NOT the session
-  // This prevents the race condition when switching models during active chat
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = async () => {
-      // Don't reload during active operations
       if (sessionOperationRef.current) {
         log.info("Skipping settings reload - session operation in progress");
         return;
       }
       
-      // Only reload character (which contains model info), not session
       if (characterId && state.character) {
         try {
           const list = await listCharacters();
@@ -235,7 +254,7 @@ export function useChatController(
         let targetSession: Session | null = null;
 
         if (sessionId) {
-          const explicitSession = await getSession(sessionId).catch((err) => {
+          const explicitSession = await getSessionMeta(sessionId).catch((err) => {
             console.warn("ChatController: failed to load requested session", { sessionId, err });
             return null;
           });
@@ -248,7 +267,7 @@ export function useChatController(
           const previews = await listSessionPreviews(match.id, 1).catch(() => []);
           const latestId = previews[0]?.id;
           if (latestId) {
-            targetSession = await getSession(latestId).catch((err) => {
+            targetSession = await getSessionMeta(latestId).catch((err) => {
               console.warn("ChatController: failed to load latest session", { latestId, err });
               return null;
             });
@@ -263,7 +282,19 @@ export function useChatController(
           );
         }
 
-        const orderedMessages = [...(targetSession.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
+        let orderedMessages: StoredMessage[] = [];
+        if (targetSession.messages && targetSession.messages.length > 0) {
+          orderedMessages = [...targetSession.messages].sort((a, b) => a.createdAt - b.createdAt);
+          hasMoreMessagesBeforeRef.current = false;
+        } else {
+          const fetched = await listMessages(targetSession.id, { limit: INITIAL_MESSAGE_LIMIT }).catch((err) => {
+            console.warn("ChatController: failed to load recent messages", { sessionId: targetSession?.id, err });
+            return [] as StoredMessage[];
+          });
+          orderedMessages = [...fetched].sort((a, b) => a.createdAt - b.createdAt);
+          hasMoreMessagesBeforeRef.current = orderedMessages.length >= INITIAL_MESSAGE_LIMIT;
+        }
+        messagesRef.current = orderedMessages;
         const normalizedSession: Session = { ...targetSession, messages: orderedMessages };
 
         // Load persona: prefer session's personaId, fallback to default
@@ -309,6 +340,10 @@ export function useChatController(
     };
   }, [characterId, sessionId]);
 
+  useEffect(() => {
+    messagesRef.current = state.messages;
+  }, [state.messages]);
+
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
       window.clearTimeout(longPressTimerRef.current);
@@ -353,6 +388,52 @@ export function useChatController(
       total: variants.length,
     };
   }, [state.character, state.messages, state.session]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!state.session) return;
+    if (!hasMoreMessagesBeforeRef.current) return;
+    if (loadingOlderRef.current) return;
+    const first = messagesRef.current[0];
+    if (!first) return;
+
+    loadingOlderRef.current = true;
+    try {
+      const older = await listMessages(state.session.id, {
+        limit: OLDER_MESSAGE_PAGE,
+        before: { createdAt: first.createdAt, id: first.id },
+      });
+      if (older.length === 0) {
+        hasMoreMessagesBeforeRef.current = false;
+        return;
+      }
+      const merged = [...older, ...messagesRef.current];
+      const seen = new Set<string>();
+      const deduped = merged.filter((m) => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+      messagesRef.current = deduped;
+      hasMoreMessagesBeforeRef.current = older.length >= OLDER_MESSAGE_PAGE;
+      dispatch({ type: "SET_MESSAGES", payload: deduped });
+      if (state.session) {
+        dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: deduped } });
+      }
+    } catch (err) {
+      console.warn("ChatController: failed to load older messages", err);
+    } finally {
+      loadingOlderRef.current = false;
+    }
+  }, [state.session]);
+
+  const ensureMessageLoaded = useCallback(async (messageId: string) => {
+    const maxPages = 20;
+    for (let i = 0; i < maxPages; i++) {
+      if (messagesRef.current.some((m) => m.id === messageId)) return;
+      if (!hasMoreMessagesBeforeRef.current) return;
+      await loadOlderMessages();
+    }
+  }, [loadOlderMessages]);
 
   const applyVariantSelection = useCallback(
     async (messageId: string, variantId: string) => {
@@ -528,44 +609,29 @@ export function useChatController(
           attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
         });
 
-        // Use session from backend which includes updated memories, memorySummary, and memoryToolEvents
-        // after dynamic memory cycle processing
-        const orderedMessages = [...(result.session.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
+        const replaced = messagesRef.current.map((msg) => {
+          if (msg.id === userPlaceholder.id) return result.userMessage;
+          if (msg.id === assistantPlaceholder.id) return result.assistantMessage;
+          return msg;
+        });
+        messagesRef.current = replaced;
         const updatedSession: Session = {
           ...result.session,
-          messages: orderedMessages,
+          messages: replaced,
         };
-
         dispatch({
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
-            { type: "SET_MESSAGES", payload: orderedMessages },
-            {
-              type: "REPLACE_PLACEHOLDER_MESSAGES",
-              payload: { userPlaceholder, assistantPlaceholder, userMessage: result.userMessage, assistantMessage: result.assistantMessage }
-            }
+            { type: "SET_MESSAGES", payload: replaced },
           ]
         });
       } catch (err) {
         console.error("ChatController: send failed", err);
         dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
-        const latest = await getSession(state.session.id).catch(() => null);
-        if (latest) {
-          const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-          dispatch({
-            type: "BATCH",
-            actions: [
-              { type: "SET_SESSION", payload: { ...latest, messages: ordered } },
-              { type: "SET_MESSAGES", payload: ordered }
-            ]
-          });
-        } else {
-          dispatch({
-            type: "SET_MESSAGES",
-            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id)
-          });
-        }
+        const cleaned = messagesRef.current.filter((msg) => msg.id !== assistantPlaceholder.id);
+        messagesRef.current = cleaned;
+        dispatch({ type: "SET_MESSAGES", payload: cleaned });
       } finally {
         streamBatcher.cancel();
         if (unlistenNormalized) unlistenNormalized();
@@ -578,7 +644,7 @@ export function useChatController(
         });
       }
     },
-    [state.character, state.persona?.id, state.session, state.messages, state.pendingAttachments],
+    [state.character, state.persona?.id, state.session, state.pendingAttachments],
   );
 
   const handleContinue = useCallback(
@@ -623,18 +689,16 @@ export function useChatController(
           requestId,
         });
 
-        // Use session from backend which has the authoritative state
-        const orderedMessages = [...(result.session.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-        const updatedSession: Session = {
-          ...result.session,
-          messages: orderedMessages,
-        };
-
+        const replaced = messagesRef.current.map((msg) => {
+          if (msg.id === assistantPlaceholder.id) return result.assistantMessage;
+          return msg;
+        });
+        messagesRef.current = replaced;
         dispatch({
           type: "BATCH",
           actions: [
-            { type: "SET_SESSION", payload: updatedSession },
-            { type: "SET_MESSAGES", payload: orderedMessages }
+            { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
+            { type: "SET_MESSAGES", payload: replaced }
           ]
         });
       } catch (err) {
@@ -644,28 +708,9 @@ export function useChatController(
 
         const abortedByUser = errMsg.toLowerCase().includes("aborted by user") || errMsg.toLowerCase().includes("cancelled");
         if (!abortedByUser) {
-          dispatch({
-            type: "SET_MESSAGES",
-            payload: state.messages.filter((msg) => msg.id !== assistantPlaceholder.id)
-          });
-          if (state.session) {
-            const currentMessages = state.messages.filter((msg) => msg.id !== assistantPlaceholder.id);
-            const syncedSession: Session = {
-              ...state.session,
-              messages: currentMessages,
-              updatedAt: Date.now(),
-            };
-            try {
-              sessionOperationRef.current = true;
-              await safeSaveSession(syncedSession);
-              lastKnownSessionTimestampRef.current = syncedSession.updatedAt;
-              dispatch({ type: "SET_SESSION", payload: syncedSession });
-            } catch (saveErr) {
-              console.error("ChatController: failed to sync session after continue error", saveErr);
-            } finally {
-              sessionOperationRef.current = false;
-            }
-          }
+          const cleaned = messagesRef.current.filter((msg) => msg.id !== assistantPlaceholder.id);
+          messagesRef.current = cleaned;
+          dispatch({ type: "SET_MESSAGES", payload: cleaned });
         }
       } finally {
         streamBatcher.cancel();
@@ -679,7 +724,7 @@ export function useChatController(
         });
       }
     },
-    [state.character, state.persona?.id, state.session, state.messages],
+    [state.character, state.persona?.id, state.session],
   );
 
   const handleRegenerate = useCallback(
@@ -742,21 +787,13 @@ export function useChatController(
           requestId,
         });
 
-        // Use session from backend which has the authoritative state
-        const orderedMessages = [...(result.session.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
-        const updatedSession: Session = {
-          ...result.session,
-          messages: orderedMessages,
-        };
-
+        const replaced = messagesRef.current.map((msg) => (msg.id === message.id ? result.assistantMessage : msg));
+        messagesRef.current = replaced;
         dispatch({
           type: "BATCH",
           actions: [
-            { type: "SET_SESSION", payload: updatedSession },
-            {
-              type: "SET_MESSAGES",
-              payload: orderedMessages
-            }
+            { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
+            { type: "SET_MESSAGES", payload: replaced }
           ]
         });
 
@@ -769,16 +806,23 @@ export function useChatController(
       } catch (err) {
         console.error("ChatController: regenerate failed", err);
         dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
-        const latest = await getSession(state.session.id).catch(() => null);
-        if (latest) {
-          const ordered = [...(latest.messages ?? [])].sort((a, b) => a.createdAt - b.createdAt);
+        const meta = await getSessionMeta(state.session.id).catch(() => null);
+        const refreshed = await listMessages(state.session.id, {
+          limit: Math.max(INITIAL_MESSAGE_LIMIT, messagesRef.current.length),
+        }).catch(() => [] as StoredMessage[]);
+        const ordered = [...refreshed].sort((a, b) => a.createdAt - b.createdAt);
+        messagesRef.current = ordered;
+        hasMoreMessagesBeforeRef.current = ordered.length >= INITIAL_MESSAGE_LIMIT;
+        if (meta) {
           dispatch({
             type: "BATCH",
             actions: [
-              { type: "SET_SESSION", payload: { ...latest, messages: ordered } },
+              { type: "SET_SESSION", payload: { ...meta, messages: ordered } },
               { type: "SET_MESSAGES", payload: ordered }
             ]
           });
+        } else {
+          dispatch({ type: "SET_MESSAGES", payload: ordered });
         }
       } finally {
         streamBatcher.cancel();
@@ -793,7 +837,7 @@ export function useChatController(
         });
       }
     },
-    [state.messageAction, state.messages, state.regeneratingMessageId, state.session],
+    [state.messageAction, state.regeneratingMessageId, state.session],
   );
 
   const handleAbort = useCallback(async () => {
@@ -803,7 +847,7 @@ export function useChatController(
       await abortMessage(state.activeRequestId);
       log.info("aborted request", state.activeRequestId);
 
-      const messagesWithoutPlaceholders = state.messages.map(msg => {
+      const messagesWithoutPlaceholders = messagesRef.current.map(msg => {
         if (msg.id.startsWith('placeholder-')) {
           if (msg.content.trim().length > 0) {
             return {
@@ -828,6 +872,7 @@ export function useChatController(
         sessionOperationRef.current = true;
         await safeSaveSession(updatedSession);
         lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
+        messagesRef.current = messagesWithoutPlaceholders;
         dispatch({
           type: "BATCH",
           actions: [
@@ -838,6 +883,7 @@ export function useChatController(
         log.info("successfully saved session after abort");
       } catch (saveErr) {
         log.error("failed to save incomplete messages after abort", saveErr);
+        messagesRef.current = messagesWithoutPlaceholders;
         dispatch({ type: "SET_MESSAGES", payload: messagesWithoutPlaceholders });
       } finally {
         sessionOperationRef.current = false;
@@ -898,7 +944,7 @@ export function useChatController(
         ]
       });
     }
-  }, [state.activeRequestId, state.session, state.messages]);
+  }, [state.activeRequestId, state.session]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!state.session || !state.messageAction) return;
@@ -916,7 +962,7 @@ export function useChatController(
       ]
     });
     try {
-      const updatedMessages = (state.session.messages ?? []).map((msg) =>
+      const updatedMessages = messagesRef.current.map((msg) =>
         msg.id === state.messageAction!.message.id
           ? {
             ...msg,
@@ -937,6 +983,7 @@ export function useChatController(
       sessionOperationRef.current = true;
       await safeSaveSession(updatedSession);
       lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
+      messagesRef.current = updatedMessages;
       dispatch({ type: "SET_SESSION", payload: updatedSession });
       dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
       resetMessageActions();
@@ -963,22 +1010,15 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_ERROR", payload: null });
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
       try {
-        const updatedMessages = (state.session.messages ?? []).filter((msg) => msg.id !== message.id);
-        const updatedSession: Session = {
-          ...state.session,
-          messages: updatedMessages,
-          updatedAt: Date.now(),
-        };
-        sessionOperationRef.current = true;
-        await safeSaveSession(updatedSession);
-        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
-        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        await deleteMessage(state.session.id, message.id);
+        const updatedMessages = messagesRef.current.filter((msg) => msg.id !== message.id);
+        messagesRef.current = updatedMessages;
+        dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() } });
         dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
         resetMessageActions();
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
       } finally {
-        sessionOperationRef.current = false;
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
     },
@@ -989,14 +1029,13 @@ export function useChatController(
     async (message: StoredMessage) => {
       if (!state.session) return;
 
-      // Check if there are any pinned messages after this message
-      const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+      const messageIndex = messagesRef.current.findIndex((msg) => msg.id === message.id);
       if (messageIndex === -1) {
         dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
         return;
       }
 
-      const messagesAfter = state.session.messages.slice(messageIndex + 1);
+      const messagesAfter = messagesRef.current.slice(messageIndex + 1);
       const hasPinnedAfter = messagesAfter.some(msg => msg.isPinned);
 
       if (hasPinnedAfter) {
@@ -1014,23 +1053,15 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
 
       try {
-        const updatedMessages = state.session.messages.slice(0, messageIndex + 1);
-        const updatedSession: Session = {
-          ...state.session,
-          messages: updatedMessages,
-          updatedAt: Date.now(),
-        };
-
-        sessionOperationRef.current = true;
-        await safeSaveSession(updatedSession);
-        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
-        dispatch({ type: "SET_SESSION", payload: updatedSession });
+        await deleteMessagesAfter(state.session.id, message.id);
+        const updatedMessages = messagesRef.current.slice(0, messageIndex + 1);
+        messagesRef.current = updatedMessages;
+        dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() } });
         dispatch({ type: "REWIND_TO_MESSAGE", payload: { messageId: message.id, messages: updatedMessages } });
         resetMessageActions();
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
       } finally {
-        sessionOperationRef.current = false;
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
     },
@@ -1046,12 +1077,16 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
 
       try {
-        const updatedSession = await toggleMessagePin(state.session.id, message.id);
+        const nextPinned = await toggleMessagePin(state.session.id, message.id);
 
-        if (updatedSession) {
-          dispatch({ type: "SET_SESSION", payload: updatedSession });
-          dispatch({ type: "SET_MESSAGES", payload: updatedSession.messages });
-          dispatch({ type: "SET_ACTION_STATUS", payload: message.isPinned ? "Message unpinned" : "Message pinned" });
+        if (nextPinned !== null) {
+          const updatedMessages = messagesRef.current.map((m) =>
+            m.id === message.id ? { ...m, isPinned: nextPinned } : m
+          );
+          messagesRef.current = updatedMessages;
+          dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() } });
+          dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
+          dispatch({ type: "SET_ACTION_STATUS", payload: nextPinned ? "Message pinned" : "Message unpinned" });
           setTimeout(() => {
             resetMessageActions();
           }, 1000);
@@ -1076,7 +1111,13 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
 
       try {
-        const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+        const fullSession = await getSession(state.session.id);
+        if (!fullSession) {
+          dispatch({ type: "SET_ACTION_ERROR", payload: "Failed to load full session for branching" });
+          return null;
+        }
+
+        const messageIndex = fullSession.messages.findIndex((msg) => msg.id === message.id);
         if (messageIndex === -1) {
           dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
           return null;
@@ -1091,7 +1132,7 @@ export function useChatController(
           return null;
         }
 
-        const branchedSession = await createBranchedSession(state.session, message.id);
+        const branchedSession = await createBranchedSession(fullSession, message.id);
         
         dispatch({ type: "SET_ACTION_STATUS", payload: "Chat branch created! Redirecting..." });
         
@@ -1120,14 +1161,20 @@ export function useChatController(
       dispatch({ type: "SET_ACTION_STATUS", payload: null });
 
       try {
-        const messageIndex = state.session.messages.findIndex((msg) => msg.id === message.id);
+        const fullSession = await getSession(state.session.id);
+        if (!fullSession) {
+          dispatch({ type: "SET_ACTION_ERROR", payload: "Failed to load full session for branching" });
+          return null;
+        }
+
+        const messageIndex = fullSession.messages.findIndex((msg) => msg.id === message.id);
         if (messageIndex === -1) {
           dispatch({ type: "SET_ACTION_ERROR", payload: "Message not found" });
           return null;
         }
 
         const branchedSession = await createBranchedSessionToCharacter(
-          state.session, 
+          fullSession, 
           message.id, 
           targetCharacterId
         );
@@ -1176,6 +1223,7 @@ export function useChatController(
     regeneratingMessageId: state.regeneratingMessageId,
     activeRequestId: state.activeRequestId,
     pendingAttachments: state.pendingAttachments,
+    hasMoreMessagesBefore: hasMoreMessagesBeforeRef.current,
 
     // Setters
     setDraft: useCallback((value: string) => dispatch({ type: "SET_DRAFT", payload: value }), []),
@@ -1196,6 +1244,8 @@ export function useChatController(
     handleContinue,
     handleRegenerate,
     handleAbort,
+    loadOlderMessages,
+    ensureMessageLoaded,
     getVariantState,
     applyVariantSelection,
     handleVariantSwipe,

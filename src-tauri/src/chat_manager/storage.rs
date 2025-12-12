@@ -4,7 +4,7 @@ use tauri::AppHandle;
 use crate::storage_manager::{
     characters::characters_list,
     personas::personas_list,
-    sessions::{session_get, session_upsert},
+    sessions::{messages_list, messages_list_pinned, messages_upsert_batch, session_get_meta, session_upsert_meta},
     settings::{storage_read_settings, storage_write_settings},
 };
 // emit_debug no longer used here; prompt_engine handles debug emission
@@ -120,18 +120,38 @@ pub fn load_personas(app: &AppHandle) -> Result<Vec<Persona>, String> {
 }
 
 pub fn load_session(app: &AppHandle, session_id: &str) -> Result<Option<Session>, String> {
-    let json = session_get(app.clone(), session_id.to_string())?;
-    match json {
-        Some(s) => serde_json::from_str::<Session>(&s)
-            .map(Some)
-            .map_err(|e| e.to_string()),
-        None => Ok(None),
+    let meta = session_get_meta(app.clone(), session_id.to_string())?;
+    let Some(meta_json) = meta else {
+        return Ok(None);
+    };
+    let mut session: Session = serde_json::from_str(&meta_json).map_err(|e| e.to_string())?;
+
+    let recent_json = messages_list(app.clone(), session_id.to_string(), 120, None, None)?;
+    let pinned_json = messages_list_pinned(app.clone(), session_id.to_string())?;
+    let recent: Vec<StoredMessage> = serde_json::from_str(&recent_json).map_err(|e| e.to_string())?;
+    let pinned: Vec<StoredMessage> = serde_json::from_str(&pinned_json).map_err(|e| e.to_string())?;
+
+    let mut by_id = std::collections::HashMap::<String, StoredMessage>::new();
+    for m in pinned.into_iter().chain(recent.into_iter()) {
+        by_id.insert(m.id.clone(), m);
     }
+    let mut merged: Vec<StoredMessage> = by_id.into_values().collect();
+    merged.sort_by(|a, b| a.created_at.cmp(&b.created_at).then_with(|| a.id.cmp(&b.id)));
+    session.messages = merged;
+    Ok(Some(session))
 }
 
 pub fn save_session(app: &AppHandle, session: &Session) -> Result<(), String> {
-    let payload = serde_json::to_string(session).map_err(|e| e.to_string())?;
-    session_upsert(app.clone(), payload)
+    let mut meta = session.clone();
+    meta.messages = Vec::new();
+    let meta_json = serde_json::to_string(&meta).map_err(|e| e.to_string())?;
+    session_upsert_meta(app.clone(), meta_json)?;
+
+    if let Some(last) = session.messages.last() {
+        let payload = serde_json::to_string(&vec![last]).map_err(|e| e.to_string())?;
+        messages_upsert_batch(app.clone(), session.id.clone(), payload)?;
+    }
+    Ok(())
 }
 
 pub fn select_model<'a>(

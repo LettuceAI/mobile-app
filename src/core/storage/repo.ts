@@ -6,6 +6,7 @@ import {
   SessionSchema,
   SettingsSchema,
   PersonaSchema,
+  MessageSchema,
   type Character,
   type Session,
   type Settings,
@@ -249,6 +250,29 @@ export async function getSessionMeta(id: string): Promise<Session | null> {
   return data ? SessionSchema.parse(data) : null;
 }
 
+export async function listMessages(
+  sessionId: string,
+  options: { limit: number; before?: { createdAt: number; id: string } } = { limit: 120 },
+): Promise<StoredMessage[]> {
+  const beforeCreatedAt = options.before?.createdAt;
+  const beforeId = options.before?.id;
+  const data = await storageBridge.messagesList(sessionId, options.limit, beforeCreatedAt, beforeId);
+  return z.array(MessageSchema).parse(data);
+}
+
+export async function listPinnedMessages(sessionId: string): Promise<StoredMessage[]> {
+  const data = await storageBridge.messagesListPinned(sessionId);
+  return z.array(MessageSchema).parse(data);
+}
+
+export async function deleteMessage(sessionId: string, messageId: string): Promise<void> {
+  await storageBridge.messageDelete(sessionId, messageId);
+}
+
+export async function deleteMessagesAfter(sessionId: string, messageId: string): Promise<void> {
+  await storageBridge.messagesDeleteAfter(sessionId, messageId);
+}
+
 export async function saveSession(s: Session): Promise<void> {
   SessionSchema.parse(s);
   await storageBridge.sessionUpsert(s);
@@ -422,9 +446,8 @@ export async function createBranchedSessionToCharacter(
   return s;
 }
 
-export async function toggleMessagePin(sessionId: string, messageId: string): Promise<Session | null> {
-  const updated = await storageBridge.messageTogglePin(sessionId, messageId);
-  return updated ? SessionSchema.parse(updated) : null;
+export async function toggleMessagePin(sessionId: string, messageId: string): Promise<boolean | null> {
+  return storageBridge.messageTogglePin(sessionId, messageId);
 }
 
 // Memory management functions

@@ -91,12 +91,26 @@ export const storageBridge = {
     sessionDelete: (id: string) => invoke("session_delete", { id }) as Promise<void>,
     sessionArchive: (id: string, archived: boolean) => invoke("session_archive", { id, archived }) as Promise<void>,
     sessionUpdateTitle: (id: string, title: string) => invoke("session_update_title", { id, title }) as Promise<void>,
-    messageTogglePin: (sessionId: string, messageId: string) => invoke<string | null>("message_toggle_pin", { sessionId, messageId }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
+    messageTogglePin: (sessionId: string, messageId: string) =>
+        invoke<boolean | null>("message_toggle_pin_state", { sessionId, messageId }),
     sessionAddMemory: (sessionId: string, memory: string) => invoke<string | null>("session_add_memory", { sessionId, memory }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
     sessionRemoveMemory: (sessionId: string, memoryIndex: number) => invoke<string | null>("session_remove_memory", { sessionId, memoryIndex }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
     sessionUpdateMemory: (sessionId: string, memoryIndex: number, newMemory: string) => invoke<string | null>("session_update_memory", { sessionId, memoryIndex, newMemory }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
 
-    // Legacy file-based bridges removed: characters/personas/sessions
+    // Messages (paged)
+    messagesList: (sessionId: string, limit: number, beforeCreatedAt?: number, beforeId?: string) =>
+        invoke<string>("messages_list", {
+            sessionId,
+            limit,
+            beforeCreatedAt: beforeCreatedAt ?? null,
+            beforeId: beforeId ?? null,
+        }).then((s) => JSON.parse(s) as any[]),
+    messagesListPinned: (sessionId: string) =>
+        invoke<string>("messages_list_pinned", { sessionId }).then((s) => JSON.parse(s) as any[]),
+    messageDelete: (sessionId: string, messageId: string) =>
+        invoke("message_delete", { sessionId, messageId }) as Promise<void>,
+    messagesDeleteAfter: (sessionId: string, messageId: string) =>
+        invoke("messages_delete_after", { sessionId, messageId }) as Promise<void>,
 
     clearAll: () => invoke("storage_clear_all"),
     resetDatabase: () => invoke("storage_reset_database") as Promise<void>,

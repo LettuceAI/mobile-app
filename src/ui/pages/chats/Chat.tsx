@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import type { Character, Model, StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
-import { getSession, listCharacters, readSettings } from "../../../core/storage";
+import { getSessionMeta, listCharacters, readSettings } from "../../../core/storage";
 
 import { useChatController } from "./hooks/useChatController";
 import { replacePlaceholders } from "../../../core/utils/placeholders";
@@ -23,8 +23,6 @@ import { radius, cn } from "../../design-tokens";
 
 const LONG_PRESS_DELAY = 450;
 const SCROLL_THRESHOLD = 10; // pixels of movement to cancel long press
-const MESSAGE_WINDOW_SIZE = 80;
-const MESSAGE_WINDOW_PAGE = 40;
 const AUTOLOAD_TOP_THRESHOLD_PX = 120;
 const STICKY_BOTTOM_THRESHOLD_PX = 80;
 
@@ -39,11 +37,9 @@ export function ChatConversationPage() {
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
   const [sessionForHeader, setSessionForHeader] = useState(chatController.session);
-  const [visibleStartIndex, setVisibleStartIndex] = useState(0);
   const pendingScrollAdjustRef = useRef<{ prevScrollTop: number; prevScrollHeight: number } | null>(null);
   const loadingOlderRef = useRef(false);
   const isAtBottomRef = useRef(true);
-  const didInitWindowForSessionRef = useRef<string | null>(null);
 
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
@@ -65,7 +61,7 @@ export function ChatConversationPage() {
   // Reload session data when memories change
   const handleSessionUpdate = useCallback(async () => {
     if (sessionId) {
-      const updatedSession = await getSession(sessionId);
+      const updatedSession = await getSessionMeta(sessionId);
       setSessionForHeader(updatedSession);
     }
   }, [sessionId]);
@@ -105,6 +101,9 @@ export function ChatConversationPage() {
     handleContinue,
     handleRegenerate,
     handleAbort,
+    hasMoreMessagesBefore,
+    loadOlderMessages,
+    ensureMessageLoaded,
     getVariantState,
     handleVariantDrag,
     handleSaveEdit,
@@ -224,8 +223,8 @@ export function ChatConversationPage() {
     pressStartPosition.current = null;
   }, [initializeLongPressTimer, setHeldMessageId]);
 
-  const loadOlderMessages = useCallback(() => {
-    if (visibleStartIndex <= 0) return;
+  const loadOlderFromDb = useCallback(async () => {
+    if (!hasMoreMessagesBefore) return;
     if (loadingOlderRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -235,9 +234,12 @@ export function ChatConversationPage() {
       prevScrollTop: container.scrollTop,
       prevScrollHeight: container.scrollHeight,
     };
-
-    setVisibleStartIndex((prev) => Math.max(0, prev - MESSAGE_WINDOW_PAGE));
-  }, [visibleStartIndex]);
+    try {
+      await loadOlderMessages();
+    } finally {
+      // scroll restore happens in the messages-length effect
+    }
+  }, [hasMoreMessagesBefore, loadOlderMessages]);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -248,10 +250,10 @@ export function ChatConversationPage() {
     const atBottom = scrollTop + clientHeight >= scrollHeight - STICKY_BOTTOM_THRESHOLD_PX;
     isAtBottomRef.current = atBottom;
 
-    if (scrollTop <= AUTOLOAD_TOP_THRESHOLD_PX && visibleStartIndex > 0) {
-      loadOlderMessages();
+    if (scrollTop <= AUTOLOAD_TOP_THRESHOLD_PX && hasMoreMessagesBefore) {
+      void loadOlderFromDb();
     }
-  }, [loadOlderMessages, visibleStartIndex]);
+  }, [hasMoreMessagesBefore, loadOlderFromDb]);
 
   const handleContextMenu = useCallback((message: StoredMessage) => (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -298,20 +300,6 @@ export function ChatConversationPage() {
   }, [messages.length]);
 
   useEffect(() => {
-    const sessionKey = session?.id ?? null;
-    if (!sessionKey) return;
-
-    if (didInitWindowForSessionRef.current !== sessionKey) {
-      didInitWindowForSessionRef.current = sessionKey;
-      setVisibleStartIndex(Math.max(0, messages.length - MESSAGE_WINDOW_SIZE));
-      return;
-    }
-
-    // Clamp when messages are deleted/rewound.
-    setVisibleStartIndex((prev) => Math.min(prev, Math.max(0, messages.length - 1)));
-  }, [messages.length, session?.id]);
-
-  useEffect(() => {
     const adjust = pendingScrollAdjustRef.current;
     if (!adjust) return;
     const container = scrollContainerRef.current;
@@ -323,19 +311,17 @@ export function ChatConversationPage() {
     container.scrollTop = adjust.prevScrollTop + delta;
     pendingScrollAdjustRef.current = null;
     loadingOlderRef.current = false;
-  }, [visibleStartIndex]);
+  }, [messages.length]);
 
   useEffect(() => {
-    if (!jumpToMessageId || loading || messages.length === 0) return;
-    const idx = messages.findIndex((m) => m.id === jumpToMessageId);
-    if (idx < 0) return;
-    if (idx < visibleStartIndex) {
-      setVisibleStartIndex(Math.max(0, idx - 20));
-    }
-  }, [jumpToMessageId, loading, messages, visibleStartIndex]);
+    if (!jumpToMessageId || loading) return;
 
-  useEffect(() => {
-    if (jumpToMessageId && !loading && messages.length > 0) {
+    let cancelled = false;
+
+    (async () => {
+      await ensureMessageLoaded(jumpToMessageId);
+      if (cancelled) return;
+
       let rafId: number | null = null;
       let tries = 0;
       const tryScroll = () => {
@@ -359,8 +345,12 @@ export function ChatConversationPage() {
       return () => {
         if (rafId !== null) window.cancelAnimationFrame(rafId);
       };
-    }
-  }, [jumpToMessageId, loading, messages.length, visibleStartIndex]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureMessageLoaded, jumpToMessageId, loading, messages.length]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -369,8 +359,6 @@ export function ChatConversationPage() {
   if (!character || !session) {
     return <EmptyState title="Character not found" />;
   }
-
-  const visibleMessages = messages.slice(visibleStartIndex);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden" style={{ backgroundColor: backgroundImageData ? undefined : '#050505' }}>
@@ -405,23 +393,22 @@ export function ChatConversationPage() {
             backgroundColor: backgroundImageData ? theme.contentOverlay : 'transparent',
           }}
         >
-          {visibleStartIndex > 0 && (
+          {hasMoreMessagesBefore && (
             <div className="flex justify-center">
               <button
                 type="button"
-                onClick={loadOlderMessages}
+                onClick={() => void loadOlderFromDb()}
                 className={cn(
                   "px-3 py-1.5 text-xs text-white/70 border border-white/15 bg-white/5 hover:bg-white/10",
                   radius.full
                 )}
               >
-                Load earlier messages ({visibleStartIndex} hidden)
+                Load earlier messages
               </button>
             </div>
           )}
 
-          {visibleMessages.map((message, offset) => {
-            const index = visibleStartIndex + offset;
+          {messages.map((message, index) => {
             const isAssistant = message.role === "assistant";
             const isUser = message.role === "user";
             const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");
