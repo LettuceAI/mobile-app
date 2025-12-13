@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const TokenCount = z.number().int().nonnegative();
+const OptionalTokenCount = z.preprocess((v) => (v === null ? undefined : v), TokenCount.optional());
 
 export const PromptScopeSchema = z.enum(["appWide", "modelSpecific", "characterSpecific"]);
 export type PromptScope = z.infer<typeof PromptScopeSchema>;
@@ -17,9 +18,9 @@ export const SystemPromptTemplateSchema = z.object({
 export type SystemPromptTemplate = z.infer<typeof SystemPromptTemplateSchema>;
 
 export const UsageSummarySchema = z.object({
-  promptTokens: TokenCount.optional(),
-  completionTokens: TokenCount.optional(),
-  totalTokens: TokenCount.optional(),
+  promptTokens: OptionalTokenCount,
+  completionTokens: OptionalTokenCount,
+  totalTokens: OptionalTokenCount,
 });
 export type UsageSummary = z.infer<typeof UsageSummarySchema>;
 

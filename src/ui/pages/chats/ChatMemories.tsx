@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useReducer, useState, useCallback } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame } from "lucide-react";
@@ -11,16 +12,136 @@ import { Routes, useNavigationManager } from "../../navigation";
 
 type MemoryToolEvent = NonNullable<Session["memoryToolEvents"]>[number];
 
+type MemoriesTab = "memories" | "tools" | "pinned";
+type RetryStatus = "idle" | "retrying" | "success";
+type MemoryStatus = "idle" | "processing" | "failed";
+
+type UiState = {
+  activeTab: MemoriesTab;
+  searchTerm: string;
+  editingIndex: number | null;
+  editingValue: string;
+  newMemory: string;
+  isAdding: boolean;
+  summaryDraft: string;
+  summaryDirty: boolean;
+  isSavingSummary: boolean;
+  retryStatus: RetryStatus;
+  actionError: string | null;
+  memoryStatus: MemoryStatus;
+  expandedMemories: Set<number>;
+  memoryTempBusy: number | null;
+  pendingRefresh: boolean;
+};
+
+type UiAction =
+  | { type: "SET_TAB"; tab: MemoriesTab }
+  | { type: "SET_SEARCH"; value: string }
+  | { type: "CLEAR_SEARCH" }
+  | { type: "START_EDIT"; index: number; text: string }
+  | { type: "SET_EDIT_VALUE"; value: string }
+  | { type: "CANCEL_EDIT" }
+  | { type: "SET_NEW_MEMORY"; value: string }
+  | { type: "SET_IS_ADDING"; value: boolean }
+  | { type: "SET_SUMMARY_DRAFT"; value: string }
+  | { type: "SYNC_SUMMARY_FROM_SESSION"; value: string }
+  | { type: "SET_IS_SAVING_SUMMARY"; value: boolean }
+  | { type: "MARK_SUMMARY_SAVED" }
+  | { type: "SET_RETRY_STATUS"; value: RetryStatus }
+  | { type: "SET_ACTION_ERROR"; value: string | null }
+  | { type: "SET_MEMORY_STATUS"; value: MemoryStatus }
+  | { type: "TOGGLE_EXPANDED"; index: number }
+  | { type: "SHIFT_EXPANDED_AFTER_DELETE"; index: number }
+  | { type: "SET_MEMORY_TEMP_BUSY"; value: number | null }
+  | { type: "SET_PENDING_REFRESH"; value: boolean };
+
+function initUi(errorParam: string | null): UiState {
+  return {
+    activeTab: "memories",
+    searchTerm: "",
+    editingIndex: null,
+    editingValue: "",
+    newMemory: "",
+    isAdding: false,
+    summaryDraft: "",
+    summaryDirty: false,
+    isSavingSummary: false,
+    retryStatus: "idle",
+    actionError: errorParam,
+    memoryStatus: "idle",
+    expandedMemories: new Set<number>(),
+    memoryTempBusy: null,
+    pendingRefresh: false,
+  };
+}
+
+function uiReducer(state: UiState, action: UiAction): UiState {
+  switch (action.type) {
+    case "SET_TAB":
+      return { ...state, activeTab: action.tab };
+    case "SET_SEARCH":
+      return { ...state, searchTerm: action.value };
+    case "CLEAR_SEARCH":
+      return { ...state, searchTerm: "" };
+    case "START_EDIT":
+      return { ...state, editingIndex: action.index, editingValue: action.text };
+    case "SET_EDIT_VALUE":
+      return { ...state, editingValue: action.value };
+    case "CANCEL_EDIT":
+      return { ...state, editingIndex: null, editingValue: "" };
+    case "SET_NEW_MEMORY":
+      return { ...state, newMemory: action.value };
+    case "SET_IS_ADDING":
+      return { ...state, isAdding: action.value };
+    case "SET_SUMMARY_DRAFT":
+      return { ...state, summaryDraft: action.value, summaryDirty: true };
+    case "SYNC_SUMMARY_FROM_SESSION":
+      if (state.summaryDirty) return state;
+      return { ...state, summaryDraft: action.value };
+    case "SET_IS_SAVING_SUMMARY":
+      return { ...state, isSavingSummary: action.value };
+    case "MARK_SUMMARY_SAVED":
+      return { ...state, summaryDirty: false, isSavingSummary: false };
+    case "SET_RETRY_STATUS":
+      return { ...state, retryStatus: action.value };
+    case "SET_ACTION_ERROR":
+      return { ...state, actionError: action.value };
+    case "SET_MEMORY_STATUS":
+      return { ...state, memoryStatus: action.value };
+    case "TOGGLE_EXPANDED": {
+      const next = new Set(state.expandedMemories);
+      if (next.has(action.index)) next.delete(action.index);
+      else next.add(action.index);
+      return { ...state, expandedMemories: next };
+    }
+    case "SHIFT_EXPANDED_AFTER_DELETE": {
+      if (state.expandedMemories.size === 0) return state;
+      const next = new Set<number>();
+      for (const idx of state.expandedMemories) {
+        if (idx === action.index) continue;
+        next.add(idx > action.index ? idx - 1 : idx);
+      }
+      return { ...state, expandedMemories: next };
+    }
+    case "SET_MEMORY_TEMP_BUSY":
+      return { ...state, memoryTempBusy: action.value };
+    case "SET_PENDING_REFRESH":
+      return { ...state, pendingRefresh: action.value };
+    default:
+      return state;
+  }
+}
+
 function SectionHeader({
   icon: Icon,
   title,
   subtitle,
   right,
 }: {
-  icon?: React.ComponentType<{ size?: string | number; className?: string }>;
+  icon?: ComponentType<{ size?: string | number; className?: string }>;
   title: string;
   subtitle?: string;
-  right?: React.ReactNode;
+  right?: ReactNode;
 }) {
   return (
     <div className="flex items-end justify-between gap-3 mb-3">
@@ -96,72 +217,48 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
   return { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload: load };
 }
 
-function useMemoryActions(session: Session | null, reload: () => Promise<void>, setSession: (s: Session) => void) {
+function useMemoryActions(session: Session | null, setSession: (s: Session) => void) {
   const handleAdd = useCallback(async (memory: string) => {
     if (!session) return;
 
-    window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: true } }));
-
     try {
-      await addMemory(session.id, memory);
-      await reload();
-      window.dispatchEvent(new CustomEvent("memory:success"));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
+      const updated = await addMemory(session.id, memory);
+      if (updated) setSession(updated);
     } catch (err: any) {
-      window.dispatchEvent(new CustomEvent("memory:error", { detail: { error: err?.message || "Failed to add memory" } }));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
       throw err;
     }
-  }, [reload, session]);
+  }, [session, setSession]);
 
   const handleRemove = useCallback(async (index: number) => {
     if (!session) return;
 
-    window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: true } }));
-
     try {
-      await removeMemory(session.id, index);
-      await reload();
-      window.dispatchEvent(new CustomEvent("memory:success"));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
+      const updated = await removeMemory(session.id, index);
+      if (updated) setSession(updated);
     } catch (err: any) {
-      window.dispatchEvent(new CustomEvent("memory:error", { detail: { error: err?.message || "Failed to remove memory" } }));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
       throw err;
     }
-  }, [reload, session]);
+  }, [session, setSession]);
 
   const handleUpdate = useCallback(async (index: number, memory: string) => {
     if (!session) return;
 
-    window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: true } }));
-
     try {
-      await updateMemory(session.id, index, memory);
-      await reload();
-      window.dispatchEvent(new CustomEvent("memory:success"));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
+      const updated = await updateMemory(session.id, index, memory);
+      if (updated) setSession(updated);
     } catch (err: any) {
-      window.dispatchEvent(new CustomEvent("memory:error", { detail: { error: err?.message || "Failed to update memory" } }));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
       throw err;
     }
-  }, [reload, session]);
+  }, [session, setSession]);
 
   const handleSaveSummary = useCallback(async (summary: string) => {
     if (!session) return;
-
-    window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: true } }));
 
     try {
       const updated: Session = { ...session, memorySummary: summary };
       await saveSession(updated);
       setSession(updated);
-      window.dispatchEvent(new CustomEvent("memory:success"));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
     } catch (err: any) {
-      window.dispatchEvent(new CustomEvent("memory:error", { detail: { error: err?.message || "Failed to save summary" } }));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
       throw err;
     }
   }, [session, setSession]);
@@ -169,19 +266,13 @@ function useMemoryActions(session: Session | null, reload: () => Promise<void>, 
   const handleTogglePin = useCallback(async (index: number) => {
     if (!session) return;
 
-    window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: true } }));
-
     try {
-      await toggleMemoryPin(session.id, index);
-      await reload();
-      window.dispatchEvent(new CustomEvent("memory:success"));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
+      const updated = await toggleMemoryPin(session.id, index);
+      if (updated) setSession(updated);
     } catch (err: any) {
-      window.dispatchEvent(new CustomEvent("memory:error", { detail: { error: err?.message || "Failed to toggle pin" } }));
-      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
       throw err;
     }
-  }, [reload, session]);
+  }, [session, setSession]);
 
   return { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin };
 }
@@ -345,45 +436,23 @@ export function ChatMemoriesPage() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload } = useSessionData(characterId, sessionId);
-  const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } = useMemoryActions(session, reload, (s) => setSession(s));
-  const [activeTab, setActiveTab] = useState<"memories" | "tools" | "pinned">("memories");
-  const [summaryDraft, setSummaryDraft] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingValue, setEditingValue] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
-  const [newMemory, setNewMemory] = useState("");
-  const [isSavingSummary, setIsSavingSummary] = useState(false);
-  const [retryStatus, setRetryStatus] = useState<"idle" | "retrying" | "success">("idle");
-
-  const [actionError, setActionError] = useState<string | null>(searchParams.get("error"));
-  const [memoryStatus, setMemoryStatus] = useState<"idle" | "processing" | "failed">("idle");
-  const [expandedMemories, setExpandedMemories] = useState<Set<number>>(() => new Set());
-  const [memoryTempBusy, setMemoryTempBusy] = useState<number | null>(null);
-
-  const toggleExpanded = useCallback((index: number) => {
-    setExpandedMemories((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  }, []);
+  const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } = useMemoryActions(session, (s) => setSession(s));
+  const [ui, dispatch] = useReducer(uiReducer, searchParams.get("error"), initUi);
 
   const handleSetColdState = useCallback(async (memoryIndex: number, isCold: boolean) => {
     if (!session?.id) return;
-    setMemoryTempBusy(memoryIndex);
+    dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: memoryIndex });
     try {
-      await setMemoryColdState(session.id, memoryIndex, isCold);
-      await reload();
-      setActionError(null);
+      const updated = await setMemoryColdState(session.id, memoryIndex, isCold);
+      if (updated) setSession(updated);
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
     } catch (err: any) {
       console.error("Failed to update memory temperature:", err);
-      setActionError(err?.message || "Failed to update memory temperature");
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to update memory temperature" });
     } finally {
-      setMemoryTempBusy(null);
+      dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: null });
     }
-  }, [reload, session?.id]);
+  }, [session?.id, setSession]);
 
   useEffect(() => {
     if (!session?.id) return;
@@ -393,20 +462,21 @@ export function ChatMemoriesPage() {
       try {
         const u1 = await listen("dynamic-memory:processing", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            setMemoryStatus("processing");
-            setActionError(null);
+            dispatch({ type: "SET_MEMORY_STATUS", value: "processing" });
+            dispatch({ type: "SET_ACTION_ERROR", value: null });
+            dispatch({ type: "SET_PENDING_REFRESH", value: false });
           }
         });
         const u2 = await listen("dynamic-memory:success", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            setMemoryStatus("idle");
-            reload();
+            dispatch({ type: "SET_MEMORY_STATUS", value: "idle" });
+            dispatch({ type: "SET_PENDING_REFRESH", value: true });
           }
         });
         const u3 = await listen("dynamic-memory:error", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            setMemoryStatus("failed");
-            setActionError(e.payload?.error || "Memory processing failed");
+            dispatch({ type: "SET_MEMORY_STATUS", value: "failed" });
+            dispatch({ type: "SET_ACTION_ERROR", value: e.payload?.error || "Memory processing failed" });
           }
         });
         unlisteners.push(u1, u2, u3);
@@ -419,10 +489,10 @@ export function ChatMemoriesPage() {
     return () => {
       unlisteners.forEach(u => u());
     };
-  }, [session?.id, reload]);
+  }, [session?.id]);
 
   useEffect(() => {
-    setSummaryDraft(session?.memorySummary ?? "");
+    dispatch({ type: "SYNC_SUMMARY_FROM_SESSION", value: session?.memorySummary ?? "" });
   }, [session?.memorySummary]);
 
   const isDynamic = useMemo(() => {
@@ -484,11 +554,11 @@ export function ChatMemoriesPage() {
   }, [session, cycleMap]);
 
   const filteredMemories = useMemo(() => {
-    if (!searchTerm.trim()) return memoryItems;
+    if (!ui.searchTerm.trim()) return memoryItems;
     return memoryItems.filter(item =>
-      item.text.toLowerCase().includes(searchTerm.toLowerCase())
+      item.text.toLowerCase().includes(ui.searchTerm.toLowerCase())
     );
-  }, [memoryItems, searchTerm]);
+  }, [memoryItems, ui.searchTerm]);
 
   const stats = useMemo(() => {
     const total = memoryItems.length;
@@ -511,10 +581,10 @@ export function ChatMemoriesPage() {
     try {
       await toggleMessagePin(session.id, messageId);
       await refreshPinnedMessages();
-      setActionError(null);
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
     } catch (err: any) {
       console.error("Failed to unpin message:", err);
-      setActionError(err?.message || "Failed to unpin message");
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to unpin message" });
     }
   }, [session, refreshPinnedMessages]);
 
@@ -523,79 +593,86 @@ export function ChatMemoriesPage() {
     go(Routes.chatSession(characterId!, session?.id || undefined, extra));
   }, [go, characterId, session?.id]);
 
-  const handleAddNew = async () => {
-    const trimmed = newMemory.trim();
-    if (trimmed.length > 0) {
-      setIsAdding(true);
-      try {
-        await handleAdd(trimmed);
-        setNewMemory("");
-        setActionError(null);
-      } catch (err: any) {
-        console.error("Failed to add memory:", err);
-        setActionError(err?.message || "Failed to add memory");
-      } finally {
-        setIsAdding(false);
-      }
-    }
-  };
+  const handleAddNew = useCallback(async () => {
+    const trimmed = ui.newMemory.trim();
+    if (!trimmed) return;
 
-  const startEdit = (index: number, text: string) => {
-    setEditingIndex(index);
-    setEditingValue(text);
-  };
-
-  const cancelEdit = () => {
-    setEditingIndex(null);
-    setEditingValue("");
-  };
-
-  const saveEdit = async (index: number) => {
-    const trimmed = editingValue.trim();
-    if (trimmed.length > 0 && trimmed !== memoryItems[index]?.text) {
-      try {
-        await handleUpdate(index, trimmed);
-        setEditingIndex(null);
-        setEditingValue("");
-        setActionError(null);
-      } catch (err: any) {
-        console.error("Failed to update memory:", err);
-        setActionError(err?.message || "Failed to update memory");
-      }
-    } else {
-      setEditingIndex(null);
-      setEditingValue("");
-    }
-  };
-
-  const handleSaveSummaryClick = async () => {
-    if (summaryDraft === session?.memorySummary) return;
-    setIsSavingSummary(true);
+    dispatch({ type: "SET_IS_ADDING", value: true });
     try {
-      await handleSaveSummary(summaryDraft);
+      await handleAdd(trimmed);
+      dispatch({ type: "SET_NEW_MEMORY", value: "" });
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
+    } catch (err: any) {
+      console.error("Failed to add memory:", err);
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to add memory" });
+    } finally {
+      dispatch({ type: "SET_IS_ADDING", value: false });
+    }
+  }, [handleAdd, ui.newMemory]);
+
+  const startEdit = useCallback((index: number, text: string) => {
+    dispatch({ type: "START_EDIT", index, text });
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    dispatch({ type: "CANCEL_EDIT" });
+  }, []);
+
+  const saveEdit = useCallback(async (index: number) => {
+    const trimmed = ui.editingValue.trim();
+    if (!trimmed || trimmed === memoryItems[index]?.text) {
+      dispatch({ type: "CANCEL_EDIT" });
+      return;
+    }
+    try {
+      await handleUpdate(index, trimmed);
+      dispatch({ type: "CANCEL_EDIT" });
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
+    } catch (err: any) {
+      console.error("Failed to update memory:", err);
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to update memory" });
+    }
+  }, [handleUpdate, memoryItems, ui.editingValue]);
+
+  const handleSaveSummaryClick = useCallback(async () => {
+    if (ui.summaryDraft === session?.memorySummary) return;
+    dispatch({ type: "SET_IS_SAVING_SUMMARY", value: true });
+    try {
+      await handleSaveSummary(ui.summaryDraft);
+      dispatch({ type: "MARK_SUMMARY_SAVED" });
     } catch (err: any) {
       console.error("Failed to save summary:", err);
-      setActionError(err?.message || "Failed to save summary");
-    } finally {
-      setIsSavingSummary(false);
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to save summary" });
+      dispatch({ type: "SET_IS_SAVING_SUMMARY", value: false });
     }
-  };
+  }, [handleSaveSummary, session?.memorySummary, ui.summaryDraft]);
 
-  const handleRetry = async () => {
+  const handleRetry = useCallback(async () => {
     if (!session?.id) return;
-    setRetryStatus("retrying");
+    dispatch({ type: "SET_RETRY_STATUS", value: "retrying" });
     try {
       await storageBridge.retryDynamicMemory(session.id);
-      await reload();
-      setRetryStatus("success");
-      setActionError(null);
-      setTimeout(() => setRetryStatus("idle"), 3000);
+      dispatch({ type: "SET_RETRY_STATUS", value: "success" });
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
+      dispatch({ type: "SET_PENDING_REFRESH", value: true });
+      window.setTimeout(() => dispatch({ type: "SET_RETRY_STATUS", value: "idle" }), 3000);
     } catch (err: any) {
       console.error("Failed to retry memory processing:", err);
-      setActionError(err?.message || "Failed to retry memory processing");
-      setRetryStatus("idle");
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to retry memory processing" });
+      dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
     }
-  };
+  }, [session?.id]);
+
+  const handleRefresh = useCallback(async () => {
+    if (!session?.id) return;
+    try {
+      await reload();
+      dispatch({ type: "SET_PENDING_REFRESH", value: false });
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
+    } catch (err: any) {
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to refresh" });
+    }
+  }, [reload, session?.id]);
 
   if (loading) {
     return (
@@ -655,7 +732,7 @@ export function ChatMemoriesPage() {
               {character.name}
             </p>
           </div>
-          {memoryStatus === "processing" && (
+          {ui.memoryStatus === "processing" && (
             <div className={cn(
               radius.full,
               "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
@@ -703,9 +780,9 @@ export function ChatMemoriesPage() {
       <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* Error Banner */}
         {/* Status Banner (Error / Retry / Success) */}
-        {(actionError || retryStatus !== "idle" || memoryStatus === "processing") && (
+        {(ui.actionError || ui.retryStatus !== "idle" || ui.memoryStatus === "processing") && (
           <div className="px-3 pt-3">
-            {(retryStatus === "retrying" || memoryStatus === "processing") ? (
+            {(ui.retryStatus === "retrying" || ui.memoryStatus === "processing") ? (
               <div className={cn(
                 radius.md,
                 "bg-blue-500/10 border border-blue-500/20 p-3 flex items-center gap-3 animate-pulse"
@@ -713,11 +790,11 @@ export function ChatMemoriesPage() {
                 <RefreshCw className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
                 <div className="flex-1 text-sm text-blue-200">
                   <p className="font-semibold">
-                    {memoryStatus === "processing" ? "AI is organizing memories..." : "Retrying Memory Cycle..."}
+                    {ui.memoryStatus === "processing" ? "AI is organizing memories..." : "Retrying Memory Cycle..."}
                   </p>
                 </div>
               </div>
-            ) : retryStatus === "success" ? (
+            ) : ui.retryStatus === "success" ? (
               <div className={cn(
                 radius.md,
                 "bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3"
@@ -727,13 +804,13 @@ export function ChatMemoriesPage() {
                   <p className="font-semibold">Memory Cycle Processed Successfully!</p>
                 </div>
                 <button
-                  onClick={() => setRetryStatus("idle")}
+                  onClick={() => dispatch({ type: "SET_RETRY_STATUS", value: "idle" })}
                   className="text-emerald-400 hover:text-emerald-300"
                 >
                   <X size={16} />
                 </button>
               </div>
-            ) : actionError ? (
+            ) : ui.actionError ? (
               <div className={cn(
                 radius.md,
                 "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3"
@@ -741,9 +818,9 @@ export function ChatMemoriesPage() {
                 <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
                 <div className="flex-1 text-sm text-red-200">
                   <p className="font-semibold mb-1">Memory System Error</p>
-                  <p className="opacity-90">{actionError}</p>
+                  <p className="opacity-90">{ui.actionError}</p>
                   {/* Retry Button for Memory Errors */}
-                  {(actionError.toLowerCase().includes("status") || actionError.toLowerCase().includes("limit") || true) && (
+                  {(ui.actionError.toLowerCase().includes("status") || ui.actionError.toLowerCase().includes("limit") || true) && (
                     <button
                       onClick={handleRetry}
                       className="mt-2 flex items-center gap-1.5 rounded-md bg-red-500/20 px-2.5 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95"
@@ -754,7 +831,7 @@ export function ChatMemoriesPage() {
                   )}
                 </div>
                 <button
-                  onClick={() => setActionError(null)}
+                  onClick={() => dispatch({ type: "SET_ACTION_ERROR", value: null })}
                   className="text-red-400 hover:text-red-300"
                 >
                   <X size={16} />
@@ -764,7 +841,34 @@ export function ChatMemoriesPage() {
           </div>
         )}
 
-        {activeTab === "memories" ? (
+        {ui.pendingRefresh && ui.memoryStatus !== "processing" && (
+          <div className="px-3 pt-3">
+            <div className={cn(
+              radius.md,
+              "bg-white/5 border border-white/10 p-3 flex items-center justify-between gap-3"
+            )}>
+              <div className={cn(typography.bodySmall.size, colors.text.secondary)}>
+                New memory updates available
+              </div>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                className={cn(
+                  typography.caption.size,
+                  "font-semibold px-3 py-1",
+                  radius.full,
+                  "border border-white/15 bg-white/10 text-white/80",
+                  interactive.transition.fast,
+                  interactive.active.scale
+                )}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        )}
+
+        {ui.activeTab === "memories" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
 
             {/* Context Summary */}
@@ -786,10 +890,10 @@ export function ChatMemoriesPage() {
                           {session.memorySummaryTokenCount.toLocaleString()} tokens
                         </span>
                       ) : null}
-                      {summaryDraft !== session?.memorySummary ? (
+                      {ui.summaryDraft !== session?.memorySummary ? (
                         <button
                           onClick={handleSaveSummaryClick}
-                          disabled={isSavingSummary}
+                          disabled={ui.isSavingSummary}
                           className={cn(
                             typography.caption.size,
                             "font-semibold px-3 py-1",
@@ -800,7 +904,7 @@ export function ChatMemoriesPage() {
                             interactive.active.scale
                           )}
                         >
-                          {isSavingSummary ? "Saving..." : "Save"}
+                          {ui.isSavingSummary ? "Saving..." : "Save"}
                         </button>
                       ) : null}
                     </div>
@@ -812,8 +916,8 @@ export function ChatMemoriesPage() {
                   "w-full p-4 text-left"
                 )}>
                   <textarea
-                    value={summaryDraft}
-                    onChange={(e) => setSummaryDraft(e.target.value)}
+                    value={ui.summaryDraft}
+                    onChange={(e) => dispatch({ type: "SET_SUMMARY_DRAFT", value: e.target.value })}
                     rows={4}
                     className={cn(
                       "w-full resize-none bg-transparent focus:outline-none",
@@ -831,8 +935,8 @@ export function ChatMemoriesPage() {
             <div>
               <SectionHeader
                 icon={Bot}
-                title={searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"}
-                subtitle={searchTerm.trim() ? "Filtered by your search" : "Create, search, edit, and delete memories"}
+                title={ui.searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"}
+                subtitle={ui.searchTerm.trim() ? "Filtered by your search" : "Create, search, edit, and delete memories"}
                 right={
                   <div className="flex items-center gap-2">
                     <span className={cn(
@@ -865,8 +969,8 @@ export function ChatMemoriesPage() {
                   <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4", colors.text.tertiary)} />
                   <input
                     type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    value={ui.searchTerm}
+                    onChange={(e) => dispatch({ type: "SET_SEARCH", value: e.target.value })}
                     placeholder="Search memories..."
                     className={cn(
                       "w-full pl-10 pr-10 py-2.5",
@@ -875,10 +979,10 @@ export function ChatMemoriesPage() {
                       "text-sm text-white placeholder-white/40"
                     )}
                   />
-                  {searchTerm.trim().length > 0 && (
+                  {ui.searchTerm.trim().length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setSearchTerm("")}
+                      onClick={() => dispatch({ type: "CLEAR_SEARCH" })}
                       className={cn(
                         "absolute right-3 top-1/2 -translate-y-1/2",
                         colors.text.tertiary,
@@ -903,8 +1007,8 @@ export function ChatMemoriesPage() {
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
                     <textarea
-                      value={newMemory}
-                      onChange={(e) => setNewMemory(e.target.value)}
+                      value={ui.newMemory}
+                      onChange={(e) => dispatch({ type: "SET_NEW_MEMORY", value: e.target.value })}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -923,7 +1027,7 @@ export function ChatMemoriesPage() {
                   </div>
                   <button
                     onClick={handleAddNew}
-                    disabled={!newMemory.trim() || isAdding}
+                    disabled={!ui.newMemory.trim() || ui.isAdding}
                     className={cn(
                       "flex h-10 w-10 items-center justify-center shrink-0",
                       radius.md,
@@ -934,7 +1038,7 @@ export function ChatMemoriesPage() {
                     )}
                     aria-label="Add memory"
                   >
-                    {isAdding ? (
+                    {ui.isAdding ? (
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400" />
                     ) : (
                       <Plus size={16} />
@@ -948,15 +1052,15 @@ export function ChatMemoriesPage() {
               {/* Memory List */}
               {filteredMemories.length === 0 ? (
                 <div className="flex h-64 flex-col items-center justify-center">
-                  {searchTerm ? (
+                  {ui.searchTerm ? (
                     <Search className="mb-3 h-12 w-12 text-white/20" />
                   ) : (
                     <Bot className="mb-3 h-12 w-12 text-white/20" />
                   )}
                   <h3 className="mb-1 text-lg font-medium text-white">
-                    {searchTerm ? "No matching memories" : "No memories yet"}
+                    {ui.searchTerm ? "No matching memories" : "No memories yet"}
                   </h3>
-                  {!searchTerm && (
+                  {!ui.searchTerm && (
                     <p className="text-center text-sm text-white/50">
                       Add your first memory above
                     </p>
@@ -965,8 +1069,8 @@ export function ChatMemoriesPage() {
               ) : (
                 <div className="space-y-3">
                   {filteredMemories.map((item) => {
-                    const expanded = expandedMemories.has(item.index);
-                    const isEditing = editingIndex === item.index;
+                    const expanded = ui.expandedMemories.has(item.index);
+                    const isEditing = ui.editingIndex === item.index;
                     
                     return (
                       <div
@@ -994,7 +1098,7 @@ export function ChatMemoriesPage() {
                           )}
                           onClick={() => {
                             if (isEditing) return;
-                            toggleExpanded(item.index);
+                            dispatch({ type: "TOGGLE_EXPANDED", index: item.index });
                           }}
                           role={isEditing ? undefined : "button"}
                           tabIndex={isEditing ? undefined : 0}
@@ -1002,7 +1106,7 @@ export function ChatMemoriesPage() {
                             if (isEditing) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              toggleExpanded(item.index);
+                              dispatch({ type: "TOGGLE_EXPANDED", index: item.index });
                             }
                           }}
                         >
@@ -1023,8 +1127,8 @@ export function ChatMemoriesPage() {
                                 </span>
                               </div>
                               <textarea
-                                value={editingValue}
-                                onChange={(e) => setEditingValue(e.target.value)}
+                                value={ui.editingValue}
+                                onChange={(e) => dispatch({ type: "SET_EDIT_VALUE", value: e.target.value })}
                                 rows={4}
                                 className={cn(
                                   "w-full p-3",
@@ -1117,7 +1221,7 @@ export function ChatMemoriesPage() {
                                         e.stopPropagation();
                                         void handleSetColdState(item.index, !item.isCold);
                                       }}
-                                      disabled={memoryTempBusy === item.index}
+                                      disabled={ui.memoryTempBusy === item.index}
                                       className={cn(
                                         "flex items-center justify-center",
                                         radius.lg,
@@ -1131,7 +1235,7 @@ export function ChatMemoriesPage() {
                                       aria-label={item.isCold ? "Mark memory as hot" : "Mark memory as cold"}
                                       title={item.isCold ? "Set hot" : "Set cold"}
                                     >
-                                      {memoryTempBusy === item.index ? (
+                                      {ui.memoryTempBusy === item.index ? (
                                         <RefreshCw size={13} className="animate-spin" />
                                       ) : item.isCold ? (
                                         <Flame size={13} />
@@ -1146,10 +1250,10 @@ export function ChatMemoriesPage() {
                                       e.stopPropagation();
                                       try {
                                         await handleTogglePin(item.index);
-                                        setActionError(null);
+                                        dispatch({ type: "SET_ACTION_ERROR", value: null });
                                       } catch (err: any) {
                                         console.error("Failed to toggle pin:", err);
-                                        setActionError(err?.message || "Failed to toggle pin");
+                                        dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to toggle pin" });
                                       }
                                     }}
                                     className={cn(
@@ -1188,10 +1292,11 @@ export function ChatMemoriesPage() {
                                       e.stopPropagation();
                                       try {
                                         await handleRemove(item.index);
-                                        setActionError(null);
+                                        dispatch({ type: "SET_ACTION_ERROR", value: null });
+                                        dispatch({ type: "SHIFT_EXPANDED_AFTER_DELETE", index: item.index });
                                       } catch (err: any) {
                                         console.error("Failed to remove memory:", err);
-                                        setActionError(err?.message || "Failed to remove memory");
+                                        dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to remove memory" });
                                       }
                                     }}
                                     className={cn(
@@ -1259,7 +1364,7 @@ export function ChatMemoriesPage() {
             </div>
 
           </div>
-        ) : activeTab === "tools" ? (
+        ) : ui.activeTab === "tools" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
             <SectionHeader
               icon={Clock}
@@ -1423,12 +1528,12 @@ export function ChatMemoriesPage() {
           ].map(({ id, icon: Icon, label }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => dispatch({ type: "SET_TAB", tab: id })}
               className={cn(
                 radius.md,
                 "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
                 interactive.active.scale,
-                activeTab === id
+                ui.activeTab === id
                   ? "bg-white/10 text-white"
                   : cn(colors.text.tertiary, "hover:text-white")
               )}

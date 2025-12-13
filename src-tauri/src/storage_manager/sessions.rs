@@ -1426,8 +1426,7 @@ pub async fn session_add_memory(
     )
     .map_err(|e| e.to_string())?;
 
-    // Return updated session
-    if let Some(json) = read_session(&conn, &session_id)? {
+    if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
             serde_json::to_string(&json).map_err(|e| e.to_string())?,
         ));
@@ -1480,8 +1479,7 @@ pub fn session_remove_memory(
         .map_err(|e| e.to_string())?;
     }
 
-    // Return updated session
-    if let Some(json) = read_session(&conn, &session_id)? {
+    if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
             serde_json::to_string(&json).map_err(|e| e.to_string())?,
         ));
@@ -1568,8 +1566,7 @@ pub async fn session_update_memory(
         .map_err(|e| e.to_string())?;
     }
 
-    // Return updated session
-    if let Some(json) = read_session(&conn, &session_id)? {
+    if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
             serde_json::to_string(&json).map_err(|e| e.to_string())?,
         ));
@@ -1624,8 +1621,7 @@ pub fn session_toggle_memory_pin(
         .map_err(|e| e.to_string())?;
     }
 
-    // Return updated session
-    if let Some(json) = read_session(&conn, &session_id)? {
+    if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
             serde_json::to_string(&json).map_err(|e| e.to_string())?,
         ));
