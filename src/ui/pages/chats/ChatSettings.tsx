@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info, Brain } from "lucide-react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
-import { readSettings, saveCharacter, createSession, listCharacters, listPersonas, getSessionMeta, saveSession, deletePersona, addMemory, removeMemory, updateMemory } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession, listCharacters, listPersonas, getSessionMeta, saveSession, deletePersona } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -233,7 +233,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
   const [showPersonaActions, setShowPersonaActions] = useState(false);
   const [selectedPersonaForActions, setSelectedPersonaForActions] = useState<Persona | null>(null);
-  const [showMemoryMenu, setShowMemoryMenu] = useState(false);
 
   const loadModels = useCallback(async () => {
     try {
@@ -460,36 +459,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const getModelDisplay = () => {
     if (!currentModel) return "No model available";
     return currentModel.displayName + (!currentCharacter?.defaultModelId ? " (app default)" : "");
-  };
-
-  const handleAddMemory = async (text: string) => {
-    if (!currentSession) return;
-    try {
-      await addMemory(currentSession.id, text);
-      await loadSession();
-    } catch (error) {
-      console.error('Error adding memory:', error);
-    }
-  };
-
-  const handleRemoveMemory = async (index: number) => {
-    if (!currentSession) return;
-    try {
-      await removeMemory(currentSession.id, index);
-      await loadSession();
-    } catch (error) {
-      console.error('Error removing memory:', error);
-    }
-  };
-
-  const handleUpdateMemory = async (index: number, text: string) => {
-    if (!currentSession) return;
-    try {
-      await updateMemory(currentSession.id, index, text);
-      await loadSession();
-    } catch (error) {
-      console.error('Error updating memory:', error);
-    }
   };
 
   return (

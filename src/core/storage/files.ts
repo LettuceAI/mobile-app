@@ -96,6 +96,9 @@ export const storageBridge = {
     sessionAddMemory: (sessionId: string, memory: string) => invoke<string | null>("session_add_memory", { sessionId, memory }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
     sessionRemoveMemory: (sessionId: string, memoryIndex: number) => invoke<string | null>("session_remove_memory", { sessionId, memoryIndex }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
     sessionUpdateMemory: (sessionId: string, memoryIndex: number, newMemory: string) => invoke<string | null>("session_update_memory", { sessionId, memoryIndex, newMemory }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
+    sessionToggleMemoryPin: (sessionId: string, memoryIndex: number) => invoke<string | null>("session_toggle_memory_pin", { sessionId, memoryIndex }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
+    sessionSetMemoryColdState: (sessionId: string, memoryIndex: number, isCold: boolean) =>
+        invoke<string | null>("session_set_memory_cold_state", { sessionId, memoryIndex, isCold }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
 
     // Messages (paged)
     messagesList: (sessionId: string, limit: number, beforeCreatedAt?: number, beforeId?: string) =>

@@ -113,6 +113,8 @@ pub fn run() {
             storage_manager::sessions::session_add_memory,
             storage_manager::sessions::session_remove_memory,
             storage_manager::sessions::session_update_memory,
+            storage_manager::sessions::session_toggle_memory_pin,
+            storage_manager::sessions::session_set_memory_cold_state,
             storage_manager::usage::storage_clear_all,
             storage_manager::usage::storage_reset_database,
             storage_manager::usage::storage_usage_summary,

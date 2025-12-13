@@ -466,6 +466,16 @@ export async function updateMemory(sessionId: string, memoryIndex: number, newMe
   return updated ? SessionSchema.parse(updated) : null;
 }
 
+export async function toggleMemoryPin(sessionId: string, memoryIndex: number): Promise<Session | null> {
+  const updated = await storageBridge.sessionToggleMemoryPin(sessionId, memoryIndex);
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
+export async function setMemoryColdState(sessionId: string, memoryIndex: number, isCold: boolean): Promise<Session | null> {
+  const updated = await storageBridge.sessionSetMemoryColdState(sessionId, memoryIndex, isCold);
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
 // Persona management functions
 export async function listPersonas(): Promise<Persona[]> {
   const data = await storageBridge.personasList();

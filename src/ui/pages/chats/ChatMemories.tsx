@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame } from "lucide-react";
-import type { Character, Session } from "../../../core/storage/schemas";
-import { addMemory, removeMemory, updateMemory, getSession, listSessionPreviews, listCharacters, saveSession, toggleMessagePin } from "../../../core/storage/repo";
+import type { Character, Session, StoredMessage } from "../../../core/storage/schemas";
+import { addMemory, removeMemory, updateMemory, getSessionMeta, listPinnedMessages, listSessionPreviews, listCharacters, saveSession, setMemoryColdState, toggleMessagePin, toggleMemoryPin } from "../../../core/storage/repo";
 
 import { storageBridge } from "../../../core/storage/files";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
@@ -11,9 +11,41 @@ import { Routes, useNavigationManager } from "../../navigation";
 
 type MemoryToolEvent = NonNullable<Session["memoryToolEvents"]>[number];
 
+function SectionHeader({
+  icon: Icon,
+  title,
+  subtitle,
+  right,
+}: {
+  icon?: React.ComponentType<{ size?: string | number; className?: string }>;
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-end justify-between gap-3 mb-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {Icon ? <Icon size={16} className="text-white/40" /> : null}
+          <h2 className={cn(typography.h2.size, typography.h2.weight, colors.text.primary, "truncate")}>
+            {title}
+          </h2>
+        </div>
+        {subtitle ? (
+          <p className={cn(typography.bodySmall.size, colors.text.tertiary, "mt-0.5 truncate")}>
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
+      {right ? <div className="shrink-0">{right}</div> : null}
+    </div>
+  );
+}
+
 function useSessionData(characterId?: string, requestedSessionId?: string | null) {
   const [session, setSession] = useState<Session | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
+  const [pinnedMessages, setPinnedMessages] = useState<StoredMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,22 +64,26 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
 
       let targetSession: Session | null = null;
       if (requestedSessionId) {
-        targetSession = await getSession(requestedSessionId).catch(() => null);
+        targetSession = await getSessionMeta(requestedSessionId).catch(() => null);
       }
 
       if (!targetSession) {
         const previews = await listSessionPreviews(characterId, 1).catch(() => []);
         const latestId = previews[0]?.id;
-        targetSession = latestId ? await getSession(latestId).catch(() => null) : null;
+        targetSession = latestId ? await getSessionMeta(latestId).catch(() => null) : null;
       }
 
       if (targetSession) {
         setSession(targetSession);
+        const pinned = await listPinnedMessages(targetSession.id).catch(() => [] as StoredMessage[]);
+        setPinnedMessages(pinned);
       } else {
         setError("Session not found");
+        setPinnedMessages([]);
       }
     } catch (err: any) {
       setError(err?.message || "Failed to load session");
+      setPinnedMessages([]);
     } finally {
       setLoading(false);
     }
@@ -57,7 +93,7 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
     void load();
   }, [load]);
 
-  return { session, setSession, character, loading, error, reload: load };
+  return { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload: load };
 }
 
 function useMemoryActions(session: Session | null, reload: () => Promise<void>, setSession: (s: Session) => void) {
@@ -130,7 +166,24 @@ function useMemoryActions(session: Session | null, reload: () => Promise<void>, 
     }
   }, [session, setSession]);
 
-  return { handleAdd, handleRemove, handleUpdate, handleSaveSummary };
+  const handleTogglePin = useCallback(async (index: number) => {
+    if (!session) return;
+
+    window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: true } }));
+
+    try {
+      await toggleMemoryPin(session.id, index);
+      await reload();
+      window.dispatchEvent(new CustomEvent("memory:success"));
+      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent("memory:error", { detail: { error: err?.message || "Failed to toggle pin" } }));
+      window.dispatchEvent(new CustomEvent("memory:busy", { detail: { busy: false } }));
+      throw err;
+    }
+  }, [reload, session]);
+
+  return { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin };
 }
 
 function UpdatedMemoriesList({ memories }: { memories: string[] }) {
@@ -291,8 +344,8 @@ export function ChatMemoriesPage() {
   const { characterId } = useParams();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("sessionId");
-  const { session, setSession, character, loading, error, reload } = useSessionData(characterId, sessionId);
-  const { handleAdd, handleRemove, handleUpdate, handleSaveSummary } = useMemoryActions(session, reload, (s) => setSession(s));
+  const { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload } = useSessionData(characterId, sessionId);
+  const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } = useMemoryActions(session, reload, (s) => setSession(s));
   const [activeTab, setActiveTab] = useState<"memories" | "tools" | "pinned">("memories");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -305,6 +358,32 @@ export function ChatMemoriesPage() {
 
   const [actionError, setActionError] = useState<string | null>(searchParams.get("error"));
   const [memoryStatus, setMemoryStatus] = useState<"idle" | "processing" | "failed">("idle");
+  const [expandedMemories, setExpandedMemories] = useState<Set<number>>(() => new Set());
+  const [memoryTempBusy, setMemoryTempBusy] = useState<number | null>(null);
+
+  const toggleExpanded = useCallback((index: number) => {
+    setExpandedMemories((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const handleSetColdState = useCallback(async (memoryIndex: number, isCold: boolean) => {
+    if (!session?.id) return;
+    setMemoryTempBusy(memoryIndex);
+    try {
+      await setMemoryColdState(session.id, memoryIndex, isCold);
+      await reload();
+      setActionError(null);
+    } catch (err: any) {
+      console.error("Failed to update memory temperature:", err);
+      setActionError(err?.message || "Failed to update memory temperature");
+    } finally {
+      setMemoryTempBusy(null);
+    }
+  }, [reload, session?.id]);
 
   useEffect(() => {
     if (!session?.id) return;
@@ -421,24 +500,26 @@ export function ChatMemoriesPage() {
     return { total, ai, user, totalMemoryTokens, summaryTokens, totalTokens };
   }, [memoryItems, session?.memorySummaryTokenCount]);
 
-  const pinnedMessages = useMemo(() => {
-    return session?.messages.filter(m => m.isPinned) || [];
-  }, [session?.messages]);
+  const refreshPinnedMessages = useCallback(async () => {
+    if (!session?.id) return;
+    const pinned = await listPinnedMessages(session.id).catch(() => [] as StoredMessage[]);
+    setPinnedMessages(pinned);
+  }, [session?.id, setPinnedMessages]);
 
   const handleUnpin = useCallback(async (messageId: string) => {
     if (!session) return;
     try {
       await toggleMessagePin(session.id, messageId);
-      await reload();
+      await refreshPinnedMessages();
       setActionError(null);
     } catch (err: any) {
       console.error("Failed to unpin message:", err);
       setActionError(err?.message || "Failed to unpin message");
     }
-  }, [session, reload]);
+  }, [session, refreshPinnedMessages]);
 
   const handleScrollToMessage = useCallback((messageId: string) => {
-    const extra = messageId ? { highlightMessage: messageId } : undefined;
+    const extra = messageId ? { jumpToMessage: messageId } : undefined;
     go(Routes.chatSession(characterId!, session?.id || undefined, extra));
   }, [go, characterId, session?.id]);
 
@@ -529,7 +610,7 @@ export function ChatMemoriesPage() {
       <div className={cn("flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center", colors.surface.base)}>
         <p className={cn("text-sm", colors.text.secondary)}>{error || "Session not found"}</p>
         <button
-          onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
+          onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
           className={cn(
             components.button.primary,
             components.button.sizes.md,
@@ -545,15 +626,15 @@ export function ChatMemoriesPage() {
   return (
     <div className={cn("flex min-h-screen flex-col", colors.surface.base, colors.text.primary)}>
       {/* Header */}
-      <div className={cn(
+      <header className={cn(
         "border-b px-3 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 sticky top-0 z-20",
         colors.glass.strong
       )}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
           <button
-            onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
+            onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
             className={cn(
-              "flex items-center justify-center",
+              "flex h-10 w-10 items-center justify-center",
               radius.full,
               "border bg-white/5",
               colors.border.subtle,
@@ -566,29 +647,60 @@ export function ChatMemoriesPage() {
           >
             <ArrowLeft size={14} />
           </button>
-          <div className="flex-1 min-w-0">
-            <div className={cn(typography.body.size, typography.body.weight, colors.text.primary, "truncate")}>
+          <div className="flex flex-col items-start min-w-0 flex-1">
+            <h1 className={cn(typography.h1.size, typography.h1.weight, colors.text.primary, "truncate")}>
+              Memories
+            </h1>
+            <p className={cn(typography.bodySmall.size, colors.text.tertiary, "mt-1 truncate")}>
               {character.name}
-            </div>
-            <div className={cn(typography.caption.size, colors.text.tertiary, "flex items-center gap-2")}>
-              <span>
-                {stats.total} {stats.total === 1 ? 'memory' : 'memories'}
-              </span>
-              {stats.totalTokens > 0 && (
-                <>
-                  <span className="text-white/20">·</span>
-                  <span className="flex items-center gap-1">
-                    {stats.totalTokens.toLocaleString()} tokens
-                  </span>
-                </>
-              )}
-            </div>
+            </p>
           </div>
+          {memoryStatus === "processing" && (
+            <div className={cn(
+              radius.full,
+              "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+              "border-blue-500/30 bg-blue-500/15 text-blue-200"
+            )}>
+              Processing
+            </div>
+          )}
         </div>
-      </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className={cn(
+            radius.full,
+            "border px-2 py-1",
+            colors.border.subtle,
+            "bg-white/5",
+            typography.caption.size,
+            colors.text.secondary
+          )}>
+            {stats.total} {stats.total === 1 ? "memory" : "memories"}
+          </span>
+          <span className={cn(
+            radius.full,
+            "border px-2 py-1",
+            colors.border.subtle,
+            "bg-white/5",
+            typography.caption.size,
+            colors.text.secondary
+          )}>
+            {stats.totalTokens.toLocaleString()} tokens
+          </span>
+          {isDynamic && (
+            <span className={cn(
+              radius.full,
+              "border px-2 py-1",
+              "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+              typography.caption.size
+            )}>
+              Dynamic
+            </span>
+          )}
+        </div>
+      </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto pb-16">
+      <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* Error Banner */}
         {/* Status Banner (Error / Retry / Success) */}
         {(actionError || retryStatus !== "idle" || memoryStatus === "processing") && (
@@ -653,57 +765,52 @@ export function ChatMemoriesPage() {
         )}
 
         {activeTab === "memories" ? (
-          <div className={cn("px-3 py-4", spacing.section)}>
+          <div className={cn("px-3 py-4", "space-y-5")}>
 
             {/* Context Summary */}
             {isDynamic && (
               <div>
-                <h2 className={cn(
-                  "mb-2 px-1",
-                  typography.overline.size,
-                  typography.overline.weight,
-                  typography.overline.tracking,
-                  typography.overline.transform,
-                  "text-white/35"
-                )}>
-                  Context Summary
-                </h2>
-                <div className={cn(
-                  "w-full px-4 py-3 text-left",
-                  radius.md,
-                  "border border-emerald-400/30 bg-emerald-400/10",
-                  interactive.transition.default
-                )}>
-                  <div className="flex items-center justify-between gap-3 mb-3">
+                <SectionHeader
+                  icon={Sparkles}
+                  title="Context Summary"
+                  subtitle="Short recap used to keep context consistent"
+                  right={
                     <div className="flex items-center gap-2">
-                      <Sparkles size={16} className="text-emerald-400" />
-                      <span className={cn(typography.body.size, typography.body.weight, "text-emerald-100")}>
-                        AI Summary
-                      </span>
-                      {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 && (
+                      {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 ? (
                         <span className={cn(
                           typography.caption.size,
-                          "inline-flex items-center gap-1 px-2 py-0.5 ml-1",
-                          radius.md,
-                          "bg-emerald-400/20 text-emerald-200"
+                          "inline-flex items-center gap-1 px-2 py-0.5",
+                          radius.full,
+                          "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
                         )}>
                           {session.memorySummaryTokenCount.toLocaleString()} tokens
                         </span>
-                      )}
+                      ) : null}
+                      {summaryDraft !== session?.memorySummary ? (
+                        <button
+                          onClick={handleSaveSummaryClick}
+                          disabled={isSavingSummary}
+                          className={cn(
+                            typography.caption.size,
+                            "font-semibold px-3 py-1",
+                            radius.full,
+                            "border border-emerald-400/30 bg-emerald-400/15 text-emerald-200",
+                            "disabled:opacity-50",
+                            interactive.transition.fast,
+                            interactive.active.scale
+                          )}
+                        >
+                          {isSavingSummary ? "Saving..." : "Save"}
+                        </button>
+                      ) : null}
                     </div>
-                    {summaryDraft !== session?.memorySummary && (
-                      <button
-                        onClick={handleSaveSummaryClick}
-                        disabled={isSavingSummary}
-                        className={cn(
-                          typography.caption.size,
-                          "font-medium text-emerald-300 hover:text-emerald-200 transition-colors disabled:opacity-50"
-                        )}
-                      >
-                        {isSavingSummary ? "Saving..." : "Save"}
-                      </button>
-                    )}
-                  </div>
+                  }
+                />
+                <div className={cn(
+                  components.card.base,
+                  "border-emerald-400/20 bg-emerald-400/5",
+                  "w-full p-4 text-left"
+                )}>
                   <textarea
                     value={summaryDraft}
                     onChange={(e) => setSummaryDraft(e.target.value)}
@@ -722,16 +829,35 @@ export function ChatMemoriesPage() {
 
             {/* Memories Section */}
             <div>
-              <h2 className={cn(
-                "mb-2 px-1",
-                typography.overline.size,
-                typography.overline.weight,
-                typography.overline.tracking,
-                typography.overline.transform,
-                "text-white/35"
-              )}>
-                Memories
-              </h2>
+              <SectionHeader
+                icon={Bot}
+                title={searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"}
+                subtitle={searchTerm.trim() ? "Filtered by your search" : "Create, search, edit, and delete memories"}
+                right={
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      typography.caption.size,
+                      "inline-flex items-center gap-1 px-2 py-0.5",
+                      radius.full,
+                      "border bg-white/5",
+                      colors.border.subtle,
+                      colors.text.secondary
+                    )}>
+                      AI {stats.ai}
+                    </span>
+                    <span className={cn(
+                      typography.caption.size,
+                      "inline-flex items-center gap-1 px-2 py-0.5",
+                      radius.full,
+                      "border bg-white/5",
+                      colors.border.subtle,
+                      colors.text.secondary
+                    )}>
+                      You {stats.user}
+                    </span>
+                  </div>
+                }
+              />
 
               {/* Search Bar */}
               {memoryItems.length > 0 && (
@@ -743,24 +869,36 @@ export function ChatMemoriesPage() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search memories..."
                     className={cn(
-                      "w-full pl-10 pr-3 py-2.5",
+                      "w-full pl-10 pr-10 py-2.5",
+                      components.input.base,
                       radius.lg,
-                      "border border-white/10 bg-black/20",
-                      "text-sm text-white placeholder-white/40",
-                      "focus:border-white/30 focus:outline-none",
-                      interactive.transition.default
+                      "text-sm text-white placeholder-white/40"
                     )}
                   />
+                  {searchTerm.trim().length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm("")}
+                      className={cn(
+                        "absolute right-3 top-1/2 -translate-y-1/2",
+                        colors.text.tertiary,
+                        "hover:text-white",
+                        interactive.transition.fast
+                      )}
+                      aria-label="Clear search"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* Add New Memory */}
               <div className={cn(
-                "w-full px-4 py-3 text-left",
-                radius.md,
-                "border border-white/10 bg-white/5",
+                components.card.base,
+                "w-full p-4 text-left",
                 interactive.transition.default,
-                "pb-6 mb-4"
+                "mb-4"
               )}>
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
@@ -787,16 +925,17 @@ export function ChatMemoriesPage() {
                     onClick={handleAddNew}
                     disabled={!newMemory.trim() || isAdding}
                     className={cn(
-                      "flex items-center justify-center shrink-0",
+                      "flex h-10 w-10 items-center justify-center shrink-0",
                       radius.md,
                       "border border-emerald-400/40 bg-emerald-500/20 text-emerald-100",
                       "hover:bg-emerald-500/30 disabled:opacity-30 disabled:pointer-events-none",
                       interactive.transition.default,
                       interactive.active.scale
                     )}
+                    aria-label="Add memory"
                   >
                     {isAdding ? (
-                      <div className="animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400" />
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400" />
                     ) : (
                       <Plus size={16} />
                     )}
@@ -824,219 +963,342 @@ export function ChatMemoriesPage() {
                   )}
                 </div>
               ) : (
-                <div className={spacing.field}>
-                  {filteredMemories.map((item) => (
-                    <div
-                      key={item.index}
-                      className={cn(
-                        "w-full px-4 py-3",
-                        radius.md,
-                        "border border-white/10 bg-white/5",
-                        interactive.transition.default
-                      )}
-                    >
-                      {/* Metadata Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {isDynamic ? (
-                            item.isCold ? (
-                              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-[10px] font-medium text-blue-200 uppercase tracking-wider">
-                                <Snowflake size={10} />
-                                Cold
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-[10px] font-medium text-amber-200 uppercase tracking-wider">
-                                <Flame size={10} />
-                                Hot ({item.importanceScore.toFixed(2)})
-                              </div>
-                            )
-                          ) : null}
-                          {item.isPinned && (
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-500/20 border border-pink-500/30 text-[10px] font-medium text-pink-200 uppercase tracking-wider">
-                              <Pin size={10} />
-                              Pinned
-                            </div>
-                          )}
-                        </div>
-                        {item.createdAt > 0 && (
-                          <div className="flex items-center gap-3 text-[10px] text-white/30 font-medium">
-                            {item.cycle && (
-                              <span className="flex items-center gap-1" title="Creation Cycle">
-                                <RefreshCw size={10} />
-                                Cycle {item.cycle}
-                              </span>
-                            )}
-                            {item.lastAccessedAt > 0 && (
-                              <span title="Last Accessed">
-                                Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
+                <div className="space-y-3">
+                  {filteredMemories.map((item) => {
+                    const expanded = expandedMemories.has(item.index);
+                    const isEditing = editingIndex === item.index;
+                    
+                    return (
+                      <div
+                        key={item.index}
+                        className={cn(
+                          "group relative overflow-hidden rounded-xl",
+                          "border transition-all duration-200",
+                          isEditing
+                            ? "border-white/20 bg-white/[0.03]"
+                            : expanded
+                              ? "border-white/10 bg-white/[0.02]"
+                              : "border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.03]"
                         )}
-                      </div>
+                      >
+                        {/* Accent line */}
+                        <div className={cn(
+                          "absolute left-0 top-0 bottom-0 w-[3px]",
+                          item.isAi ? "bg-blue-400/60" : "bg-emerald-400/60"
+                        )} />
 
-                      {editingIndex === item.index ? (
-                        <div className={spacing.field}>
-                          <textarea
-                            value={editingValue}
-                            onChange={(e) => setEditingValue(e.target.value)}
-                            rows={3}
-                            className={cn(
-                              "w-full p-3",
-                              radius.lg,
-                              "border border-white/10 bg-black/20",
-                              "text-sm text-white resize-none",
-                              "focus:border-white/30 focus:outline-none"
-                            )}
-                            autoFocus
-                          />
-                          <div className="flex justify-end gap-3">
-                            <button
-                              onClick={cancelEdit}
-                              className={cn(
-                                "flex-1 px-4 py-2",
-                                radius.lg,
-                                "border border-white/10 bg-white/5",
-                                "text-sm font-medium text-white/70",
-                                "transition hover:border-white/20 hover:bg-white/10 hover:text-white"
-                              )}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => saveEdit(item.index)}
-                              className={cn(
-                                "flex-1 px-4 py-2",
-                                radius.lg,
-                                "border border-emerald-400/40 bg-emerald-500/20",
-                                "text-sm font-semibold text-emerald-100",
-                                "transition hover:border-emerald-400/60 hover:bg-emerald-500/30"
-                              )}
-                            >
-                              <Check size={14} className="mr-1.5 inline" />
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-start gap-3">
-                            <div className={cn(
-                              "flex h-8 w-8 shrink-0 items-center justify-center",
-                              radius.full,
-                              "border text-white/70",
-                              interactive.transition.default,
-                              item.isAi
-                                ? "border-blue-400/30 bg-blue-400/10"
-                                : "border-emerald-400/30 bg-emerald-400/10"
-                            )}>
-                              {item.isAi ? (
-                                <Bot className="h-4 w-4 text-blue-400" />
-                              ) : (
-                                <User className="h-4 w-4 text-emerald-400" />
-                              )}
+                        <div
+                          className={cn(
+                            "pl-5 pr-4 py-4",
+                            !isEditing && "cursor-pointer"
+                          )}
+                          onClick={() => {
+                            if (isEditing) return;
+                            toggleExpanded(item.index);
+                          }}
+                          role={isEditing ? undefined : "button"}
+                          tabIndex={isEditing ? undefined : 0}
+                          onKeyDown={(e) => {
+                            if (isEditing) return;
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleExpanded(item.index);
+                            }
+                          }}
+                        >
+                          {isEditing ? (
+                            /* Edit Mode */
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2">
+                                {item.isAi ? (
+                                  <Bot className="h-4 w-4 text-blue-400" />
+                                ) : (
+                                  <User className="h-4 w-4 text-emerald-400" />
+                                )}
+                                <span className={cn(
+                                  "text-xs font-semibold uppercase tracking-wider",
+                                  item.isAi ? "text-blue-400" : "text-emerald-400"
+                                )}>
+                                  Editing {item.isAi ? "AI Memory" : "Your Note"}
+                                </span>
+                              </div>
+                              <textarea
+                                value={editingValue}
+                                onChange={(e) => setEditingValue(e.target.value)}
+                                rows={4}
+                                className={cn(
+                                  "w-full p-3",
+                                  radius.lg,
+                                  "border border-white/10 bg-black/30",
+                                  "text-sm text-white/90 resize-none leading-relaxed",
+                                  "focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10",
+                                  "placeholder:text-white/30"
+                                )}
+                                placeholder="Enter memory content..."
+                                autoFocus
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={cancelEdit}
+                                  className={cn(
+                                    "flex-1 px-4 py-2.5",
+                                    radius.lg,
+                                    "border border-white/10 bg-white/5",
+                                    "text-sm font-medium text-white/60",
+                                    "transition-all hover:border-white/15 hover:bg-white/8 hover:text-white/80",
+                                    "active:scale-[0.98]"
+                                  )}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => saveEdit(item.index)}
+                                  className={cn(
+                                    "flex-1 px-4 py-2.5 flex items-center justify-center gap-2",
+                                    radius.lg,
+                                    "border border-emerald-400/30 bg-emerald-500/15",
+                                    "text-sm font-semibold text-emerald-200",
+                                    "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25",
+                                    "active:scale-[0.98]"
+                                  )}
+                                >
+                                  <Check size={14} />
+                                  Save Changes
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
+                          ) : (
+                            /* View Mode */
+                            <div className="space-y-3">
+                              {/* Header Row */}
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {item.isAi ? (
+                                    <Bot className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                  ) : (
+                                    <User className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                  )}
+                                  <span className={cn(
+                                    "text-[11px] font-semibold uppercase tracking-wider",
+                                    item.isAi ? "text-blue-400/90" : "text-emerald-400/90"
+                                  )}>
+                                    {item.isAi ? "AI Memory" : "Your Note"}
+                                  </span>
+                                  
+                                  {/* Status badges */}
+                                  {isDynamic && (
+                                    item.isCold ? (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-300/80 border border-blue-500/20">
+                                        Cold
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-300/80 border border-amber-500/20">
+                                        Hot {item.importanceScore.toFixed(1)}
+                                      </span>
+                                    )
+                                  )}
+                                  {item.isPinned && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-pink-500/10 text-pink-300/80 border border-pink-500/20">
+                                      <Pin size={8} />
+                                      Pinned
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Action Buttons - Always visible on mobile, hover on desktop */}
+                                <div className={cn(
+                                  "flex items-center gap-1.5 shrink-0",
+                                  "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                )}>
+                                  {isDynamic && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void handleSetColdState(item.index, !item.isCold);
+                                      }}
+                                      disabled={memoryTempBusy === item.index}
+                                      className={cn(
+                                        "flex items-center justify-center",
+                                        radius.lg,
+                                        item.isCold
+                                          ? "bg-blue-500/15 text-blue-300/90"
+                                          : "bg-amber-500/15 text-amber-300/90",
+                                        "transition-all hover:bg-white/10 hover:text-white/80",
+                                        "disabled:opacity-60 disabled:pointer-events-none",
+                                        "active:scale-95"
+                                      )}
+                                      aria-label={item.isCold ? "Mark memory as hot" : "Mark memory as cold"}
+                                      title={item.isCold ? "Set hot" : "Set cold"}
+                                    >
+                                      {memoryTempBusy === item.index ? (
+                                        <RefreshCw size={13} className="animate-spin" />
+                                      ) : item.isCold ? (
+                                        <Flame size={13} />
+                                      ) : (
+                                        <Snowflake size={13} />
+                                      )}
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        await handleTogglePin(item.index);
+                                        setActionError(null);
+                                      } catch (err: any) {
+                                        console.error("Failed to toggle pin:", err);
+                                        setActionError(err?.message || "Failed to toggle pin");
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex items-center justify-center",
+                                      radius.lg,
+                                      item.isPinned
+                                        ? "bg-pink-500/20 text-pink-400"
+                                        : "bg-white/5 text-white/50",
+                                      "transition-all hover:bg-pink-500/20 hover:text-pink-400",
+                                      "active:scale-95"
+                                    )}
+                                    aria-label={item.isPinned ? "Unpin memory" : "Pin memory"}
+                                  >
+                                    <Pin size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEdit(item.index, item.text);
+                                    }}
+                                    className={cn(
+                                      "flex items-center justify-center",
+                                      radius.lg,
+                                      "bg-white/5 text-white/50",
+                                      "transition-all hover:bg-white/10 hover:text-white/80",
+                                      "active:scale-95"
+                                    )}
+                                    aria-label="Edit memory"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        await handleRemove(item.index);
+                                        setActionError(null);
+                                      } catch (err: any) {
+                                        console.error("Failed to remove memory:", err);
+                                        setActionError(err?.message || "Failed to remove memory");
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex items-center justify-center",
+                                      radius.lg,
+                                      "bg-red-500/10 text-red-400/70",
+                                      "transition-all hover:bg-red-500/20 hover:text-red-400",
+                                      "active:scale-95"
+                                    )}
+                                    aria-label="Delete memory"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Memory Content */}
                               <p className={cn(
-                                typography.bodySmall.size,
-                                colors.text.secondary,
-                                "leading-relaxed wrap-break-word"
+                                "text-[13px] text-white/75 leading-[1.6]",
+                                expanded ? "whitespace-pre-wrap" : "line-clamp-2"
                               )}>
                                 {item.text}
                               </p>
-                              {item.tokenCount > 0 && (
-                                <div className="mt-1.5">
-                                  <span className={cn(
-                                    typography.caption.size,
-                                    "inline-flex items-center gap-1 px-2 py-0.5",
-                                    radius.md,
-                                    "bg-white/5 text-white/50"
-                                  )}>
-                                    {item.tokenCount.toLocaleString()} tokens
-                                  </span>
+
+                              {/* Footer / Meta */}
+                              <div className="flex items-center justify-between pt-1">
+                                <div className="flex items-center gap-3 text-[10px] text-white/35">
+                                  {item.tokenCount > 0 && (
+                                    <span>{item.tokenCount.toLocaleString()} tokens</span>
+                                  )}
+                                  {item.cycle && (
+                                    <span>Cycle {item.cycle}</span>
+                                  )}
+                                  {item.lastAccessedAt > 0 && (
+                                    <span>Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}</span>
+                                  )}
                                 </div>
-                              )}
+                                
+                                {/* Expand hint */}
+                                <div className={cn(
+                                  "flex items-center gap-1 text-[10px] text-white/30 transition-colors",
+                                  "group-hover:text-white/40"
+                                )}>
+                                  {expanded ? (
+                                    <>
+                                      <ChevronUp size={12} />
+                                      <span>Collapse</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ChevronDown size={12} />
+                                      <span>Expand</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-4 mt-3 pl-11">
-                            <button
-                              onClick={() => startEdit(item.index, item.text)}
-                              className={cn(
-                                typography.caption.size,
-                                "font-medium flex items-center gap-1.5",
-                                colors.text.tertiary,
-                                "hover:text-white transition-colors"
-                              )}
-                            >
-                              <Edit2 size={12} />
-                              Edit
-                            </button>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await handleRemove(item.index);
-                                  setActionError(null);
-                                } catch (err: any) {
-                                  console.error("Failed to remove memory:", err);
-                                  setActionError(err?.message || "Failed to remove memory");
-                                }
-                              }}
-                              className={cn(
-                                typography.caption.size,
-                                "font-medium flex items-center gap-1.5",
-                                colors.text.tertiary,
-                                "hover:text-red-400 transition-colors"
-                              )}
-                            >
-                              <Trash2 size={12} />
-                              Delete
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
           </div>
         ) : activeTab === "tools" ? (
-          <div className={cn("px-3 py-4", spacing.section)}>
-            <div>
-              <h2 className={cn(
-                "mb-2 px-1",
-                typography.overline.size,
-                typography.overline.weight,
-                typography.overline.tracking,
-                typography.overline.transform,
-                "text-white/35"
-              )}>
-                Activity Log
-              </h2>
-              <p className={cn(typography.caption.size, colors.text.tertiary, "mb-3 px-1")}>
-                History of AI memory operations
-              </p>
-            </div>
+          <div className={cn("px-3 py-4", "space-y-5")}>
+            <SectionHeader
+              icon={Clock}
+              title="Activity"
+              subtitle="History of AI memory operations"
+              right={
+                <span className={cn(
+                  typography.caption.size,
+                  "inline-flex items-center gap-1 px-2 py-0.5",
+                  radius.full,
+                  "border bg-white/5",
+                  colors.border.subtle,
+                  colors.text.secondary
+                )}>
+                  {(session.memoryToolEvents?.length ?? 0).toLocaleString()}
+                </span>
+              }
+            />
             <ToolLog events={(session.memoryToolEvents as MemoryToolEvent[]) || []} />
           </div>
         ) : (
-          <div className={cn("px-3 py-4", spacing.section)}>
-            <div>
-              <h2 className={cn(
-                "mb-2 px-1",
-                typography.overline.size,
-                typography.overline.weight,
-                typography.overline.tracking,
-                typography.overline.transform,
-                "text-white/35"
-              )}>
-                Pinned Messages
-              </h2>
-              <p className={cn(typography.caption.size, colors.text.tertiary, "mb-3 px-1")}>
-                Messages that are always included in context
-              </p>
-            </div>
+          <div className={cn("px-3 py-4", "space-y-5")}>
+            <SectionHeader
+              icon={Pin}
+              title="Pinned Messages"
+              subtitle="Always included in context"
+              right={
+                <span className={cn(
+                  typography.caption.size,
+                  "inline-flex items-center gap-1 px-2 py-0.5",
+                  radius.full,
+                  "border bg-white/5",
+                  colors.border.subtle,
+                  colors.text.secondary
+                )}>
+                  {pinnedMessages.length.toLocaleString()}
+                </span>
+              }
+            />
             {pinnedMessages.length === 0 ? (
               <div className={cn(
                 components.card.base,
@@ -1057,17 +1319,16 @@ export function ChatMemoriesPage() {
                   const isAssistant = msg.role === "assistant";
                   const timestamp = new Date(msg.createdAt).toLocaleString();
 
-                  return (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        "w-full px-4 py-3",
-                        radius.md,
-                        "border bg-white/5",
-                        isUser ? "border-emerald-400/30" : isAssistant ? "border-blue-400/30" : "border-white/10",
-                        interactive.transition.default
-                      )}
-                    >
+	                  return (
+	                    <div
+	                      key={msg.id}
+	                      className={cn(
+	                        components.card.base,
+	                        components.card.interactive,
+	                        "w-full p-4",
+	                        isUser ? "border-emerald-400/30" : isAssistant ? "border-blue-400/30" : "border-white/10"
+	                      )}
+	                    >
                       <div className="flex items-start gap-3">
                         <div className={cn(
                           "flex h-8 w-8 shrink-0 items-center justify-center",
@@ -1101,13 +1362,13 @@ export function ChatMemoriesPage() {
                               {timestamp}
                             </span>
                           </div>
-                          <p className={cn(
-                            typography.bodySmall.size,
-                            colors.text.secondary,
-                            "leading-relaxed wrap-break-word whitespace-pre-wrap"
-                          )}>
-                            {msg.content}
-                          </p>
+	                          <p className={cn(
+	                            typography.bodySmall.size,
+	                            colors.text.secondary,
+	                            "leading-relaxed whitespace-pre-wrap break-words"
+	                          )}>
+	                            {msg.content}
+	                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 mt-3 pl-11">

@@ -1576,3 +1576,133 @@ pub async fn session_update_memory(
     }
     Ok(None)
 }
+
+#[tauri::command]
+pub fn session_toggle_memory_pin(
+    app: tauri::AppHandle,
+    session_id: String,
+    memory_index: usize,
+) -> Result<Option<String>, String> {
+    let conn = open_db(&app)?;
+
+    // Read current memory embeddings
+    let current_embeddings_json: String = conn
+        .query_row(
+            "SELECT memory_embeddings FROM sessions WHERE id = ?",
+            params![&session_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| "[]".to_string());
+
+    let mut memory_embeddings: Vec<JsonValue> =
+        serde_json::from_str(&current_embeddings_json).unwrap_or_else(|_| vec![]);
+
+    // Toggle pin status at index
+    if memory_index < memory_embeddings.len() {
+        if let Some(obj) = memory_embeddings
+            .get_mut(memory_index)
+            .and_then(|v| v.as_object_mut())
+        {
+            let current_pinned = obj
+                .get("isPinned")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            obj.insert("isPinned".into(), JsonValue::Bool(!current_pinned));
+        }
+
+        // Save back
+        let new_embeddings_json =
+            serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+        let now = now_ms() as i64;
+
+        conn.execute(
+            "UPDATE sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
+            params![new_embeddings_json, now, &session_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Return updated session
+    if let Some(json) = read_session(&conn, &session_id)? {
+        return Ok(Some(
+            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+        ));
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn session_set_memory_cold_state(
+    app: tauri::AppHandle,
+    session_id: String,
+    memory_index: usize,
+    is_cold: bool,
+) -> Result<Option<String>, String> {
+    let conn = open_db(&app)?;
+
+    // Read current memories + embeddings so we can keep alignment.
+    let (current_memories_json, current_embeddings_json): (String, String) = conn
+        .query_row(
+            "SELECT memories, memory_embeddings FROM sessions WHERE id = ?",
+            params![&session_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| ("[]".to_string(), "[]".to_string()));
+
+    let memories: Vec<String> =
+        serde_json::from_str(&current_memories_json).unwrap_or_else(|_| vec![]);
+    let mut memory_embeddings: Vec<JsonValue> =
+        serde_json::from_str(&current_embeddings_json).unwrap_or_else(|_| vec![]);
+
+    if memory_index >= memories.len() {
+        if let Some(json) = read_session_meta(&conn, &session_id)? {
+            return Ok(Some(serde_json::to_string(&json).map_err(|e| e.to_string())?));
+        }
+        return Ok(None);
+    }
+
+    let now = now_ms() as i64;
+
+    // Ensure embeddings vector is long enough; fill missing entries with placeholders.
+    while memory_embeddings.len() <= memory_index {
+        let idx = memory_embeddings.len();
+        let text = memories.get(idx).cloned().unwrap_or_default();
+        memory_embeddings.push(serde_json::json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "text": text,
+            "embedding": [],
+            "createdAt": now,
+            "tokenCount": 0,
+        }));
+    }
+
+    if let Some(obj) = memory_embeddings
+        .get_mut(memory_index)
+        .and_then(|v| v.as_object_mut())
+    {
+        obj.insert("isCold".into(), JsonValue::Bool(is_cold));
+        if is_cold {
+            obj.insert("importanceScore".into(), JsonValue::from(0.0));
+        } else {
+            obj.insert("importanceScore".into(), JsonValue::from(1.0));
+            obj.insert("lastAccessedAt".into(), JsonValue::from(now));
+        }
+    }
+
+    let new_embeddings_json =
+        serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
+        params![new_embeddings_json, now, &session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    if let Some(json) = read_session_meta(&conn, &session_id)? {
+        return Ok(Some(serde_json::to_string(&json).map_err(|e| e.to_string())?));
+    }
+    Ok(None)
+}
