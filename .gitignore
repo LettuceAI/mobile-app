@@ -29,3 +29,4 @@ target/rust-analyzer/flycheck0/stdout
 STORAGE_MIGRATION_NOTES.md
 TOOL_SUPPORT.md
 usage-2025-12-06.csv
+.github/copilot-instructions.md

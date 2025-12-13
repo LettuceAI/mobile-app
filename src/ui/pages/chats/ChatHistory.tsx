@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Trash2, MessageCircle, AlertCircle, Edit3 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Trash2, MessageCircle, AlertCircle, Edit3, Search, X } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 import type { Character } from "../../../core/storage/schemas";
@@ -10,6 +10,7 @@ import {
   updateSessionTitle
 } from "../../../core/storage";
 import { typography, radius, cn, colors, interactive } from "../../design-tokens";
+import { BottomMenu, MenuButton, MenuButtonGroup, MenuDivider, MenuLabel } from "../../components";
 import { Routes, useNavigationManager } from "../../navigation";
 
 interface SessionPreview {
@@ -28,6 +29,31 @@ export function ChatHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<SessionPreview | null>(null);
+  const [query, setQuery] = useState(() => {
+    const storageKey = characterId ? `chatHistoryQuery:${characterId}` : "chatHistoryQuery";
+    const fromStorage = sessionStorage.getItem(storageKey);
+    if (fromStorage != null) return fromStorage;
+    return new URLSearchParams(window.location.search).get("q") ?? "";
+  });
+
+  useEffect(() => {
+    const storageKey = characterId ? `chatHistoryQuery:${characterId}` : "chatHistoryQuery";
+    if (query.trim()) sessionStorage.setItem(storageKey, query);
+    else sessionStorage.removeItem(storageKey);
+  }, [characterId, query]);
+
+  useEffect(() => {
+    // Keep URL shareable without triggering react-router navigation/remounts.
+    const handle = window.setTimeout(() => {
+      const url = new URL(window.location.href);
+      const next = query.trim();
+      if (next) url.searchParams.set("q", next);
+      else url.searchParams.delete("q");
+      window.history.replaceState(window.history.state, "", url.toString());
+    }, 150);
+    return () => window.clearTimeout(handle);
+  }, [query]);
 
   // Load data
   useEffect(() => {
@@ -99,6 +125,16 @@ export function ChatHistoryPage() {
       });
     }
   }, []);
+
+  const filteredSessions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => {
+      if (s.title.toLowerCase().includes(q)) return true;
+      if (s.lastMessage.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [query, sessions]);
 
   if (!characterId) {
     return (
@@ -187,6 +223,51 @@ export function ChatHistoryPage() {
           </div>
         )}
 
+        {sessions.length > 0 && (
+          <div className="mb-4">
+            <div className={cn("relative")}>
+              <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4", colors.text.tertiary)} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search chats..."
+                className={cn(
+                  "w-full pl-10 pr-10 py-2.5",
+                  "border bg-white/5",
+                  colors.border.subtle,
+                  radius.lg,
+                  typography.bodySmall.size,
+                  "text-white placeholder-white/40",
+                  "focus:outline-none focus:ring-2 focus:ring-white/10 focus:border-white/20"
+                )}
+              />
+              {query.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className={cn(
+                    "absolute right-2 top-1/2 -translate-y-1/2",
+                    "flex items-center justify-center",
+                    radius.full,
+                    colors.text.tertiary,
+                    "hover:text-white",
+                    interactive.transition.fast,
+                    interactive.active.scale
+                  )}
+                  aria-label="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            {query.trim() ? (
+              <p className={cn(typography.caption.size, colors.text.tertiary, "mt-2")}>
+                {filteredSessions.length.toLocaleString()} result{filteredSessions.length === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
+        )}
+
         {sessions.length === 0 ? (
           <div className="text-center py-20">
             <MessageCircle className="mx-auto mb-4 h-12 w-12 text-white/30" />
@@ -198,20 +279,97 @@ export function ChatHistoryPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {sessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                onSelect={() => go(Routes.chatSession(characterId!, session.id))}
-                onDelete={() => handleDelete(session.id)}
-                onRename={(newTitle) => handleRename(session.id, newTitle)}
-                isBusy={busyIds.has(session.id)}
-              />
-            ))}
-          </div>
+          filteredSessions.length === 0 ? (
+            <div className="text-center py-20">
+              <MessageCircle className="mx-auto mb-4 h-12 w-12 text-white/30" />
+              <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white/70 mb-2")}>
+                No matching chats
+              </h3>
+              <p className={cn(typography.bodySmall.size, "text-white/40 mb-6")}>
+                Try a different search term
+              </p>
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className={cn(
+                  "px-4 py-2 border bg-white/5 text-white/80",
+                  colors.border.subtle,
+                  radius.md,
+                  typography.bodySmall.size,
+                  interactive.active.scale,
+                  interactive.hover.brightness,
+                  interactive.transition.fast
+                )}
+              >
+                Clear search
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredSessions.map((session) => (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  onSelect={() => go(Routes.chatSession(characterId!, session.id))}
+                  onDelete={() => setDeleteTarget(session)}
+                  onRename={(newTitle) => handleRename(session.id, newTitle)}
+                  isBusy={busyIds.has(session.id)}
+                />
+              ))}
+            </div>
+          )
         )}
       </main>
+
+      <BottomMenu
+        isOpen={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete chat?"
+        includeExitIcon={false}
+      >
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+          <p className={cn(typography.bodySmall.size, "font-semibold text-white/90 truncate")}>
+            {deleteTarget?.title || "Untitled Chat"}
+          </p>
+          {deleteTarget ? (
+            <p className={cn(typography.caption.size, "text-white/45 mt-0.5")}>
+              {formatTimeAgo(deleteTarget.updatedAt)}
+            </p>
+          ) : null}
+          {deleteTarget?.lastMessage ? (
+            <p className={cn(typography.bodySmall.size, "text-white/60 mt-2 line-clamp-2")}>
+              {deleteTarget.lastMessage}
+            </p>
+          ) : null}
+        </div>
+
+        <MenuDivider />
+
+        <MenuButtonGroup>
+          <MenuButton
+            icon={Trash2}
+            title={deleteTarget && busyIds.has(deleteTarget.id) ? "Deleting..." : "Delete chat"}
+            description="Permanently removes it from history"
+            color="from-rose-500 to-red-600"
+            disabled={!deleteTarget || busyIds.has(deleteTarget.id)}
+            onClick={() => {
+              if (!deleteTarget) return;
+              void (async () => {
+                await handleDelete(deleteTarget.id);
+                setDeleteTarget(null);
+              })();
+            }}
+          />
+          <MenuButton
+            icon={X}
+            title="Cancel"
+            description="Keep this chat"
+            color="from-blue-500 to-blue-600"
+            disabled={!!deleteTarget && busyIds.has(deleteTarget.id)}
+            onClick={() => setDeleteTarget(null)}
+          />
+        </MenuButtonGroup>
+      </BottomMenu>
     </div>
   );
 }
