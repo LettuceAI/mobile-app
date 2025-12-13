@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef } from "react";
 import { ArrowLeft, Loader2, X, Search } from "lucide-react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
-import { radius, cn } from "../../design-tokens";
+import { components, colors, interactive, radius, cn } from "../../design-tokens";
 import { storageBridge } from "../../../core/storage/files";
+import { Routes, useNavigationManager } from "../../navigation";
 
 interface SearchResult {
     messageId: string;
@@ -14,6 +15,7 @@ interface SearchResult {
 export function SearchMessagesPage() {
     const navigate = useNavigate();
     const { characterId } = useParams<{ characterId: string }>();
+    const { backOrReplace } = useNavigationManager();
     const [searchParams] = useSearchParams();
     const sessionId = searchParams.get("sessionId");
 
@@ -73,14 +75,27 @@ export function SearchMessagesPage() {
     };
 
     return (
-        <div className="flex h-screen flex-col bg-[#050505] text-white">
+        <div className={cn("flex h-screen flex-col", colors.surface.base, colors.text.primary)}>
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-white/10 px-3 pb-3 pt-10 sticky top-0 bg-[#050505] z-10">
+            <div className={cn(
+                "flex items-center gap-3 border-b px-3 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0 z-20",
+                colors.glass.strong
+            )}>
                 <button
-                    onClick={() => navigate(-1)}
-                    className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 h-10 w-10 text-white transition hover:border-white/25"
+                    onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
+                    className={cn(
+                        "flex shrink-0 items-center justify-center",
+                        radius.full,
+                        "border bg-white/5",
+                        colors.border.subtle,
+                        colors.text.primary,
+                        interactive.hover.brightness,
+                        interactive.active.scale,
+                        interactive.focus.ring
+                    )}
+                    aria-label="Back"
                 >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={14} />
                 </button>
                 <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
@@ -91,9 +106,9 @@ export function SearchMessagesPage() {
                         onChange={onQueryChange}
                         placeholder="Search conversation..."
                         className={cn(
-                            "w-full bg-white/5 border border-white/10 text-white pl-10 pr-10 py-2.5",
-                            radius.lg,
-                            "focus:outline-none focus:border-white/20 focus:bg-white/10 placeholder:text-white/30"
+                            "w-full pl-10 pr-10 py-2.5 placeholder:text-white/30",
+                            components.input.base,
+                            radius.lg
                         )}
                     />
                     {query && (
@@ -127,7 +142,8 @@ export function SearchMessagesPage() {
                             <button
                                 key={result.messageId}
                                 onClick={() => {
-                                    navigate(`/chat/${characterId}?sessionId=${sessionId}&jumpToMessage=${result.messageId}`);
+                                    if (!characterId) return;
+                                    navigate(Routes.chatSession(characterId, sessionId, { jumpToMessage: result.messageId }));
                                 }}
                                 className={cn(
                                     "w-full text-left p-4 space-y-2 border border-white/10 bg-white/5 hover:bg-white/10 transition",

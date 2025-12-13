@@ -11,6 +11,29 @@ export const Routes = {
   chatRoot: "/",
   chatHistory: (characterId: string) => `/chat/${characterId}/history`,
   chatSettings: (characterId: string) => `/chat/${characterId}/settings`,
+  chatSettingsSession: (characterId: string, sessionId?: string | null) => {
+    const params = new URLSearchParams();
+    if (sessionId) params.set("sessionId", sessionId);
+    const query = params.toString();
+    return query ? `/chat/${characterId}/settings?${query}` : `/chat/${characterId}/settings`;
+  },
+  chatMemories: (characterId: string, sessionId?: string | null, extra?: Record<string, string | null>) => {
+    const params = new URLSearchParams();
+    if (sessionId) params.set("sessionId", sessionId);
+    if (extra) {
+      Object.entries(extra).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) params.set(k, v);
+      });
+    }
+    const query = params.toString();
+    return query ? `/chat/${characterId}/memories?${query}` : `/chat/${characterId}/memories`;
+  },
+  chatSearch: (characterId: string, sessionId?: string | null) => {
+    const params = new URLSearchParams();
+    if (sessionId) params.set("sessionId", sessionId);
+    const query = params.toString();
+    return query ? `/chat/${characterId}/search?${query}` : `/chat/${characterId}/search`;
+  },
   chatSession: (characterId: string, sessionId?: string | null, extra?: Record<string, string | null>) => {
     const params = new URLSearchParams();
     if (sessionId) params.set("sessionId", sessionId);

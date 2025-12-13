@@ -9,7 +9,7 @@ import {
   deleteSession,
   updateSessionTitle
 } from "../../../core/storage";
-import { typography, radius, cn } from "../../design-tokens";
+import { typography, radius, cn, colors, interactive } from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
 
 interface SessionPreview {
@@ -122,22 +122,30 @@ export function ChatHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505]">
+    <div className={cn("flex min-h-screen flex-col", colors.surface.base, colors.text.primary)}>
       {/* Header */}
-      <div
-        className="z-20 shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
-        <div className="flex">
+      <header
+        className={cn(
+          "z-20 shrink-0 border-b px-3 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
+          colors.glass.strong
+        )}>
+        <div className="flex items-center justify-between gap-3">
           <button
             onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
             className={cn(
-              "flex shrink-0 items-center justify-center border border-white/15 bg-white/5 text-white/70",
+              "flex shrink-0 items-center justify-center border bg-white/5",
               radius.full,
-              "active:scale-95 transition-transform"
+              colors.border.subtle,
+              colors.text.primary,
+              interactive.hover.brightness,
+              interactive.active.scale,
+              interactive.focus.ring
             )}
+            aria-label="Back to chat settings"
           >
             <ArrowLeft size={14} />
           </button>
-          <div className="min-w-0 overflow-hidden">
+          <div className="flex flex-col items-start min-w-0 flex-1">
             <h1 className={cn(
               typography.h1.size,
               typography.h1.weight,
@@ -145,17 +153,15 @@ export function ChatHistoryPage() {
             )}>
               Chat History
             </h1>
-            {character && (
-              <p className={cn(
-                typography.bodySmall.size,
-                "text-white/50 mt-1 text-left truncate whitespace-nowrap"
-              )}>
-                Chat History for {character.name}
-              </p>
-            )}
+            <p className={cn(
+              typography.bodySmall.size,
+              "text-white/50 mt-1 text-left truncate whitespace-nowrap"
+            )}>
+              {character ? `Previous conversations with ${character.name}` : "Previous conversations"}
+            </p>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto px-3 pt-4">

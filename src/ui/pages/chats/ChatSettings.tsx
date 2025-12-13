@@ -8,7 +8,6 @@ import { readSettings, saveCharacter, createSession, listCharacters, listPersona
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
-import { MemoryManager } from "./components/MemoryManager";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
@@ -19,7 +18,7 @@ import {
   formatAdvancedModelSettingsSummary,
   sanitizeAdvancedModelSettings,
 } from "../../components/AdvancedModelSettingsForm";
-import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
+import { typography, radius, spacing, interactive, cn, colors } from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
 
 function isImageLike(value?: string) {
@@ -361,7 +360,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       setShowPersonaSelector(false);
 
       if (characterId && currentSession.id) {
-        navigate(`/chat/${characterId}?sessionId=${currentSession.id}`, { replace: true });
+        navigate(Routes.chatSession(characterId, currentSession.id), { replace: true });
       }
     } catch (error) {
       console.error("Failed to change persona:", error);
@@ -393,7 +392,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
   const handleViewHistory = useCallback(() => {
     if (!characterId) return;
-    navigate(`/chat/${characterId}/history`);
+    navigate(Routes.chatHistory(characterId));
   }, [characterId, navigate]);
 
   const avatarDisplay = useMemo(() => {
@@ -494,16 +493,21 @@ function ChatSettingsContent({ character }: { character: Character }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-100">
+    <div className={cn("flex min-h-screen flex-col", colors.surface.base, colors.text.primary)}>
       {/* Header */}
-      <header className="z-20 shrink-0 border-b border-white/10 px-3 pb-3 pt-10 bg-[#050505]">
+      <header className={cn(
+        "z-20 shrink-0 border-b px-3 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
+        colors.glass.strong
+      )}>
         <div className="flex items-center justify-between gap-3">
           <button
             onClick={handleBack}
             className={cn(
               "flex items-center justify-center",
               radius.full,
-              "border border-white/15 bg-white/5 text-white",
+              "border bg-white/5",
+              colors.border.subtle,
+              colors.text.primary,
               interactive.transition.default,
               "hover:border-white/25 hover:bg-white/10"
             )}
@@ -530,7 +534,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto px-3 pt-4">
+      <main className="flex-1 overflow-y-auto px-3 pt-4 pb-16">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -601,26 +605,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
               }}
               disabled={!currentSession}
             />
-
-            <SettingsButton
-              icon={<Brain className="h-4 w-4" />}
-              title="Manage Memories"
-              subtitle={
-                currentSession?.memories && currentSession.memories.length > 0
-                  ? `${currentSession.memories.length} ${currentSession.memories.length === 1 ? 'memory' : 'memories'} stored`
-                  : 'No memories'
-              }
-              onClick={() => setShowMemoryMenu(true)}
-              disabled={!currentSession}
-            />
             <SettingsButton
               icon={<History className="h-4 w-4" />}
               title="Conversation Memory Page"
               subtitle="Summary, AI tags, tool call history"
               onClick={() => {
                 if (!characterId) return;
-                const query = currentSession ? `?sessionId=${currentSession.id}` : "";
-                navigate(`/chat/${characterId}/memories${query}`);
+                if (!currentSession) return;
+                navigate(Routes.chatMemories(characterId, currentSession.id));
               }}
               disabled={!currentSession}
             />
@@ -1031,25 +1023,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
               Open a chat session to configure per-session settings.
             </div>
           )}
-        </MenuSection>
-      </BottomMenu>
-
-      {/* Parameter Support Info */}
-      {/* Memory Manager */}
-      <BottomMenu
-        isOpen={showMemoryMenu}
-        onClose={() => setShowMemoryMenu(false)}
-        title="Conversation Memories"
-        includeExitIcon={true}
-        location="bottom"
-      >
-        <MenuSection>
-          <MemoryManager
-            memories={currentSession?.memories ?? []}
-            onAdd={handleAddMemory}
-            onRemove={handleRemoveMemory}
-            onUpdate={handleUpdateMemory}
-          />
         </MenuSection>
       </BottomMenu>
 

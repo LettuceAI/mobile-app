@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { Character, Session } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { listen } from "@tauri-apps/api/event";
+import { Routes } from "../../../navigation";
 
 interface ChatHeaderProps {
   character: Character;
@@ -100,8 +101,7 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
             <button
               onClick={() => {
                 if (!characterId) return;
-                const settingsUrl = `/chat/${characterId}/settings?sessionId=${sessionId}`;
-                navigate(settingsUrl);
+                navigate(Routes.chatSettingsSession(characterId, sessionId));
               }}
               className="min-w-0 flex-1 text-left"
               aria-label="Open chat settings"
@@ -116,12 +116,7 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
               <button
                 onClick={() => {
                   if (!characterId || !sessionId) return;
-                  const params = new URLSearchParams();
-                  params.set("sessionId", sessionId);
-                  if (memoryError) {
-                    params.set("error", memoryError);
-                  }
-                  navigate(`/chat/${characterId}/memories?${params.toString()}`);
+                  navigate(Routes.chatMemories(characterId, sessionId, memoryError ? { error: memoryError } : undefined));
                 }}
                 className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
                 aria-label="Manage memories"
@@ -144,7 +139,7 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
               <button
                 onClick={() => {
                   if (!characterId || !sessionId) return;
-                  navigate(`/chat/${characterId}/search?sessionId=${sessionId}`);
+                  navigate(Routes.chatSearch(characterId, sessionId));
                 }}
                 className="flex items-center justify-center text-white/80 transition hover:text-white"
                 aria-label="Search messages"
@@ -157,7 +152,7 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
             <button
               onClick={() => {
                 if (!characterId) return;
-                navigate(`/chat/${characterId}/settings?sessionId=${sessionId}`);
+                navigate(Routes.chatSettingsSession(characterId, sessionId));
               }}
               className="relative shrink-0 rounded-full overflow-hidden ring-1 ring-white/20 transition hover:ring-white/40"
               style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', flexShrink: 0 }}
