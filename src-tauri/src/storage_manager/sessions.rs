@@ -32,6 +32,28 @@ fn session_preview_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionPr
     })
 }
 
+fn json_usage_summary(
+    prompt_tokens: Option<i64>,
+    completion_tokens: Option<i64>,
+    total_tokens: Option<i64>,
+) -> Option<JsonValue> {
+    let mut usage = JsonMap::new();
+    if let Some(v) = prompt_tokens {
+        usage.insert("promptTokens".into(), JsonValue::from(v));
+    }
+    if let Some(v) = completion_tokens {
+        usage.insert("completionTokens".into(), JsonValue::from(v));
+    }
+    if let Some(v) = total_tokens {
+        usage.insert("totalTokens".into(), JsonValue::from(v));
+    }
+    if usage.is_empty() {
+        None
+    } else {
+        Some(JsonValue::Object(usage))
+    }
+}
+
 fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
         .query_row(
@@ -201,15 +223,22 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         let mut variants: Vec<JsonValue> = Vec::new();
         for vr in vrows {
             let (vid, vcontent, vcreated, vp, vc, vt) = vr.map_err(|e| e.to_string())?;
-            variants.push(serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated, "usage": {"promptTokens": vp, "completionTokens": vc, "totalTokens": vt}}));
+            let mut vobj = JsonMap::new();
+            vobj.insert("id".into(), JsonValue::String(vid));
+            vobj.insert("content".into(), JsonValue::String(vcontent));
+            vobj.insert("createdAt".into(), JsonValue::from(vcreated));
+            if let Some(usage) = json_usage_summary(vp, vc, vt) {
+                vobj.insert("usage".into(), usage);
+            }
+            variants.push(JsonValue::Object(vobj));
         }
         let mut mobj = JsonMap::new();
         mobj.insert("id".into(), JsonValue::String(mid));
         mobj.insert("role".into(), JsonValue::String(role));
         mobj.insert("content".into(), JsonValue::String(content));
         mobj.insert("createdAt".into(), JsonValue::from(mcreated));
-        if p_tokens.is_some() || c_tokens.is_some() || t_tokens.is_some() {
-            mobj.insert("usage".into(), serde_json::json!({"promptTokens": p_tokens, "completionTokens": c_tokens, "totalTokens": t_tokens}));
+        if let Some(usage) = json_usage_summary(p_tokens, c_tokens, t_tokens) {
+            mobj.insert("usage".into(), usage);
         }
         if !variants.is_empty() {
             mobj.insert("variants".into(), JsonValue::Array(variants));
@@ -389,12 +418,16 @@ fn fetch_messages_page(
             variants_by_message
                 .entry(message_id)
                 .or_default()
-                .push(serde_json::json!({
-                    "id": vid,
-                    "content": vcontent,
-                    "createdAt": vcreated,
-                    "usage": {"promptTokens": vp, "completionTokens": vc, "totalTokens": vt}
-                }));
+                .push({
+                    let mut vobj = JsonMap::new();
+                    vobj.insert("id".into(), JsonValue::String(vid));
+                    vobj.insert("content".into(), JsonValue::String(vcontent));
+                    vobj.insert("createdAt".into(), JsonValue::from(vcreated));
+                    if let Some(usage) = json_usage_summary(vp, vc, vt) {
+                        vobj.insert("usage".into(), usage);
+                    }
+                    JsonValue::Object(vobj)
+                });
         }
     }
 
@@ -418,11 +451,8 @@ fn fetch_messages_page(
         mobj.insert("role".into(), JsonValue::String(role));
         mobj.insert("content".into(), JsonValue::String(content));
         mobj.insert("createdAt".into(), JsonValue::from(mcreated));
-        if p_tokens.is_some() || c_tokens.is_some() || t_tokens.is_some() {
-            mobj.insert(
-                "usage".into(),
-                serde_json::json!({"promptTokens": p_tokens, "completionTokens": c_tokens, "totalTokens": t_tokens}),
-            );
+        if let Some(usage) = json_usage_summary(p_tokens, c_tokens, t_tokens) {
+            mobj.insert("usage".into(), usage);
         }
         if let Some(variants) = variants_by_message.get(&mid) {
             if !variants.is_empty() {
@@ -655,12 +685,16 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
             variants_by_message
                 .entry(message_id)
                 .or_default()
-                .push(serde_json::json!({
-                    "id": vid,
-                    "content": vcontent,
-                    "createdAt": vcreated,
-                    "usage": {"promptTokens": vp, "completionTokens": vc, "totalTokens": vt}
-                }));
+                .push({
+                    let mut vobj = JsonMap::new();
+                    vobj.insert("id".into(), JsonValue::String(vid));
+                    vobj.insert("content".into(), JsonValue::String(vcontent));
+                    vobj.insert("createdAt".into(), JsonValue::from(vcreated));
+                    if let Some(usage) = json_usage_summary(vp, vc, vt) {
+                        vobj.insert("usage".into(), usage);
+                    }
+                    JsonValue::Object(vobj)
+                });
         }
     }
 
@@ -684,11 +718,8 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         mobj.insert("role".into(), JsonValue::String(role));
         mobj.insert("content".into(), JsonValue::String(content));
         mobj.insert("createdAt".into(), JsonValue::from(mcreated));
-        if p_tokens.is_some() || c_tokens.is_some() || t_tokens.is_some() {
-            mobj.insert(
-                "usage".into(),
-                serde_json::json!({"promptTokens": p_tokens, "completionTokens": c_tokens, "totalTokens": t_tokens}),
-            );
+        if let Some(usage) = json_usage_summary(p_tokens, c_tokens, t_tokens) {
+            mobj.insert("usage".into(), usage);
         }
         if let Some(variants) = variants_by_message.get(&mid) {
             if !variants.is_empty() {

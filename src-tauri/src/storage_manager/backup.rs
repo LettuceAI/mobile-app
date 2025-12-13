@@ -24,15 +24,10 @@ use tauri_plugin_fs::FilePath;
 #[cfg(target_os = "android")]
 use url::Url;
 
-/// Helper to open a backup file (handles Android content URIs via plugin)
 fn open_backup_file(app: &tauri::AppHandle, path: &str) -> Result<File, String> {
     #[cfg(target_os = "android")]
     {
         let api = app.android_fs();
-
-        // Construct FilePath from the URI string
-        // If it starts with content://, parse as URL. Otherwise fallback to Path?
-        // Actually, Android dialog returns URI strings.
 
         let url = Url::parse(path).map_err(|e| format!("Invalid URI '{}': {}", path, e))?;
         let file_path = FilePath::Url(url);
