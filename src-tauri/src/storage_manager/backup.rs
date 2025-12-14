@@ -24,10 +24,10 @@ use tauri_plugin_fs::FilePath;
 #[cfg(target_os = "android")]
 use url::Url;
 
-fn open_backup_file(app: &tauri::AppHandle, path: &str) -> Result<File, String> {
+fn open_backup_file(_app: &tauri::AppHandle, path: &str) -> Result<File, String> {
     #[cfg(target_os = "android")]
     {
-        let api = app.android_fs();
+        let api = _app.android_fs();
 
         let url = Url::parse(path).map_err(|e| format!("Invalid URI '{}': {}", path, e))?;
         let file_path = FilePath::Url(url);
@@ -191,7 +191,7 @@ fn export_provider_credentials(app: &tauri::AppHandle) -> Result<Vec<JsonValue>,
 fn export_models(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
     let mut stmt = conn
-        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt FROM models")
+        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt FROM models")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -203,10 +203,11 @@ fn export_models(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "provider_label": r.get::<_, String>(3)?,
                 "display_name": r.get::<_, String>(4)?,
                 "created_at": r.get::<_, i64>(5)?,
-                "model_type": r.get::<_, Option<String>>(6)?,
-                "advanced_model_settings": r.get::<_, Option<String>>(7)?,
-                "prompt_template_id": r.get::<_, Option<String>>(8)?,
-                "system_prompt": r.get::<_, Option<String>>(9)?,
+                "input_scopes": r.get::<_, Option<String>>(6)?,
+                "output_scopes": r.get::<_, Option<String>>(7)?,
+                "advanced_model_settings": r.get::<_, Option<String>>(8)?,
+                "prompt_template_id": r.get::<_, Option<String>>(9)?,
+                "system_prompt": r.get::<_, Option<String>>(10)?,
             }))
         })
         .map_err(|e| e.to_string())?;
@@ -903,11 +904,62 @@ fn import_models(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String>
         .map_err(|e| e.to_string())?;
 
     if let Some(arr) = data.as_array() {
+        let normalize_scope_json_str = |raw: &str| -> String {
+            let scope_order = ["text", "image", "audio"];
+            let parsed: JsonValue =
+                serde_json::from_str(raw).unwrap_or_else(|_| serde_json::json!(["text"]));
+            let mut scopes: Vec<String> = vec![];
+            if let Some(items) = parsed.as_array() {
+                for v in items {
+                    if let Some(s) = v.as_str() {
+                        scopes.push(s.to_string());
+                    }
+                }
+            }
+            if !scopes.iter().any(|s| s.eq_ignore_ascii_case("text")) {
+                scopes.push("text".to_string());
+            }
+            scopes.sort_by_key(|s| {
+                scope_order
+                    .iter()
+                    .position(|o| o.eq_ignore_ascii_case(s))
+                    .unwrap_or(scope_order.len())
+            });
+            scopes.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+            serde_json::to_string(&scopes).unwrap_or_else(|_| "[\"text\"]".into())
+        };
+
         for item in arr {
+            let legacy_model_type = item.get("model_type").and_then(|v| v.as_str());
+            let input_scopes_raw = item
+                .get("input_scopes")
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    if legacy_model_type == Some("multimodel") {
+                        Some("[\"text\",\"image\"]")
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("[\"text\"]");
+            let output_scopes_raw = item
+                .get("output_scopes")
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    if legacy_model_type == Some("imagegeneration") {
+                        Some("[\"text\",\"image\"]")
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("[\"text\"]");
+            let input_scopes = normalize_scope_json_str(input_scopes_raw);
+            let output_scopes = normalize_scope_json_str(output_scopes_raw);
+
             conn.execute(
                 "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, 
-                 model_type, advanced_model_settings, prompt_template_id, system_prompt) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                 model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     item.get("id").and_then(|v| v.as_str()),
                     item.get("name").and_then(|v| v.as_str()),
@@ -915,7 +967,9 @@ fn import_models(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String>
                     item.get("provider_label").and_then(|v| v.as_str()),
                     item.get("display_name").and_then(|v| v.as_str()),
                     item.get("created_at").and_then(|v| v.as_i64()),
-                    item.get("model_type").and_then(|v| v.as_str()),
+                    "chat",
+                    input_scopes,
+                    output_scopes,
                     item.get("advanced_model_settings").and_then(|v| v.as_str()),
                     item.get("prompt_template_id").and_then(|v| v.as_str()),
                     item.get("system_prompt").and_then(|v| v.as_str()),

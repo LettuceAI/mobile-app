@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 17;
+pub const CURRENT_MIGRATION_VERSION: u32 = 19;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -224,6 +224,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v17_to_v18(app)?;
         version = 18;
+    }
+
+    if version < 19 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v18 -> v19: Add model input/output scopes".to_string(),
+        );
+        migrate_v18_to_v19(app)?;
+        version = 19;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -1299,5 +1309,66 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
         "migrations",
         "v17->v18 migration completed".to_string(),
     );
+    Ok(())
+}
+
+/// Migration v18 -> v19: add input_scopes and output_scopes to models table and migrate legacy multimodel.
+fn migrate_v18_to_v19(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+    use crate::utils::log_info;
+
+    log_info(app, "migrations", "Starting v18->v19 migration".to_string());
+
+    let conn = open_db(app)?;
+
+    // Check which columns exist
+    let mut has_input_scopes = false;
+    let mut has_output_scopes = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(models)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        match name.as_str() {
+            "input_scopes" => has_input_scopes = true,
+            "output_scopes" => has_output_scopes = true,
+            _ => {}
+        }
+    }
+
+    if !has_input_scopes {
+        let _ = conn.execute("ALTER TABLE models ADD COLUMN input_scopes TEXT", []);
+    }
+
+    if !has_output_scopes {
+        let _ = conn.execute("ALTER TABLE models ADD COLUMN output_scopes TEXT", []);
+    }
+
+    // Migrate legacy multimodel -> scopes
+    let _ = conn.execute(
+        "UPDATE models SET input_scopes = '[\"text\",\"image\"]' WHERE model_type = 'multimodel' AND (input_scopes IS NULL OR input_scopes = '')",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE models SET output_scopes = '[\"text\"]' WHERE model_type = 'multimodel' AND (output_scopes IS NULL OR output_scopes = '')",
+        [],
+    );
+    // Normalize model_type away from legacy "multimodel"
+    let _ = conn.execute("UPDATE models SET model_type = 'chat' WHERE model_type = 'multimodel'", []);
+
+    // Backfill defaults where scopes are missing
+    let _ = conn.execute(
+        "UPDATE models SET input_scopes = '[\"text\"]' WHERE input_scopes IS NULL OR input_scopes = ''",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE models SET output_scopes = '[\"text\"]' WHERE output_scopes IS NULL OR output_scopes = ''",
+        [],
+    );
+
     Ok(())
 }

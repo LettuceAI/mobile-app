@@ -28,10 +28,45 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
         .get("displayName")
         .and_then(|v| v.as_str())
         .unwrap_or(name);
-    let model_type = model
-        .get("modelType")
-        .and_then(|v| v.as_str())
-        .unwrap_or("chat");
+    let legacy_model_type = model.get("modelType").and_then(|v| v.as_str());
+    let normalize_scopes = |value: JsonValue| -> JsonValue {
+        let scope_order = ["text", "image", "audio"];
+        let mut scopes: Vec<String> = vec![];
+        if let Some(arr) = value.as_array() {
+            for v in arr {
+                if let Some(s) = v.as_str() {
+                    scopes.push(s.to_string());
+                }
+            }
+        }
+        if !scopes.iter().any(|s| s.eq_ignore_ascii_case("text")) {
+            scopes.push("text".to_string());
+        }
+        scopes.sort_by_key(|s| {
+            scope_order
+                .iter()
+                .position(|o| o.eq_ignore_ascii_case(s))
+                .unwrap_or(scope_order.len())
+        });
+        scopes.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        JsonValue::Array(scopes.into_iter().map(JsonValue::String).collect())
+    };
+    let input_scopes = model.get("inputScopes").cloned().unwrap_or_else(|| {
+        if legacy_model_type == Some("multimodel") {
+            serde_json::json!(["text", "image"])
+        } else {
+            serde_json::json!(["text"])
+        }
+    });
+    let output_scopes = model.get("outputScopes").cloned().unwrap_or_else(|| {
+        if legacy_model_type == Some("imagegeneration") {
+            serde_json::json!(["text", "image"])
+        } else {
+            serde_json::json!(["text"])
+        }
+    });
+    let input_scopes = normalize_scopes(input_scopes);
+    let output_scopes = normalize_scopes(output_scopes);
     let adv = model
         .get("advancedModelSettings")
         .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
@@ -53,18 +88,32 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
         .map_err(|e| e.to_string())?;
     let created_at = existing_created.unwrap_or(now_ms() as i64);
     conn.execute(
-        r#"INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               provider_id=excluded.provider_id,
               provider_label=excluded.provider_label,
               display_name=excluded.display_name,
-              model_type=excluded.model_type,
+              input_scopes=excluded.input_scopes,
+              output_scopes=excluded.output_scopes,
               advanced_model_settings=excluded.advanced_model_settings,
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt"#,
-        params![id, name, provider_id, provider_label, display_name, created_at, model_type, adv, prompt_template_id, system_prompt],
+        params![
+            id,
+            name,
+            provider_id,
+            provider_label,
+            display_name,
+            created_at,
+            "chat",
+            serde_json::to_string(&input_scopes).unwrap_or("[\"text\"]".into()),
+            serde_json::to_string(&output_scopes).unwrap_or("[\"text\"]".into()),
+            adv,
+            prompt_template_id,
+            system_prompt
+        ],
     ).map_err(|e| e.to_string())?;
     let mut out = JsonMap::new();
     out.insert("id".into(), JsonValue::String(id));
@@ -82,10 +131,8 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
         JsonValue::String(display_name.to_string()),
     );
     out.insert("createdAt".into(), JsonValue::from(created_at));
-    out.insert(
-        "modelType".into(),
-        JsonValue::String(model_type.to_string()),
-    );
+    out.insert("inputScopes".into(), input_scopes);
+    out.insert("outputScopes".into(), output_scopes);
     if let Some(v) = model.get("advancedModelSettings").cloned() {
         if !v.is_null() {
             out.insert("advancedModelSettings".into(), v);

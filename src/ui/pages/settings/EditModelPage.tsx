@@ -39,6 +39,7 @@ export function EditModelPage() {
     isNew,
     canSave,
     providerDisplay,
+    updateEditorModel,
     handleDisplayNameChange,
     handleModelNameChange,
     handleProviderSelection,
@@ -77,6 +78,21 @@ export function EditModelPage() {
     if (!editorModel) return;
     editorModel.promptTemplateId = templateId || null;
     handleModelNameChange(editorModel.name); // Trigger state update
+  };
+
+  const scopeOrder = ["text", "image", "audio"] as const;
+  const toggleScope = (
+    key: "inputScopes" | "outputScopes",
+    scope: "image" | "audio",
+    enabled: boolean
+  ) => {
+    if (!editorModel) return;
+    const current = new Set((editorModel as any)[key] ?? ["text"]);
+    if (enabled) current.add(scope);
+    else current.delete(scope);
+    current.add("text");
+    const next = scopeOrder.filter((s) => current.has(s));
+    updateEditorModel({ [key]: next } as any);
   };
 
   if (loading || !editorModel) {
@@ -155,21 +171,69 @@ export function EditModelPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[11px] font-medium text-white/70">MODEL TYPE</label>
-            <select
-              value={editorModel.modelType || "chat"}
-              onChange={(e) => {
-                editorModel.modelType = e.target.value as any;
-                handleModelNameChange(editorModel.name); // Trigger state update
-              }}
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
-            >
-              <option value="chat" className="bg-black">Chat</option>
-              <option value="multimodel" className="bg-black">Multimodel</option>
-              <option value="imagegeneration" className="bg-black">Image Generation</option>
-              <option value="embedding" className="bg-black">Embedding</option>
-            </select>
-            <p className="text-xs text-white/50">Model capability type</p>
+            <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div>
+                <p className="text-[11px] font-medium text-white/70">CAPABILITIES</p>
+                <p className="mt-1 text-xs text-white/50">Configure what this model can take as input and produce as output</p>
+              </div>
+              <div className="pt-2">
+                <p className="text-[11px] font-medium text-white/70">INPUT SCOPES</p>
+                <p className="mt-1 text-xs text-white/50">What this model can accept as input</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input type="checkbox" checked disabled className="h-4 w-4 accent-emerald-400" />
+                  Text
+                </label>
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={editorModel.inputScopes?.includes("image") ?? false}
+                    onChange={(e) => toggleScope("inputScopes", "image", e.target.checked)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  Image
+                </label>
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={editorModel.inputScopes?.includes("audio") ?? false}
+                    onChange={(e) => toggleScope("inputScopes", "audio", e.target.checked)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  Audio
+                </label>
+              </div>
+
+              <div className="pt-2">
+                <p className="text-[11px] font-medium text-white/70">OUTPUT SCOPES</p>
+                <p className="mt-1 text-xs text-white/50">What this model can produce as output</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input type="checkbox" checked disabled className="h-4 w-4 accent-emerald-400" />
+                  Text
+                </label>
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={editorModel.outputScopes?.includes("image") ?? false}
+                    onChange={(e) => toggleScope("outputScopes", "image", e.target.checked)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  Image
+                </label>
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={editorModel.outputScopes?.includes("audio") ?? false}
+                    onChange={(e) => toggleScope("outputScopes", "audio", e.target.checked)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  Audio
+                </label>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

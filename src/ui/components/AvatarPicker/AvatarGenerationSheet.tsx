@@ -43,9 +43,7 @@ export function AvatarGenerationSheet({
       try {
         setLoading(true);
         const settings = await readSettings();
-        const imageModels = settings.models.filter(
-          (m) => m.modelType === "imagegeneration"
-        );
+        const imageModels = settings.models.filter((m) => m.outputScopes?.includes("image"));
         const providerCreds = settings.providerCredentials;
 
         setModels(imageModels);

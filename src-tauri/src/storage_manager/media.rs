@@ -546,6 +546,18 @@ pub fn storage_load_session_attachment(
 }
 
 #[tauri::command]
+pub fn storage_get_session_attachment_path(
+    app: tauri::AppHandle,
+    storage_path: String,
+) -> Result<String, String> {
+    let full_path = storage_root(&app)?.join(&storage_path);
+    if !full_path.exists() {
+        return Err(format!("Attachment not found: {}", storage_path));
+    }
+    Ok(full_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn storage_delete_session_attachments(
     app: tauri::AppHandle,
     character_id: String,

@@ -93,3 +93,31 @@ export async function abortMessage(requestId: string): Promise<void> {
     requestId,
   });
 }
+
+export async function addChatMessageAttachment(params: {
+  sessionId: string;
+  characterId: string;
+  messageId: string;
+  role: "user" | "assistant";
+  attachmentId: string;
+  base64Data: string;
+  mimeType: string;
+  filename?: string;
+  width?: number;
+  height?: number;
+}): Promise<StoredMessage> {
+  return invoke<StoredMessage>("chat_add_message_attachment", {
+    args: {
+      sessionId: params.sessionId,
+      characterId: params.characterId,
+      messageId: params.messageId,
+      role: params.role,
+      attachmentId: params.attachmentId,
+      base64Data: params.base64Data,
+      mimeType: params.mimeType,
+      filename: params.filename ?? null,
+      width: params.width ?? null,
+      height: params.height ?? null,
+    },
+  });
+}

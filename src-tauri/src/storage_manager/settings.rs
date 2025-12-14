@@ -90,7 +90,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 
     // Models
     let mut stmt = conn
-        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt FROM models ORDER BY created_at ASC")
+        .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt FROM models ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
     let models_iter = stmt
         .query_map([], |r| {
@@ -100,10 +100,11 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             let provider_label: String = r.get(3)?;
             let display_name: String = r.get(4)?;
             let created_at: i64 = r.get(5)?;
-            let model_type: String = r.get(6)?;
-            let advanced: Option<String> = r.get(7)?;
-            let prompt_template_id: Option<String> = r.get(8)?;
-            let system_prompt: Option<String> = r.get(9)?;
+            let input_scopes: Option<String> = r.get(6)?;
+            let output_scopes: Option<String> = r.get(7)?;
+            let advanced: Option<String> = r.get(8)?;
+            let prompt_template_id: Option<String> = r.get(9)?;
+            let system_prompt: Option<String> = r.get(10)?;
             let mut obj = JsonMap::new();
             obj.insert("id".into(), JsonValue::String(id));
             obj.insert("name".into(), JsonValue::String(name));
@@ -111,7 +112,20 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             obj.insert("providerLabel".into(), JsonValue::String(provider_label));
             obj.insert("displayName".into(), JsonValue::String(display_name));
             obj.insert("createdAt".into(), JsonValue::from(created_at));
-            obj.insert("modelType".into(), JsonValue::String(model_type));
+            if let Some(s) = input_scopes {
+                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+                    if v.is_array() {
+                        obj.insert("inputScopes".into(), v);
+                    }
+                }
+            }
+            if let Some(s) = output_scopes {
+                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+                    if v.is_array() {
+                        obj.insert("outputScopes".into(), v);
+                    }
+                }
+            }
             if let Some(s) = advanced {
                 if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
                     obj.insert("advancedModelSettings".into(), v);
@@ -292,6 +306,29 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
     tx.execute("DELETE FROM models", [])
         .map_err(|e| e.to_string())?;
     if let Some(models) = json.get("models").and_then(|v| v.as_array()) {
+        let normalize_scopes = |value: JsonValue| -> JsonValue {
+            let scope_order = ["text", "image", "audio"];
+            let mut scopes: Vec<String> = vec![];
+            if let Some(arr) = value.as_array() {
+                for v in arr {
+                    if let Some(s) = v.as_str() {
+                        scopes.push(s.to_string());
+                    }
+                }
+            }
+            if !scopes.iter().any(|s| s.eq_ignore_ascii_case("text")) {
+                scopes.push("text".to_string());
+            }
+            scopes.sort_by_key(|s| {
+                scope_order
+                    .iter()
+                    .position(|o| o.eq_ignore_ascii_case(s))
+                    .unwrap_or(scope_order.len())
+            });
+            scopes.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+            JsonValue::Array(scopes.into_iter().map(JsonValue::String).collect())
+        };
+
         for m in models {
             let id = m.get("id").and_then(|v| v.as_str()).unwrap_or("");
             let name = m.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -305,10 +342,23 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
                 .and_then(|v| v.as_str())
                 .unwrap_or(name);
             let created_at = m.get("createdAt").and_then(|v| v.as_i64()).unwrap_or(now);
-            let model_type = m
-                .get("modelType")
-                .and_then(|v| v.as_str())
-                .unwrap_or("chat");
+            let legacy_model_type = m.get("modelType").and_then(|v| v.as_str());
+            let input_scopes = m.get("inputScopes").cloned().unwrap_or_else(|| {
+                if legacy_model_type == Some("multimodel") {
+                    serde_json::json!(["text", "image"])
+                } else {
+                    serde_json::json!(["text"])
+                }
+            });
+            let output_scopes = m.get("outputScopes").cloned().unwrap_or_else(|| {
+                if legacy_model_type == Some("imagegeneration") {
+                    serde_json::json!(["text", "image"])
+                } else {
+                    serde_json::json!(["text"])
+                }
+            });
+            let input_scopes = normalize_scopes(input_scopes);
+            let output_scopes = normalize_scopes(output_scopes);
             let adv = m
                 .get("advancedModelSettings")
                 .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
@@ -321,8 +371,21 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
             tx.execute(
-                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, model_type, advanced_model_settings, prompt_template_id, system_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                params![id, name, provider_id, provider_label, display_name, created_at, model_type, adv, prompt_template_id, system_prompt],
+                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![
+                    id,
+                    name,
+                    provider_id,
+                    provider_label,
+                    display_name,
+                    created_at,
+                    "chat",
+                    serde_json::to_string(&input_scopes).unwrap_or("[\"text\"]".into()),
+                    serde_json::to_string(&output_scopes).unwrap_or("[\"text\"]".into()),
+                    adv,
+                    prompt_template_id,
+                    system_prompt
+                ],
             ).map_err(|e| e.to_string())?;
         }
     }

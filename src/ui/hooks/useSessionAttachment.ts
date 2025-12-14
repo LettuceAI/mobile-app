@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 /**
  * Hook to load attachment data from storage when only storagePath is available.
@@ -40,9 +41,9 @@ export function useSessionAttachment(
         loadingRef.current = true;
         lastPathRef.current = storagePath;
 
-        invoke<string>("storage_load_session_attachment", { storagePath })
-            .then((dataUrl) => {
-                setLoadedData(dataUrl);
+        invoke<string>("storage_get_session_attachment_path", { storagePath })
+            .then((fullPath) => {
+                setLoadedData(convertFileSrc(fullPath));
                 loadingRef.current = false;
             })
             .catch((err) => {
@@ -63,9 +64,9 @@ interface LazyAttachment {
     data?: string | null;
     storagePath?: string | null;
     mimeType?: string;
-    filename?: string;
-    width?: number;
-    height?: number;
+    filename?: string | null;
+    width?: number | null;
+    height?: number | null;
 }
 
 /**
@@ -118,13 +119,14 @@ export function useSessionAttachments(
 
                 loadingMapRef.current.set(att.id, true);
 
-                invoke<string>("storage_load_session_attachment", { storagePath: att.storagePath })
-                    .then((dataUrl) => {
-                        dataMapRef.current.set(att.id, dataUrl);
+                invoke<string>("storage_get_session_attachment_path", { storagePath: att.storagePath })
+                    .then((fullPath) => {
+                        const url = convertFileSrc(fullPath);
+                        dataMapRef.current.set(att.id, url);
                         loadingMapRef.current.set(att.id, false);
 
                         setLoadedAttachments((prev) =>
-                            prev.map((a) => (a.id === att.id ? { ...a, data: dataUrl } : a))
+                            prev.map((a) => (a.id === att.id ? { ...a, data: url } : a))
                         );
                     })
                     .catch((err) => {

@@ -38,11 +38,8 @@ pub fn message_text_for_api(message: &StoredMessage) -> String {
 pub fn extract_text(data: &Value) -> Option<String> {
     match data {
         Value::String(s) => {
-            // Prefer SSE-aware parser first
             if s.contains("data:") {
-                if let Some(accum) = super::sse::accumulate_text_from_sse(s) {
-                    return Some(accum);
-                }
+                return Some(super::sse::accumulate_text_from_sse(s).unwrap_or_default());
             }
             Some(s.clone())
         }
@@ -148,7 +145,13 @@ fn join_text_fragments(value: &Value) -> Option<String> {
 
 fn collect_text_fragments(value: &Value, acc: &mut String) {
     match value {
-        Value::String(s) => acc.push_str(s),
+        Value::String(s) => {
+            // Avoid accidentally treating image payloads (often data URLs / base64) as message text.
+            if s.starts_with("data:image/") {
+                return;
+            }
+            acc.push_str(s);
+        }
         Value::Array(items) => {
             for item in items {
                 collect_text_fragments(item, acc);

@@ -236,13 +236,13 @@ export const ImageAttachmentSchema = z.object({
   /** MIME type (e.g., 'image/png', 'image/jpeg') */
   mimeType: z.string(),
   /** Original filename if available */
-  filename: z.string().optional(),
+  filename: z.string().nullish(),
   /** Width in pixels */
-  width: z.number().int().optional(),
+  width: z.number().int().nullish(),
   /** Height in pixels */
-  height: z.number().int().optional(),
+  height: z.number().int().nullish(),
   /** Relative storage path for persisted images (lazy loading) */
-  storagePath: z.string().optional(),
+  storagePath: z.string().nullish(),
 });
 export type ImageAttachment = z.infer<typeof ImageAttachmentSchema>;
 
@@ -298,8 +298,23 @@ export const ProviderCredentialSchema = z.object({
 });
 export type ProviderCredential = z.infer<typeof ProviderCredentialSchema>;
 
-export const ModelTypeSchema = z.enum(["chat", "multimodel", "imagegeneration", "embedding"]);
-export type ModelType = z.infer<typeof ModelTypeSchema>;
+export const ModelScopeSchema = z.enum(["text", "image", "audio"]);
+export type ModelScope = z.infer<typeof ModelScopeSchema>;
+
+function normalizeModelScopes(value: unknown): ModelScope[] {
+  const scopeOrder: ModelScope[] = ["text", "image", "audio"];
+  const fromValue = Array.isArray(value) ? value : [];
+  const set = new Set<ModelScope>();
+  for (const item of fromValue) {
+    if (item === "text" || item === "image" || item === "audio") set.add(item);
+  }
+  set.add("text");
+  return scopeOrder.filter((s) => set.has(s));
+}
+
+const ModelScopesSchema = z
+  .preprocess((v) => (v == null ? ["text"] : v), z.array(ModelScopeSchema))
+  .transform((scopes) => normalizeModelScopes(scopes));
 
 export const ModelSchema = z.object({
   id: z.string().uuid(),
@@ -308,7 +323,9 @@ export const ModelSchema = z.object({
   providerLabel: z.string().min(1),
   displayName: z.string().min(1),
   createdAt: z.number().int(),
-  modelType: ModelTypeSchema.default("chat"),
+  // Input/output modality scopes for chat models. Text is always enabled.
+  inputScopes: ModelScopesSchema,
+  outputScopes: ModelScopesSchema,
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated

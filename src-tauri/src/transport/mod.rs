@@ -47,6 +47,7 @@ pub fn emit_normalized(app: &tauri::AppHandle, request_id: &str, event: Normaliz
     let _ = app.emit(&channel, payload);
 }
 
+#[allow(dead_code)]
 pub fn emit_raw(app: &tauri::AppHandle, event_name: &str, chunk: &str) {
     let _ = app.emit(event_name, chunk.to_string());
 }

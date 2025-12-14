@@ -12,7 +12,7 @@ use crate::{
     serde_utils::{
         json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json,
     },
-    transport::{self, emit_normalized},
+    transport::emit_normalized,
     utils::{log_error, log_info, log_warn},
 };
 
@@ -181,7 +181,9 @@ pub(crate) async fn handle_streaming_response(
                 match chunk_result {
                     Some(Ok(chunk)) => {
                         let text = String::from_utf8_lossy(&chunk).to_string();
-                        transport::emit_raw(app, &event_name, &text);
+                        // Do not forward raw provider SSE chunks to the frontend.
+                        // Some providers include very large base64 payloads (e.g. image outputs) in SSE which
+                        // should never be surfaced as raw text events.
                         /*log_info(
                             app,
                             "api_request",

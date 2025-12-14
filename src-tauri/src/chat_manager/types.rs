@@ -48,8 +48,10 @@ pub struct Model {
     pub provider_label: String,
     pub display_name: String,
     pub created_at: u64,
-    #[serde(default = "default_model_type")]
-    pub model_type: String,
+    #[serde(default = "default_input_scopes")]
+    pub input_scopes: Vec<String>,
+    #[serde(default = "default_output_scopes")]
+    pub output_scopes: Vec<String>,
     #[serde(default)]
     pub advanced_model_settings: Option<AdvancedModelSettings>,
     /// Reference to a system prompt template (if any)
@@ -61,8 +63,12 @@ pub struct Model {
     pub system_prompt: Option<String>,
 }
 
-fn default_model_type() -> String {
-    "chat".to_string()
+fn default_input_scopes() -> Vec<String> {
+    vec!["text".to_string()]
+}
+
+fn default_output_scopes() -> Vec<String> {
+    vec!["text".to_string()]
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -410,6 +416,31 @@ pub struct ChatContinueArgs {
     pub stream: Option<bool>,
     #[serde(alias = "requestId")]
     pub request_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAddMessageAttachmentArgs {
+    #[serde(alias = "sessionId")]
+    pub session_id: String,
+    #[serde(alias = "characterId")]
+    pub character_id: String,
+    #[serde(alias = "messageId")]
+    pub message_id: String,
+    /// "user" or "assistant"
+    pub role: String,
+    #[serde(alias = "attachmentId")]
+    pub attachment_id: String,
+    #[serde(alias = "base64Data")]
+    pub base64_data: String,
+    #[serde(alias = "mimeType")]
+    pub mime_type: String,
+    #[serde(default)]
+    pub filename: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
 }
 
 #[derive(Serialize)]

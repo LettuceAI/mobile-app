@@ -64,6 +64,7 @@ pub fn push_user_or_assistant_message_with_context(
     message: &super::types::StoredMessage,
     char_name: &str,
     persona_name: &str,
+    allow_image_input: bool,
 ) {
     if message.role == "scene" {
         return;
@@ -73,7 +74,7 @@ pub fn push_user_or_assistant_message_with_context(
         .replace("{{char}}", char_name)
         .replace("{{persona}}", persona_name);
 
-    if !message.attachments.is_empty() && message.role == "user" {
+    if allow_image_input && !message.attachments.is_empty() && message.role == "user" {
         let content = build_multimodal_content(&text, &message.attachments);
         target.push(json!({
             "role": message.role,

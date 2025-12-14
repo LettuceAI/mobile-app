@@ -18,11 +18,12 @@ use super::service::{record_usage_if_available, resolve_api_key, ChatContext};
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
-    ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs, ChatTurnResult, ContinueResult,
-    MemoryEmbedding, Model, PromptScope, ProviderCredential, RegenerateResult, Session, Settings,
-    StoredMessage, SystemPromptTemplate,
+    ChatAddMessageAttachmentArgs, ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs,
+    ChatTurnResult, ContinueResult, MemoryEmbedding, Model, PromptScope, ProviderCredential,
+    RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
 use crate::utils::emit_debug;
+use crate::storage_manager::sessions::{messages_upsert_batch, session_upsert_meta};
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
@@ -51,6 +52,38 @@ fn is_dynamic_memory_active(
         && session_character
             .memory_type
             .eq_ignore_ascii_case("dynamic")
+}
+
+fn has_image_generation_model(settings: &Settings) -> bool {
+    settings
+        .models
+        .iter()
+        .any(|m| m.output_scopes.iter().any(|s| s.eq_ignore_ascii_case("image")))
+}
+
+fn append_image_directive_instructions(
+    system_prompt: Option<String>,
+    settings: &Settings,
+) -> Option<String> {
+    if !has_image_generation_model(settings) {
+        return system_prompt;
+    }
+
+    let instructions = r#"
+
+[In-chat image generation]
+If the user asks you to generate an image, respond normally in-character, then include a directive on its own line in this exact format:
+<<image:{"prompt":"...","size":"1024x1024","n":1}>>
+Only include the directive when an image is requested. Never mention the directive itself.
+"#;
+
+    Some(match system_prompt {
+        Some(mut existing) => {
+            existing.push_str(instructions);
+            existing
+        }
+        None => instructions.trim_start().to_string(),
+    })
 }
 
 fn dynamic_window_size(settings: &Settings) -> usize {
@@ -745,7 +778,10 @@ pub async fn chat_completion(
         }),
     );
 
-    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
+    let system_prompt = append_image_directive_instructions(
+        context.build_system_prompt(&character, model, persona, &session),
+        settings,
+    );
 
     // Determine message window: use conversation_window for dynamic memory (limited context),
     // or recent_messages for manual memory (includes all recent non-scene messages)
@@ -850,6 +886,10 @@ pub async fn chat_completion(
 
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    let allow_image_input = model
+        .input_scopes
+        .iter()
+        .any(|scope| scope.eq_ignore_ascii_case("image"));
 
     // Include pinned messages first (if dynamic memory is enabled)
     // Pinned messages are always included but don't count against the sliding window limit
@@ -860,6 +900,7 @@ pub async fn chat_completion(
             &msg_with_data,
             char_name,
             persona_name,
+            allow_image_input,
         );
     }
 
@@ -870,6 +911,7 @@ pub async fn chat_completion(
             &msg_with_data,
             char_name,
             persona_name,
+            allow_image_input,
         );
     }
 
@@ -990,19 +1032,25 @@ pub async fn chat_completion(
         return Err(combined_error);
     }
 
-    let text = extract_text(api_response.data())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            let preview =
-                serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
-            log_error(
-                &app,
-                "chat_completion",
-                format!("empty response from provider, preview={}", &preview),
-            );
-            emit_debug(&app, "empty_response", json!({ "preview": preview }));
-            "Empty response from provider".to_string()
-        })?;
+    // Extract assistant text and any image outputs.
+    // Some multimodal models stream image data URLs via SSE; we must not treat those as text.
+    let images_from_sse = match api_response.data() {
+        Value::String(s) if s.contains("data:") => super::sse::accumulate_image_data_urls_from_sse(s),
+        _ => Vec::new(),
+    };
+
+    let text = extract_text(api_response.data()).unwrap_or_default();
+    if text.trim().is_empty() && images_from_sse.is_empty() {
+        let preview =
+            serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+        log_error(
+            &app,
+            "chat_completion",
+            format!("empty response from provider, preview={}", &preview),
+        );
+        emit_debug(&app, "empty_response", json!({ "preview": preview }));
+        return Err("Empty response from provider".to_string());
+    }
 
     emit_debug(
         &app,
@@ -1018,8 +1066,39 @@ pub async fn chat_completion(
     let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
     let variant_id = variant.id.clone();
 
+    let assistant_message_id = Uuid::new_v4().to_string();
+
+    let mut assistant_generated_attachments: Vec<ImageAttachment> = Vec::new();
+    for data_url in images_from_sse {
+        // Best-effort mime type inference from data URL header; fallback to PNG.
+        let mime_type = data_url
+            .split_once(";base64,")
+            .and_then(|(prefix, _)| prefix.strip_prefix("data:"))
+            .unwrap_or("image/png")
+            .to_string();
+
+        assistant_generated_attachments.push(ImageAttachment {
+            id: Uuid::new_v4().to_string(),
+            data: data_url,
+            mime_type,
+            filename: None,
+            width: None,
+            height: None,
+            storage_path: None,
+        });
+    }
+
+    let persisted_assistant_attachments = persist_attachments(
+        &app,
+        &character_id,
+        &session_id,
+        &assistant_message_id,
+        "assistant",
+        assistant_generated_attachments,
+    )?;
+
     let assistant_message = StoredMessage {
-        id: Uuid::new_v4().to_string(),
+        id: assistant_message_id,
         role: "assistant".into(),
         content: text.clone(),
         created_at: assistant_created_at,
@@ -1041,7 +1120,7 @@ pub async fn chat_completion(
             Vec::new()
         },
         is_pinned: false,
-        attachments: Vec::new(),
+        attachments: persisted_assistant_attachments,
     };
 
     session.messages.push(assistant_message.clone());
@@ -1257,7 +1336,10 @@ pub async fn chat_regenerate(
         mark_memories_accessed(&mut session, &memory_ids);
     }
 
-    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
+    let system_prompt = append_image_directive_instructions(
+        context.build_system_prompt(&character, model, persona, &session),
+        settings,
+    );
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let messages_for_api = {
@@ -1266,6 +1348,10 @@ pub async fn chat_regenerate(
 
         let char_name = &character.name;
         let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+        let allow_image_input = model
+            .input_scopes
+            .iter()
+            .any(|scope| scope.eq_ignore_ascii_case("image"));
 
         let messages_before_target: Vec<StoredMessage> = session
             .messages
@@ -1286,6 +1372,7 @@ pub async fn chat_regenerate(
                     &msg_with_data,
                     char_name,
                     persona_name,
+                    allow_image_input,
                 );
             }
 
@@ -1296,6 +1383,7 @@ pub async fn chat_regenerate(
                     &msg_with_data,
                     char_name,
                     persona_name,
+                    allow_image_input,
                 );
             }
         } else {
@@ -1312,6 +1400,7 @@ pub async fn chat_regenerate(
                     &msg_with_data,
                     char_name,
                     persona_name,
+                    allow_image_input,
                 );
             }
         }
@@ -1436,22 +1525,53 @@ pub async fn chat_regenerate(
         };
     }
 
-    let text = extract_text(api_response.data())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            let preview =
-                serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
-            emit_debug(
-                &app,
-                "regenerate_empty_response",
-                json!({ "preview": preview }),
-            );
-            "Empty response from provider".to_string()
-        })?;
+    let images_from_sse = match api_response.data() {
+        Value::String(s) if s.contains("data:") => super::sse::accumulate_image_data_urls_from_sse(s),
+        _ => Vec::new(),
+    };
+
+    let text = extract_text(api_response.data()).unwrap_or_default();
+    if text.trim().is_empty() && images_from_sse.is_empty() {
+        let preview =
+            serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+        emit_debug(
+            &app,
+            "regenerate_empty_response",
+            json!({ "preview": preview }),
+        );
+        return Err("Empty response from provider".to_string());
+    }
 
     let usage = extract_usage(api_response.data());
     let created_at = now_millis()?;
     let new_variant = new_assistant_variant(text.clone(), usage.clone(), created_at);
+
+    let mut assistant_generated_attachments: Vec<ImageAttachment> = Vec::new();
+    for data_url in images_from_sse {
+        let mime_type = data_url
+            .split_once(";base64,")
+            .and_then(|(prefix, _)| prefix.strip_prefix("data:"))
+            .unwrap_or("image/png")
+            .to_string();
+        assistant_generated_attachments.push(ImageAttachment {
+            id: Uuid::new_v4().to_string(),
+            data: data_url,
+            mime_type,
+            filename: None,
+            width: None,
+            height: None,
+            storage_path: None,
+        });
+    }
+
+    let persisted_assistant_attachments = persist_attachments(
+        &app,
+        &character.id,
+        &session.id,
+        &message_id,
+        "assistant",
+        assistant_generated_attachments,
+    )?;
 
     let assistant_clone = {
         let assistant_message = session
@@ -1477,6 +1597,9 @@ pub async fn chat_regenerate(
                     }
                 })
                 .collect();
+        }
+        if !persisted_assistant_attachments.is_empty() {
+            assistant_message.attachments = persisted_assistant_attachments;
         }
         assistant_message.clone()
     };
@@ -1648,7 +1771,10 @@ pub async fn chat_continue(
         mark_memories_accessed(&mut session, &memory_ids);
     }
 
-    let system_prompt = context.build_system_prompt(&character, model, persona, &session);
+    let system_prompt = append_image_directive_instructions(
+        context.build_system_prompt(&character, model, persona, &session),
+        settings,
+    );
 
     let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
         let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
@@ -1667,6 +1793,10 @@ pub async fn chat_continue(
 
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    let allow_image_input = model
+        .input_scopes
+        .iter()
+        .any(|scope| scope.eq_ignore_ascii_case("image"));
 
     for msg in &pinned_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
@@ -1675,6 +1805,7 @@ pub async fn chat_continue(
             &msg_with_data,
             char_name,
             persona_name,
+            allow_image_input,
         );
     }
 
@@ -1685,6 +1816,7 @@ pub async fn chat_continue(
             &msg_with_data,
             char_name,
             persona_name,
+            allow_image_input,
         );
     }
     crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
@@ -1811,23 +1943,27 @@ pub async fn chat_continue(
         };
     }
 
-    let text = extract_text(api_response.data())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            let preview =
-                serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
-            log_warn(
-                &app,
-                "chat_continue",
-                format!("empty response from provider, preview={}", &preview),
-            );
-            emit_debug(
-                &app,
-                "continue_empty_response",
-                json!({ "preview": preview }),
-            );
-            "Empty response from provider".to_string()
-        })?;
+    let images_from_sse = match api_response.data() {
+        Value::String(s) if s.contains("data:") => super::sse::accumulate_image_data_urls_from_sse(s),
+        _ => Vec::new(),
+    };
+
+    let text = extract_text(api_response.data()).unwrap_or_default();
+    if text.trim().is_empty() && images_from_sse.is_empty() {
+        let preview =
+            serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+        log_warn(
+            &app,
+            "chat_continue",
+            format!("empty response from provider, preview={}", &preview),
+        );
+        emit_debug(
+            &app,
+            "continue_empty_response",
+            json!({ "preview": preview }),
+        );
+        return Err("Empty response from provider".to_string());
+    }
 
     emit_debug(
         &app,
@@ -1843,8 +1979,37 @@ pub async fn chat_continue(
     let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
     let variant_id = variant.id.clone();
 
+    let assistant_message_id = Uuid::new_v4().to_string();
+
+    let mut assistant_generated_attachments: Vec<ImageAttachment> = Vec::new();
+    for data_url in images_from_sse {
+        let mime_type = data_url
+            .split_once(";base64,")
+            .and_then(|(prefix, _)| prefix.strip_prefix("data:"))
+            .unwrap_or("image/png")
+            .to_string();
+        assistant_generated_attachments.push(ImageAttachment {
+            id: Uuid::new_v4().to_string(),
+            data: data_url,
+            mime_type,
+            filename: None,
+            width: None,
+            height: None,
+            storage_path: None,
+        });
+    }
+
+    let persisted_assistant_attachments = persist_attachments(
+        &app,
+        &character_id,
+        &session_id,
+        &assistant_message_id,
+        "assistant",
+        assistant_generated_attachments,
+    )?;
+
     let assistant_message = StoredMessage {
-        id: Uuid::new_v4().to_string(),
+        id: assistant_message_id,
         role: "assistant".into(),
         content: text.clone(),
         created_at: assistant_created_at,
@@ -1866,7 +2031,7 @@ pub async fn chat_continue(
             Vec::new()
         },
         is_pinned: false,
-        attachments: Vec::new(),
+        attachments: persisted_assistant_attachments,
     };
 
     session.messages.push(assistant_message.clone());
@@ -2873,6 +3038,85 @@ fn find_model_and_credential<'a>(
                 .find(|cred| cred.provider_id == model.provider_id)
         })?;
     Some((model, provider_cred))
+}
+
+#[tauri::command]
+pub async fn chat_add_message_attachment(
+    app: AppHandle,
+    args: ChatAddMessageAttachmentArgs,
+) -> Result<StoredMessage, String> {
+    let ChatAddMessageAttachmentArgs {
+        session_id,
+        character_id,
+        message_id,
+        role,
+        attachment_id,
+        base64_data,
+        mime_type,
+        filename,
+        width,
+        height,
+    } = args;
+
+    if base64_data.trim().is_empty() {
+        return Err("base64Data cannot be empty".to_string());
+    }
+
+    let mut session = super::storage::load_session(&app, &session_id)?
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let target_index = session
+        .messages
+        .iter()
+        .position(|m| m.id == message_id)
+        .ok_or_else(|| "Message not found in loaded session window".to_string())?;
+
+    let storage_path = crate::storage_manager::media::storage_save_session_attachment(
+        app.clone(),
+        character_id,
+        session_id.clone(),
+        message_id.clone(),
+        attachment_id.clone(),
+        role,
+        base64_data,
+    )?;
+
+    let new_attachment = super::types::ImageAttachment {
+        id: attachment_id,
+        data: String::new(),
+        mime_type,
+        filename,
+        width,
+        height,
+        storage_path: Some(storage_path),
+    };
+
+    let updated_message = {
+        let target = &mut session.messages[target_index];
+        if let Some(existing) = target
+            .attachments
+            .iter_mut()
+            .find(|att| att.id == new_attachment.id)
+        {
+            *existing = new_attachment;
+        } else {
+            target.attachments.push(new_attachment);
+        }
+        target.clone()
+    };
+
+    session.updated_at = now_millis()?;
+
+    // Persist meta + the updated message (even if it's not the last message).
+    let mut meta = session.clone();
+    meta.messages = Vec::new();
+    let meta_json = serde_json::to_string(&meta).map_err(|e| e.to_string())?;
+    session_upsert_meta(app.clone(), meta_json)?;
+
+    let payload = serde_json::to_string(&vec![updated_message.clone()]).map_err(|e| e.to_string())?;
+    messages_upsert_batch(app.clone(), session_id, payload)?;
+
+    Ok(updated_message)
 }
 
 #[tauri::command]

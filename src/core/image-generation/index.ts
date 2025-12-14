@@ -97,10 +97,3 @@ export function getModelSizes(providerId: string, modelId: string): readonly str
   const model = provider.models.find(m => m.id === modelId);
   return model?.sizes ?? ["1024x1024"];
 }
-
-/**
- * Check if a model supports image generation based on its type
- */
-export function isImageGenerationModel(modelType: string): boolean {
-  return modelType === "imagegeneration";
-}

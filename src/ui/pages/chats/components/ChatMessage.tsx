@@ -353,13 +353,26 @@ function ChatMessageInner({
 export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
   const a = prev.message;
   const b = next.message;
+  const aAttachments = a.attachments ?? [];
+  const bAttachments = b.attachments ?? [];
   return (
     a.id === b.id &&
     a.role === b.role &&
     a.content === b.content &&
     a.selectedVariantId === b.selectedVariantId &&
     (a.variants?.length ?? 0) === (b.variants?.length ?? 0) &&
-    (a.attachments?.length ?? 0) === (b.attachments?.length ?? 0) &&
+    aAttachments.length === bAttachments.length &&
+    aAttachments.every((att, idx) => {
+      const other = bAttachments[idx];
+      return (
+        att.id === other?.id &&
+        att.data === other?.data &&
+        att.storagePath === other?.storagePath &&
+        att.mimeType === other?.mimeType &&
+        att.width === other?.width &&
+        att.height === other?.height
+      );
+    }) &&
     prev.index === next.index &&
     prev.messagesLength === next.messagesLength &&
     prev.heldMessageId === next.heldMessageId &&

@@ -39,9 +39,7 @@ export function AvatarPicker({
     (async () => {
       try {
         const settings = await readSettings();
-        const imageModels = settings.models.filter(
-          (m) => m.modelType === "imagegeneration"
-        );
+        const imageModels = settings.models.filter((m) => m.outputScopes?.includes("image"));
         setHasImageGenModels(imageModels.length > 0);
       } catch {
         setHasImageGenModels(false);

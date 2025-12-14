@@ -27,6 +27,24 @@ pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
     }
 }
 
+pub fn accumulate_image_data_urls_from_sse(raw: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in raw.lines() {
+        let l = line.trim();
+        if !l.starts_with("data:") {
+            continue;
+        }
+        let payload = l[5..].trim();
+        if payload.is_empty() || payload == "[DONE]" {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<Value>(payload) {
+            extract_image_data_urls_from_value(&v, &mut out);
+        }
+    }
+    out
+}
+
 pub fn usage_from_sse(raw: &str) -> Option<UsageSummary> {
     let mut last: Option<UsageSummary> = None;
     for line in raw.lines() {
@@ -150,6 +168,38 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
     None
 }
 
+fn extract_image_data_urls_from_value(v: &Value, out: &mut Vec<String>) {
+    // OpenAI-style streaming: choices[].delta.images[].image_url.url
+    if let Some(choices) = v.get("choices").and_then(|c| c.as_array()) {
+        for choice in choices {
+            let images = choice
+                .get("delta")
+                .and_then(|d| d.get("images"))
+                .and_then(|i| i.as_array())
+                .or_else(|| {
+                    choice
+                        .get("message")
+                        .and_then(|m| m.get("images"))
+                        .and_then(|i| i.as_array())
+                });
+
+            if let Some(images) = images {
+                for img in images {
+                    if let Some(url) = img
+                        .get("image_url")
+                        .and_then(|iu| iu.get("url"))
+                        .and_then(|u| u.as_str())
+                    {
+                        if url.starts_with("data:image/") {
+                            out.push(url.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn usage_from_value(v: &Value) -> Option<UsageSummary> {
     let u = v.get("usage")?;
     let prompt_tokens = take_first(
@@ -168,6 +218,10 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             "output_tokens",
             "completionTokens",
             "outputTokens",
+            "reasoningTokens",
+            "reasoning_tokens",
+            "imageTokens",
+            "image_tokens",
         ],
     );
     let total_tokens = take_first(u, &["total_tokens", "totalTokens"]).or_else(|| {
@@ -176,6 +230,7 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             _ => None,
         }
     });
+    
     if prompt_tokens.is_none() && completion_tokens.is_none() && total_tokens.is_none() {
         None
     } else {

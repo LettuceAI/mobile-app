@@ -46,9 +46,7 @@ export function ImageGenerationPage() {
     (async () => {
       try {
         const settings = await readSettings();
-        const imageModels = settings.models.filter(
-          (m) => m.modelType === "imagegeneration"
-        );
+        const imageModels = settings.models.filter((m) => m.outputScopes?.includes("image"));
         const providers = settings.providerCredentials;
 
         const selectedModel = imageModels[0] ?? null;

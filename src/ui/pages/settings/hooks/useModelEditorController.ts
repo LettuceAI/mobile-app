@@ -32,6 +32,7 @@ type ControllerReturn = {
   isNew: boolean;
   canSave: boolean;
   providerDisplay: (prov: ProviderCredential) => string;
+  updateEditorModel: (patch: Partial<Model>) => void;
   handleDisplayNameChange: (value: string) => void;
   handleModelNameChange: (value: string) => Promise<void>;
   handleProviderSelection: (providerId: string, providerLabel: string) => Promise<void>;
@@ -104,7 +105,8 @@ export function useModelEditorController(): ControllerReturn {
             providerId: firstProvider?.providerId || firstCap?.id || "",
             providerLabel: firstProvider?.label || firstCap?.name || "",
             createdAt: Date.now(),
-            modelType: "chat",
+            inputScopes: ["text"],
+            outputScopes: ["text"],
           } as Model;
         } else {
           const existing = settings.models.find((m) => m.id === modelId) || null;
@@ -175,6 +177,13 @@ export function useModelEditorController(): ControllerReturn {
     };
   }, [capabilities]);
 
+  const updateEditorModel = useCallback(
+    (patch: Partial<Model>) => {
+      dispatch({ type: "update_editor_model", payload: patch });
+    },
+    [dispatch],
+  );
+
   const canSave = useMemo(() => {
     const { editorModel, providers, saving, verifying } = state;
     if (!editorModel) return false;
@@ -195,24 +204,18 @@ export function useModelEditorController(): ControllerReturn {
 
   const handleDisplayNameChange = useCallback(
     (value: string) => {
-      dispatch({
-        type: "update_editor_model",
-        payload: { displayName: value },
-      });
+      updateEditorModel({ displayName: value });
     },
-    [dispatch],
+    [updateEditorModel],
   );
 
   const handleModelNameChange = useCallback(
     async (name: string) => {
       if (!state.editorModel) return;
 
-      dispatch({
-        type: "update_editor_model",
-        payload: { name },
-      });
+      updateEditorModel({ name });
     },
-    [dispatch, state.editorModel],
+    [updateEditorModel, state.editorModel],
   );
 
   const handleProviderSelection = useCallback(
@@ -469,6 +472,7 @@ export function useModelEditorController(): ControllerReturn {
     isNew,
     canSave,
     providerDisplay,
+    updateEditorModel,
     handleDisplayNameChange,
     handleModelNameChange,
     handleProviderSelection,

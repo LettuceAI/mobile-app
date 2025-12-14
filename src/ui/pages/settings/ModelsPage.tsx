@@ -559,14 +559,35 @@ export function ModelsPage() {
                                         <code className="rounded-md bg-black/30 px-1.5 py-0.5 font-mono text-[10px] text-white/40">{model.name}</code>
                                         <span className="text-white/20">·</span>
                                         <span className="text-[11px] text-white/40">{model.providerLabel || providerInfo?.label}</span>
-                                        {model.modelType && model.modelType !== "chat" && (
+                                        {model.inputScopes?.includes("image") && (
                                             <>
                                                 <span className="text-white/20">·</span>
                                                 <span className="rounded-md bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">
-                                                    {model.modelType === "multimodel" ? "Multimodel" :
-                                                        model.modelType === "imagegeneration" ? "Image Gen" :
-                                                            model.modelType === "embedding" ? "Embedding" :
-                                                                model.modelType}
+                                                    Image In
+                                                </span>
+                                            </>
+                                        )}
+                                        {model.outputScopes?.includes("image") && (
+                                            <>
+                                                <span className="text-white/20">·</span>
+                                                <span className="rounded-md bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">
+                                                    Image Out
+                                                </span>
+                                            </>
+                                        )}
+                                        {model.inputScopes?.includes("audio") && (
+                                            <>
+                                                <span className="text-white/20">·</span>
+                                                <span className="rounded-md bg-purple-400/15 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+                                                    Audio In
+                                                </span>
+                                            </>
+                                        )}
+                                        {model.outputScopes?.includes("audio") && (
+                                            <>
+                                                <span className="text-white/20">·</span>
+                                                <span className="rounded-md bg-purple-400/15 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+                                                    Audio Out
                                                 </span>
                                             </>
                                         )}

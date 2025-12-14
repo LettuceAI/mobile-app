@@ -143,7 +143,8 @@ export function useModelController(): ControllerReturn {
                 providerLabel: selectedProvider.label,
                 displayName: displayName.trim(),
                 createdAt: Date.now(),
-                modelType: "chat",
+                inputScopes: ["text"],
+                outputScopes: ["text"],
             };
 
             await addOrUpdateModel(model);

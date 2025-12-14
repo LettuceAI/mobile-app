@@ -46,7 +46,7 @@ export function ChatConversationPage() {
   const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
   const [messageToBranch, setMessageToBranch] = useState<StoredMessage | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
-  const [isMultimodelModel, setIsMultimodelModel] = useState(false);
+  const [supportsImageInput, setSupportsImageInput] = useState(false);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
     setSelectedImage({ src, alt });
@@ -121,22 +121,23 @@ export function ChatConversationPage() {
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
 
   useEffect(() => {
-    const checkModelType = async () => {
+    const checkModelCapabilities = async () => {
       if (!character) {
-        setIsMultimodelModel(false);
+        setSupportsImageInput(false);
         return;
       }
       try {
         const settings = await readSettings();
         const effectiveModelId = character.defaultModelId || settings.defaultModelId;
         const currentModel = settings.models.find((m: Model) => m.id === effectiveModelId);
-        setIsMultimodelModel(currentModel?.modelType === "multimodel");
+        const hasImageScope = currentModel?.inputScopes?.includes("image") ?? false;
+        setSupportsImageInput(hasImageScope);
       } catch (err) {
-        console.error("Failed to check model type:", err);
-        setIsMultimodelModel(false);
+        console.error("Failed to check model capabilities:", err);
+        setSupportsImageInput(false);
       }
     };
-    checkModelType();
+    checkModelCapabilities();
   }, [character]);
 
   useEffect(() => {
@@ -521,8 +522,8 @@ export function ChatConversationPage() {
           onAbort={handleAbort}
           hasBackgroundImage={!!backgroundImageData}
           pendingAttachments={pendingAttachments}
-          onAddAttachment={isMultimodelModel ? addPendingAttachment : undefined}
-          onRemoveAttachment={isMultimodelModel ? removePendingAttachment : undefined}
+          onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}
+          onRemoveAttachment={supportsImageInput ? removePendingAttachment : undefined}
         />
       </div>
 

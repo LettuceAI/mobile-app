@@ -13,6 +13,7 @@ pub mod types;
 
 pub use commands::{
     __cmd__chat_completion, __cmd__chat_continue, __cmd__chat_regenerate,
+    __cmd__chat_add_message_attachment,
     __cmd__create_prompt_template, __cmd__delete_prompt_template,
     __cmd__get_app_default_template_id, __cmd__get_default_character_rules,
     __cmd__get_default_system_prompt_template, __cmd__get_prompt_template,
@@ -21,6 +22,7 @@ pub use commands::{
     __cmd__reset_dynamic_memory_template, __cmd__reset_dynamic_summary_template,
     __cmd__retry_dynamic_memory, __cmd__search_messages, __cmd__update_prompt_template,
     __cmd__validate_template_variables, chat_completion, chat_continue, chat_regenerate,
+    chat_add_message_attachment,
     create_prompt_template, delete_prompt_template, get_app_default_template_id,
     get_default_character_rules, get_default_system_prompt_template, get_prompt_template,
     get_required_template_variables, is_app_default_template, list_prompt_templates,

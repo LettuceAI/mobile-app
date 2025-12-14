@@ -6,7 +6,8 @@ pub struct OpenRouterModel {
     pub id: String,
     pub name: String,
     pub architecture: OpenRouterArchitecture,
-    pub model_type: String,
+    pub input_scopes: Vec<String>,
+    pub output_scopes: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,32 +50,21 @@ pub async fn get_openrouter_models(_app: AppHandle) -> Result<Vec<OpenRouterMode
         .data
         .into_iter()
         .map(|m| {
-            let has_text_input = m
-                .architecture
-                .input_modalities
-                .contains(&"text".to_string());
-            let has_image_input = m
-                .architecture
-                .input_modalities
-                .contains(&"image".to_string());
-            let has_image_output = m
-                .architecture
-                .output_modalities
-                .contains(&"image".to_string());
-
-            let model_type = if has_text_input && has_image_input {
-                "multimodel"
-            } else if has_image_output {
-                "imagegeneration"
-            } else {
-                "chat"
-            };
+            let mut input_scopes = m.architecture.input_modalities.clone();
+            if !input_scopes.iter().any(|s| s.eq_ignore_ascii_case("text")) {
+                input_scopes.push("text".to_string());
+            }
+            let mut output_scopes = m.architecture.output_modalities.clone();
+            if !output_scopes.iter().any(|s| s.eq_ignore_ascii_case("text")) {
+                output_scopes.push("text".to_string());
+            }
 
             OpenRouterModel {
                 id: m.id,
                 name: m.name,
                 architecture: m.architecture,
-                model_type: model_type.to_string(),
+                input_scopes,
+                output_scopes,
             }
         })
         .collect();

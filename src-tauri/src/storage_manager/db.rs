@@ -208,6 +208,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           provider_label TEXT NOT NULL,
           display_name TEXT NOT NULL,
           created_at INTEGER NOT NULL,
+          model_type TEXT NOT NULL DEFAULT 'chat',
+          input_scopes TEXT,
+          output_scopes TEXT,
           advanced_model_settings TEXT,
           prompt_template_id TEXT,
           system_prompt TEXT
