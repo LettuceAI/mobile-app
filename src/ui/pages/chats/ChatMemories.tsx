@@ -703,44 +703,32 @@ export function ChatMemoriesPage() {
   return (
     <div className={cn("flex min-h-screen flex-col", colors.surface.base, colors.text.primary)}>
       {/* Header */}
-      <header className={cn(
-        "border-b px-3 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 sticky top-0 z-20",
-        colors.glass.strong
-      )}>
-        <div className="flex items-center justify-between gap-3">
-          <button
-            onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
-            className={cn(
-              "flex h-10 w-10 items-center justify-center",
-              radius.full,
-              "border bg-white/5",
-              colors.border.subtle,
-              colors.text.primary,
-              interactive.hover.brightness,
-              interactive.active.scale,
-              interactive.focus.ring
-            )}
-            aria-label="Go back"
-          >
-            <ArrowLeft size={14} />
-          </button>
-          <div className="flex flex-col items-start min-w-0 flex-1">
-            <h1 className={cn(typography.h1.size, typography.h1.weight, colors.text.primary, "truncate")}>
-              Memories
-            </h1>
-            <p className={cn(typography.bodySmall.size, colors.text.tertiary, "mt-1 truncate")}>
-              {character.name}
-            </p>
-          </div>
-          {ui.memoryStatus === "processing" && (
-            <div className={cn(
-              radius.full,
-              "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
-              "border-blue-500/30 bg-blue-500/15 text-blue-200"
-            )}>
-              Processing
+      <header className={cn("border-b border-white/10 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 sticky top-0 z-20", "bg-[#050505]")}>
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 items-center min-w-0">
+            <button
+              onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
+              className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+              aria-label="Go back"
+            >
+              <ArrowLeft size={14} strokeWidth={2.5} />
+            </button>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-xl font-bold text-white/90">Memories</p>
+              <p className="mt-0.5 truncate text-xs text-white/50">{character.name}</p>
             </div>
-          )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2 ml-auto">
+            {ui.memoryStatus === "processing" && (
+              <div className={cn(
+                radius.full,
+                "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+                "border-blue-500/30 bg-blue-500/15 text-blue-200"
+              )}>
+                Processing
+              </div>
+            )}
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <span className={cn(

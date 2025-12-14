@@ -610,40 +610,25 @@ function ChatSettingsContent({ character }: { character: Character }) {
         </>
       ) : null}
       {/* Header */}
-      <header className={cn(
-        "z-20 shrink-0 border-b px-3 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
-        colors.glass.strong
-      )}>
-        <div className="flex items-center justify-between gap-3">
-          <button
-            onClick={handleBack}
-            className={cn(
-              "flex items-center justify-center",
-              radius.full,
-              "border bg-white/5",
-              colors.border.subtle,
-              colors.text.primary,
-              interactive.transition.default,
-              "hover:border-white/25 hover:bg-white/10"
-            )}
-            aria-label="Back to chat"
-          >
-            <ArrowLeft size={14} />
-          </button>
-          <div className="flex flex-col items-start min-w-0 flex-1">
-            <h1 className={cn(
-              typography.h1.size,
-              typography.h1.weight,
-              "text-white text-left truncate whitespace-nowrap"
-            )}>
-              Chat Settings
-            </h1>
-            <p className={cn(
-              typography.bodySmall.size,
-              "text-white/50 mt-1 text-left truncate whitespace-nowrap"
-            )}>
-              Manage conversation preferences
-            </p>
+      <header
+        className={cn(
+          "z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
+          !backgroundImageData ? "bg-[#050505]" : ""
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 items-center min-w-0">
+            <button
+              onClick={handleBack}
+              className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+              aria-label="Back to chat"
+            >
+              <ArrowLeft size={14} strokeWidth={2.5} />
+            </button>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-xl font-bold text-white/90">Chat Settings</p>
+              <p className="mt-0.5 truncate text-xs text-white/50">Manage conversation preferences</p>
+            </div>
           </div>
         </div>
       </header>

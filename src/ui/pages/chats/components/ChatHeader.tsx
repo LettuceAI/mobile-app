@@ -129,7 +129,9 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
                   <Brain size={14} strokeWidth={2.5} />
                 )}
                 {!memoryBusy && !memoryError && session.memories && session.memories.length > 0 && (
-                  <span className="absolute right-1 top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-[#050505]" />
+                  <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-[3px] font-semibold leading-none text-[#050505]">
+                    {session.memories.length}
+                  </span>
                 )}
               </button>
             )}
