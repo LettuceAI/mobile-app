@@ -10,7 +10,7 @@ import {
   updateSessionTitle
 } from "../../../core/storage";
 import { typography, radius, cn, colors, interactive } from "../../design-tokens";
-import { BottomMenu, MenuButton, MenuButtonGroup, MenuDivider, MenuLabel } from "../../components";
+import { BottomMenu, MenuButton, MenuButtonGroup, MenuDivider } from "../../components";
 import { Routes, useNavigationManager } from "../../navigation";
 
 interface SessionPreview {

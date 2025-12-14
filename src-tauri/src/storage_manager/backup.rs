@@ -42,7 +42,6 @@ fn open_backup_file(app: &tauri::AppHandle, path: &str) -> Result<File, String> 
     }
 }
 
-/// Backup format version 2 - JSON-based table exports (no db swapping)
 const BACKUP_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]

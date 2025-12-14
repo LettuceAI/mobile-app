@@ -314,7 +314,7 @@ function UpdatedMemoriesList({ memories }: { memories: string[] }) {
               className={cn(
                 radius.sm,
                 colors.accent.emerald.subtle,
-                "px-3 py-2"
+                "px-3 py-2",
               )}
             >
               <p className={cn(typography.caption.size, "leading-relaxed")}>
@@ -776,10 +776,8 @@ export function ChatMemoriesPage() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* Error Banner */}
-        {/* Status Banner (Error / Retry / Success) */}
         {(ui.actionError || ui.retryStatus !== "idle" || ui.memoryStatus === "processing") && (
           <div className="px-3 pt-3">
             {(ui.retryStatus === "retrying" || ui.memoryStatus === "processing") ? (
@@ -819,7 +817,6 @@ export function ChatMemoriesPage() {
                 <div className="flex-1 text-sm text-red-200">
                   <p className="font-semibold mb-1">Memory System Error</p>
                   <p className="opacity-90">{ui.actionError}</p>
-                  {/* Retry Button for Memory Errors */}
                   {(ui.actionError.toLowerCase().includes("status") || ui.actionError.toLowerCase().includes("limit") || true) && (
                     <button
                       onClick={handleRetry}
@@ -1071,7 +1068,7 @@ export function ChatMemoriesPage() {
                   {filteredMemories.map((item) => {
                     const expanded = ui.expandedMemories.has(item.index);
                     const isEditing = ui.editingIndex === item.index;
-                    
+
                     return (
                       <div
                         key={item.index}
@@ -1085,7 +1082,6 @@ export function ChatMemoriesPage() {
                               : "border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.03]"
                         )}
                       >
-                        {/* Accent line */}
                         <div className={cn(
                           "absolute left-0 top-0 bottom-0 w-[3px]",
                           item.isAi ? "bg-blue-400/60" : "bg-emerald-400/60"
@@ -1188,7 +1184,7 @@ export function ChatMemoriesPage() {
                                   )}>
                                     {item.isAi ? "AI Memory" : "Your Note"}
                                   </span>
-                                  
+
                                   {/* Status badges */}
                                   {isDynamic && (
                                     item.isCold ? (
@@ -1209,7 +1205,7 @@ export function ChatMemoriesPage() {
                                   )}
                                 </div>
 
-                                {/* Action Buttons - Always visible on mobile, hover on desktop */}
+                                {/* Action Buttons */}
                                 <div className={cn(
                                   "flex items-center gap-1.5 shrink-0",
                                   "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
@@ -1334,7 +1330,7 @@ export function ChatMemoriesPage() {
                                     <span>Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}</span>
                                   )}
                                 </div>
-                                
+
                                 {/* Expand hint */}
                                 <div className={cn(
                                   "flex items-center gap-1 text-[10px] text-white/30 transition-colors",
@@ -1424,16 +1420,16 @@ export function ChatMemoriesPage() {
                   const isAssistant = msg.role === "assistant";
                   const timestamp = new Date(msg.createdAt).toLocaleString();
 
-	                  return (
-	                    <div
-	                      key={msg.id}
-	                      className={cn(
-	                        components.card.base,
-	                        components.card.interactive,
-	                        "w-full p-4",
-	                        isUser ? "border-emerald-400/30" : isAssistant ? "border-blue-400/30" : "border-white/10"
-	                      )}
-	                    >
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        components.card.base,
+                        components.card.interactive,
+                        "w-full p-4",
+                        isUser ? "border-emerald-400/30" : isAssistant ? "border-blue-400/30" : "border-white/10"
+                      )}
+                    >
                       <div className="flex items-start gap-3">
                         <div className={cn(
                           "flex h-8 w-8 shrink-0 items-center justify-center",
@@ -1467,13 +1463,13 @@ export function ChatMemoriesPage() {
                               {timestamp}
                             </span>
                           </div>
-	                          <p className={cn(
-	                            typography.bodySmall.size,
-	                            colors.text.secondary,
-	                            "leading-relaxed whitespace-pre-wrap break-words"
-	                          )}>
-	                            {msg.content}
-	                          </p>
+                          <p className={cn(
+                            typography.bodySmall.size,
+                            colors.text.secondary,
+                            "leading-relaxed whitespace-pre-wrap break-words"
+                          )}>
+                            {msg.content}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 mt-3 pl-11">
