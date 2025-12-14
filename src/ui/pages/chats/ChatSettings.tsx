@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info } from "lucide-react";
+import { CSSProperties, useMemo, useState, useEffect, useCallback } from "react";
+import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info, Sparkles } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
@@ -8,6 +8,7 @@ import { readSettings, saveCharacter, createSession, listCharacters, listPersona
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
+import { useImageData } from "../../hooks/useImageData";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
@@ -66,6 +67,75 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
           <div className={cn(typography.caption.size, "text-gray-400 mt-0.5 truncate")}>
             {subtitle}
           </div>
+        </div>
+      </div>
+      <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+    </button>
+  );
+}
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="flex items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white truncate")}>
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className={cn(typography.bodySmall.size, "text-white/50 mt-0.5 truncate")}>
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function QuickChip({
+  icon,
+  label,
+  value,
+  onClick,
+  disabled = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "group flex w-full items-center justify-between gap-3",
+        radius.full,
+        "border px-4 py-3 text-left",
+        interactive.transition.default,
+        interactive.active.scale,
+        disabled
+          ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+          : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10"
+      )}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={cn("flex h-9 w-9 items-center justify-center", radius.full, "border border-white/15 bg-white/10 text-white/80")}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div
+            className={cn(
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/50"
+            )}
+          >
+            {label}
+          </div>
+          <div className={cn(typography.bodySmall.size, "text-white truncate")}>{value}</div>
         </div>
       </div>
       <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
@@ -221,6 +291,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [globalDefaultModelId, setGlobalDefaultModelId] = useState<string | null>(null);
   const [currentCharacter, setCurrentCharacter] = useState<Character>(character);
   const avatarUrl = useAvatar("character", currentCharacter?.id, currentCharacter?.avatarPath);
+  const backgroundImageData = useImageData(currentCharacter?.backgroundImagePath);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
@@ -417,17 +488,72 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const effectiveModelId = getEffectiveModelId();
   const currentModel = models.find(m => m.id === effectiveModelId);
 
+  const baseAdvancedSettings = useMemo(() => {
+    return currentModel?.advancedModelSettings ?? globalAdvancedSettings ?? createDefaultAdvancedModelSettings();
+  }, [currentModel?.advancedModelSettings, globalAdvancedSettings]);
+
+  const advancedDefaultsLabel = useMemo(() => {
+    return currentModel?.advancedModelSettings ? "Model defaults" : "App defaults";
+  }, [currentModel?.advancedModelSettings]);
+
   const sessionAdvancedSummary = useMemo(() => {
     if (!currentSession) {
       return "Open a chat session first";
     }
-    // If session override exists, use it; otherwise use model's advanced settings
-    const effectiveSettings = sessionAdvancedSettings ?? currentModel?.advancedModelSettings ?? createDefaultAdvancedModelSettings();
-    return formatAdvancedModelSettingsSummary(
-      effectiveSettings,
-      "Default settings"
-    );
-  }, [currentSession, sessionAdvancedSettings, currentModel]);
+    if (!sessionAdvancedSettings) {
+      return `${advancedDefaultsLabel}: ${formatAdvancedModelSettingsSummary(baseAdvancedSettings, "Default settings")}`;
+    }
+    return `Overrides: ${formatAdvancedModelSettingsSummary(sessionAdvancedSettings, "Overrides active")}`;
+  }, [currentSession, sessionAdvancedSettings, baseAdvancedSettings, advancedDefaultsLabel]);
+
+  const sessionAdvancedOverrideCount = useMemo(() => {
+    if (!currentSession || !sessionAdvancedSettings) return 0;
+    const keys: (keyof AdvancedModelSettings)[] = [
+      "temperature",
+      "topP",
+      "topK",
+      "maxOutputTokens",
+      "frequencyPenalty",
+      "presencePenalty",
+    ];
+    let count = 0;
+    for (const key of keys) {
+      const overrideValue = sessionAdvancedSettings[key];
+      if (overrideValue === null || overrideValue === undefined) continue;
+      const baseValue = baseAdvancedSettings?.[key];
+      if (baseValue === null || baseValue === undefined) {
+        count += 1;
+        continue;
+      }
+      if (typeof overrideValue === "number" && typeof baseValue === "number") {
+        if (Math.abs(overrideValue - baseValue) > 1e-9) count += 1;
+      } else {
+        count += 1;
+      }
+    }
+    return count;
+  }, [currentSession, sessionAdvancedSettings, baseAdvancedSettings]);
+
+  const memorySummaryPreview = useMemo(() => {
+    if (!currentSession) return "Open a chat session to view memory";
+    const summary = (currentSession.memorySummary ?? "").trim();
+    if (summary) return summary;
+    const memoryCount = currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
+    if (memoryCount > 0) return "No summary yet — memories exist for this session";
+    return "No memories yet — open to add summary, tags, and history";
+  }, [currentSession]);
+
+  const memoryMetaLine = useMemo(() => {
+    if (!currentSession) return "Session required";
+    const memoryCount = currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
+    const toolsCount = currentSession.memoryToolEvents?.length ?? 0;
+    const tokenCount = currentSession.memorySummaryTokenCount ?? 0;
+    const parts: string[] = [];
+    parts.push(`${memoryCount.toLocaleString()} items`);
+    if (toolsCount > 0) parts.push(`${toolsCount.toLocaleString()} tool events`);
+    if (tokenCount > 0) parts.push(`${tokenCount.toLocaleString()} summary tokens`);
+    return parts.join(" • ");
+  }, [currentSession]);
 
   const handleBack = () => {
     if (characterId) {
@@ -461,8 +587,28 @@ function ChatSettingsContent({ character }: { character: Character }) {
     return currentModel.displayName + (!currentCharacter?.defaultModelId ? " (app default)" : "");
   };
 
+  const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!backgroundImageData) return undefined;
+    return {
+      backgroundImage: `linear-gradient(rgba(5, 5, 5, 0.25), rgba(5, 5, 5, 0.25)), url(${backgroundImageData})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    };
+  }, [backgroundImageData]);
+
   return (
-    <div className={cn("flex min-h-screen flex-col", colors.surface.base, colors.text.primary)}>
+    <div
+      className={cn("relative flex min-h-screen flex-col overflow-hidden", colors.text.primary)}
+      style={{ backgroundColor: backgroundImageData ? undefined : "#050505" }}
+    >
+      {/* Fixed background image (does not scroll with content) */}
+      {backgroundImageData ? (
+        <>
+          <div className="fixed inset-0 -z-10 pointer-events-none" style={chatBackgroundStyle} aria-hidden="true" />
+          <div className="fixed inset-0 -z-10 pointer-events-none bg-black/30" aria-hidden="true" />
+        </>
+      ) : null}
       {/* Header */}
       <header className={cn(
         "z-20 shrink-0 border-b px-3 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
@@ -510,7 +656,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
           transition={{ duration: 0.3, ease: "easeOut" }}
           className={spacing.section}
         >
-          {/* Character Info */}
+          {/* Session Header */}
           <section className={cn(
             radius.lg,
             "border border-white/10 bg-[#0c0d13]/85 p-4 backdrop-blur-sm"
@@ -521,70 +667,156 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <h3 className={cn(typography.body.size, typography.h3.weight, "text-white")}>
                   {characterName}
                 </h3>
-                {currentCharacter?.description && (
+                {currentSession ? (
+                  <p className={cn(typography.caption.size, "text-gray-400 mt-1 truncate")}>
+                    Session: {currentSession.title || "Untitled"}
+                  </p>
+                ) : null}
+                {currentCharacter?.description ? (
                   <p className={cn(typography.caption.size, "text-gray-400 leading-relaxed line-clamp-2 mt-1")}>
                     {currentCharacter.description}
                   </p>
-                )}
+                ) : null}
               </div>
             </div>
           </section>
 
-          {/* Actions */}
-          <section className={spacing.field}>
-            <SettingsButton
-              icon={<MessageSquarePlus className="h-4 w-4" />}
-              title="New Chat"
-              subtitle="Start a fresh conversation"
-              onClick={handleNewChat}
-            />
-
-            <SettingsButton
-              icon={<History className="h-4 w-4" />}
-              title="Chat History"
-              subtitle="View previous sessions"
-              onClick={handleViewHistory}
-            />
-
-            <SettingsButton
-              icon={<User className="h-4 w-4" />}
-              title="Change Persona"
-              subtitle={getCurrentPersonaDisplay()}
-              onClick={() => setShowPersonaSelector(true)}
-              disabled={!currentSession}
-            />
-
-            <SettingsButton
-              icon={<Cpu className="h-4 w-4" />}
-              title="Change Model"
-              subtitle={getModelDisplay()}
-              onClick={() => setShowModelSelector(true)}
-            />
-
-            <SettingsButton
-              icon={<SlidersHorizontal className="h-4 w-4" />}
-              title="Session Advanced Settings"
-              subtitle={sessionAdvancedSummary}
-              onClick={() => {
-                if (!currentSession) return;
-                const draft = sessionAdvancedSettings ?? currentModel?.advancedModelSettings ?? createDefaultAdvancedModelSettings();
-                setSessionAdvancedDraft(draft);
-                setSessionOverrideEnabled(Boolean(sessionAdvancedSettings));
-                setShowSessionAdvancedMenu(true);
-              }}
-              disabled={!currentSession}
-            />
-            <SettingsButton
-              icon={<History className="h-4 w-4" />}
-              title="Conversation Memory Page"
-              subtitle="Summary, AI tags, tool call history"
+          {/* Memory (Primary) */}
+          <section className={spacing.item}>
+            <SectionHeader title="Memory" subtitle="Summary, tags, tool call history" />
+            <button
               onClick={() => {
                 if (!characterId) return;
                 if (!currentSession) return;
                 navigate(Routes.chatMemories(characterId, currentSession.id));
               }}
               disabled={!currentSession}
-            />
+              className={cn(
+                "group w-full text-left",
+                radius.lg,
+                "border p-4",
+                interactive.transition.default,
+                interactive.active.scale,
+                !currentSession
+                  ? "border-white/5 bg-[#0c0d13]/50 opacity-10 cursor-not-allowed"
+                  : cn("border-emerald-400/20 bg-[#0c0d13]/70 hover:border-emerald-400/30", colors.effects.glow)
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn("flex h-10 w-10 items-center justify-center", radius.full, "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200")}>
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={cn(typography.body.size, typography.h3.weight, "text-white")}>Conversation Memory</div>
+                    <div className={cn(typography.caption.size, "text-white/60 mt-0.5 truncate")}>
+                      {memoryMetaLine}
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="mt-1 h-4 w-4 text-white/40 transition-colors group-hover:text-white" />
+              </div>
+              <p className={cn(typography.bodySmall.size, "mt-3 text-white/70 leading-relaxed line-clamp-3")}>
+                {memorySummaryPreview}
+              </p>
+            </button>
+          </section>
+
+          {/* Quick Settings */}
+          <section className={spacing.item}>
+            <SectionHeader title="Quick Settings" subtitle="Most common adjustments" />
+            <div className="grid grid-cols-1 gap-2">
+              <QuickChip
+                icon={<User className="h-4 w-4" />}
+                label="Persona"
+                value={getCurrentPersonaDisplay()}
+                onClick={() => setShowPersonaSelector(true)}
+                disabled={!currentSession}
+              />
+              <QuickChip
+                icon={<Cpu className="h-4 w-4" />}
+                label="Model"
+                value={getModelDisplay()}
+                onClick={() => setShowModelSelector(true)}
+              />
+            </div>
+          </section>
+
+          {/* Advanced (Important) */}
+          <section className={spacing.item}>
+            <SectionHeader title="Advanced" subtitle="Override model parameters for this session" />
+            <button
+              onClick={() => {
+                if (!currentSession) return;
+                const draft = sessionAdvancedSettings ?? baseAdvancedSettings;
+                setSessionAdvancedDraft(draft);
+                setSessionOverrideEnabled(Boolean(sessionAdvancedSettings));
+                setShowSessionAdvancedMenu(true);
+              }}
+              disabled={!currentSession}
+              className={cn(
+                "group flex w-full items-center justify-between gap-3",
+                radius.lg,
+                "border p-4 text-left",
+                interactive.transition.default,
+                interactive.active.scale,
+                !currentSession
+                  ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+                  : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10"
+              )}
+            >
+              <div className="flex items-start gap-3 min-w-0">
+                <div className={cn("flex h-10 w-10 items-center justify-center", radius.full, "border border-white/15 bg-white/10 text-white/80")}>
+                  <SlidersHorizontal className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={cn(typography.bodySmall.size, typography.body.weight, "text-white truncate")}>
+                      Session Advanced Settings
+                    </div>
+                    {currentSession ? (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full border px-2 py-0.5",
+                          typography.overline.size,
+                          typography.overline.weight,
+                          typography.overline.tracking,
+                          typography.overline.transform,
+                          sessionAdvancedSettings ? colors.accent.emerald.subtle : "border-white/10 bg-white/5 text-white/60"
+                        )}
+                      >
+                        {sessionAdvancedSettings
+                          ? `Overrides${sessionAdvancedOverrideCount ? ` (${sessionAdvancedOverrideCount})` : ""}`
+                          : "Defaults"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className={cn(typography.caption.size, "text-gray-400 mt-1 truncate")}>
+                    {sessionAdvancedSummary}
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+            </button>
+          </section>
+
+          {/* Session Management */}
+          <section className={spacing.item}>
+            <SectionHeader title="Session" subtitle="Start new chats and browse history" />
+            <div className={spacing.field}>
+              <SettingsButton
+                icon={<MessageSquarePlus className="h-4 w-4" />}
+                title="New Chat"
+                subtitle="Start a fresh conversation"
+                onClick={handleNewChat}
+              />
+              <SettingsButton
+                icon={<History className="h-4 w-4" />}
+                title="Chat History"
+                subtitle="View previous sessions"
+                onClick={handleViewHistory}
+              />
+            </div>
           </section>
         </motion.div>
       </main>
@@ -729,9 +961,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
             <div className="space-y-5">
               <div className="flex items-center justify-between rounded-xl border border-white/10 px-4 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-white">Session override</p>
+                  <p className="text-sm font-semibold text-white">Override defaults</p>
                   <p className="mt-1 text-xs text-white/50 leading-relaxed">
-                    Customize parameters just for this conversation
+                    Override model parameters just for this conversation
                   </p>
                 </div>
 
@@ -969,12 +1201,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   type="button"
                   onClick={() => {
                     setSessionOverrideEnabled(false);
-                    setSessionAdvancedDraft(globalAdvancedSettings ?? createDefaultAdvancedModelSettings());
+                    setSessionAdvancedDraft(baseAdvancedSettings);
                     handleSaveSessionAdvancedSettings(null);
                   }}
                   className="flex-1 rounded-xl border border-white/10 py-3 text-sm font-medium text-white hover:bg-white/5 active:scale-[0.99]"
                 >
-                  Use app defaults
+                  Use defaults
                 </button>
                 <button
                   type="button"
