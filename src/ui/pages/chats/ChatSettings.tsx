@@ -52,7 +52,7 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
           : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <div className={cn(
           "flex h-10 w-10 items-center justify-center",
           radius.full,
@@ -61,10 +61,18 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <div className={cn(typography.bodySmall.size, typography.body.weight, "text-white")}>
+          <div
+            className={cn(
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/50"
+            )}
+          >
             {title}
           </div>
-          <div className={cn(typography.caption.size, "text-gray-400 mt-0.5 truncate")}>
+          <div className={cn(typography.bodySmall.size, "text-white truncate")}>
             {subtitle}
           </div>
         </div>
@@ -109,9 +117,9 @@ function QuickChip({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "group flex w-full items-center justify-between gap-3",
-        radius.full,
-        "border px-4 py-3 text-left",
+        "group flex w-full min-h-14 items-center justify-between",
+        radius.md,
+        "border p-4 text-left",
         interactive.transition.default,
         interactive.active.scale,
         disabled
@@ -120,10 +128,10 @@ function QuickChip({
       )}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <div className={cn("flex h-9 w-9 items-center justify-center", radius.full, "border border-white/15 bg-white/10 text-white/80")}>
+        <div className={cn("flex h-10 w-10 items-center justify-center", radius.full, "border border-white/15 bg-white/10 text-white/80")}>
           {icon}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div
             className={cn(
               typography.overline.size,
@@ -693,8 +701,18 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     <Sparkles className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className={cn(typography.body.size, typography.h3.weight, "text-white")}>Conversation Memory</div>
-                    <div className={cn(typography.caption.size, "text-white/60 mt-0.5 truncate")}>
+                    <div
+                      className={cn(
+                        typography.overline.size,
+                        typography.overline.weight,
+                        typography.overline.tracking,
+                        typography.overline.transform,
+                        "text-white/50"
+                      )}
+                    >
+                      Memory
+                    </div>
+                    <div className={cn(typography.bodySmall.size, "text-white truncate")}>
                       {memoryMetaLine}
                     </div>
                   </div>
@@ -756,8 +774,16 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className={cn(typography.bodySmall.size, typography.body.weight, "text-white truncate")}>
-                      Session Advanced Settings
+                    <div
+                      className={cn(
+                        typography.overline.size,
+                        typography.overline.weight,
+                        typography.overline.tracking,
+                        typography.overline.transform,
+                        "text-white/50 truncate"
+                      )}
+                    >
+                      Advanced Settings
                     </div>
                     {currentSession ? (
                       <span
@@ -776,7 +802,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                       </span>
                     ) : null}
                   </div>
-                  <div className={cn(typography.caption.size, "text-gray-400 mt-1 truncate")}>
+                  <div className={cn(typography.bodySmall.size, "text-white mt-1 truncate")}>
                     {sessionAdvancedSummary}
                   </div>
                 </div>
