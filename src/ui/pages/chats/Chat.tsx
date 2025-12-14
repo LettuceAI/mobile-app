@@ -1,7 +1,7 @@
-import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import type { Character, Model, StoredMessage } from "../../../core/storage/schemas";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
@@ -40,6 +40,7 @@ export function ChatConversationPage() {
   const pendingScrollAdjustRef = useRef<{ prevScrollTop: number; prevScrollHeight: number } | null>(null);
   const loadingOlderRef = useRef(false);
   const isAtBottomRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
@@ -112,6 +113,9 @@ export function ChatConversationPage() {
     initializeLongPressTimer,
     isStartingSceneMessage,
   } = chatController;
+
+  const isGenerating = sending || regeneratingMessageId !== null;
+  const lastMessageContentLength = messages[messages.length - 1]?.content.length ?? 0;
 
   const backgroundImageData = useImageData(character?.backgroundImagePath);
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
@@ -241,19 +245,33 @@ export function ChatConversationPage() {
     }
   }, [hasMoreMessagesBefore, loadOlderMessages]);
 
-  const handleScroll = useCallback(() => {
+  const updateIsAtBottom = useCallback(() => {
     const container = scrollContainerRef.current;
-    if (!container) return;
+    if (!container) return null;
 
     const { scrollTop, clientHeight, scrollHeight } = container;
-
     const atBottom = scrollTop + clientHeight >= scrollHeight - STICKY_BOTTOM_THRESHOLD_PX;
     isAtBottomRef.current = atBottom;
+    setIsAtBottom((prev) => (prev === atBottom ? prev : atBottom));
+    return scrollTop;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const scrollTop = updateIsAtBottom();
+    if (scrollTop === null) return;
 
     if (scrollTop <= AUTOLOAD_TOP_THRESHOLD_PX && hasMoreMessagesBefore) {
       void loadOlderFromDb();
     }
-  }, [hasMoreMessagesBefore, loadOlderFromDb]);
+  }, [hasMoreMessagesBefore, loadOlderFromDb, updateIsAtBottom]);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    isAtBottomRef.current = true;
+    setIsAtBottom(true);
+    container.scrollTo({ top: container.scrollHeight, behavior });
+  }, []);
 
   const handleContextMenu = useCallback((message: StoredMessage) => (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -285,19 +303,26 @@ export function ChatConversationPage() {
     }
   }, [sending, setError, draft, setDraft, handleSend, handleContinue, pendingAttachments]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) {
       return;
     }
-    if (!isAtBottomRef.current) return;
 
     const frame = window.requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
+      if (isAtBottomRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+      updateIsAtBottom();
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [messages.length]);
+  }, [messages.length, lastMessageContentLength, isGenerating, updateIsAtBottom]);
+
+  useEffect(() => {
+    if (!isAtBottom || !isGenerating) return;
+    scrollToBottom("auto");
+  }, [isAtBottom, isGenerating, scrollToBottom]);
 
   useEffect(() => {
     const adjust = pendingScrollAdjustRef.current;
@@ -460,6 +485,29 @@ export function ChatConversationPage() {
           })}
         </div>
       </main>
+
+      <AnimatePresence>
+        {!isAtBottom && (
+          <motion.button
+            type="button"
+            aria-label="Scroll to bottom"
+            onClick={() => scrollToBottom("smooth")}
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className={cn(
+              "fixed right-3 z-30 flex h-11 w-11 items-center justify-center",
+              "bottom-[calc(env(safe-area-inset-bottom)+88px)]",
+              "border border-white/15 bg-black/40 text-white/80 shadow-lg backdrop-blur-sm",
+              "hover:bg-black/55 active:scale-95",
+              radius.full,
+            )}
+          >
+            <ChevronDown size={18} />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <div className="relative z-10">
