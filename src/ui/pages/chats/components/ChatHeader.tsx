@@ -88,29 +88,27 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
   return (
     <>
       <header className={`z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-10 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
-        <div className="flex items-center gap-3">
-          <div className="flex flex-1 items-center">
-            <button
-              onClick={() => navigate("/chat")}
-              className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
-              aria-label="Back"
-            >
-              <ArrowLeft size={14} strokeWidth={2.5} />
-            </button>
+        <div className="flex items-center">
+          <button
+            onClick={() => navigate("/chat")}
+            className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+            aria-label="Back"
+          >
+            <ArrowLeft size={14} strokeWidth={2.5} />
+          </button>
 
-            <button
-              onClick={() => {
-                if (!characterId) return;
-                navigate(Routes.chatSettingsSession(characterId, sessionId));
-              }}
-              className="min-w-0 flex-1 text-left"
-              aria-label="Open chat settings"
-            >
-              <p className="truncate text-xl font-bold text-white/90">{headerTitle}</p>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              if (!characterId) return;
+              navigate(Routes.chatSettingsSession(characterId, sessionId));
+            }}
+            className="min-w-0 flex-1 text-left truncate text-xl font-bold text-white/90 p-0 hover:opacity-80 transition-opacity"
+            aria-label="Open chat settings"
+          >
+            {headerTitle}
+          </button>
 
-          <div className="flex shrink-0 items-center gap-1 ml-auto">
+          <div className="flex shrink-0 items-center gap-1">
             {/* Memory Button */}
             {session && (
               <button

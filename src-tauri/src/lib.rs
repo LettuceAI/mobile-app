@@ -29,7 +29,8 @@ pub fn run() {
     #[cfg(target_os = "android")]
     let builder = builder.plugin(tauri_plugin_android_fs::init());
 
-    builder.setup(|app| {
+    builder
+        .setup(|app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
 
@@ -109,6 +110,7 @@ pub fn run() {
             storage_manager::sessions::sessions_list_previews,
             storage_manager::sessions::session_get,
             storage_manager::sessions::session_get_meta,
+            storage_manager::sessions::session_message_count,
             storage_manager::sessions::messages_list,
             storage_manager::sessions::messages_list_pinned,
             storage_manager::sessions::session_upsert_meta,

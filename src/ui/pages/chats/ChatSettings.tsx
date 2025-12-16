@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
-import { readSettings, saveCharacter, createSession, listCharacters, listPersonas, getSessionMeta, saveSession, deletePersona } from "../../../core/storage/repo";
+import { readSettings, saveCharacter, createSession, listCharacters, listPersonas, getSessionMeta, saveSession, deletePersona, getSessionMessageCount } from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -312,6 +312,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
   const [showPersonaActions, setShowPersonaActions] = useState(false);
   const [selectedPersonaForActions, setSelectedPersonaForActions] = useState<Persona | null>(null);
+  const [messageCount, setMessageCount] = useState<number>(0);
 
   const loadModels = useCallback(async () => {
     try {
@@ -342,6 +343,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
         setCurrentSession(session);
         const sessionAdvanced = session?.advancedModelSettings ?? null;
         setSessionAdvancedSettings(sessionAdvanced);
+
+        try {
+          const count = await getSessionMessageCount(sessionId);
+          setMessageCount(count);
+        } catch (e) {
+          console.warn("Failed to load message count", e);
+          setMessageCount(0);
+        }
       } catch (error) {
         console.error("Failed to load session:", error);
         setCurrentSession(null);
@@ -663,6 +672,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 {currentSession ? (
                   <p className={cn(typography.caption.size, "text-gray-400 mt-1 truncate")}>
                     Session: {currentSession.title || "Untitled"}
+                    <span className="opacity-50 mx-1.5">•</span>
+                    {messageCount} messages
                   </p>
                 ) : null}
                 {currentCharacter?.description ? (

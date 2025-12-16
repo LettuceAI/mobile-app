@@ -359,24 +359,21 @@ fn fetch_messages_page(
             }
         } else {
             let rows = stmt
-                .query_map(
-                    params![session_id],
-                    |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, i64>(3)?,
-                            r.get::<_, Option<i64>>(4)?,
-                            r.get::<_, Option<i64>>(5)?,
-                            r.get::<_, Option<i64>>(6)?,
-                            r.get::<_, Option<String>>(7)?,
-                            r.get::<_, i64>(8)?,
-                            r.get::<_, Option<String>>(9)?,
-                            r.get::<_, Option<String>>(10)?,
-                        ))
-                    },
-                )
+                .query_map(params![session_id], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
+                        r.get::<_, Option<i64>>(4)?,
+                        r.get::<_, Option<i64>>(5)?,
+                        r.get::<_, Option<i64>>(6)?,
+                        r.get::<_, Option<String>>(7)?,
+                        r.get::<_, i64>(8)?,
+                        r.get::<_, Option<String>>(9)?,
+                        r.get::<_, Option<String>>(10)?,
+                    ))
+                })
                 .map_err(|e| e.to_string())?;
             for row in rows {
                 let tuple = row.map_err(|e| e.to_string())?;
@@ -415,19 +412,16 @@ fn fetch_messages_page(
         for vr in vrows {
             let (message_id, vid, vcontent, vcreated, vp, vc, vt) =
                 vr.map_err(|e| e.to_string())?;
-            variants_by_message
-                .entry(message_id)
-                .or_default()
-                .push({
-                    let mut vobj = JsonMap::new();
-                    vobj.insert("id".into(), JsonValue::String(vid));
-                    vobj.insert("content".into(), JsonValue::String(vcontent));
-                    vobj.insert("createdAt".into(), JsonValue::from(vcreated));
-                    if let Some(usage) = json_usage_summary(vp, vc, vt) {
-                        vobj.insert("usage".into(), usage);
-                    }
-                    JsonValue::Object(vobj)
-                });
+            variants_by_message.entry(message_id).or_default().push({
+                let mut vobj = JsonMap::new();
+                vobj.insert("id".into(), JsonValue::String(vid));
+                vobj.insert("content".into(), JsonValue::String(vcontent));
+                vobj.insert("createdAt".into(), JsonValue::from(vcreated));
+                if let Some(usage) = json_usage_summary(vp, vc, vt) {
+                    vobj.insert("usage".into(), usage);
+                }
+                JsonValue::Object(vobj)
+            });
         }
     }
 
@@ -584,6 +578,19 @@ pub fn session_get_meta(app: tauri::AppHandle, id: String) -> Result<Option<Stri
 }
 
 #[tauri::command]
+pub fn session_message_count(app: tauri::AppHandle, session_id: String) -> Result<i64, String> {
+    let conn = open_db(&app)?;
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(1) FROM messages WHERE session_id = ?",
+            params![session_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(count)
+}
+
+#[tauri::command]
 pub fn messages_list(
     app: tauri::AppHandle,
     session_id: String,
@@ -659,7 +666,11 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
 
     let mut variants_by_message: HashMap<String, Vec<JsonValue>> = HashMap::new();
     if !message_ids.is_empty() {
-        let placeholders = message_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let placeholders = message_ids
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
         let vsql = format!(
             "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
             placeholders
@@ -682,19 +693,16 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         for vr in vrows {
             let (message_id, vid, vcontent, vcreated, vp, vc, vt) =
                 vr.map_err(|e| e.to_string())?;
-            variants_by_message
-                .entry(message_id)
-                .or_default()
-                .push({
-                    let mut vobj = JsonMap::new();
-                    vobj.insert("id".into(), JsonValue::String(vid));
-                    vobj.insert("content".into(), JsonValue::String(vcontent));
-                    vobj.insert("createdAt".into(), JsonValue::from(vcreated));
-                    if let Some(usage) = json_usage_summary(vp, vc, vt) {
-                        vobj.insert("usage".into(), usage);
-                    }
-                    JsonValue::Object(vobj)
-                });
+            variants_by_message.entry(message_id).or_default().push({
+                let mut vobj = JsonMap::new();
+                vobj.insert("id".into(), JsonValue::String(vid));
+                vobj.insert("content".into(), JsonValue::String(vcontent));
+                vobj.insert("createdAt".into(), JsonValue::from(vcreated));
+                if let Some(usage) = json_usage_summary(vp, vc, vt) {
+                    vobj.insert("usage".into(), usage);
+                }
+                JsonValue::Object(vobj)
+            });
         }
     }
 
@@ -888,10 +896,7 @@ pub fn messages_upsert_batch(
             .ok_or_else(|| "message.id is required".to_string())?;
         let role = m.get("role").and_then(|v| v.as_str()).unwrap_or("user");
         let content = m.get("content").and_then(|v| v.as_str()).unwrap_or("");
-        let mcreated = m
-            .get("createdAt")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(now);
+        let mcreated = m.get("createdAt").and_then(|v| v.as_i64()).unwrap_or(now);
         let is_pinned = m.get("isPinned").and_then(|v| v.as_bool()).unwrap_or(false) as i64;
         let usage = m.get("usage");
         let pt = usage
@@ -949,8 +954,11 @@ pub fn messages_upsert_batch(
         .map_err(|e| e.to_string())?;
 
         if m.get("variants").is_some() {
-            tx.execute("DELETE FROM message_variants WHERE message_id = ?", params![&mid])
-                .map_err(|e| e.to_string())?;
+            tx.execute(
+                "DELETE FROM message_variants WHERE message_id = ?",
+                params![&mid],
+            )
+            .map_err(|e| e.to_string())?;
             if let Some(vars) = m.get("variants").and_then(|v| v.as_array()) {
                 for v in vars {
                     let vid = v
@@ -959,10 +967,7 @@ pub fn messages_upsert_batch(
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                     let vcontent = v.get("content").and_then(|x| x.as_str()).unwrap_or("");
-                    let vcreated = v
-                        .get("createdAt")
-                        .and_then(|x| x.as_i64())
-                        .unwrap_or(now);
+                    let vcreated = v.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(now);
                     let u = v.get("usage");
                     let vp = u
                         .and_then(|u| u.get("promptTokens"))
@@ -993,13 +998,23 @@ pub fn messages_upsert_batch(
 }
 
 #[tauri::command]
-pub fn message_delete(app: tauri::AppHandle, session_id: String, message_id: String) -> Result<(), String> {
+pub fn message_delete(
+    app: tauri::AppHandle,
+    session_id: String,
+    message_id: String,
+) -> Result<(), String> {
     let conn = open_db(&app)?;
     let now = now_ms() as i64;
-    conn.execute("DELETE FROM messages WHERE id = ? AND session_id = ?", params![&message_id, &session_id])
-        .map_err(|e| e.to_string())?;
-    conn.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", params![now, &session_id])
-        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM messages WHERE id = ? AND session_id = ?",
+        params![&message_id, &session_id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE sessions SET updated_at = ? WHERE id = ?",
+        params![now, &session_id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1033,12 +1048,18 @@ pub fn messages_delete_after(
 
     let to_delete = &ids[(pos + 1)..];
     for id in to_delete {
-        tx.execute("DELETE FROM messages WHERE id = ? AND session_id = ?", params![id, &session_id])
-            .map_err(|e| e.to_string())?;
+        tx.execute(
+            "DELETE FROM messages WHERE id = ? AND session_id = ?",
+            params![id, &session_id],
+        )
+        .map_err(|e| e.to_string())?;
     }
 
-    tx.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", params![now, &session_id])
-        .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE sessions SET updated_at = ? WHERE id = ?",
+        params![now, &session_id],
+    )
+    .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -1224,8 +1245,11 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
             ).map_err(|e| e.to_string())?;
 
             if m.get("variants").is_some() {
-                tx.execute("DELETE FROM message_variants WHERE message_id = ?", params![&mid])
-                    .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "DELETE FROM message_variants WHERE message_id = ?",
+                    params![&mid],
+                )
+                .map_err(|e| e.to_string())?;
                 if let Some(vars) = m.get("variants").and_then(|v| v.as_array()) {
                     for v in vars {
                         let vid = v
@@ -1656,7 +1680,9 @@ pub fn session_set_memory_cold_state(
 
     if memory_index >= memories.len() {
         if let Some(json) = read_session_meta(&conn, &session_id)? {
-            return Ok(Some(serde_json::to_string(&json).map_err(|e| e.to_string())?));
+            return Ok(Some(
+                serde_json::to_string(&json).map_err(|e| e.to_string())?,
+            ));
         }
         return Ok(None);
     }
@@ -1698,7 +1724,9 @@ pub fn session_set_memory_cold_state(
     .map_err(|e| e.to_string())?;
 
     if let Some(json) = read_session_meta(&conn, &session_id)? {
-        return Ok(Some(serde_json::to_string(&json).map_err(|e| e.to_string())?));
+        return Ok(Some(
+            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+        ));
     }
     Ok(None)
 }

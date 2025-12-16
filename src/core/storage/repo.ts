@@ -332,6 +332,10 @@ export async function getSessionMeta(id: string): Promise<Session | null> {
   return data ? SessionSchema.parse(data) : null;
 }
 
+export async function getSessionMessageCount(sessionId: string): Promise<number> {
+  return storageBridge.sessionMessageCount(sessionId);
+}
+
 export async function listMessages(
   sessionId: string,
   options: { limit: number; before?: { createdAt: number; id: string } } = { limit: 120 },
