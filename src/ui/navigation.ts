@@ -50,6 +50,7 @@ export const Routes = {
   settingsModelsNew: "/settings/models/new",
   settingsModel: (modelId: string) => `/settings/models/${modelId}`,
   settingsImageGeneration: "/settings/image-generation",
+  characterLorebook: (characterId: string) => `/settings/characters/${characterId}/lorebook`,
 } as const;
 
 export type BackMapping = {
@@ -76,6 +77,7 @@ export const BACK_MAPPINGS: BackMapping[] = [
   { match: (p) => p.startsWith("/settings/reset"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings/personas/"), target: "/settings/personas" },
   { match: (p) => p.startsWith("/settings/personas"), target: Routes.settings },
+  { match: (p) => p.includes("/lorebook"), target: "/settings/characters" },
   { match: (p) => p.startsWith("/settings/characters"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings"), target: Routes.chat },
 ];

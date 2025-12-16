@@ -72,6 +72,20 @@ export const storageBridge = {
     characterUpsert: (character: unknown) => invoke<string>("character_upsert", { characterJson: JSON.stringify(character) }).then((s) => JSON.parse(s)),
     characterDelete: (id: string) => invoke("character_delete", { id }) as Promise<void>,
 
+    // Lorebook
+    lorebooksList: () => invoke<string>("lorebooks_list").then((s) => JSON.parse(s) as any[]),
+    lorebookUpsert: (lorebook: unknown) => invoke<string>("lorebook_upsert", { lorebookJson: JSON.stringify(lorebook) }).then((s) => JSON.parse(s)),
+    lorebookDelete: (lorebookId: string) => invoke("lorebook_delete", { lorebookId }) as Promise<void>,
+    characterLorebooksList: (characterId: string) => invoke<string>("character_lorebooks_list", { characterId }).then((s) => JSON.parse(s) as any[]),
+    characterLorebooksSet: (characterId: string, lorebookIds: string[]) => invoke("character_lorebooks_set", { characterId, lorebookIdsJson: JSON.stringify(lorebookIds) }) as Promise<void>,
+
+    lorebookEntriesList: (lorebookId: string) => invoke<string>("lorebook_entries_list", { lorebookId }).then((s) => JSON.parse(s) as any[]),
+    lorebookEntryGet: (entryId: string) => invoke<string | null>("lorebook_entry_get", { entryId }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
+    lorebookEntryUpsert: (entry: unknown) => invoke<string>("lorebook_entry_upsert", { entryJson: JSON.stringify(entry) }).then((s) => JSON.parse(s)),
+    lorebookEntryDelete: (entryId: string) => invoke("lorebook_entry_delete", { entryId }) as Promise<void>,
+    lorebookEntryCreateBlank: (lorebookId: string) => invoke<string>("lorebook_entry_create_blank", { lorebookId }).then((s) => JSON.parse(s)),
+    lorebookEntriesReorder: (updates: Array<[string, number]>) => invoke("lorebook_entries_reorder", { updatesJson: JSON.stringify(updates) }) as Promise<void>,
+
     // Personas
     personasList: () => invoke<string>("personas_list").then((s) => JSON.parse(s) as any[]),
     personaUpsert: (persona: unknown) => invoke<string>("persona_upsert", { personaJson: JSON.stringify(persona) }).then((s) => JSON.parse(s)),

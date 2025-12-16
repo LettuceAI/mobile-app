@@ -62,7 +62,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
     }
 
     fn build_url(&self, base_url: &str, model_name: &str, api_key: &str) -> String {
-        // Gemini uses URL pattern: /v1beta/models/{model}:generateContent?key={api_key}
+        // v1beta/models/{model}:generateContent?key={api_key}
         let base = base_url.trim_end_matches('/').replace("/v1", "/v1beta");
         format!(
             "{}/models/{}:generateContent?key={}",
@@ -79,7 +79,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
-        &[] // Gemini uses query parameter for auth, not headers
+        &[]
     }
 
     fn default_headers_template(&self) -> HashMap<String, String> {

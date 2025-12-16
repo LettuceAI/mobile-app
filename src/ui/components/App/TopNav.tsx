@@ -10,12 +10,14 @@ interface TopNavProps {
   onBackOverride?: () => void;
 }
 
-export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
+export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavProps & { titleOverride?: string }) {
   const navigate = useNavigate();
   const basePath = useMemo(() => currentPath.split("?")[0], [currentPath]);
   const hasAdvancedView = useMemo(() => currentPath.includes("view=advanced"), [currentPath]);
 
   const title = useMemo(() => {
+    if (titleOverride) return titleOverride;
+
     const rules: Array<{
       match: (path: string) => boolean;
       title: string;
@@ -34,6 +36,7 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
         { match: p => p === "/settings/developer", title: "Developer" },
         { match: p => p === "/settings/advanced", title: "Advanced" },
         { match: p => p === "/settings/characters", title: "Characters" },
+        { match: p => p.includes("/lorebook"), title: "Lorebooks" },
         { match: p => p === "/settings/personas", title: "Personas" },
         { match: p => p === "/settings/advanced/memory", title: "Dynamic Memory" },
         { match: p => p.startsWith("/settings/personas/") && p.endsWith("/edit"), title: "Edit Persona" },
@@ -48,7 +51,7 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
 
     const rule = rules.find(r => r.match(basePath));
     return rule?.title ?? "Chats";
-  }, [basePath]);
+  }, [basePath, titleOverride]);
 
 
   const showBackButton = useMemo(() => {
@@ -73,6 +76,7 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
     if (basePath.startsWith("/settings/providers")) return true;
     if (basePath.startsWith("/settings/models") && !hasAdvancedView) return true;
     if (basePath === "/settings/prompts") return true;
+    if (basePath.includes("/lorebook")) return true;
     return false;
   }, [basePath, hasAdvancedView]);
 
@@ -133,6 +137,10 @@ export function TopNav({ currentPath, onBackOverride }: TopNavProps) {
     }
     if (basePath === "/settings/prompts") {
       window.dispatchEvent(new CustomEvent("prompts:add"));
+      return;
+    }
+    if (basePath.includes("/lorebook")) {
+      window.dispatchEvent(new CustomEvent("lorebook:add"));
       return;
     }
   };

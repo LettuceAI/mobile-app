@@ -4,6 +4,7 @@ pub mod characters;
 pub mod db;
 pub mod importer;
 pub mod legacy;
+pub mod lorebook;
 pub mod media;
 pub mod models;
 pub mod personas;

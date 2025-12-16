@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 19;
+pub const CURRENT_MIGRATION_VERSION: u32 = 20;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -234,6 +234,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v18_to_v19(app)?;
         version = 19;
+    }
+
+    if version < 20 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v19 -> v20: Convert lorebooks to app-level".to_string(),
+        );
+        migrate_v19_to_v20(app)?;
+        version = 20;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -1370,5 +1380,209 @@ fn migrate_v18_to_v19(app: &AppHandle) -> Result<(), String> {
         [],
     );
 
+    Ok(())
+}
+
+/// Migration v19 -> v20: convert character-level lorebook_entries into app-level lorebooks.
+fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+    use crate::utils::{log_info, now_millis};
+    use rusqlite::{params, OptionalExtension};
+    use uuid::Uuid;
+
+    log_info(app, "migrations", "Starting v19->v20 migration".to_string());
+
+    let conn = open_db(app)?;
+
+    // Ensure new tables exist (fresh installs already have these from init_db).
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS lorebooks (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS character_lorebooks (
+          character_id TEXT NOT NULL,
+          lorebook_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          display_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(character_id, lorebook_id),
+          FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE,
+          FOREIGN KEY(lorebook_id) REFERENCES lorebooks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_character_lorebooks_character ON character_lorebooks(character_id);
+        "#,
+    )
+    .map_err(|e| format!("Failed to ensure lorebook tables: {}", e))?;
+
+    // If lorebook_entries already uses lorebook_id, nothing to do.
+    let entries_table_exists: i32 = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='lorebook_entries'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if entries_table_exists == 0 {
+        // Ensure the v2 entries table exists and return.
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS lorebook_entries (
+              id TEXT PRIMARY KEY,
+              lorebook_id TEXT NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              always_active INTEGER NOT NULL DEFAULT 0,
+              keywords TEXT NOT NULL DEFAULT '[]',
+              case_sensitive INTEGER NOT NULL DEFAULT 0,
+              content TEXT NOT NULL,
+              priority INTEGER NOT NULL DEFAULT 0,
+              display_order INTEGER NOT NULL DEFAULT 0,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              FOREIGN KEY(lorebook_id) REFERENCES lorebooks(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_lorebook_entries_lorebook ON lorebook_entries(lorebook_id);
+            CREATE INDEX IF NOT EXISTS idx_lorebook_entries_enabled ON lorebook_entries(lorebook_id, enabled);
+            "#,
+        )
+        .map_err(|e| format!("Failed to create lorebook_entries: {}", e))?;
+        return Ok(());
+    }
+
+    // Detect legacy character-level schema.
+    let mut has_character_id = false;
+    let mut has_lorebook_id = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(lorebook_entries)")
+        .map_err(|e| format!("Failed to read lorebook_entries schema: {}", e))?;
+    let cols = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| format!("Failed to query lorebook_entries schema: {}", e))?;
+    for col in cols {
+        let name = col.map_err(|e| e.to_string())?;
+        match name.as_str() {
+            "character_id" => has_character_id = true,
+            "lorebook_id" => has_lorebook_id = true,
+            _ => {}
+        }
+    }
+
+    if has_lorebook_id {
+        return Ok(());
+    }
+
+    if !has_character_id {
+        // Unexpected schema; do not attempt destructive migration.
+        return Ok(());
+    }
+
+    // Rename legacy table and create v2 table.
+    let legacy_exists: i32 = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='lorebook_entries_v1'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if legacy_exists == 0 {
+        conn.execute(
+            "ALTER TABLE lorebook_entries RENAME TO lorebook_entries_v1",
+            [],
+        )
+        .map_err(|e| format!("Failed to rename legacy lorebook_entries: {}", e))?;
+    }
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS lorebook_entries (
+          id TEXT PRIMARY KEY,
+          lorebook_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          always_active INTEGER NOT NULL DEFAULT 0,
+          keywords TEXT NOT NULL DEFAULT '[]',
+          case_sensitive INTEGER NOT NULL DEFAULT 0,
+          content TEXT NOT NULL,
+          priority INTEGER NOT NULL DEFAULT 0,
+          display_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY(lorebook_id) REFERENCES lorebooks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_lorebook_entries_lorebook ON lorebook_entries(lorebook_id);
+        CREATE INDEX IF NOT EXISTS idx_lorebook_entries_enabled ON lorebook_entries(lorebook_id, enabled);
+        "#,
+    )
+    .map_err(|e| format!("Failed to create v2 lorebook_entries: {}", e))?;
+
+    // Create a default lorebook per character that has legacy entries and map it to the character.
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT character_id FROM lorebook_entries_v1")
+        .map_err(|e| format!("Failed to read legacy lorebook entries: {}", e))?;
+    let character_ids = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(0)?))
+        .map_err(|e| format!("Failed to query legacy character ids: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to collect legacy character ids: {}", e))?;
+
+    for character_id in character_ids {
+        let name: Option<String> = conn
+            .query_row(
+                "SELECT name FROM characters WHERE id = ?1",
+                params![character_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| format!("Failed to read character name: {}", e))?;
+
+        let lorebook_id = Uuid::new_v4().to_string();
+        let now = now_millis()? as i64;
+        let lorebook_name = match name {
+            Some(n) if !n.trim().is_empty() => format!("{} Lorebook", n.trim()),
+            _ => "Lorebook".to_string(),
+        };
+
+        conn.execute(
+            "INSERT INTO lorebooks (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![lorebook_id, lorebook_name, now, now],
+        )
+        .map_err(|e| format!("Failed to create migrated lorebook: {}", e))?;
+
+        conn.execute(
+            r#"
+            INSERT INTO character_lorebooks (character_id, lorebook_id, enabled, display_order, created_at, updated_at)
+            VALUES (?1, ?2, 1, 0, ?3, ?3)
+            "#,
+            params![character_id, lorebook_id, now],
+        )
+        .map_err(|e| format!("Failed to map character to migrated lorebook: {}", e))?;
+
+        conn.execute(
+            r#"
+            INSERT INTO lorebook_entries (
+              id, lorebook_id, enabled, always_active, keywords, case_sensitive,
+              content, priority, display_order, created_at, updated_at
+            )
+            SELECT
+              id, ?2, enabled, always_active, keywords, case_sensitive,
+              content, priority, display_order, created_at, updated_at
+            FROM lorebook_entries_v1
+            WHERE character_id = ?1
+            "#,
+            params![character_id, lorebook_id],
+        )
+        .map_err(|e| format!("Failed to migrate lorebook entries: {}", e))?;
+    }
+
+    log_info(app, "migrations", "v19->v20 migration completed".to_string());
     Ok(())
 }

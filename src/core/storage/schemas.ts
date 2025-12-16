@@ -412,6 +412,32 @@ export function createDefaultSettings(): Settings {
   };
 }
 
+export const LorebookSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+
+export type Lorebook = z.infer<typeof LorebookSchema>;
+
+export const LorebookEntrySchema = z.object({
+  id: z.string().uuid(),
+  lorebookId: z.string().uuid(),
+  title: z.string().default(""),
+  enabled: z.boolean().default(true),
+  alwaysActive: z.boolean().default(false),
+  keywords: z.array(z.string()).default([]),
+  caseSensitive: z.boolean().default(false),
+  content: z.string(),
+  priority: z.number().int().default(0),
+  displayOrder: z.number().int().default(0),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+
+export type LorebookEntry = z.infer<typeof LorebookEntrySchema>;
+
 export const CharacterSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),

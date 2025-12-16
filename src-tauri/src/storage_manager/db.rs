@@ -262,6 +262,48 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
         );
 
+        -- Lorebooks (app-level, can be shared across characters)
+        CREATE TABLE IF NOT EXISTS lorebooks (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Character <-> Lorebook mapping (many-to-many)
+        CREATE TABLE IF NOT EXISTS character_lorebooks (
+          character_id TEXT NOT NULL,
+          lorebook_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          display_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(character_id, lorebook_id),
+          FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE,
+          FOREIGN KEY(lorebook_id) REFERENCES lorebooks(id) ON DELETE CASCADE
+        );
+
+        -- Lorebook entries (app-level; entries belong to a lorebook)
+        CREATE TABLE IF NOT EXISTS lorebook_entries (
+          id TEXT PRIMARY KEY,
+          lorebook_id TEXT NOT NULL,
+          title TEXT NOT NULL DEFAULT '',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          always_active INTEGER NOT NULL DEFAULT 0,
+          keywords TEXT NOT NULL DEFAULT '[]',
+          case_sensitive INTEGER NOT NULL DEFAULT 0,
+          content TEXT NOT NULL,
+          priority INTEGER NOT NULL DEFAULT 0,
+          display_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY(lorebook_id) REFERENCES lorebooks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_lorebook_entries_lorebook ON lorebook_entries(lorebook_id);
+        CREATE INDEX IF NOT EXISTS idx_lorebook_entries_enabled ON lorebook_entries(lorebook_id, enabled);
+        CREATE INDEX IF NOT EXISTS idx_character_lorebooks_character ON character_lorebooks(character_id);
+
         CREATE TABLE IF NOT EXISTS scenes (
           id TEXT PRIMARY KEY,
           character_id TEXT NOT NULL,
@@ -461,6 +503,26 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     if !has_custom_text_secondary {
         let _ = conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
+            [],
+        );
+    }
+
+    // Migrations: add title to lorebook_entries if missing
+    let mut stmt3 = conn
+        .prepare("PRAGMA table_info(lorebook_entries)")
+        .map_err(|e| e.to_string())?;
+    let mut has_lorebook_entry_title = false;
+    let mut rows3 = stmt3.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows3.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        if col_name == "title" {
+            has_lorebook_entry_title = true;
+            break;
+        }
+    }
+    if !has_lorebook_entry_title {
+        let _ = conn.execute(
+            "ALTER TABLE lorebook_entries ADD COLUMN title TEXT NOT NULL DEFAULT ''",
             [],
         );
     }

@@ -25,7 +25,7 @@ import { EmbeddingDownloadPage } from "./ui/pages/settings/EmbeddingDownloadPage
 import { EmbeddingTestPage } from "./ui/pages/settings/EmbeddingTestPage";
 import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage, ChatMemoriesPage, SearchMessagesPage } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
-import { CreateCharacterPage, EditCharacterPage } from "./ui/pages/characters";
+import { CreateCharacterPage, EditCharacterPage, LorebookEditor } from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
 import { SearchPage } from "./ui/pages/search";
 import { LibraryPage } from "./ui/pages/library/LibraryPage";
@@ -277,6 +277,7 @@ function AppContent() {
               <Route path="/create/character" element={<CreateCharacterPage />} />
               <Route path="/settings/characters" element={<CharactersPage />} />
               <Route path="/settings/characters/:characterId/edit" element={<EditCharacterPage />} />
+              <Route path="/settings/characters/:characterId/lorebook" element={<LorebookEditor />} />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
               <Route path="/personas" element={<PersonasPage />} />
               <Route path="/settings/personas" element={<PersonasPage />} />

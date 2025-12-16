@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { ArrowLeft, Brain, Loader2, AlertTriangle, Search } from "lucide-react";
+import { ArrowLeft, Brain, Loader2, AlertTriangle, Search, BookOpen } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Character, Session } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
@@ -149,6 +149,18 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
                 <Search size={14} strokeWidth={2.5} />
               </button>
             )}
+
+            {/* Lorebooks Button */}
+            <button
+              onClick={() => {
+                if (!characterId) return;
+                navigate(Routes.characterLorebook(characterId));
+              }}
+              className="flex items-center justify-center text-white/80 transition hover:text-white"
+              aria-label="Manage lorebooks"
+            >
+              <BookOpen size={14} strokeWidth={2.5} />
+            </button>
 
             {/* Avatar (Settings) Button */}
             <button

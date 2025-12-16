@@ -1,8 +1,10 @@
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
+use super::lorebook_matcher::{format_lorebook_for_prompt, get_active_lorebook_entries};
 use super::prompts;
 use super::types::{Character, Model, Persona, Session, Settings};
+use crate::storage_manager::db::open_db;
 
 pub fn default_system_prompt_template() -> String {
     "
@@ -21,6 +23,9 @@ pub fn default_system_prompt_template() -> String {
     
     # Roleplay Guidelines
     {{rules}}
+
+    # World Information
+    {{lorebook}}
 
     # Context Summary
     {{context_summary}}
@@ -111,6 +116,30 @@ pub fn default_dynamic_memory_prompt() -> String {
     - Call `done` when finished making changes
     - Output NO natural language, only tool calls"
         .to_string()
+}
+
+/// Get lorebook content for the current conversation context
+/// Scans recent messages and returns formatted lorebook entries
+fn get_lorebook_content(app: &AppHandle, character_id: &str, session: &Session) -> Result<String, String> {
+    let conn = open_db(app)?;
+
+    // Get last 10 messages for keyword matching context
+    let recent_messages: Vec<String> = session
+        .messages
+        .iter()
+        .rev()
+        .take(10)
+        .rev()
+        .map(|msg| msg.content.clone())
+        .collect();
+
+    let active_entries = get_active_lorebook_entries(&conn, character_id, &recent_messages)?;
+
+    if active_entries.is_empty() {
+        return Ok(String::new());
+    }
+
+    Ok(format_lorebook_for_prompt(&active_entries))
 }
 
 /// model template > app default template (from database)
@@ -406,6 +435,25 @@ fn render_with_context_internal(
     };
 
     result = result.replace("{{key_memories}}", &key_memories_text);
+
+    // Lorebook entries - get recent messages for keyword matching
+    let lorebook_text = if let Some(app) = app {
+        match get_lorebook_content(app, &character.id, session) {
+            Ok(content) => content,
+            Err(e) => {
+                super::super::utils::log_warn(
+                    app,
+                    "prompt_engine",
+                    format!("Failed to get lorebook content: {}", e),
+                );
+                String::new()
+            }
+        }
+    } else {
+        String::new()
+    };
+
+    result = result.replace("{{lorebook}}", &lorebook_text);
 
     // Global fallback replacements in entire template for simple placeholders
     result = result.replace("{{char}}", char_name);

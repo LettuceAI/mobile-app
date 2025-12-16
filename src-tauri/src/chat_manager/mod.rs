@@ -1,4 +1,5 @@
 mod commands;
+pub mod lorebook_matcher;
 pub mod messages;
 pub mod prompt_engine;
 pub mod prompts;

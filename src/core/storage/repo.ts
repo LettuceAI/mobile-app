@@ -3,6 +3,8 @@ import { storageBridge } from "./files";
 import { getDefaultCharacterRules } from "./defaults";
 import {
   CharacterSchema,
+  LorebookSchema,
+  LorebookEntrySchema,
   SessionSchema,
   SettingsSchema,
   PersonaSchema,
@@ -16,6 +18,8 @@ import {
   type Model,
   type AdvancedModelSettings,
   type AppState,
+  type Lorebook,
+  type LorebookEntry,
   createDefaultSettings,
   createDefaultAdvancedModelSettings,
 } from "./schemas";
@@ -219,6 +223,84 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
 
 export async function deleteCharacter(id: string): Promise<void> {
   await storageBridge.characterDelete(id);
+}
+
+// ============================================================================
+// Lorebook
+// ============================================================================
+
+export async function listLorebooks(): Promise<Lorebook[]> {
+  const data = await storageBridge.lorebooksList();
+  return z.array(LorebookSchema).parse(data);
+}
+
+export async function saveLorebook(lorebook: Partial<Lorebook> & { name: string }): Promise<Lorebook> {
+  const timestamp = now();
+  const entity = {
+    id: lorebook.id ?? uuidv4(),
+    name: lorebook.name,
+    createdAt: lorebook.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
+
+  const stored = await storageBridge.lorebookUpsert(entity);
+  return LorebookSchema.parse(stored);
+}
+
+export async function deleteLorebook(lorebookId: string): Promise<void> {
+  await storageBridge.lorebookDelete(lorebookId);
+}
+
+export async function listCharacterLorebooks(characterId: string): Promise<Lorebook[]> {
+  const data = await storageBridge.characterLorebooksList(characterId);
+  return z.array(LorebookSchema).parse(data);
+}
+
+export async function setCharacterLorebooks(characterId: string, lorebookIds: string[]): Promise<void> {
+  await storageBridge.characterLorebooksSet(characterId, lorebookIds);
+}
+
+export async function listLorebookEntries(lorebookId: string): Promise<LorebookEntry[]> {
+  const data = await storageBridge.lorebookEntriesList(lorebookId);
+  return z.array(LorebookEntrySchema).parse(data);
+}
+
+export async function getLorebookEntry(entryId: string): Promise<LorebookEntry | null> {
+  const data = await storageBridge.lorebookEntryGet(entryId);
+  return data ? LorebookEntrySchema.parse(data) : null;
+}
+
+export async function saveLorebookEntry(entry: Partial<LorebookEntry> & { lorebookId: string }): Promise<LorebookEntry> {
+  const timestamp = now();
+  const entity = {
+    id: entry.id ?? uuidv4(),
+    lorebookId: entry.lorebookId,
+    enabled: entry.enabled ?? true,
+    alwaysActive: entry.alwaysActive ?? false,
+    keywords: entry.keywords ?? [],
+    caseSensitive: entry.caseSensitive ?? false,
+    content: entry.content ?? "",
+    priority: entry.priority ?? 0,
+    displayOrder: entry.displayOrder ?? 0,
+    createdAt: entry.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
+
+  const stored = await storageBridge.lorebookEntryUpsert(entity);
+  return LorebookEntrySchema.parse(stored);
+}
+
+export async function deleteLorebookEntry(entryId: string): Promise<void> {
+  await storageBridge.lorebookEntryDelete(entryId);
+}
+
+export async function createBlankLorebookEntry(lorebookId: string): Promise<LorebookEntry> {
+  const data = await storageBridge.lorebookEntryCreateBlank(lorebookId);
+  return LorebookEntrySchema.parse(data);
+}
+
+export async function reorderLorebookEntries(updates: Array<[string, number]>): Promise<void> {
+  await storageBridge.lorebookEntriesReorder(updates);
 }
 
 export async function listSessionIds(): Promise<string[]> {
