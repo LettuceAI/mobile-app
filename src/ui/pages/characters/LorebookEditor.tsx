@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams, useLocation } from "react-router-dom";
-import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search, GripVertical } from "lucide-react";
+import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import type { Lorebook, LorebookEntry } from "../../../core/storage/schemas";
 import {
   deleteLorebook,
@@ -13,6 +13,7 @@ import {
   saveLorebook,
   saveLorebookEntry,
   setCharacterLorebooks,
+  reorderLorebookEntries,
 } from "../../../core/storage/repo";
 import { BottomMenu, MenuButton } from "../../components";
 import { TopNav } from "../../components/App";
@@ -294,10 +295,6 @@ function LorebookListView({
   );
 }
 
-// ============================================================================
-// ENTRY LIST VIEW
-// ============================================================================
-
 function EntryListView({
   entries,
   loading,
@@ -305,6 +302,7 @@ function EntryListView({
   onEditEntry,
   onToggleEntry,
   onDeleteEntry,
+  onReorderEntries,
 }: {
   entries: LorebookEntry[];
   loading: boolean;
@@ -312,13 +310,14 @@ function EntryListView({
   onEditEntry: (entry: LorebookEntry) => void;
   onToggleEntry: (entry: LorebookEntry, enabled: boolean) => void;
   onDeleteEntry: (id: string) => void;
+  onReorderEntries: (entries: LorebookEntry[]) => void;
 }) {
   const [selectedEntry, setSelectedEntry] = useState<LorebookEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dragState, setDragState] = useState<{ fromIndex: number; toIndex: number } | null>(null);
 
-  // Listen for add event from TopNav
   useEffect(() => {
-    const handleAdd = () => onCreateEntry(); // Direct creation since we don't have a menu
+    const handleAdd = () => onCreateEntry(); 
     window.addEventListener("lorebook:add", handleAdd);
     return () => window.removeEventListener("lorebook:add", handleAdd);
   }, [onCreateEntry]);
@@ -333,6 +332,35 @@ function EntryListView({
       return title.includes(query) || content.includes(query) || keywords.includes(query);
     });
   }, [entries, searchQuery]);
+
+  const displayEntries = useMemo(() => {
+    if (!dragState || dragState.fromIndex === dragState.toIndex) {
+      return filteredEntries;
+    }
+    const result = [...filteredEntries];
+    const [removed] = result.splice(dragState.fromIndex, 1);
+    result.splice(dragState.toIndex, 0, removed);
+    return result;
+  }, [filteredEntries, dragState]);
+
+  const handleDrag = (fromIndex: number, info: { offset: { y: number } }) => {
+    const offsetSlots = Math.round(info.offset.y / 70);
+    const toIndex = Math.max(0, Math.min(entries.length - 1, fromIndex + offsetSlots));
+    setDragState({ fromIndex, toIndex });
+  };
+
+  const handleDragEnd = (fromIndex: number, info: PanInfo) => {
+    const offsetSlots = Math.round(info.offset.y / 70);
+    const toIndex = Math.max(0, Math.min(entries.length - 1, fromIndex + offsetSlots));
+
+    if (fromIndex !== toIndex) {
+      const reordered = [...entries];
+      const [removed] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, removed);
+      onReorderEntries(reordered);
+    }
+    setDragState(null);
+  };
 
   // Empty state
   const EmptyState = () => (
@@ -369,9 +397,7 @@ function EntryListView({
   );
 
   return (
-    <div className="flex h-full flex-col pb-16 text-gray-200">
-      {/* Header Actions - Replaced by TopNav for navigation + Create button */}
-      {/* We keep Search bar here */}
+    <div className="flex h-full flex-col text-gray-200 overflow-hidden">
       {entries.length > 0 && (
         <div className="px-4 pb-2 pt-2">
           <div className="relative">
@@ -386,7 +412,7 @@ function EntryListView({
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto px-4 pt-2">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-2 pb-6">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -404,23 +430,44 @@ function EntryListView({
             </div>
           ) : (
             <div className="space-y-3">
-              <AnimatePresence>
-                {filteredEntries.map((entry) => {
-                  const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
-                  const displaySubtitle = entry.alwaysActive
-                    ? "Always active"
-                    : entry.keywords.length > 0
-                      ? entry.keywords.slice(0, 3).join(", ") + (entry.keywords.length > 3 ? "..." : "")
-                      : "No keywords";
+              {displayEntries.map((entry) => {
+                const originalIndex = filteredEntries.findIndex(e => e.id === entry.id);
+                const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
+                const displaySubtitle = entry.alwaysActive
+                  ? "Always active"
+                  : entry.keywords.length > 0
+                    ? entry.keywords.slice(0, 3).join(", ") + (entry.keywords.length > 3 ? "..." : "")
+                    : "No keywords";
+                const isDragging = dragState?.fromIndex === originalIndex;
 
-                  return (
-                    <motion.button
-                      key={entry.id}
+                return (
+                  <motion.div
+                    key={entry.id}
+                    layout
+                    layoutId={entry.id}
+                    drag="y"
+                    dragElastic={0.15}
+                    dragMomentum={false}
+                    dragSnapToOrigin
+                    dragTransition={{ bounceStiffness: 300, bounceDamping: 25 }}
+                    onDrag={(_, info) => handleDrag(originalIndex, info)}
+                    onDragEnd={(_, info) => handleDragEnd(originalIndex, info)}
+                    whileDrag={{ scale: 1.03, zIndex: 50, boxShadow: "0 15px 40px rgba(0,0,0,0.5)" }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    className={`group relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2 py-3 ${isDragging ? "opacity-0" : "cursor-grab active:cursor-grabbing"} ${entry.enabled
+                      ? "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
+                      : "border-white/10 bg-[#0b0c12]/60 opacity-60 hover:opacity-80"
+                      }`}
+                  >
+                    {/* Drag Handle */}
+                    <div className="flex h-10 w-8 shrink-0 items-center justify-center text-white/30">
+                      <GripVertical size={18} />
+                    </div>
+
+                    {/* Main content */}
+                    <button
                       onClick={() => setSelectedEntry(entry)}
-                      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left transition-all duration-200 active:scale-[0.995] ${entry.enabled
-                        ? "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
-                        : "border-white/10 bg-[#0b0c12]/60 opacity-60 hover:opacity-80"
-                        }`}
+                      className="flex flex-1 items-center gap-3 text-left active:scale-[0.995]"
                     >
                       {/* Enable indicator */}
                       <div
@@ -458,10 +505,10 @@ function EntryListView({
                       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white transition">
                         <ChevronRight size={16} />
                       </span>
-                    </motion.button>
-                  );
-                })}
-              </AnimatePresence>
+                    </button>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </motion.div>
@@ -517,10 +564,6 @@ function EntryListView({
     </div>
   );
 }
-
-// ============================================================================
-// ENTRY EDITOR (Bottom Menu)
-// ============================================================================
 
 function EntryEditorMenu({
   entry,
@@ -658,17 +701,6 @@ function EntryEditorMenu({
           />
         </div>
 
-        {/* Priority */}
-        <div className="space-y-2 w-32">
-          <label className="text-[11px] font-medium text-white/70">PRIORITY</label>
-          <input
-            type="number"
-            value={draft.priority}
-            onChange={(e) => setDraft({ ...draft, priority: parseInt(e.target.value) || 0 })}
-            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
-          />
-        </div>
-
         {/* Save Button */}
         <button
           onClick={handleSave}
@@ -682,17 +714,12 @@ function EntryEditorMenu({
   );
 }
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
 export function LorebookEditor() {
   const { characterId: characterIdParam } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const characterId = characterIdParam ?? searchParams.get("characterId");
 
-  // View state via URL
   const activeLorebookId = searchParams.get("lorebookId");
 
   const [lorebooks, setLorebooks] = useState<Lorebook[]>([]);
@@ -702,7 +729,6 @@ export function LorebookEditor() {
   const [isLorebooksLoading, setIsLorebooksLoading] = useState(true);
   const [isEntriesLoading, setIsEntriesLoading] = useState(false);
 
-  // Entry editor state
   const [editingEntry, setEditingEntry] = useState<LorebookEntry | null>(null);
 
   const activeLorebook = useMemo(
@@ -710,16 +736,13 @@ export function LorebookEditor() {
     [lorebooks, activeLorebookId]
   );
 
-  // Determine page title
   const pageTitle = activeLorebook ? `Lorebook - ${activeLorebook.name}` : undefined;
 
-  // Load lorebooks
   useEffect(() => {
     if (!characterId) return;
     loadLorebooks();
   }, [characterId]);
 
-  // Load entries when viewing a lorebook
   useEffect(() => {
     if (!activeLorebookId) {
       setEntries([]);
@@ -762,12 +785,10 @@ export function LorebookEditor() {
     try {
       const created = await saveLorebook({ name });
       setLorebooks((prev) => [created, ...prev]);
-      // Auto-assign
       const next = new Set(assignedLorebookIds);
       next.add(created.id);
       setAssignedLorebookIds(next);
       await setCharacterLorebooks(characterId, Array.from(next));
-      // Navigate to it
       setSearchParams({ lorebookId: created.id });
     } catch (error) {
       console.error("Failed to create lorebook:", error);
@@ -840,6 +861,16 @@ export function LorebookEditor() {
     }
   };
 
+  const handleReorderEntries = async (reorderedEntries: LorebookEntry[]) => {
+    try {
+      const updates = reorderedEntries.map((e, i) => [e.id, i] as [string, number]);
+      await reorderLorebookEntries(updates);
+      setEntries(reorderedEntries.map((e, i) => ({ ...e, displayOrder: i })));
+    } catch (error) {
+      console.error("Failed to reorder entries:", error);
+    }
+  };
+
 
 
   if (!characterId) {
@@ -856,7 +887,7 @@ export function LorebookEditor() {
         currentPath={location.pathname + location.search}
         titleOverride={pageTitle}
       />
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-visible">
         {activeLorebookId && activeLorebook ? (
           <>
             <EntryListView
@@ -866,6 +897,7 @@ export function LorebookEditor() {
               onEditEntry={setEditingEntry}
               onToggleEntry={handleToggleEntry}
               onDeleteEntry={handleDeleteEntry}
+              onReorderEntries={handleReorderEntries}
             />
             <EntryEditorMenu
               entry={editingEntry}

@@ -51,11 +51,10 @@ pub fn get_active_lorebook_entries(
         }
     }
 
-    // Sort by priority (higher first), then by display_order, then by created_at
+    // Sort by display_order (lower = higher priority in list)
     active_entries.sort_by(|a, b| {
-        b.priority
-            .cmp(&a.priority)
-            .then_with(|| a.display_order.cmp(&b.display_order))
+        a.display_order
+            .cmp(&b.display_order)
             .then_with(|| a.created_at.cmp(&b.created_at))
     });
 

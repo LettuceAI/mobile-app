@@ -236,7 +236,7 @@ pub fn get_enabled_character_lorebook_entries(
             FROM lorebook_entries e
             JOIN character_lorebooks cl ON cl.lorebook_id = e.lorebook_id
             WHERE cl.character_id = ?1 AND cl.enabled = 1 AND e.enabled = 1
-            ORDER BY e.priority DESC, cl.display_order ASC, e.display_order ASC, e.created_at ASC
+            ORDER BY cl.display_order ASC, e.display_order ASC, e.created_at ASC
             "#,
         )
         .map_err(|e| format!("Failed to prepare enabled entries query: {}", e))?;
