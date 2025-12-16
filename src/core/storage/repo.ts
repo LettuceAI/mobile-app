@@ -275,6 +275,7 @@ export async function saveLorebookEntry(entry: Partial<LorebookEntry> & { lorebo
   const entity = {
     id: entry.id ?? uuidv4(),
     lorebookId: entry.lorebookId,
+    title: entry.title ?? "",
     enabled: entry.enabled ?? true,
     alwaysActive: entry.alwaysActive ?? false,
     keywords: entry.keywords ?? [],

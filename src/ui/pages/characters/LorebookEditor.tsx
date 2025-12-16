@@ -25,6 +25,7 @@ function LorebookListView({
   onSelectLorebook,
   onToggleAssignment,
   onCreateLorebook,
+  onDeleteLorebook,
 }: {
   lorebooks: Lorebook[];
   assignedLorebookIds: Set<string>;
@@ -32,6 +33,7 @@ function LorebookListView({
   onSelectLorebook: (id: string) => void;
   onToggleAssignment: (id: string, enabled: boolean) => void;
   onCreateLorebook: (name: string) => void;
+  onDeleteLorebook: (id: string) => void;
 }) {
   const [selectedLorebook, setSelectedLorebook] = useState<Lorebook | null>(null);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
@@ -274,9 +276,8 @@ function LorebookListView({
             <button
               onClick={() => {
                 if (confirm("Delete this lorebook? All entries will be lost.")) {
-                  deleteLorebook(selectedLorebook.id).then(() => {
-                    window.location.reload();
-                  });
+                  onDeleteLorebook(selectedLorebook.id);
+                  setSelectedLorebook(null);
                 }
               }}
               className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
@@ -303,12 +304,14 @@ function EntryListView({
   onCreateEntry,
   onEditEntry,
   onToggleEntry,
+  onDeleteEntry,
 }: {
   entries: LorebookEntry[];
   loading: boolean;
   onCreateEntry: () => void;
   onEditEntry: (entry: LorebookEntry) => void;
   onToggleEntry: (entry: LorebookEntry, enabled: boolean) => void;
+  onDeleteEntry: (id: string) => void;
 }) {
   const [selectedEntry, setSelectedEntry] = useState<LorebookEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -497,9 +500,8 @@ function EntryListView({
             <button
               onClick={() => {
                 if (confirm("Delete this entry?")) {
-                  deleteLorebookEntry(selectedEntry.id).then(() => {
-                    window.location.reload();
-                  });
+                  onDeleteEntry(selectedEntry.id);
+                  setSelectedEntry(null);
                 }
               }}
               className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
@@ -796,6 +798,29 @@ export function LorebookEditor() {
     }
   };
 
+  const handleDeleteLorebook = async (id: string) => {
+    try {
+      await deleteLorebook(id);
+      setLorebooks((prev) => prev.filter((l) => l.id !== id));
+      if (assignedLorebookIds.has(id)) {
+        const next = new Set(assignedLorebookIds);
+        next.delete(id);
+        setAssignedLorebookIds(next);
+      }
+    } catch (error) {
+      console.error("Failed to delete lorebook:", error);
+    }
+  };
+
+  const handleDeleteEntry = async (id: string) => {
+    try {
+      await deleteLorebookEntry(id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+    } catch (error) {
+      console.error("Failed to delete entry:", error);
+    }
+  };
+
   const handleSaveEntry = async (entry: LorebookEntry) => {
     try {
       const saved = await saveLorebookEntry(entry);
@@ -840,6 +865,7 @@ export function LorebookEditor() {
               onCreateEntry={handleCreateEntry}
               onEditEntry={setEditingEntry}
               onToggleEntry={handleToggleEntry}
+              onDeleteEntry={handleDeleteEntry}
             />
             <EntryEditorMenu
               entry={editingEntry}
@@ -856,6 +882,7 @@ export function LorebookEditor() {
             onSelectLorebook={handleSelectLorebook}
             onToggleAssignment={handleToggleAssignment}
             onCreateLorebook={handleCreateLorebook}
+            onDeleteLorebook={handleDeleteLorebook}
           />
         )}
       </div>
