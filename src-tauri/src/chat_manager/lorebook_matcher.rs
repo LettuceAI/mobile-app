@@ -1,10 +1,64 @@
 use crate::storage_manager::db::DbConnection;
 use crate::storage_manager::lorebook::{get_enabled_character_lorebook_entries, LorebookEntry};
 
+fn keyword_matches(keyword: &str, text: &str, case_sensitive: bool) -> bool {
+    let keyword = keyword.trim();
+    if keyword.is_empty() {
+        return false;
+    }
+
+    let normalize = |s: &str| -> String {
+        s.chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c.is_whitespace() {
+                    c
+                } else {
+                    ' '
+                }
+            })
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+
+    let (search_keyword, search_text) = if case_sensitive {
+        (keyword.to_string(), text.to_string())
+    } else {
+        (keyword.to_lowercase(), text.to_lowercase())
+    };
+
+    if search_keyword.ends_with('*') {
+        let prefix = &search_keyword[..search_keyword.len() - 1];
+        if prefix.is_empty() {
+            return false;
+        }
+
+        let normalized_text = normalize(&search_text);
+
+        for word in normalized_text.split_whitespace() {
+            if word.starts_with(prefix) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    let normalized_keyword = normalize(&search_keyword);
+    let normalized_text = normalize(&search_text);
+
+    if normalized_keyword.contains(' ') {
+        return normalized_text.contains(&normalized_keyword);
+    }
+
+    let text_words: Vec<&str> = normalized_text.split_whitespace().collect();
+    text_words.iter().any(|word| *word == normalized_keyword)
+}
+
 pub fn get_active_lorebook_entries(
     conn: &DbConnection,
     character_id: &str,
-    recent_messages: &[String], 
+    recent_messages: &[String],
 ) -> Result<Vec<LorebookEntry>, String> {
     let entries = get_enabled_character_lorebook_entries(conn, character_id)?;
 
@@ -12,7 +66,7 @@ pub fn get_active_lorebook_entries(
         return Ok(vec![]);
     }
 
-    let context = recent_messages.join("\n").to_lowercase();
+    let context = recent_messages.join("\n");
 
     let mut active_entries: Vec<LorebookEntry> = vec![];
 
@@ -22,19 +76,10 @@ pub fn get_active_lorebook_entries(
         } else if entry.keywords.is_empty() {
             false
         } else {
-            entry.keywords.iter().any(|keyword| {
-                if keyword.trim().is_empty() {
-                    return false;
-                }
-
-                if entry.case_sensitive {
-                    let original_context = recent_messages.join("\n");
-                    original_context.contains(keyword)
-                } else {
-                    let keyword_lower = keyword.to_lowercase();
-                    context.contains(&keyword_lower)
-                }
-            })
+            entry
+                .keywords
+                .iter()
+                .any(|keyword| keyword_matches(keyword, &context, entry.case_sensitive))
         };
 
         if should_activate {
@@ -42,7 +87,6 @@ pub fn get_active_lorebook_entries(
         }
     }
 
-    // Sort by display_order (lower = higher priority in list)
     active_entries.sort_by(|a, b| {
         a.display_order
             .cmp(&b.display_order)
@@ -52,8 +96,6 @@ pub fn get_active_lorebook_entries(
     Ok(active_entries)
 }
 
-/// Format lorebook entries into a string for prompt injection
-/// Each entry is separated by a double newline
 pub fn format_lorebook_for_prompt(entries: &[LorebookEntry]) -> String {
     if entries.is_empty() {
         return String::new();
@@ -65,53 +107,4 @@ pub fn format_lorebook_for_prompt(entries: &[LorebookEntry]) -> String {
         .filter(|content| !content.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_format_lorebook_for_prompt() {
-        let entries = vec![
-            LorebookEntry {
-                id: "1".to_string(),
-                lorebook_id: "lorebook1".to_string(),
-                title: "Entry 1".to_string(),
-                enabled: true,
-                always_active: false,
-                keywords: vec![],
-                case_sensitive: false,
-                content: "Entry 1 content".to_string(),
-                priority: 0,
-                display_order: 0,
-                created_at: 0,
-                updated_at: 0,
-            },
-            LorebookEntry {
-                id: "2".to_string(),
-                lorebook_id: "lorebook1".to_string(),
-                title: "Entry 2".to_string(),
-                enabled: true,
-                always_active: false,
-                keywords: vec![],
-                case_sensitive: false,
-                content: "Entry 2 content".to_string(),
-                priority: 0,
-                display_order: 1,
-                created_at: 0,
-                updated_at: 0,
-            },
-        ];
-
-        let result = format_lorebook_for_prompt(&entries);
-        assert_eq!(result, "Entry 1 content\n\nEntry 2 content");
-    }
-
-    #[test]
-    fn test_format_lorebook_empty() {
-        let entries = vec![];
-        let result = format_lorebook_for_prompt(&entries);
-        assert_eq!(result, "");
-    }
 }

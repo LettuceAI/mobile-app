@@ -153,15 +153,30 @@ fn get_lorebook_content(
         super::super::utils::log_info(
             app,
             "lorebook",
-            "No active lorebook entries found".to_string(),
+            "No active lorebook entries (no keywords matched or none always-active)".to_string(),
         );
         return Ok(String::new());
     }
 
+    let entry_titles: Vec<String> = active_entries
+        .iter()
+        .map(|e| {
+            if e.title.is_empty() {
+                format!("[{}]", &e.id[..6.min(e.id.len())])
+            } else {
+                e.title.clone()
+            }
+        })
+        .collect();
+
     super::super::utils::log_info(
         app,
         "lorebook",
-        format!("Injecting {} active lorebook entries", active_entries.len()),
+        format!(
+            "Injecting {} active entries: {}",
+            active_entries.len(),
+            entry_titles.join(", ")
+        ),
     );
 
     Ok(format_lorebook_for_prompt(&active_entries))
