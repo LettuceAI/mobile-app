@@ -4,7 +4,10 @@ use tauri::AppHandle;
 use crate::storage_manager::{
     characters::characters_list,
     personas::personas_list,
-    sessions::{messages_list, messages_list_pinned, messages_upsert_batch, session_get_meta, session_upsert_meta},
+    sessions::{
+        messages_list, messages_list_pinned, messages_upsert_batch, session_get_meta,
+        session_upsert_meta,
+    },
     settings::{storage_read_settings, storage_write_settings},
 };
 // emit_debug no longer used here; prompt_engine handles debug emission
@@ -128,15 +131,21 @@ pub fn load_session(app: &AppHandle, session_id: &str) -> Result<Option<Session>
 
     let recent_json = messages_list(app.clone(), session_id.to_string(), 120, None, None)?;
     let pinned_json = messages_list_pinned(app.clone(), session_id.to_string())?;
-    let recent: Vec<StoredMessage> = serde_json::from_str(&recent_json).map_err(|e| e.to_string())?;
-    let pinned: Vec<StoredMessage> = serde_json::from_str(&pinned_json).map_err(|e| e.to_string())?;
+    let recent: Vec<StoredMessage> =
+        serde_json::from_str(&recent_json).map_err(|e| e.to_string())?;
+    let pinned: Vec<StoredMessage> =
+        serde_json::from_str(&pinned_json).map_err(|e| e.to_string())?;
 
     let mut by_id = std::collections::HashMap::<String, StoredMessage>::new();
     for m in pinned.into_iter().chain(recent.into_iter()) {
         by_id.insert(m.id.clone(), m);
     }
     let mut merged: Vec<StoredMessage> = by_id.into_values().collect();
-    merged.sort_by(|a, b| a.created_at.cmp(&b.created_at).then_with(|| a.id.cmp(&b.id)));
+    merged.sort_by(|a, b| {
+        a.created_at
+            .cmp(&b.created_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
     session.messages = merged;
     Ok(Some(session))
 }
@@ -214,9 +223,9 @@ pub fn build_system_prompt(
     prompt_engine::build_system_prompt(app, character, model, persona, session, settings)
 }
 
-pub fn recent_messages(session: &Session) -> Vec<StoredMessage> {
+pub fn recent_messages(session: &Session, limit: usize) -> Vec<StoredMessage> {
     let mut recent_msgs: Vec<StoredMessage> =
-        session.messages.iter().rev().take(50).cloned().collect();
+        session.messages.iter().rev().take(limit).cloned().collect();
     recent_msgs.reverse();
     recent_msgs
 }

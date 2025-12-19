@@ -22,8 +22,8 @@ use super::types::{
     ChatTurnResult, ContinueResult, MemoryEmbedding, Model, PromptScope, ProviderCredential,
     RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
-use crate::utils::emit_debug;
 use crate::storage_manager::sessions::{messages_upsert_batch, session_upsert_meta};
+use crate::utils::emit_debug;
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
@@ -55,10 +55,11 @@ fn is_dynamic_memory_active(
 }
 
 fn has_image_generation_model(settings: &Settings) -> bool {
-    settings
-        .models
-        .iter()
-        .any(|m| m.output_scopes.iter().any(|s| s.eq_ignore_ascii_case("image")))
+    settings.models.iter().any(|m| {
+        m.output_scopes
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case("image"))
+    })
 }
 
 fn append_image_directive_instructions(
@@ -93,6 +94,14 @@ fn dynamic_window_size(settings: &Settings) -> usize {
         .and_then(|a| a.dynamic_memory.as_ref())
         .map(|dm| dm.summary_message_interval.max(1))
         .unwrap_or(FALLBACK_DYNAMIC_WINDOW) as usize
+}
+
+fn manual_window_size(settings: &Settings) -> usize {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.manual_mode_context_window)
+        .unwrap_or(50) as usize
 }
 
 fn dynamic_max_entries(settings: &Settings) -> usize {
@@ -790,7 +799,10 @@ pub async fn chat_completion(
         let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
         (pinned, unpinned)
     } else {
-        (Vec::new(), recent_messages(&session))
+        (
+            Vec::new(),
+            recent_messages(&session, manual_window_size(settings)),
+        )
     };
 
     // Retrieve top-k relevant memories for this turn.
@@ -1035,7 +1047,9 @@ pub async fn chat_completion(
     // Extract assistant text and any image outputs.
     // Some multimodal models stream image data URLs via SSE; we must not treat those as text.
     let images_from_sse = match api_response.data() {
-        Value::String(s) if s.contains("data:") => super::sse::accumulate_image_data_urls_from_sse(s),
+        Value::String(s) if s.contains("data:") => {
+            super::sse::accumulate_image_data_urls_from_sse(s)
+        }
         _ => Vec::new(),
     };
 
@@ -1387,7 +1401,11 @@ pub async fn chat_regenerate(
                 );
             }
         } else {
+            let start_index = target_index.saturating_sub(manual_window_size(settings));
             for (idx, msg) in session.messages.iter().enumerate() {
+                if idx < start_index {
+                    continue;
+                }
                 if idx > target_index {
                     break;
                 }
@@ -1526,7 +1544,9 @@ pub async fn chat_regenerate(
     }
 
     let images_from_sse = match api_response.data() {
-        Value::String(s) if s.contains("data:") => super::sse::accumulate_image_data_urls_from_sse(s),
+        Value::String(s) if s.contains("data:") => {
+            super::sse::accumulate_image_data_urls_from_sse(s)
+        }
         _ => Vec::new(),
     };
 
@@ -1780,7 +1800,10 @@ pub async fn chat_continue(
         let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
         (pinned, unpinned)
     } else {
-        (Vec::new(), recent_messages(&session))
+        (
+            Vec::new(),
+            recent_messages(&session, manual_window_size(settings)),
+        )
     };
 
     let system_role = super::request_builder::system_role_for(provider_cred);
@@ -1944,7 +1967,9 @@ pub async fn chat_continue(
     }
 
     let images_from_sse = match api_response.data() {
-        Value::String(s) if s.contains("data:") => super::sse::accumulate_image_data_urls_from_sse(s),
+        Value::String(s) if s.contains("data:") => {
+            super::sse::accumulate_image_data_urls_from_sse(s)
+        }
         _ => Vec::new(),
     };
 
@@ -3113,7 +3138,8 @@ pub async fn chat_add_message_attachment(
     let meta_json = serde_json::to_string(&meta).map_err(|e| e.to_string())?;
     session_upsert_meta(app.clone(), meta_json)?;
 
-    let payload = serde_json::to_string(&vec![updated_message.clone()]).map_err(|e| e.to_string())?;
+    let payload =
+        serde_json::to_string(&vec![updated_message.clone()]).map_err(|e| e.to_string())?;
     messages_upsert_batch(app.clone(), session_id, payload)?;
 
     Ok(updated_message)

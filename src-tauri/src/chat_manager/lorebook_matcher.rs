@@ -1,45 +1,36 @@
 use crate::storage_manager::db::DbConnection;
 use crate::storage_manager::lorebook::{get_enabled_character_lorebook_entries, LorebookEntry};
 
-/// Filter lorebook entries based on recent conversation context
-/// Returns entries that should be injected into the prompt, sorted by priority
 pub fn get_active_lorebook_entries(
     conn: &DbConnection,
     character_id: &str,
-    recent_messages: &[String], // Last N messages to scan for keywords
+    recent_messages: &[String], 
 ) -> Result<Vec<LorebookEntry>, String> {
-    // Get all enabled entries for this character
     let entries = get_enabled_character_lorebook_entries(conn, character_id)?;
 
     if entries.is_empty() {
         return Ok(vec![]);
     }
 
-    // Combine recent messages into a single searchable text
     let context = recent_messages.join("\n").to_lowercase();
 
     let mut active_entries: Vec<LorebookEntry> = vec![];
 
     for entry in entries {
         let should_activate = if entry.always_active {
-            // Always include if always_active is true
             true
         } else if entry.keywords.is_empty() {
-            // Skip entries with no keywords and not always active
             false
         } else {
-            // Check if any keyword matches in the context
             entry.keywords.iter().any(|keyword| {
                 if keyword.trim().is_empty() {
                     return false;
                 }
 
                 if entry.case_sensitive {
-                    // Case-sensitive search in original messages
                     let original_context = recent_messages.join("\n");
                     original_context.contains(keyword)
                 } else {
-                    // Case-insensitive search
                     let keyword_lower = keyword.to_lowercase();
                     context.contains(&keyword_lower)
                 }

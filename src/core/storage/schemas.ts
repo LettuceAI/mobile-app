@@ -381,6 +381,7 @@ export const SettingsSchema = z.object({
     summarisationModelId: z.string().optional(),
     creationHelperEnabled: z.boolean().default(false),
     creationHelperModelId: z.string().optional(),
+    manualModeContextWindow: z.number().optional(),
     dynamicMemory: z.object({
       enabled: z.boolean().default(false),
       summaryMessageInterval: z.number().min(1).default(20),

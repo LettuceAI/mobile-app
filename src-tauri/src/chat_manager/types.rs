@@ -107,6 +107,8 @@ pub struct AdvancedSettings {
     pub creation_helper_model_id: Option<String>,
     #[serde(default)]
     pub dynamic_memory: Option<DynamicMemorySettings>,
+    #[serde(default)]
+    pub manual_mode_context_window: Option<u32>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

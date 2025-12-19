@@ -16,6 +16,7 @@ export function AdvancedPage() {
     //const [creationHelperEnabled, setCreationHelperEnabled] = useState(false);
     //const [creationHelperModelId, setCreationHelperModelId] = useState<string>("");
     const [dynamicMemoryEnabled, setDynamicMemoryEnabled] = useState(false);
+    const [manualWindow, setManualWindow] = useState<number | null>(50);
 
     // Load settings on mount
     useEffect(() => {
@@ -24,6 +25,7 @@ export function AdvancedPage() {
                 //setCreationHelperEnabled(settings.advancedSettings?.creationHelperEnabled ?? false);
                 //setCreationHelperModelId(settings.advancedSettings?.creationHelperModelId || "");
                 setDynamicMemoryEnabled(settings.advancedSettings?.dynamicMemory?.enabled ?? false);
+                setManualWindow(settings.advancedSettings?.manualModeContextWindow ?? 50);
                 //setModels(settings.models.map((m: Model) => ({ id: m.id, name: m.name })));
                 setIsLoading(false);
             })
@@ -93,6 +95,23 @@ export function AdvancedPage() {
         } catch (err) {
             console.error("Failed to save dynamic memory setting:", err);
             setDynamicMemoryEnabled(!newValue);
+        }
+    };
+
+    const handleManualWindowChange = async (value: number | null) => {
+        setManualWindow(value);
+
+        try {
+            const settings = await readSettings();
+            if (!settings.advancedSettings) {
+                settings.advancedSettings = {
+                    creationHelperEnabled: false,
+                };
+            }
+            settings.advancedSettings.manualModeContextWindow = value === null ? 50 : value;
+            await saveAdvancedSettings(settings.advancedSettings);
+        } catch (err) {
+            console.error("Failed to save manual window setting:", err);
         }
     };
 
@@ -278,6 +297,42 @@ export function AdvancedPage() {
                                 </div>
                             </div>
                         </button>
+                    </div>
+                </div>
+
+                {/* Section: Manual Memory Settings */}
+                <div className="mt-6">
+                    <h2 className={cn(
+                        "mb-2 px-1",
+                        typography.overline.size,
+                        typography.overline.weight,
+                        typography.overline.tracking,
+                        typography.overline.transform,
+                        "text-white/35"
+                    )}>
+                        Manual Memory Settings
+                    </h2>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                            <div>
+                                <label className="text-xs font-medium uppercase tracking-wider text-white/70">Context Window</label>
+                                <p className="mt-0.5 text-[11px] text-white/50">Number of recent messages to include (Default: 50)</p>
+                            </div>
+                            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+                                {manualWindow ?? 50}
+                            </span>
+                        </div>
+                        <input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            value={manualWindow ?? ''}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                handleManualWindowChange(isNaN(val) ? null : val);
+                            }}
+                            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
+                        />
                     </div>
                 </div>
             </section>
