@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams, useLocation } from "react-router-dom";
-import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search, GripVertical } from "lucide-react";
+import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search, GripVertical, X } from "lucide-react";
 import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import type { Lorebook, LorebookEntry } from "../../../core/storage/schemas";
 import {
@@ -18,6 +18,94 @@ import {
 import { BottomMenu, MenuButton } from "../../components";
 import { TopNav } from "../../components/App";
 
+function KeywordTagInput({
+  keywords,
+  onChange,
+  caseSensitive,
+  onCaseSensitiveChange,
+}: {
+  keywords: string[];
+  onChange: (keywords: string[]) => void;
+  caseSensitive: boolean;
+  onCaseSensitiveChange: (caseSensitive: boolean) => void;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const addKeyword = () => {
+    const newKeyword = inputValue.trim();
+    if (newKeyword && !keywords.includes(newKeyword)) {
+      onChange([...keywords, newKeyword]);
+      setInputValue("");
+    }
+  };
+
+  const removeKeyword = (index: number) => {
+    onChange(keywords.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-medium text-white/70">KEYWORDS</label>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/50">Case sensitive</span>
+          <label
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${caseSensitive ? "bg-emerald-500" : "bg-white/20"
+              }`}
+          >
+            <input
+              type="checkbox"
+              checked={caseSensitive}
+              onChange={(e) => onCaseSensitiveChange(e.target.checked)}
+              className="sr-only"
+            />
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${caseSensitive ? "translate-x-4" : "translate-x-0"
+                }`}
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Input with Add button */}
+      <div className="flex gap-2">
+        <input
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder="Type a keyword..."
+          className="flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={addKeyword}
+          disabled={!inputValue.trim()}
+          className="rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Add
+        </button>
+      </div>
+
+      {/* Keyword chips */}
+      {keywords.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {keywords.map((keyword, index) => (
+            <button
+              key={`${keyword}-${index}`}
+              type="button"
+              onClick={() => removeKeyword(index)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/10 pl-3 pr-2 py-1.5 text-sm text-white active:bg-white/20 transition"
+            >
+              {keyword}
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10">
+                <X size={12} className="text-white/70" />
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function LorebookListView({
   lorebooks,
@@ -317,7 +405,7 @@ function EntryListView({
   const [dragState, setDragState] = useState<{ fromIndex: number; toIndex: number } | null>(null);
 
   useEffect(() => {
-    const handleAdd = () => onCreateEntry(); 
+    const handleAdd = () => onCreateEntry();
     window.addEventListener("lorebook:add", handleAdd);
     return () => window.removeEventListener("lorebook:add", handleAdd);
   }, [onCreateEntry]);
@@ -654,39 +742,12 @@ function EntryEditorMenu({
 
         {/* Keywords */}
         {!draft.alwaysActive && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-medium text-white/70">KEYWORDS</label>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-white/50">Case sensitive</span>
-                <label
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${draft.caseSensitive ? "bg-emerald-500" : "bg-white/20"
-                    }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draft.caseSensitive}
-                    onChange={(e) => setDraft({ ...draft, caseSensitive: e.target.checked })}
-                    className="sr-only"
-                  />
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${draft.caseSensitive ? "translate-x-4" : "translate-x-0"
-                      }`}
-                  />
-                </label>
-              </div>
-            </div>
-            <input
-              value={draft.keywords.join(", ")}
-              onChange={(e) => {
-                const keywords = e.target.value.split(",").map((k) => k.trim()).filter(Boolean);
-                setDraft({ ...draft, keywords });
-              }}
-              placeholder="dragon, castle, magic sword"
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-            />
-            <p className="text-xs text-white/50">Comma separated. Content injected when any keyword appears.</p>
-          </div>
+          <KeywordTagInput
+            keywords={draft.keywords}
+            onChange={(keywords) => setDraft({ ...draft, keywords })}
+            caseSensitive={draft.caseSensitive}
+            onCaseSensitiveChange={(caseSensitive) => setDraft({ ...draft, caseSensitive })}
+          />
         )}
 
         {/* Content */}
