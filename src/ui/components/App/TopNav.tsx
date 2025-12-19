@@ -74,7 +74,8 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
 
   const showAddButton = useMemo(() => {
     if (basePath.startsWith("/settings/providers")) return true;
-    if (basePath.startsWith("/settings/models") && !hasAdvancedView) return true;
+    // Only show + on models list page, not on edit pages (/settings/models/xxx)
+    if (basePath === "/settings/models" && !hasAdvancedView) return true;
     if (basePath === "/settings/prompts") return true;
     if (basePath.includes("/lorebook")) return true;
     return false;
@@ -86,7 +87,9 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
 
   const isCharacterEdit = useMemo(() => /^\/settings\/characters\/[^/]+\/edit$/.test(basePath), [basePath]);
   const isPersonaEdit = useMemo(() => /^\/settings\/personas\/[^/]+\/edit$/.test(basePath), [basePath]);
-  const showSaveButton = isCharacterEdit || isPersonaEdit;
+  const isModelEdit = useMemo(() => /^\/settings\/models\/[^/]+$/.test(basePath) && basePath !== '/settings/models/new', [basePath]);
+  const isModelNew = useMemo(() => basePath === '/settings/models/new', [basePath]);
+  const showSaveButton = isCharacterEdit || isPersonaEdit || isModelEdit || isModelNew;
 
   // Track save button state from window globals
   const [canSave, setCanSave] = useState(false);
@@ -108,6 +111,11 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
         const newIsSaving = !!globalWindow.__savePersonaSaving;
         setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
         setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+      } else if (isModelEdit || isModelNew) {
+        const newCanSave = !!globalWindow.__saveModelCanSave;
+        const newIsSaving = !!globalWindow.__saveModelSaving;
+        setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
+        setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
       }
     };
 
@@ -116,7 +124,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
     const interval = setInterval(checkGlobals, 200);
 
     return () => clearInterval(interval);
-  }, [showSaveButton, isCharacterEdit, isPersonaEdit]);
+  }, [showSaveButton, isCharacterEdit, isPersonaEdit, isModelEdit, isModelNew]);
 
   const handleBack = () => {
     if (onBackOverride) {
@@ -273,6 +281,8 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
                   globalWindow.__saveCharacter();
                 } else if (isPersonaEdit && typeof globalWindow.__savePersona === "function") {
                   globalWindow.__savePersona();
+                } else if ((isModelEdit || isModelNew) && typeof globalWindow.__saveModel === "function") {
+                  globalWindow.__saveModel();
                 }
               }}
               disabled={!canSave || isSaving}
