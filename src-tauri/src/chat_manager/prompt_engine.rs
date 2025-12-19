@@ -503,6 +503,12 @@ fn render_with_context_internal(
     } else {
         String::new()
     };
+    
+    let lorebook_text = if lorebook_text.trim().is_empty() && session.id == "preview" {
+        "**The Sunken City of Eldara** (Sample Entry)\nAn ancient city beneath the waves, Eldara was once the capital of a great empire. Its ruins are said to contain powerful artifacts and are guarded by merfolk descendants of its original inhabitants.\n\n**Dragonstone Keep** (Sample Entry)\nA fortress built into the side of Mount Ember, known for its impenetrable walls forged from volcanic glass. The keep is ruled by House Valthor, who claim ancestry from the first dragon riders.".to_string()
+    } else {
+        lorebook_text
+    };
 
     if lorebook_text.trim().is_empty() {
         result = result.replace(
@@ -521,7 +527,7 @@ fn render_with_context_internal(
 
     result = result.replace("{{ai_name}}", char_name);
     result = result.replace("{{ai_description}}", &char_desc);
-    result = result.replace("{{ai_rules}}", ""); 
+    result = result.replace("{{ai_rules}}", "");
     result = result.replace("{{persona_name}}", persona_name);
     result = result.replace("{{persona_description}}", persona_desc);
 
