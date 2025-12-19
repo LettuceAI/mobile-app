@@ -120,7 +120,11 @@ pub fn default_dynamic_memory_prompt() -> String {
 
 /// Get lorebook content for the current conversation context
 /// Scans recent messages and returns formatted lorebook entries
-fn get_lorebook_content(app: &AppHandle, character_id: &str, session: &Session) -> Result<String, String> {
+fn get_lorebook_content(
+    app: &AppHandle,
+    character_id: &str,
+    session: &Session,
+) -> Result<String, String> {
     let conn = open_db(app)?;
 
     // Get last 10 messages for keyword matching context
@@ -133,11 +137,32 @@ fn get_lorebook_content(app: &AppHandle, character_id: &str, session: &Session) 
         .map(|msg| msg.content.clone())
         .collect();
 
+    super::super::utils::log_info(
+        app,
+        "lorebook",
+        format!(
+            "Checking lorebook for character={} with {} recent messages",
+            character_id,
+            recent_messages.len()
+        ),
+    );
+
     let active_entries = get_active_lorebook_entries(&conn, character_id, &recent_messages)?;
 
     if active_entries.is_empty() {
+        super::super::utils::log_info(
+            app,
+            "lorebook",
+            "No active lorebook entries found".to_string(),
+        );
         return Ok(String::new());
     }
+
+    super::super::utils::log_info(
+        app,
+        "lorebook",
+        format!("Injecting {} active lorebook entries", active_entries.len()),
+    );
 
     Ok(format_lorebook_for_prompt(&active_entries))
 }
@@ -196,6 +221,16 @@ pub fn build_system_prompt(
                 for memory in &session.memories {
                     result.push_str(&format!("- {}\n", memory));
                 }
+            }
+        }
+        if !base_template.contains("{{lorebook}}") {
+            let lorebook_content = match get_lorebook_content(app, &character.id, session) {
+                Ok(content) => content,
+                Err(_) => String::new(),
+            };
+            if !lorebook_content.trim().is_empty() {
+                result.push_str("\n\n# World Information\n");
+                result.push_str(&lorebook_content);
             }
         }
 
@@ -453,13 +488,17 @@ fn render_with_context_internal(
         String::new()
     };
 
-    result = result.replace("{{lorebook}}", &lorebook_text);
+    if lorebook_text.trim().is_empty() {
+        result = result.replace("# World Information\n    {{lorebook}}", "");
+        result = result.replace("# World Information\n{{lorebook}}", "");
+        result = result.replace("{{lorebook}}", "");
+    } else {
+        result = result.replace("{{lorebook}}", &lorebook_text);
+    }
 
-    // Global fallback replacements in entire template for simple placeholders
     result = result.replace("{{char}}", char_name);
     result = result.replace("{{persona}}", persona_name);
 
-    // Legacy template variable support (for backwards compatibility)
     result = result.replace("{{ai_name}}", char_name);
     result = result.replace("{{ai_description}}", &char_desc);
     result = result.replace("{{ai_rules}}", &rules_formatted);
