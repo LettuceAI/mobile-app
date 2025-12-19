@@ -1,4 +1,3 @@
-// no direct serde_json usage here
 use tauri::AppHandle;
 
 use crate::storage_manager::{
@@ -10,9 +9,7 @@ use crate::storage_manager::{
     },
     settings::{storage_read_settings, storage_write_settings},
 };
-// emit_debug no longer used here; prompt_engine handles debug emission
 
-// prompts not used directly here after delegating to prompt_engine
 use super::prompt_engine;
 use super::types::{
     AdvancedModelSettings, Character, Model, Persona, ProviderCredential, Session, Settings,

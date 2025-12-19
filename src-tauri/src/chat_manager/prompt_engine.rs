@@ -20,11 +20,9 @@ pub fn default_system_prompt_template() -> String {
     
     # {{persona.name}}'s Character
     {{persona.desc}}
-    
-    # Roleplay Guidelines
-    {{rules}}
 
     # World Information
+    The following is essential lore about this world, its characters, locations, items, and concepts. You MUST incorporate this information naturally into your roleplay when relevant. Treat this as established canon that shapes how characters behave, what they know, and how the world works.
     {{lorebook}}
 
     # Context Summary
@@ -34,20 +32,25 @@ pub fn default_system_prompt_template() -> String {
     Important facts to remember in this conversation:
     {{key_memories}}
     
-    # Core Instructions
-    - Write as {{char.name}} from their perspective
-    - You may also act as and portray any other characters mentioned in the scenario or {{char.name}}'s description (friends, companions, NPCs) when they're relevant to the scene
+    # Instructions
+    **Character & Roleplay:**
+    - Write as {{char.name}} from their perspective, responding based on their personality, background, and current situation
+    - You may also portray NPCs and background characters when relevant to the scene, but NEVER speak or act as {{persona.name}}
+    - Show emotions through actions, body language, and dialogue - don't just state them
     - React authentically to {{persona.name}}'s actions and dialogue
-    - Keep responses concise and focused - short to medium length - so {{persona.name}} can actively participate in the roleplay
-    - Show don't tell: Express emotions through actions, body language, and dialogue
-    - Maintain narrative consistency with the established scenario and all character traits
     - Never break character unless {{persona.name}} explicitly asks you to step out of roleplay
-    - Never speak or act for {{persona.name}} - only describe the environment and other characters' reactions
-    - Avoid summarizing or rushing through scenes. Let moments unfold naturally
-    - If you see a [CONTINUE] instruction, pick up exactly where your last response ended and write new content forward - never restart or repeat yourself
-    - Drive the story forward with your responses while respecting {{persona.name}}'s agency and choices
-    - Use vivid, sensory details to create an immersive experience
-    - When multiple characters are present, write their interactions naturally and distinguish their unique voices
+
+    **World & Lore:**
+    - ACTIVELY incorporate the World Information above when locations, characters, items, or concepts from the lore are relevant
+    - Maintain consistency with established facts and the scenario
+
+    **Pacing & Style:**
+    - Keep responses concise and focused so {{persona.name}} can actively participate
+    - Let scenes unfold naturally - avoid summarizing or rushing
+    - Use vivid, sensory details for immersion
+    - If you see [CONTINUE], continue exactly where you left off without restarting
+
+    {{content_rules}}
     "
         .to_string()
 }
@@ -216,9 +219,6 @@ pub fn build_system_prompt(
 
     let final_prompt = {
         let mut result = rendered;
-
-        // Legacy Support: If placeholders were NOT present in the template, append content automatically.
-        // If they WERE present, they have already been replaced (populated or removed) in `render_with_context`.
 
         if !base_template.contains("{{context_summary}}") {
             if let Some(summary) = &session.memory_summary {
@@ -428,12 +428,11 @@ fn render_with_context_internal(
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let rules_to_use = if character.rules.is_empty() {
-        super::storage::default_character_rules(pure_mode_enabled)
+    let content_rules = if pure_mode_enabled {
+        "**Content Guidelines:**\n    - Keep all interactions appropriate and respectful\n    - Avoid sexual, adult, or explicit content".to_string()
     } else {
-        character.rules.clone()
+        String::new()
     };
-    let rules_formatted = format!("- {}", rules_to_use.join("\n- "));
 
     // Replace all template variables
     let mut result = base_template.to_string();
@@ -462,7 +461,9 @@ fn render_with_context_internal(
     result = result.replace("{{char.desc}}", &char_desc);
     result = result.replace("{{persona.name}}", persona_name);
     result = result.replace("{{persona.desc}}", persona_desc);
-    result = result.replace("{{rules}}", &rules_formatted);
+    result = result.replace("{{content_rules}}", &content_rules);
+    // Legacy support for {{rules}} placeholder
+    result = result.replace("{{rules}}", "");
 
     let context_summary_text = session
         .memory_summary
@@ -504,6 +505,10 @@ fn render_with_context_internal(
     };
 
     if lorebook_text.trim().is_empty() {
+        result = result.replace(
+            "# World Information\n    The following is essential lore about this world, its characters, locations, items, and concepts. You MUST incorporate this information naturally into your roleplay when relevant. Treat this as established canon that shapes how characters behave, what they know, and how the world works.\n    {{lorebook}}",
+            ""
+        );
         result = result.replace("# World Information\n    {{lorebook}}", "");
         result = result.replace("# World Information\n{{lorebook}}", "");
         result = result.replace("{{lorebook}}", "");
@@ -516,7 +521,7 @@ fn render_with_context_internal(
 
     result = result.replace("{{ai_name}}", char_name);
     result = result.replace("{{ai_description}}", &char_desc);
-    result = result.replace("{{ai_rules}}", &rules_formatted);
+    result = result.replace("{{ai_rules}}", ""); 
     result = result.replace("{{persona_name}}", persona_name);
     result = result.replace("{{persona_description}}", persona_desc);
 
