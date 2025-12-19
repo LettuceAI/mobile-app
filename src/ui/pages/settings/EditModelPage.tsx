@@ -171,67 +171,110 @@ export function EditModelPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
               <div>
                 <p className="text-[11px] font-medium text-white/70">CAPABILITIES</p>
                 <p className="mt-1 text-xs text-white/50">Configure what this model can take as input and produce as output</p>
               </div>
-              <div className="pt-2">
-                <p className="text-[11px] font-medium text-white/70">INPUT SCOPES</p>
-                <p className="mt-1 text-xs text-white/50">What this model can accept as input</p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <label className="flex items-center gap-2 text-sm text-white/80">
-                  <input type="checkbox" checked disabled className="h-4 w-4 accent-emerald-400" />
-                  Text
-                </label>
-                <label className="flex items-center gap-2 text-sm text-white/80">
-                  <input
-                    type="checkbox"
-                    checked={editorModel.inputScopes?.includes("image") ?? false}
-                    onChange={(e) => toggleScope("inputScopes", "image", e.target.checked)}
-                    className="h-4 w-4 accent-emerald-400"
-                  />
-                  Image
-                </label>
-                <label className="flex items-center gap-2 text-sm text-white/80">
-                  <input
-                    type="checkbox"
-                    checked={editorModel.inputScopes?.includes("audio") ?? false}
-                    onChange={(e) => toggleScope("inputScopes", "audio", e.target.checked)}
-                    className="h-4 w-4 accent-emerald-400"
-                  />
-                  Audio
-                </label>
+
+              {/* Input Scopes */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-medium text-white/70">INPUT SCOPES</p>
+                  <p className="mt-0.5 text-xs text-white/50">What this model can accept as input</p>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Text - Always enabled */}
+                  <div className="flex items-center justify-between rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2.5">
+                    <span className="text-sm font-medium text-emerald-200">Text</span>
+                    <div className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
+                      <span className="absolute right-0.5 inline-block h-5 w-5 rounded-full bg-white shadow" />
+                    </div>
+                  </div>
+
+                  {/* Image Input */}
+                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                    <span className="text-sm font-medium text-white/80">Image</span>
+                    <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.inputScopes?.includes("image") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+                      }`}>
+                      <input
+                        type="checkbox"
+                        checked={editorModel.inputScopes?.includes("image") ?? false}
+                        onChange={(e) => toggleScope("inputScopes", "image", e.target.checked)}
+                        className="sr-only"
+                      />
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.inputScopes?.includes("image") ? "translate-x-5" : "translate-x-0"
+                        }`} />
+                    </label>
+                  </div>
+
+                  {/* Audio Input */}
+                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                    <span className="text-sm font-medium text-white/80">Audio</span>
+                    <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.inputScopes?.includes("audio") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+                      }`}>
+                      <input
+                        type="checkbox"
+                        checked={editorModel.inputScopes?.includes("audio") ?? false}
+                        onChange={(e) => toggleScope("inputScopes", "audio", e.target.checked)}
+                        className="sr-only"
+                      />
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.inputScopes?.includes("audio") ? "translate-x-5" : "translate-x-0"
+                        }`} />
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-2">
-                <p className="text-[11px] font-medium text-white/70">OUTPUT SCOPES</p>
-                <p className="mt-1 text-xs text-white/50">What this model can produce as output</p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <label className="flex items-center gap-2 text-sm text-white/80">
-                  <input type="checkbox" checked disabled className="h-4 w-4 accent-emerald-400" />
-                  Text
-                </label>
-                <label className="flex items-center gap-2 text-sm text-white/80">
-                  <input
-                    type="checkbox"
-                    checked={editorModel.outputScopes?.includes("image") ?? false}
-                    onChange={(e) => toggleScope("outputScopes", "image", e.target.checked)}
-                    className="h-4 w-4 accent-emerald-400"
-                  />
-                  Image
-                </label>
-                <label className="flex items-center gap-2 text-sm text-white/80">
-                  <input
-                    type="checkbox"
-                    checked={editorModel.outputScopes?.includes("audio") ?? false}
-                    onChange={(e) => toggleScope("outputScopes", "audio", e.target.checked)}
-                    className="h-4 w-4 accent-emerald-400"
-                  />
-                  Audio
-                </label>
+              {/* Output Scopes */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-medium text-white/70">OUTPUT SCOPES</p>
+                  <p className="mt-0.5 text-xs text-white/50">What this model can produce as output</p>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Text - Always enabled */}
+                  <div className="flex items-center justify-between rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2.5">
+                    <span className="text-sm font-medium text-emerald-200">Text</span>
+                    <div className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
+                      <span className="absolute right-0.5 inline-block h-5 w-5 rounded-full bg-white shadow" />
+                    </div>
+                  </div>
+
+                  {/* Image Output */}
+                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                    <span className="text-sm font-medium text-white/80">Image</span>
+                    <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.outputScopes?.includes("image") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+                      }`}>
+                      <input
+                        type="checkbox"
+                        checked={editorModel.outputScopes?.includes("image") ?? false}
+                        onChange={(e) => toggleScope("outputScopes", "image", e.target.checked)}
+                        className="sr-only"
+                      />
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.outputScopes?.includes("image") ? "translate-x-5" : "translate-x-0"
+                        }`} />
+                    </label>
+                  </div>
+
+                  {/* Audio Output */}
+                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                    <span className="text-sm font-medium text-white/80">Audio</span>
+                    <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.outputScopes?.includes("audio") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+                      }`}>
+                      <input
+                        type="checkbox"
+                        checked={editorModel.outputScopes?.includes("audio") ?? false}
+                        onChange={(e) => toggleScope("outputScopes", "audio", e.target.checked)}
+                        className="sr-only"
+                      />
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.outputScopes?.includes("audio") ? "translate-x-5" : "translate-x-0"
+                        }`} />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
