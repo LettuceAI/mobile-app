@@ -134,18 +134,6 @@ export function ModelSetupPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-white/70">Model Name</label>
-              <input
-                type="text"
-                value={modelName}
-                onChange={(e) => handleModelNameChange(e.target.value)}
-                placeholder="gpt-4o, claude-3-sonnet"
-                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
-              />
-              <p className="text-xs text-gray-500">Exact identifier used for API calls</p>
-            </div>
-
-            <div className="space-y-2">
               <label className="text-xs font-medium text-white/70">Display Name</label>
               <input
                 type="text"
@@ -155,6 +143,18 @@ export function ModelSetupPage() {
                 className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
               />
               <p className="text-xs text-gray-500">How this model appears in menus</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-white/70">Model Name</label>
+              <input
+                type="text"
+                value={modelName}
+                onChange={(e) => handleModelNameChange(e.target.value)}
+                placeholder="gpt-4o, claude-3-sonnet"
+                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
+              />
+              <p className="text-xs text-gray-500">Exact identifier used for API calls</p>
             </div>
           </div>
 

@@ -138,7 +138,7 @@ export function PersonasPage() {
                 >
                   <div className={cn(
                     "absolute inset-y-0 right-0 w-1/4 transition",
-                    "bg-gradient-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                    "bg-linear-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
                   )} />
 
                   <PersonaAvatar persona={persona} />
