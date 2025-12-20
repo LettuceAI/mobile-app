@@ -1368,7 +1368,10 @@ fn migrate_v18_to_v19(app: &AppHandle) -> Result<(), String> {
         [],
     );
     // Normalize model_type away from legacy "multimodel"
-    let _ = conn.execute("UPDATE models SET model_type = 'chat' WHERE model_type = 'multimodel'", []);
+    let _ = conn.execute(
+        "UPDATE models SET model_type = 'chat' WHERE model_type = 'multimodel'",
+        [],
+    );
 
     // Backfill defaults where scopes are missing
     let _ = conn.execute(
@@ -1583,6 +1586,10 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to migrate lorebook entries: {}", e))?;
     }
 
-    log_info(app, "migrations", "v19->v20 migration completed".to_string());
+    log_info(
+        app,
+        "migrations",
+        "v19->v20 migration completed".to_string(),
+    );
     Ok(())
 }

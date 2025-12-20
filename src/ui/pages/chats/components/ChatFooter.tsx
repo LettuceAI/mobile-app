@@ -174,7 +174,7 @@ export function ChatFooter({
           <span
             className={cn(
               "pointer-events-none absolute",
-              onAddAttachment ? "left-[4rem]" : "left-5",
+              onAddAttachment ? "left-16" : "left-5",
               "top-1/2 -translate-y-1/2",
               "text-white/40",
               "transition-opacity duration-150",

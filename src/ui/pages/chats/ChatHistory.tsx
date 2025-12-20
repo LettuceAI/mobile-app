@@ -313,7 +313,7 @@ export function ChatHistoryPage() {
         title="Delete chat?"
         includeExitIcon={false}
       >
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+        <div className="rounded-xl border border-white/10 bg-white/4 p-3">
           <p className={cn(typography.bodySmall.size, "font-semibold text-white/90 truncate")}>
             {deleteTarget?.title || "Untitled Chat"}
           </p>

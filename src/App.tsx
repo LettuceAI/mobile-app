@@ -220,7 +220,7 @@ function AppContent() {
         <main
           ref={mainRef}
           className={`flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${isOnboardingRoute
-            ? "overflow-y-auto px-4 pt-6 pb-6"
+            ? "overflow-y-auto px-4"
             : isChatDetailRoute
               ? "overflow-hidden px-0 pt-0 pb-0"
               : isCreateRoute

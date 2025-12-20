@@ -33,12 +33,12 @@ export const typography = {
         lineHeight: 'leading-relaxed',
     },
     bodySmall: {
-        size: 'text-xs',         // 12px
+        size: 'text-[12px]',         // 12px
         weight: 'font-normal',
         lineHeight: 'leading-normal',
     },
     label: {
-        size: 'text-xs',         // 12px
+        size: 'text-[12px]',         // 12px
         weight: 'font-medium',
         lineHeight: 'leading-none',
         tracking: 'tracking-wide', // 0.025em

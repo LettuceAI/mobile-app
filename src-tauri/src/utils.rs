@@ -1,9 +1,9 @@
+use crate::logger::{LogEntry, LogManager};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
-use crate::logger::{LogEntry, LogManager};
 
 pub const _SERVICE: &str = "lettuceai";
 
@@ -15,9 +15,7 @@ pub fn lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 pub fn ensure_lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = lettuce_dir(app)?;
-    fs::create_dir_all(&dir).map_err(|e| {
-        e.to_string()
-    })?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
 

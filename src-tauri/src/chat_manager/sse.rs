@@ -230,7 +230,7 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             _ => None,
         }
     });
-    
+
     if prompt_tokens.is_none() && completion_tokens.is_none() && total_tokens.is_none() {
         None
     } else {

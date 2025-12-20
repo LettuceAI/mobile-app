@@ -174,7 +174,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
       style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)", paddingBottom: "12px" }}
     >
       <div className="relative mx-auto flex w-full max-w-md lg:max-w-none items-center justify-between px-3 lg:px-8 h-10">
-        {/* Left side: Logo + Title */}
+        {/* Left side: */}
         <div className="flex items-center gap-1 overflow-hidden h-full">
           <div className={cn("flex items-center justify-center shrink-0", showBackButton ? "w-10" : "w-0")}>
             <AnimatePresence mode="wait" initial={false}>
@@ -215,8 +215,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
           </motion.h1>
         </div>
 
-        {/* Right side: Actions - Fixed width container or flex-end to prevent layout shift */}
-        <div className="flex items-center justify-end gap-1 shrink-0 min-w-[40px] h-full">
+        <div className="flex items-center justify-end gap-1 shrink-0 min-w-10 h-full">
           {showSearchButton && (
             <button
               onClick={() => navigate("/search")}

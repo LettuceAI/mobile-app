@@ -30,6 +30,7 @@
           "path": "$APPDATA/**"
         }
       ]
-    }
+    },
+    "os:default"
   ]
 }

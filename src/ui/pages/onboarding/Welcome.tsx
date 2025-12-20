@@ -10,11 +10,14 @@ import {
 import { storageBridge } from "../../../core/storage/files";
 import logoSvg from "../../../assets/logo.svg";
 import { typography, radius, spacing, interactive, shadows, colors, cn } from "../../design-tokens";
+import { getPlatform } from "../../../core/utils/platform";
 
 export function WelcomePage() {
   const navigate = useNavigate();
   const [showSkipWarning, setShowSkipWarning] = useState(false);
   const [showRestoreBackup, setShowRestoreBackup] = useState(false);
+
+  const platform = getPlatform();
 
   const handleAddProvider = () => {
     navigate("/onboarding/provider");
@@ -35,27 +38,29 @@ export function WelcomePage() {
 
   return (
     <div className={cn("flex min-h-screen flex-col text-gray-200", colors.effects.gradient.surface)}>
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
+      {/* Desktop: Split layout | Mobile: Stacked layout */}
+      <div className="flex flex-1 flex-col lg:flex-row items-center justify-center px-4 py-12 lg:px-16 lg:gap-16 xl:gap-24">
 
-        {/* Logo Section - Hero */}
+        {/* Left Side - Branding (desktop) / Top (mobile) */}
         <motion.div
-          className="flex flex-col items-center mb-12"
+          className="flex flex-col items-center lg:items-start lg:flex-1 lg:max-w-lg"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         >
-          <div className="relative mb-8">
-            {/* Glow effect */}
-            <div className={cn("absolute -inset-6 rounded-full blur-2xl animate-pulse", colors.effects.gradient.brand)} />
+          {/* Logo Section */}
+          <div className="relative mb-8 overflow-visible">
+            {/* Glow effect - larger spread for smoother edges */}
+            <div className={cn("absolute -inset-8 rounded-full blur-3xl opacity-60 animate-pulse", colors.effects.gradient.brand)} />
 
             {/* Logo container */}
             <div className={cn(
-              "relative flex h-24 w-24 items-center justify-center",
+              "relative flex h-24 w-24 lg:h-32 lg:w-32 items-center justify-center",
               colors.glass.default,
               radius.full,
               shadows.xl
             )}>
-              <img src={logoSvg} alt="LettuceAI" className="h-14 w-14" />
+              <img src={logoSvg} alt="LettuceAI" className="h-14 w-14 lg:h-20 lg:w-20" />
             </div>
           </div>
 
@@ -63,7 +68,8 @@ export function WelcomePage() {
           <h1 className={cn(
             typography.display.size,
             typography.display.weight,
-            "mb-3",
+            "mb-3 lg:text-5xl",
+            "text-center lg:text-left",
             colors.effects.gradient.text
           )}>
             LettuceAI
@@ -73,127 +79,137 @@ export function WelcomePage() {
           <p className={cn(
             typography.body.size,
             typography.body.lineHeight,
-            "max-w-[280px] text-center text-white/60"
+            "max-w-[280px] lg:max-w-md lg:text-lg",
+            "text-center lg:text-left text-white/60"
           )}>
             Your personal AI companion. Private, secure, and always on-device.
           </p>
+
+          {/* Feature Pills */}
+          <div className={cn("mt-6 flex items-center flex-wrap gap-2 lg:gap-3", "justify-center lg:justify-start")}>
+            {quickFacts.map(({ icon: Icon, label }) => (
+              <div
+                key={label}
+                className={cn(
+                  "flex items-center gap-1.5 border border-white/10 bg-white/5 px-3 py-1.5 lg:px-4 lg:py-2 backdrop-blur-sm",
+                  radius.full
+                )}
+              >
+                <Icon size={14} className="text-emerald-400 lg:w-4 lg:h-4" strokeWidth={2.5} />
+                <span className={cn(typography.bodySmall.size, typography.label.weight, "text-white/70 lg:text-sm")}>
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop-only: Bottom hint on left side */}
+          <motion.p
+            className={cn(
+              "mt-8 hidden lg:block",
+              typography.caption.size,
+              "text-white/40"
+            )}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+          >
+            Setup takes less than 2 minutes
+          </motion.p>
         </motion.div>
 
-        {/* Feature Pills */}
+        {/* Right Side - Actions (desktop) / Bottom (mobile) */}
         <motion.div
-          className={cn("mb-8 flex items-center justify-center", spacing.inlineSmall)}
+          className="flex flex-col items-center lg:items-stretch w-full max-w-xs lg:max-w-sm lg:flex-1 mt-8 lg:mt-0"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
         >
-          {quickFacts.map(({ icon: Icon, label }) => (
-            <div
-              key={label}
-              className={cn(
-                "flex items-center gap-1.5 border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-sm",
-                radius.full
-              )}
-            >
-              <Icon size={14} className="text-emerald-400" strokeWidth={2.5} />
-              <span className={cn(typography.bodySmall.size, typography.label.weight, "text-white/70")}>
-                {label}
-              </span>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Beta Warning */}
-        <motion.div
-          className={cn(
-            "mb-8 w-full max-w-sm rounded-xl border border-amber-400/30 bg-amber-400/10 p-4"
-          )}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.25 }}
-        >
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-            <div>
-              <h3 className={cn(typography.bodySmall.size, typography.body.weight, "text-amber-200")}>
-                Beta Build
-              </h3>
-              <p className={cn(typography.caption.size, "mt-1 text-amber-200/70")}>
-                This is a beta version. Please report any issues or feedback on our GitHub repository.
-              </p>
+          {/* Beta Warning */}
+          <div className={cn(
+            "mb-6 w-full rounded-xl border border-amber-400/30 bg-amber-400/10 p-4"
+          )}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <div>
+                <h3 className={cn(typography.bodySmall.size, typography.body.weight, "text-amber-200")}>
+                  {platform.type === "desktop" ? "Desktop Alpha build" : "Beta Build"}
+                </h3>
+                <p className={cn(typography.caption.size, "mt-1 text-amber-200/70")}>
+                  {platform.type === "desktop"
+                    ? "You're using the desktop version. Some features may differ from mobile. Report issues on GitHub."
+                    : "This is a Android beta version. Please report any issues or feedback on our GitHub repository."}
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* CTA Buttons */}
+          <div className={cn("w-full", spacing.field)}>
+            <button
+              className={cn(
+                "group w-full flex items-center justify-center gap-2 px-6 py-4",
+                radius.md,
+                "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                typography.body.size,
+                typography.h3.weight,
+                shadows.glow,
+                interactive.transition.default,
+                interactive.active.scale,
+                "hover:border-emerald-400/60 hover:bg-emerald-400/30"
+              )}
+              onClick={handleAddProvider}
+            >
+              <span>Get Started</span>
+              <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
+            </button>
+
+            <button
+              className={cn(
+                "w-full px-6 py-3",
+                radius.md,
+                "border border-white/10 bg-white/5 text-white/60",
+                typography.body.size,
+                interactive.transition.default,
+                interactive.active.scale,
+                "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
+              )}
+              onClick={() => setShowSkipWarning(true)}
+            >
+              Skip for now
+            </button>
+
+            <button
+              className={cn(
+                "w-full flex items-center justify-center gap-2 px-6 py-3",
+                radius.md,
+                "border border-white/10 bg-white/5 text-white/60",
+                typography.body.size,
+                interactive.transition.default,
+                interactive.active.scale,
+                "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
+              )}
+              onClick={() => setShowRestoreBackup(true)}
+            >
+              <Upload size={16} />
+              Restore from Backup
+            </button>
+          </div>
+
+          {/* Mobile-only: Bottom hint */}
+          <motion.p
+            className={cn(
+              "mt-8 text-center lg:hidden",
+              typography.caption.size,
+              "text-white/40"
+            )}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+          >
+            Setup takes less than 2 minutes
+          </motion.p>
         </motion.div>
-
-        {/* CTA Buttons */}
-        <motion.div
-          className={cn("w-full max-w-xs", spacing.field)}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-        >
-          <button
-            className={cn(
-              "group w-full flex items-center justify-center gap-2 px-6 py-4",
-              radius.md,
-              "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
-              typography.body.size,
-              typography.h3.weight,
-              shadows.glow,
-              interactive.transition.default,
-              interactive.active.scale,
-              "hover:border-emerald-400/60 hover:bg-emerald-400/30"
-            )}
-            onClick={handleAddProvider}
-          >
-            <span>Get Started</span>
-            <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
-          </button>
-
-          <button
-            className={cn(
-              "w-full px-6 py-3",
-              radius.md,
-              "border border-white/10 bg-white/5 text-white/60",
-              typography.body.size,
-              interactive.transition.default,
-              interactive.active.scale,
-              "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
-            )}
-            onClick={() => setShowSkipWarning(true)}
-          >
-            Skip for now
-          </button>
-
-          <button
-            className={cn(
-              "w-full flex items-center justify-center gap-2 px-6 py-3",
-              radius.md,
-              "border border-white/10 bg-white/5 text-white/60",
-              typography.body.size,
-              interactive.transition.default,
-              interactive.active.scale,
-              "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
-            )}
-            onClick={() => setShowRestoreBackup(true)}
-          >
-            <Upload size={16} />
-            Restore from Backup
-          </button>
-        </motion.div>
-
-        {/* Bottom hint */}
-        <motion.p
-          className={cn(
-            "mt-8 text-center",
-            typography.caption.size,
-            "text-white/40"
-          )}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-        >
-          Setup takes less than 2 minutes
-        </motion.p>
       </div>
 
       {showSkipWarning && (

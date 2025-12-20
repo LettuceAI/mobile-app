@@ -149,13 +149,13 @@ pub async fn record_usage_if_available(
     for emb in &session.memory_embeddings {
         memory_token_count += emb.token_count as u64;
     }
-    
+
     let summary_token_count = session.memory_summary_token_count as u64;
 
     if memory_token_count > 0 {
         request_usage.memory_tokens = Some(memory_token_count);
     }
-    
+
     if summary_token_count > 0 {
         request_usage.summary_tokens = Some(summary_token_count);
     }

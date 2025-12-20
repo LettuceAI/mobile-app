@@ -1064,10 +1064,10 @@ export function ChatMemoriesPage() {
                           "group relative overflow-hidden rounded-xl",
                           "border transition-all duration-200",
                           isEditing
-                            ? "border-white/20 bg-white/[0.03]"
+                            ? "border-white/20 bg-white/3"
                             : expanded
-                              ? "border-white/10 bg-white/[0.02]"
-                              : "border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.03]"
+                              ? "border-white/10 bg-white/2"
+                              : "border-white/6 bg-white/2 hover:border-white/10 hover:bg-white/3"
                         )}
                       >
                         <div className={cn(
@@ -1454,7 +1454,7 @@ export function ChatMemoriesPage() {
                           <p className={cn(
                             typography.bodySmall.size,
                             colors.text.secondary,
-                            "leading-relaxed whitespace-pre-wrap break-words"
+                            "leading-relaxed whitespace-pre-wrap wrap-break-word"
                           )}>
                             {msg.content}
                           </p>

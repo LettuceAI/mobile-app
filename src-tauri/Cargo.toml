@@ -1,6 +1,6 @@
 [package]
 name = "lettuceai"
-version = "1.0.0-beta.5"
+version = "1.0.0-beta.6"
 description = "LettuceAI mobile AI roleplaying app."
 authors = ["MegalithOfficial"]
 edition = "2021"
@@ -56,6 +56,7 @@ lazy_static = "1.5.0"
 anyhow = "1.0.100"
 tauri-plugin-fs = "2"
 url = "2"
+tauri-plugin-os = "2"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 machine-uid = "0.3"

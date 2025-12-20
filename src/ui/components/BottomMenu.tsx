@@ -103,7 +103,7 @@ export function BottomMenu({
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-100 bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -112,7 +112,7 @@ export function BottomMenu({
           />
 
           <motion.div
-            className={`${menuClasses} z-[110] mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 ${isBottomMenu ? 'max-h-[90vh]' : 'max-h-[95vh]'} overflow-hidden flex flex-col ${className}`}
+            className={`${menuClasses} z-110 mx-auto max-w-xl border border-white/10 bg-[#0f1014] p-1 ${isBottomMenu ? 'max-h-[90vh]' : 'max-h-[95vh]'} overflow-hidden flex flex-col ${className}`}
             variants={menuVariants}
             initial="hidden"
             animate="visible"
@@ -149,7 +149,7 @@ export function BottomMenu({
               </div>
             )}
 
-            <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"} flex-shrink-0`}>
+            <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"} shrink-0`}>
               <h3 className="text-lg font-semibold text-white">{title}</h3>
               {includeExitIcon && (
                 <button
@@ -186,7 +186,7 @@ export function MenuButton({
 
   return (
     <motion.button
-      className={`group relative w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-white ${disabled
+      className={`group relative w-full rounded-xl border border-white/10 bg-white/4 p-3 text-left text-white ${disabled
           ? "cursor-not-allowed opacity-50"
           : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
         } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}

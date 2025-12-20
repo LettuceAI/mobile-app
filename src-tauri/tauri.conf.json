@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "lettuceai",
+        "title": "LettuceAI",
         "width": 1100,
-        "height": 720
+        "height": 720,
+        "minHeight": 600,
+        "minWidth": 900
       }
     ],
     "security": {

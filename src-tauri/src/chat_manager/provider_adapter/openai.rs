@@ -133,7 +133,7 @@ impl ProviderAdapter for OpenRouterAdapter {
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("HTTP-Referer".into(), "https://lettuce.ai".into());
         out.insert("X-Title".into(), "Lettuce AI".into());
-        
+
         if let Some(extra) = extra {
             for (k, v) in extra.iter() {
                 out.insert(k.clone(), v.clone());
