@@ -1,6 +1,6 @@
 import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
 import { X, ChevronRight, LucideIcon } from "lucide-react";
-import { ReactNode, useCallback, useMemo } from "react";
+import { ReactNode, useCallback, useMemo, useEffect } from "react";
 
 const ICON_ACCENT_MAP: Record<string, string> = {
   "from-blue-500 to-blue-600": "border-blue-400/40 bg-blue-500/15 text-blue-200 group-hover:border-blue-300/50 group-hover:text-blue-100",
@@ -53,14 +53,13 @@ export function BottomMenu({
 
   const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (!isBottomMenu) return;
-    const hasPulledFarEnough = info.offset.y > 100; // Reduced threshold for faster response
-    const hasQuickSwipe = info.velocity.y > 600 && info.offset.y > 20; // More responsive swipe
+    const hasPulledFarEnough = info.offset.y > 100; 
+    const hasQuickSwipe = info.velocity.y > 600 && info.offset.y > 20;
     if (hasPulledFarEnough || hasQuickSwipe) {
       onClose();
       return;
     }
 
-    // snap back into place when not closing
     dragControls.stop();
   }, [isBottomMenu, onClose, dragControls]);
 
@@ -68,6 +67,17 @@ export function BottomMenu({
     event.preventDefault();
     dragControls.start(event);
   }, [dragControls]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   const menuVariants = useMemo(() => ({
     hidden: {
@@ -107,35 +117,35 @@ export function BottomMenu({
             initial="hidden"
             animate="visible"
             exit="exit"
-            transition={{ 
-              type: "spring", 
-              damping: 30, 
+            transition={{
+              type: "spring",
+              damping: 30,
               stiffness: 300,
               mass: 0.8
             }}
             {...(isBottomMenu
               ? {
-                  drag: "y" as const,
-                  dragControls,
-                  dragListener: false,
-                  dragConstraints: { top: 0, bottom: 200 }, // Reduced for better feel
-                  dragElastic: { top: 0, bottom: 0.1 }, // Less elastic for snappier feel
-                  dragMomentum: false,
-                  onDragEnd: handleDragEnd,
-                }
+                drag: "y" as const,
+                dragControls,
+                dragListener: false,
+                dragConstraints: { top: 0, bottom: 200 }, // Reduced for better feel
+                dragElastic: { top: 0, bottom: 0.1 }, // Less elastic for snappier feel
+                dragMomentum: false,
+                onDragEnd: handleDragEnd,
+              }
               : {})}
           >
             {isBottomMenu && (
               <div className="flex justify-center pt-4 pb-2">
-              <button
-                type="button"
-                onPointerDown={handlePointerDown}
-                style={{ touchAction: "none" }}
-                className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none"
-                aria-label="Drag to close menu"
-              >
-                <span className="h-1 w-20 rounded-full bg-white/40" />
-              </button>
+                <button
+                  type="button"
+                  onPointerDown={handlePointerDown}
+                  style={{ touchAction: "none" }}
+                  className="flex h-8 w-28 items-center justify-center border-0 bg-transparent focus:outline-none"
+                  aria-label="Drag to close menu"
+                >
+                  <span className="h-1 w-20 rounded-full bg-white/40" />
+                </button>
               </div>
             )}
 
@@ -176,19 +186,17 @@ export function MenuButton({
 
   return (
     <motion.button
-      className={`group relative w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-white ${
-        disabled
+      className={`group relative w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left text-white ${disabled
           ? "cursor-not-allowed opacity-50"
           : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
-      } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}
+        } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}
       onClick={handleClick}
       disabled={disabled}
     >
       <div className="flex items-center gap-2">
         <div
-          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${
-            disabled ? "opacity-60" : ""
-          }`}
+          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${disabled ? "opacity-60" : ""
+            }`}
         >
           <Icon size={18} />
         </div>
