@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Info, Cpu, RefreshCw, Trash2 } from "lucide-react";
-import { readSettings, saveAdvancedSettings } from "../../../core/storage/repo";
+import { readSettings, saveAdvancedSettings, getEmbeddingModelInfo } from "../../../core/storage/repo";
 import { storageBridge } from "../../../core/storage/files";
 import type { Model } from "../../../core/storage/schemas";
 import { cn, typography } from "../../design-tokens";
 import { useNavigate } from "react-router-dom";
+import { EmbeddingUpgradePrompt } from "../../components/EmbeddingUpgradePrompt";
 
 export function DynamicMemoryPage() {
     const navigate = useNavigate();
@@ -19,26 +20,46 @@ export function DynamicMemoryPage() {
     const [hotMemoryTokenBudget, setHotMemoryTokenBudget] = useState(2000);
     const [decayRate, setDecayRate] = useState(0.08);
     const [coldThreshold, setColdThreshold] = useState(0.3);
+    const [embeddingMaxTokens, setEmbeddingMaxTokens] = useState<number>(2048);
+    const [modelVersion, setModelVersion] = useState<string | null>(null);
+    const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+    const [contextEnrichmentEnabled, setContextEnrichmentEnabled] = useState(true);
 
     useEffect(() => {
-        readSettings()
-            .then((settings) => {
+        const loadData = async () => {
+            try {
+                const [settings, modelInfo] = await Promise.all([
+                    readSettings(),
+                    getEmbeddingModelInfo()
+                ]);
+
                 setEnabled(settings.advancedSettings?.dynamicMemory?.enabled ?? false);
                 setSummarisationModelId(settings.advancedSettings?.summarisationModelId || "");
                 setSummaryMessageInterval(settings.advancedSettings?.dynamicMemory?.summaryMessageInterval ?? 20);
-                setMaxMemoryEntries(settings.advancedSettings?.dynamicMemory?.maxEntries ?? 50);
                 setMaxMemoryEntries(settings.advancedSettings?.dynamicMemory?.maxEntries ?? 50);
                 setMinSimilarityThreshold(settings.advancedSettings?.dynamicMemory?.minSimilarityThreshold ?? 0.35);
                 setHotMemoryTokenBudget(settings.advancedSettings?.dynamicMemory?.hotMemoryTokenBudget ?? 2000);
                 setDecayRate(settings.advancedSettings?.dynamicMemory?.decayRate ?? 0.08);
                 setColdThreshold(settings.advancedSettings?.dynamicMemory?.coldThreshold ?? 0.3);
+                setEmbeddingMaxTokens(settings.advancedSettings?.embeddingMaxTokens ?? 2048);
+                setContextEnrichmentEnabled(settings.advancedSettings?.dynamicMemory?.contextEnrichmentEnabled ?? true);
                 setModels(settings.models.map((m: Model) => ({ id: m.id, name: m.name })));
+
+                if (modelInfo.installed && modelInfo.version === "v1") {
+                    setModelVersion(modelInfo.version);
+                    setShowUpgradePrompt(true);
+                } else if (modelInfo.installed) {
+                    setModelVersion(modelInfo.version);
+                }
+
                 setIsLoading(false);
-            })
-            .catch((err) => {
+            } catch (err) {
                 console.error("Failed to load settings:", err);
                 setIsLoading(false);
-            });
+            }
+        };
+
+        loadData();
     }, []);
 
     const handleSummarisationModelChange = async (modelId: string) => {
@@ -49,7 +70,7 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             settings.advancedSettings.summarisationModelId = modelId;
@@ -67,11 +88,11 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
             settings.advancedSettings.dynamicMemory.summaryMessageInterval = value;
             await saveAdvancedSettings(settings.advancedSettings);
@@ -88,11 +109,11 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
             settings.advancedSettings.dynamicMemory.maxEntries = value;
             await saveAdvancedSettings(settings.advancedSettings);
@@ -109,11 +130,11 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
             settings.advancedSettings.dynamicMemory.minSimilarityThreshold = value;
             await saveAdvancedSettings(settings.advancedSettings);
@@ -129,11 +150,11 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
             settings.advancedSettings.dynamicMemory.hotMemoryTokenBudget = value;
             await saveAdvancedSettings(settings.advancedSettings);
@@ -149,11 +170,11 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
             settings.advancedSettings.dynamicMemory.decayRate = value;
             await saveAdvancedSettings(settings.advancedSettings);
@@ -169,16 +190,53 @@ export function DynamicMemoryPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
             settings.advancedSettings.dynamicMemory.coldThreshold = value;
             await saveAdvancedSettings(settings.advancedSettings);
         } catch (err) {
             console.error("Failed to save cold threshold:", err);
+        }
+    };
+
+    const handleEmbeddingMaxTokensChange = async (value: number) => {
+        setEmbeddingMaxTokens(value);
+        try {
+            const settings = await readSettings();
+            if (!settings.advancedSettings) {
+                settings.advancedSettings = {
+                    creationHelperEnabled: false,
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
+                };
+            }
+            settings.advancedSettings.embeddingMaxTokens = value;
+            await saveAdvancedSettings(settings.advancedSettings);
+        } catch (err) {
+            console.error("Failed to save embedding max tokens:", err);
+        }
+    };
+
+    const handleContextEnrichmentChange = async (value: boolean) => {
+        setContextEnrichmentEnabled(value);
+        try {
+            const settings = await readSettings();
+            if (!settings.advancedSettings) {
+                settings.advancedSettings = {
+                    creationHelperEnabled: false,
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
+                };
+            }
+            if (!settings.advancedSettings.dynamicMemory) {
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
+            }
+            settings.advancedSettings.dynamicMemory.contextEnrichmentEnabled = value;
+            await saveAdvancedSettings(settings.advancedSettings);
+        } catch (err) {
+            console.error("Failed to save context enrichment setting:", err);
         }
     };
 
@@ -206,6 +264,91 @@ export function DynamicMemoryPage() {
                             </p>
                         </div>
                     </div>
+
+                    <AnimatePresence>
+                        {showUpgradePrompt && (
+                            <EmbeddingUpgradePrompt
+                                onDismiss={() => setShowUpgradePrompt(false)}
+                                returnTo="/settings/advanced/dynamic-memory"
+                            />
+                        )}
+                    </AnimatePresence>
+
+                    {modelVersion && (
+                        <div className="text-xs text-white/40 px-1">
+                            Installed model: {modelVersion === "v2" ? `v2 (${embeddingMaxTokens} tokens selected)` : "v1 (512 tokens)"}
+                        </div>
+                    )}
+
+                    {modelVersion === "v2" && enabled && (
+                        <div className={cn(
+                            "rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                        )}>
+                            <div className="flex items-start gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                        <span className="text-sm font-medium text-white">Token Capacity</span>
+                                        <span className={cn(
+                                            "rounded-md border border-white/10 bg-white/10 px-2 py-1",
+                                            typography.caption.size,
+                                            "text-white/70"
+                                        )}>
+                                            {embeddingMaxTokens} tokens
+                                        </span>
+                                    </div>
+                                    <div className="text-[11px] text-white/45 leading-relaxed mb-3">
+                                        Higher = better memory for longer conversations
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[1024, 2048, 4096].map((val) => (
+                                            <button
+                                                key={val}
+                                                onClick={() => handleEmbeddingMaxTokensChange(val)}
+                                                className={cn(
+                                                    "px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                                                    embeddingMaxTokens === val
+                                                        ? "bg-blue-500 text-white"
+                                                        : "border border-white/10 bg-white/5 text-white/70 hover:border-white/20"
+                                                )}
+                                            >
+                                                {val / 1024}K
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Context Enrichment - v2 exclusive */}
+                    {modelVersion === "v2" && enabled && (
+                        <div className={cn(
+                            "rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                        )}>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-sm font-medium text-white">Context Enrichment</span>
+                                        <span className="rounded-md border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">
+                                            Experimental
+                                        </span>
+                                    </div>
+                                    <div className="text-[11px] text-white/45 leading-relaxed">
+                                        Uses last 2 messages for better memory retrieval
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={contextEnrichmentEnabled}
+                                        onChange={(e) => handleContextEnrichmentChange(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-white/10 rounded-full peer peer-checked:bg-blue-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                                </label>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Status Banner */}
                     {!enabled && (

@@ -192,6 +192,7 @@ pub fn run() {
             usage::usage_save_csv,
             utils::get_app_version,
             embedding_model::check_embedding_model,
+            embedding_model::get_embedding_model_info,
             embedding_model::start_embedding_download,
             embedding_model::get_embedding_download_progress,
             embedding_model::cancel_embedding_download,

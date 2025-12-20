@@ -20,19 +20,25 @@ export function AdvancedPage() {
 
     // Load settings on mount
     useEffect(() => {
-        Promise.all([readSettings()])
-            .then(([settings]) => {
+        const loadData = async () => {
+            try {
+                const [settings] = await Promise.all([
+                    readSettings(),
+                ]);
+
                 //setCreationHelperEnabled(settings.advancedSettings?.creationHelperEnabled ?? false);
                 //setCreationHelperModelId(settings.advancedSettings?.creationHelperModelId || "");
                 setDynamicMemoryEnabled(settings.advancedSettings?.dynamicMemory?.enabled ?? false);
                 setManualWindow(settings.advancedSettings?.manualModeContextWindow ?? 50);
                 //setModels(settings.models.map((m: Model) => ({ id: m.id, name: m.name })));
                 setIsLoading(false);
-            })
-            .catch((err) => {
+            } catch (err) {
                 console.error("Failed to load settings:", err);
                 setIsLoading(false);
-            });
+            }
+        };
+
+        loadData();
     }, []);
 
     /*const handleToggleCreationHelper = async () => {
@@ -79,11 +85,11 @@ export function AdvancedPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
+                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true },
                 };
             }
             if (!settings.advancedSettings.dynamicMemory) {
-                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 };
+                settings.advancedSettings.dynamicMemory = { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3, contextEnrichmentEnabled: true };
             }
 
             if (newValue && !settings.advancedSettings.summarisationModelId && settings.defaultModelId) {

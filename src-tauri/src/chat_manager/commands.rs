@@ -213,6 +213,15 @@ fn dynamic_cold_threshold(settings: &Settings) -> f32 {
         .unwrap_or(FALLBACK_COLD_THRESHOLD)
 }
 
+fn context_enrichment_enabled(settings: &Settings) -> bool {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.context_enrichment_enabled)
+        .unwrap_or(true) // Default to enabled (v2 users get this by default)
+}
+
 /// Apply importance decay to all hot, unpinned memories.
 /// Memories that fall below cold_threshold are demoted to cold storage.
 /// Returns (decayed_count, demoted_count)
@@ -307,6 +316,29 @@ fn conversation_count(messages: &[StoredMessage]) -> usize {
 fn generate_memory_id() -> String {
     let now = now_millis().unwrap_or(0);
     format!("{:06}", now % MEMORY_ID_SPACE)
+}
+
+/// Build an enriched query from the last 2 messages for better memory retrieval.
+/// Cases:
+/// - [assistant, user] -> assistant.content + user.content (normal chat)
+/// - [assistant, assistant] -> prev.content + last.content (chat continue)
+/// - [user, user] -> prev.content + last.content (cancelled retry)
+/// Falls back to just the latest message if only 1 exists.
+fn build_enriched_query(messages: &[StoredMessage]) -> String {
+    let convo: Vec<&StoredMessage> = messages
+        .iter()
+        .filter(|m| m.role == "user" || m.role == "assistant")
+        .collect();
+
+    match convo.len() {
+        0 => String::new(),
+        1 => convo[0].content.clone(),
+        _ => {
+            let last = &convo[convo.len() - 1];
+            let second_last = &convo[convo.len() - 2];
+            format!("{}\n{}", second_last.content, last.content)
+        }
+    }
 }
 
 fn format_memories_with_ids(session: &Session) -> Vec<String> {
@@ -809,19 +841,9 @@ pub async fn chat_completion(
     // - Dynamic memory: use semantic search over memory embeddings
     // - Manual memory: memories are injected via system prompt (see below)
     let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
-        // Enriched query: Context (last 300 chars of prev msg) + User Message
-        // This helps short queries like "What now?" find relevant memories.
-        let search_query = if let Some(prev_msg) = session.messages.iter().rev().nth(1) {
-            let context: String = prev_msg
-                .content
-                .chars()
-                .rev()
-                .take(300)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            format!("{}\n{}", context, user_message)
+        // Build search query - use enriched query (last 2 msgs) if enabled, else just user message
+        let search_query = if context_enrichment_enabled(settings) {
+            build_enriched_query(&session.messages)
         } else {
             user_message.clone()
         };
@@ -829,7 +851,11 @@ pub async fn chat_completion(
         crate::utils::log_info(
             &app,
             "memory_retrieval",
-            format!("Enriched query ({:?} chars)", search_query.len()),
+            format!(
+                "Search query ({} chars, enriched={})",
+                search_query.len(),
+                context_enrichment_enabled(settings)
+            ),
         );
 
         select_relevant_memories(
@@ -1323,18 +1349,27 @@ pub async fn chat_regenerate(
     let dynamic_window = dynamic_window_size(settings);
 
     let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
-        let preceding_user_content = session
+        // Build search query - use enriched query (last 2 msgs up to target) if enabled
+        let messages_up_to: Vec<StoredMessage> = session
             .messages
             .iter()
-            .take(target_index)
-            .rev()
-            .find(|m| m.role == "user")
-            .map(|m| m.content.as_str())
-            .unwrap_or("");
+            .take(target_index + 1) // Include the message being regenerated
+            .cloned()
+            .collect();
+        let search_query = if context_enrichment_enabled(&context.settings) {
+            build_enriched_query(&messages_up_to)
+        } else {
+            messages_up_to
+                .iter()
+                .rev()
+                .find(|m| m.role == "user")
+                .map(|m| m.content.clone())
+                .unwrap_or_default()
+        };
         select_relevant_memories(
             &app,
             &session,
-            preceding_user_content,
+            &search_query,
             5,
             dynamic_min_similarity(&context.settings),
         )
@@ -1765,17 +1800,22 @@ pub async fn chat_continue(
     let dynamic_window = dynamic_window_size(settings);
 
     let relevant_memories = if dynamic_memory_enabled && !session.memory_embeddings.is_empty() {
-        let last_user_content = session
-            .messages
-            .iter()
-            .rev()
-            .find(|m| m.role == "user")
-            .map(|m| m.content.as_str())
-            .unwrap_or("");
+        // Build search query - use enriched query (last 2 msgs) if enabled
+        let search_query = if context_enrichment_enabled(&context.settings) {
+            build_enriched_query(&session.messages)
+        } else {
+            session
+                .messages
+                .iter()
+                .rev()
+                .find(|m| m.role == "user")
+                .map(|m| m.content.clone())
+                .unwrap_or_default()
+        };
         select_relevant_memories(
             &app,
             &session,
-            last_user_content,
+            &search_query,
             5,
             dynamic_min_similarity(&context.settings),
         )

@@ -31,6 +31,7 @@ import { SearchPage } from "./ui/pages/search";
 import { LibraryPage } from "./ui/pages/library/LibraryPage";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
+import { V1UpgradeToast } from "./ui/components/V1UpgradeToast";
 import { isOnboardingCompleted } from "./core/storage/appState";
 import { TopNav, BottomNav } from "./ui/components/App";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
@@ -313,6 +314,9 @@ function AppContent() {
           className="bottom-[88px] right-4"
         />
       )}
+
+      {/* V1 Embedding Model Upgrade Toast */}
+      <V1UpgradeToast />
     </div>
   );
 }

@@ -109,6 +109,9 @@ pub struct AdvancedSettings {
     pub dynamic_memory: Option<DynamicMemorySettings>,
     #[serde(default)]
     pub manual_mode_context_window: Option<u32>,
+    /// Max token capacity for embedding model (1024, 2048, or 4096)
+    #[serde(default)]
+    pub embedding_max_tokens: Option<u32>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -129,22 +132,29 @@ pub struct DynamicMemorySettings {
     /// Score below which memories are demoted to cold (0.2-0.4 recommended)
     #[serde(default = "default_cold_threshold")]
     pub cold_threshold: f32,
+    /// v2 exclusive: Use last 2 messages for better memory retrieval
+    #[serde(default = "default_context_enrichment")]
+    pub context_enrichment_enabled: bool,
 }
 
 fn default_min_similarity() -> f32 {
-    0.35 // Default threshold - memories below this score are excluded
+    0.5 // Default threshold - memories below this score are excluded
 }
 
 fn default_hot_memory_token_budget() -> u32 {
-    2000 // Default token budget for hot memories
+    2048 // Default token budget for hot memories
 }
 
 fn default_decay_rate() -> f32 {
-    0.08 // Score reduction per memory cycle
+    0.1 // Score reduction per memory cycle
 }
 
 fn default_cold_threshold() -> f32 {
-    0.3 // Memories below this score are demoted to cold
+    0.4 // Memories below this score are demoted to cold
+}
+
+fn default_context_enrichment() -> bool {
+    true // v2 exclusive: Use last 2 messages for better retrieval
 }
 
 #[derive(Deserialize, Serialize, Clone)]

@@ -39,7 +39,8 @@ export const storageBridge = {
 
     // Embedding model download
     checkEmbeddingModel: () => invoke<boolean>("check_embedding_model"),
-    startEmbeddingDownload: () => invoke("start_embedding_download") as Promise<void>,
+    getEmbeddingModelInfo: () => invoke<{ installed: boolean; version: string | null; maxTokens: number }>("get_embedding_model_info"),
+    startEmbeddingDownload: (version?: string) => invoke("start_embedding_download", { version: version ?? null }) as Promise<void>,
     getEmbeddingDownloadProgress: () => invoke<{ downloaded: number; total: number; status: string; currentFileIndex: number; totalFiles: number; currentFileName: string }>("get_embedding_download_progress"),
     listenToEmbeddingDownloadProgress: (callback: (progress: { downloaded: number; total: number; status: string; currentFileIndex: number; totalFiles: number; currentFileName: string }) => void) =>
         listen<{ downloaded: number; total: number; status: string; currentFileIndex: number; totalFiles: number; currentFileName: string }>("embedding_download_progress", (event) => callback(event.payload)),

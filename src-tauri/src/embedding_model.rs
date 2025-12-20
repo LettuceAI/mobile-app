@@ -10,13 +10,41 @@ use tokio::sync::Mutex as TokioMutex;
 use crate::chat_manager::prompts;
 use crate::utils::log_warn;
 
-const MODEL_FILES: [&str; 3] = [
+// V1 model files (legacy - 512 token max)
+const MODEL_FILES_V1: [&str; 3] = [
     "lettuce-emb-512d-kd-v1.onnx",
     "lettuce-emb-512d-kd-v1.onnx.data",
     "tokenizer.json",
 ];
 
-const HUGGINGFACE_BASE: &str = "https://huggingface.co/Zeolit/lettuce-emb-512d-v1/resolve/main";
+const MODEL_FILES_V2_REMOTE: [&str; 3] = ["model.onnx", "model.onnx.data", "tokenizer.json"];
+const MODEL_FILES_V2_LOCAL: [&str; 3] = ["v2-model.onnx", "v2-model.onnx.data", "tokenizer.json"];
+
+const HUGGINGFACE_BASE_V1: &str = "https://huggingface.co/Zeolit/lettuce-emb-512d-v1/resolve/main";
+const HUGGINGFACE_BASE_V2: &str = "https://huggingface.co/Zeolit/lettuce-emb-512d-v2/resolve/main";
+
+const MAX_SEQ_LENGTH_V1: usize = 512;
+const MAX_SEQ_LENGTH_V2: usize = 4096;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum EmbeddingModelVersion {
+    V1,
+    V2,
+}
+
+impl Default for EmbeddingModelVersion {
+    fn default() -> Self {
+        EmbeddingModelVersion::V2
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingModelInfo {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub max_tokens: u32,
+}
 
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,7 +64,6 @@ struct DownloadState {
 }
 
 lazy_static::lazy_static! {
-    // Global environment - lazy loaded
     static ref DOWNLOAD_STATE: Arc<TokioMutex<DownloadState>> = Arc::new(TokioMutex::new(DownloadState {
         progress: DownloadProgress {
             downloaded: 0,
@@ -51,29 +78,78 @@ lazy_static::lazy_static! {
     }));
 }
 
-/// Get the embedding model directory path
 pub fn embedding_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let lettuce_dir = crate::utils::lettuce_dir(app)?;
     let model_dir = lettuce_dir.join("models").join("embedding");
     Ok(model_dir)
 }
 
-/// Check if the embedding model files exist
 #[tauri::command]
 pub fn check_embedding_model(app: AppHandle) -> Result<bool, String> {
     let model_dir = embedding_model_dir(&app)?;
 
-    for filename in MODEL_FILES.iter() {
+    let v2_exists = MODEL_FILES_V2_LOCAL.iter().all(|filename| {
         let file_path = model_dir.join(filename);
-        if !file_path.exists() {
-            return Ok(false);
-        }
+        file_path.exists()
+    });
+
+    if v2_exists {
+        return Ok(true);
     }
 
-    Ok(true)
+    let v1_exists = MODEL_FILES_V1.iter().all(|filename| {
+        let file_path = model_dir.join(filename);
+        file_path.exists()
+    });
+
+    Ok(v1_exists)
 }
 
-/// Reset the download state to idle (useful after deleting model files)
+pub fn detect_model_version(app: &AppHandle) -> Result<Option<EmbeddingModelVersion>, String> {
+    let model_dir = embedding_model_dir(app)?;
+
+    let v2_exists = MODEL_FILES_V2_LOCAL.iter().all(|filename| {
+        let file_path = model_dir.join(filename);
+        file_path.exists()
+    });
+
+    if v2_exists {
+        return Ok(Some(EmbeddingModelVersion::V2));
+    }
+
+    let v1_exists = MODEL_FILES_V1.iter().all(|filename| {
+        let file_path = model_dir.join(filename);
+        file_path.exists()
+    });
+
+    if v1_exists {
+        return Ok(Some(EmbeddingModelVersion::V1));
+    }
+
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn get_embedding_model_info(app: AppHandle) -> Result<EmbeddingModelInfo, String> {
+    match detect_model_version(&app)? {
+        Some(EmbeddingModelVersion::V2) => Ok(EmbeddingModelInfo {
+            installed: true,
+            version: Some("v2".to_string()),
+            max_tokens: MAX_SEQ_LENGTH_V2 as u32,
+        }),
+        Some(EmbeddingModelVersion::V1) => Ok(EmbeddingModelInfo {
+            installed: true,
+            version: Some("v1".to_string()),
+            max_tokens: MAX_SEQ_LENGTH_V1 as u32,
+        }),
+        None => Ok(EmbeddingModelInfo {
+            installed: false,
+            version: None,
+            max_tokens: 0,
+        }),
+    }
+}
+
 pub async fn reset_download_state() {
     let mut state = DOWNLOAD_STATE.lock().await;
     state.is_downloading = false;
@@ -88,9 +164,25 @@ pub async fn reset_download_state() {
     };
 }
 
-/// Delete partial/incomplete model files
-fn cleanup_partial_files(model_dir: &PathBuf) -> Result<(), String> {
-    for filename in MODEL_FILES.iter() {
+fn cleanup_partial_files(
+    model_dir: &PathBuf,
+    version: Option<&EmbeddingModelVersion>,
+) -> Result<(), String> {
+    let files = match version {
+        Some(EmbeddingModelVersion::V1) => MODEL_FILES_V1.to_vec(),
+        Some(EmbeddingModelVersion::V2) => MODEL_FILES_V2_LOCAL.to_vec(),
+        None => {
+            let mut all_files = MODEL_FILES_V1.to_vec();
+            all_files.extend(
+                MODEL_FILES_V2_LOCAL
+                    .iter()
+                    .filter(|f| **f != "tokenizer.json"),
+            );
+            all_files
+        }
+    };
+
+    for filename in files.iter() {
         let file_path = model_dir.join(filename);
         if file_path.exists() {
             fs::remove_file(&file_path)
@@ -102,7 +194,6 @@ fn cleanup_partial_files(model_dir: &PathBuf) -> Result<(), String> {
 
 use tauri::Emitter;
 
-/// Download a single file from HuggingFace
 async fn download_file(
     app: &AppHandle,
     url: &str,
@@ -125,14 +216,12 @@ async fn download_file(
 
     let total_size = response.content_length().unwrap_or(0);
 
-    // Update total size in state
     {
         let mut state_lock = state.lock().await;
         state_lock.progress.total += total_size;
         let _ = app.emit("embedding_download_progress", &state_lock.progress);
     }
 
-    // Create temporary file
     let temp_path = dest_path.with_extension("tmp");
     let mut file = tokio::fs::File::create(&temp_path)
         .await
@@ -143,7 +232,6 @@ async fn download_file(
     let mut last_emit = std::time::Instant::now();
 
     while let Some(chunk_result) = stream.next().await {
-        // Check for cancellation
         {
             let state_lock = state.lock().await;
             if state_lock.cancel_requested {
@@ -161,12 +249,10 @@ async fn download_file(
 
         _downloaded += chunk.len() as u64;
 
-        // Update progress
         {
             let mut state_lock = state.lock().await;
             state_lock.progress.downloaded += chunk.len() as u64;
 
-            // Emit event (throttled to every 100ms)
             if last_emit.elapsed().as_millis() > 100 {
                 let _ = app.emit("embedding_download_progress", &state_lock.progress);
                 last_emit = std::time::Instant::now();
@@ -179,7 +265,6 @@ async fn download_file(
         .map_err(|e| format!("Error flushing file: {}", e))?;
     drop(file);
 
-    // Rename temp file to final name
     tokio::fs::rename(&temp_path, dest_path)
         .await
         .map_err(|e| format!("Failed to rename file: {}", e))?;
@@ -187,10 +272,29 @@ async fn download_file(
     Ok(())
 }
 
-/// Start downloading the embedding model
 #[tauri::command]
-pub async fn start_embedding_download(app: AppHandle) -> Result<(), String> {
-    // Check if already downloading
+pub async fn start_embedding_download(
+    app: AppHandle,
+    version: Option<String>,
+) -> Result<(), String> {
+    let target_version = match version.as_deref() {
+        Some("v1") => EmbeddingModelVersion::V1,
+        _ => EmbeddingModelVersion::V2,
+    };
+
+    let (remote_files, local_files, base_url) = match target_version {
+        EmbeddingModelVersion::V1 => (
+            MODEL_FILES_V1.to_vec(),
+            MODEL_FILES_V1.to_vec(),
+            HUGGINGFACE_BASE_V1,
+        ),
+        EmbeddingModelVersion::V2 => (
+            MODEL_FILES_V2_REMOTE.to_vec(),
+            MODEL_FILES_V2_LOCAL.to_vec(),
+            HUGGINGFACE_BASE_V2,
+        ),
+    };
+
     {
         let mut state = DOWNLOAD_STATE.lock().await;
         if state.is_downloading {
@@ -203,8 +307,8 @@ pub async fn start_embedding_download(app: AppHandle) -> Result<(), String> {
             total: 0,
             status: "downloading".to_string(),
             current_file_index: 1,
-            total_files: MODEL_FILES.len(),
-            current_file_name: MODEL_FILES
+            total_files: remote_files.len(),
+            current_file_name: local_files
                 .first()
                 .map(|s| s.to_string())
                 .unwrap_or_default(),
@@ -218,24 +322,24 @@ pub async fn start_embedding_download(app: AppHandle) -> Result<(), String> {
 
     let state = DOWNLOAD_STATE.clone();
 
-    // Download each file
-    for (file_index, filename) in MODEL_FILES.iter().enumerate() {
-        let url = format!("{}/{}", HUGGINGFACE_BASE, filename);
-        let dest_path = model_dir.join(filename);
+    for (file_index, (remote_filename, local_filename)) in
+        remote_files.iter().zip(local_files.iter()).enumerate()
+    {
+        let url = format!("{}/{}", base_url, remote_filename);
+        let dest_path = model_dir.join(local_filename);
 
         {
             let mut state_lock = state.lock().await;
-            state_lock.progress.status = format!("Downloading {}", filename);
+            state_lock.progress.status = format!("Downloading {}", local_filename);
             state_lock.progress.current_file_index = file_index + 1;
-            state_lock.progress.current_file_name = filename.to_string();
+            state_lock.progress.current_file_name = local_filename.to_string();
             let _ = app.emit("embedding_download_progress", &state_lock.progress);
         }
 
         match download_file(&app, &url, &dest_path, state.clone()).await {
             Ok(_) => {}
             Err(e) => {
-                // Cleanup on error
-                let _ = cleanup_partial_files(&model_dir);
+                let _ = cleanup_partial_files(&model_dir, Some(&target_version));
                 let mut state_lock = state.lock().await;
                 state_lock.is_downloading = false;
                 state_lock.progress.status = "failed".to_string();
@@ -245,7 +349,6 @@ pub async fn start_embedding_download(app: AppHandle) -> Result<(), String> {
         }
     }
 
-    // Mark as completed
     {
         let mut state_lock = state.lock().await;
         state_lock.is_downloading = false;
@@ -264,14 +367,12 @@ pub async fn start_embedding_download(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Get current download progress
 #[tauri::command]
 pub async fn get_embedding_download_progress() -> Result<DownloadProgress, String> {
     let state = DOWNLOAD_STATE.lock().await;
     Ok(state.progress.clone())
 }
 
-/// Cancel ongoing download
 #[tauri::command]
 pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
     {
@@ -282,14 +383,11 @@ pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
         state.cancel_requested = true;
     }
 
-    // Wait a bit for cancellation to propagate
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    // Clean up partial files
     let model_dir = embedding_model_dir(&app)?;
-    cleanup_partial_files(&model_dir)?;
+    cleanup_partial_files(&model_dir, None)?;
 
-    // Reset state
     {
         let mut state = DOWNLOAD_STATE.lock().await;
         state.is_downloading = false;
@@ -307,24 +405,16 @@ pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Delete all embedding model files and reset state
 #[tauri::command]
 pub async fn delete_embedding_model(app: AppHandle) -> Result<(), String> {
-    // 1. Reset download state to stop any potential downloads/usage
     reset_download_state().await;
 
-    // 3. Delete files
     let model_dir = embedding_model_dir(&app)?;
-    cleanup_partial_files(&model_dir)?;
+    cleanup_partial_files(&model_dir, None)?;
 
     Ok(())
 }
 
-// ============================================================================
-// ONNX Inference Implementation
-// ============================================================================
-
-// IMPORTANT: Ensure your Cargo.toml has ndarray = "0.15" to match ort 1.16 dependencies.
 use ndarray::Array2;
 use ort::{
     inputs,
@@ -333,10 +423,8 @@ use ort::{
 };
 use tokenizers::Tokenizer;
 
-const MAX_SEQ_LENGTH: usize = 512;
 const EMBEDDING_DIM: usize = 512;
 
-/// Initialize ONNX Runtime
 async fn ensure_ort_init() -> Result<(), String> {
     if ort::init().with_name("lettuce-embedding").commit().is_err() {}
     Ok(())
@@ -351,16 +439,41 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     );
 
     let model_dir = embedding_model_dir(&app)?;
-    let model_path = model_dir.join("lettuce-emb-512d-kd-v1.onnx");
-    let tokenizer_path = model_dir.join("tokenizer.json");
 
-    if !model_path.exists() {
-        return Err("Model files not found. Please download the model first.".to_string());
-    }
+    // For v2 model, read user's preferred max token capacity from settings
+    // Falls back to MAX_SEQ_LENGTH_V2 (4096) if not configured
+    let (model_path, max_seq_length) = match detect_model_version(&app)? {
+        Some(EmbeddingModelVersion::V2) => {
+            // Read user's selected capacity from advanced settings JSON
+            let user_max_tokens = crate::storage_manager::settings::internal_read_settings(&app)
+                .ok()
+                .flatten()
+                .and_then(|json_str| serde_json::from_str::<serde_json::Value>(&json_str).ok())
+                .and_then(|json| {
+                    json.get("advancedSettings")
+                        .and_then(|adv| adv.get("embeddingMaxTokens"))
+                        .and_then(|v| v.as_u64())
+                        .map(|t| t as usize)
+                })
+                .unwrap_or(MAX_SEQ_LENGTH_V2);
+
+            // Clamp to valid range [512, 4096]
+            let clamped = user_max_tokens.max(512).min(MAX_SEQ_LENGTH_V2);
+            (model_dir.join("v2-model.onnx"), clamped)
+        }
+        Some(EmbeddingModelVersion::V1) => (
+            model_dir.join("lettuce-emb-512d-kd-v1.onnx"),
+            MAX_SEQ_LENGTH_V1,
+        ),
+        None => {
+            return Err("Model files not found. Please download the model first.".to_string());
+        }
+    };
+
+    let tokenizer_path = model_dir.join("tokenizer.json");
 
     ensure_ort_init().await?;
 
-    // Create new session and tokenizer (NO CACHING)
     let mut session = Session::builder()
         .map_err(|e| format!("Failed to create session builder: {}", e))?
         .with_optimization_level(GraphOptimizationLevel::Level3)
@@ -379,7 +492,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     let input_ids = encoding.get_ids();
     let attention_mask = encoding.get_attention_mask();
 
-    let seq_len = input_ids.len().min(MAX_SEQ_LENGTH);
+    let seq_len = input_ids.len().min(max_seq_length);
     let input_ids = &input_ids[..seq_len];
     let attention_mask = &attention_mask[..seq_len];
 
@@ -429,10 +542,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
 
 #[tauri::command]
 pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
-    let model_dir = embedding_model_dir(&app)?;
-    let model_path = model_dir.join("lettuce-emb-512d-kd-v1.onnx");
-
-    if !model_path.exists() {
+    if detect_model_version(&app)?.is_none() {
         return Err("Model files not found. Please download the model first.".to_string());
     }
 

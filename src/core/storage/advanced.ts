@@ -5,6 +5,8 @@ export interface AdvancedSettings {
     summarisationModelId?: string;
     creationHelperEnabled?: boolean;
     creationHelperModelId?: string;
+    manualModeContextWindow?: number;
+    embeddingMaxTokens?: number; // 1024, 2048, or 4096
     dynamicMemory?: {
         enabled: boolean;
         summaryMessageInterval: number;

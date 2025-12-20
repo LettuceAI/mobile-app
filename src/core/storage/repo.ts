@@ -601,3 +601,7 @@ export async function getDefaultPersona(): Promise<Persona | null> {
 export async function checkEmbeddingModel(): Promise<boolean> {
   return storageBridge.checkEmbeddingModel();
 }
+
+export async function getEmbeddingModelInfo(): Promise<{ installed: boolean; version: string | null; maxTokens: number }> {
+  return storageBridge.getEmbeddingModelInfo();
+}

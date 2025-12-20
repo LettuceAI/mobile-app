@@ -1,14 +1,28 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Download, X, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Download, X, CheckCircle, XCircle, Loader2, Zap } from "lucide-react";
 import { storageBridge } from "../../../core/storage/files";
 import { updateAdvancedSetting } from "../../../core/storage/advanced";
 import { useNavigate, useSearchParams } from "react-router-dom";
+
+type Capacity = 1024 | 2048 | 4096;
+
+const CAPACITY_OPTIONS: { value: Capacity; label: string; description: string }[] = [
+    { value: 1024, label: "1K tokens", description: "Best for quick responses" },
+    { value: 2048, label: "2K tokens", description: "Balanced performance" },
+    { value: 4096, label: "4K tokens", description: "Maximum context" },
+];
 
 export function EmbeddingDownloadPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const returnTo = searchParams.get("returnTo");
+    const isUpgrade = searchParams.get("upgrade") === "true";
+
+    // Capacity selection state
+    const [showCapacitySelection, setShowCapacitySelection] = useState(true);
+    const [selectedCapacity, setSelectedCapacity] = useState<Capacity>(2048);
+
     const [progress, setProgress] = useState<{
         downloaded: number;
         total: number;
@@ -40,14 +54,16 @@ export function EmbeddingDownloadPage() {
     } | null>(null);
     const [countdown, setCountdown] = useState<number>(5);
 
+    // Setup progress listener on mount
     useEffect(() => {
         let mounted = true;
         let unsubscribe: (() => void) | null = null;
 
-        const initDownload = async () => {
+        const setupListener = async () => {
             try {
                 const currentProgress = await storageBridge.getEmbeddingDownloadProgress();
 
+                // If already completed, redirect
                 if (currentProgress.status === "completed") {
                     if (returnTo) {
                         navigate(returnTo, { replace: true });
@@ -57,6 +73,7 @@ export function EmbeddingDownloadPage() {
                     return;
                 }
 
+                // Setup listener for progress updates
                 unsubscribe = await storageBridge.listenToEmbeddingDownloadProgress((progressData) => {
                     console.log("Progress update:", progressData);
                     if (mounted) {
@@ -71,34 +88,19 @@ export function EmbeddingDownloadPage() {
                     }
                 });
 
+                // If already downloading, attach to it and skip capacity selection
                 if (currentProgress.status === "downloading") {
                     console.log("Download already in progress, attaching...");
+                    setShowCapacitySelection(false);
                     setIsDownloading(true);
                     setProgress(currentProgress);
-                    return;
                 }
-
-                setIsDownloading(true);
-                await storageBridge.startEmbeddingDownload();
-
             } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : String(err);
-
-                if (errorMessage.includes("Download already in progress")) {
-                    console.log("Race condition caught, attaching to existing download...");
-                    if (mounted) {
-                        setIsDownloading(true);
-                    }
-                } else {
-                    if (mounted) {
-                        setError(errorMessage);
-                        setIsDownloading(false);
-                    }
-                }
+                console.error("Failed to setup listener:", err);
             }
         };
 
-        initDownload();
+        setupListener();
 
         return () => {
             mounted = false;
@@ -106,7 +108,32 @@ export function EmbeddingDownloadPage() {
                 unsubscribe();
             }
         };
-    }, [navigate]);
+    }, [navigate, returnTo]);
+
+    // Start download with selected capacity
+    const startDownload = async () => {
+        setShowCapacitySelection(false);
+        setIsDownloading(true);
+        setError(null);
+
+        try {
+            // Always download v2 model (the backend defaults to v2)
+            await storageBridge.startEmbeddingDownload("v2");
+
+            // Save the selected capacity to settings
+            await updateAdvancedSetting("embeddingMaxTokens", selectedCapacity);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+
+            if (errorMessage.includes("Download already in progress")) {
+                console.log("Race condition caught, attaching to existing download...");
+                setIsDownloading(true);
+            } else {
+                setError(errorMessage);
+                setIsDownloading(false);
+            }
+        }
+    };
 
     // Run embedding test
     const runTest = async () => {
@@ -205,133 +232,213 @@ export function EmbeddingDownloadPage() {
                     {/* Header */}
                     <div className="text-center">
                         <h1 className="text-2xl font-bold text-white">
-                            {testStatus === "idle" && "Downloading Embedding Model"}
-                            {testStatus === "testing" && "Testing Model"}
-                            {testStatus === "passed" && "Test Passed!"}
-                            {testStatus === "failed" && "Test Failed"}
+                            {showCapacitySelection && (isUpgrade ? "Upgrade Embedding Model" : "Setup Embedding Model")}
+                            {!showCapacitySelection && testStatus === "idle" && "Downloading Embedding Model"}
+                            {!showCapacitySelection && testStatus === "testing" && "Testing Model"}
+                            {!showCapacitySelection && testStatus === "passed" && "Test Passed!"}
+                            {!showCapacitySelection && testStatus === "failed" && "Test Failed"}
                         </h1>
                         <p className="mt-2 text-sm text-white/60">
-                            {testStatus === "idle" && "Dynamic Memory requires a local embedding model to function"}
-                            {testStatus === "testing" && "Verifying model functionality..."}
-                            {testStatus === "passed" && `Redirecting in ${countdown} seconds...`}
-                            {testStatus === "failed" && "Model verification failed. Please try again."}
+                            {showCapacitySelection && "Choose your preferred memory context capacity"}
+                            {!showCapacitySelection && testStatus === "idle" && "Dynamic Memory requires a local embedding model to function"}
+                            {!showCapacitySelection && testStatus === "testing" && "Verifying model functionality..."}
+                            {!showCapacitySelection && testStatus === "passed" && `Redirecting in ${countdown} seconds...`}
+                            {!showCapacitySelection && testStatus === "failed" && "Model verification failed. Please try again."}
                         </p>
                     </div>
 
+                    {/* Capacity Selection */}
+                    {showCapacitySelection && (
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                            <div className="space-y-4">
+                                <div className="text-center mb-6">
+                                    <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
+                                        <Zap className="h-8 w-8 text-blue-400" />
+                                    </div>
+                                    <p className="mt-4 text-sm text-white/70">
+                                        Higher capacity = better memory for longer conversations, but uses more processing power per embedding.
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-3">
+                                    {CAPACITY_OPTIONS.map((option) => (
+                                        <button
+                                            key={option.value}
+                                            onClick={() => setSelectedCapacity(option.value)}
+                                            className={`
+                                                flex items-center justify-between p-4 rounded-xl border transition-all
+                                                ${selectedCapacity === option.value
+                                                    ? "border-blue-500 bg-blue-500/20"
+                                                    : "border-white/10 bg-white/5 hover:border-white/20"
+                                                }
+                                            `}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`
+                                                    w-5 h-5 rounded-full border-2 flex items-center justify-center
+                                                    ${selectedCapacity === option.value
+                                                        ? "border-blue-500 bg-blue-500"
+                                                        : "border-white/30"
+                                                    }
+                                                `}>
+                                                    {selectedCapacity === option.value && (
+                                                        <div className="w-2 h-2 rounded-full bg-white" />
+                                                    )}
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="font-medium text-white">{option.label}</div>
+                                                    <div className="text-xs text-white/50">{option.description}</div>
+                                                </div>
+                                            </div>
+                                            {option.value === 2048 && (
+                                                <span className="text-[10px] font-medium uppercase tracking-wider text-green-400 bg-green-500/20 px-2 py-0.5 rounded">
+                                                    Recommended
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={startDownload}
+                                    className="w-full mt-4 py-3 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Download className="h-5 w-5" />
+                                    Download v2 Model (~86 MB)
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (returnTo) {
+                                            navigate(returnTo);
+                                        } else {
+                                            navigate("/settings/advanced");
+                                        }
+                                    }}
+                                    className="w-full py-2 text-sm text-white/50 hover:text-white/70 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Download/Test Progress Card */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-                        {/* Icon */}
-                        <div className="mb-4 flex justify-center">
-                            {testStatus === "idle" && (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
-                                    <Download className="h-8 w-8 text-blue-400" />
-                                </div>
-                            )}
-                            {testStatus === "testing" && (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-500/10">
-                                    <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
-                                </div>
-                            )}
-                            {testStatus === "passed" && (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-green-400/20 bg-green-500/10">
-                                    <CheckCircle className="h-8 w-8 text-green-400" />
-                                </div>
-                            )}
-                            {testStatus === "failed" && (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-400/20 bg-red-500/10">
-                                    <XCircle className="h-8 w-8 text-red-400" />
-                                </div>
-                            )}
-                        </div>
+                    {!showCapacitySelection && (
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                            {/* Icon */}
+                            <div className="mb-4 flex justify-center">
+                                {testStatus === "idle" && (
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
+                                        <Download className="h-8 w-8 text-blue-400" />
+                                    </div>
+                                )}
+                                {testStatus === "testing" && (
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-500/10">
+                                        <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
+                                    </div>
+                                )}
+                                {testStatus === "passed" && (
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-green-400/20 bg-green-500/10">
+                                        <CheckCircle className="h-8 w-8 text-green-400" />
+                                    </div>
+                                )}
+                                {testStatus === "failed" && (
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-400/20 bg-red-500/10">
+                                        <XCircle className="h-8 w-8 text-red-400" />
+                                    </div>
+                                )}
+                            </div>
 
-                        <div className="space-y-6">
-                            {/* File Info - Above Progress Bar */}
-                            {progress.status.toLowerCase().includes("downloading") && (
+                            <div className="space-y-6">
+                                {/* File Info - Above Progress Bar */}
+                                {progress.status.toLowerCase().includes("downloading") && (
+                                    <div className="space-y-2">
+                                        <div className="text-center">
+                                            <div className="text-sm font-medium text-white/80">
+                                                File {progress.currentFileIndex} of {progress.totalFiles}
+                                            </div>
+                                            {progress.currentFileName && (
+                                                <div className="mt-1 text-xs text-white/50 font-mono">
+                                                    {progress.currentFileName}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Progress Bar */}
                                 <div className="space-y-2">
-                                    <div className="text-center">
-                                        <div className="text-sm font-medium text-white/80">
-                                            File {progress.currentFileIndex} of {progress.totalFiles}
-                                        </div>
-                                        {progress.currentFileName && (
-                                            <div className="mt-1 text-xs text-white/50 font-mono">
-                                                {progress.currentFileName}
-                                            </div>
-                                        )}
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-white/70">Progress</span>
+                                        <span className="font-medium text-white">{Math.round(progressPercent)}%</span>
+                                    </div>
+                                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                                        <motion.div
+                                            className="h-full bg-green-500"
+                                            initial={{ width: 0 }}
+                                            animate={{
+                                                width: progress.total > 0 ? `${(progress.downloaded / progress.total) * 100}%` : "0%",
+                                            }}
+                                            transition={{ duration: 0.3 }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-xs text-white/50">
+                                        <span>{formatBytes(progress.downloaded)}</span>
+                                        <span>{formatBytes(progress.total)}</span>
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Progress Bar */}
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-white/70">Progress</span>
-                                    <span className="font-medium text-white">{Math.round(progressPercent)}%</span>
+                                {/* Status */}
+                                <div className="text-center text-sm text-white/60">
+                                    {testStatus === "idle" && progress.status === "downloading" && "Downloading..."}
+                                    {testStatus === "idle" && progress.status === "completed" && "Download completed!"}
+                                    {testStatus === "idle" && progress.status === "failed" && "Download failed"}
+                                    {testStatus === "idle" && progress.status === "cancelled" && "Download cancelled"}
+                                    {testStatus === "testing" && "Running verification tests..."}
+                                    {testStatus === "passed" && "All tests passed successfully"}
+                                    {testStatus === "failed" && "Verification failed"}
                                 </div>
-                                <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                                    <motion.div
-                                        className="h-full bg-green-500"
-                                        initial={{ width: 0 }}
-                                        animate={{
-                                            width: progress.total > 0 ? `${(progress.downloaded / progress.total) * 100}%` : "0%",
-                                        }}
-                                        transition={{ duration: 0.3 }}
-                                    />
-                                </div>
-                                <div className="flex justify-between text-xs text-white/50">
-                                    <span>{formatBytes(progress.downloaded)}</span>
-                                    <span>{formatBytes(progress.total)}</span>
-                                </div>
+
+                                {/* Test Results */}
+                                {testResults && (testStatus === "passed" || testStatus === "failed") && (
+                                    <div className="mt-6 space-y-4">
+                                        <div className="text-center">
+                                            <div className={`text-sm font-medium ${testResults.success ? "text-green-400" : "text-red-400"
+                                                }`}>
+                                                {testResults.message}
+                                            </div>
+                                        </div>
+
+                                        {/* Similarity Scores */}
+                                        <div className="space-y-3">
+                                            {testResults.scores.map((score, idx) => (
+                                                <div key={idx} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs font-medium text-white/70">{score.pairName}</span>
+                                                        <span className={`text-sm font-bold ${score.similarityScore > 0.6 ? "text-green-400" : "text-yellow-400"
+                                                            }`}>
+                                                            {score.similarityScore.toFixed(4)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-white/50">
+                                                        Expected: {score.expected}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Status */}
-                            <div className="text-center text-sm text-white/60">
-                                {testStatus === "idle" && progress.status === "downloading" && "Downloading..."}
-                                {testStatus === "idle" && progress.status === "completed" && "Download completed!"}
-                                {testStatus === "idle" && progress.status === "failed" && "Download failed"}
-                                {testStatus === "idle" && progress.status === "cancelled" && "Download cancelled"}
-                                {testStatus === "testing" && "Running verification tests..."}
-                                {testStatus === "passed" && "All tests passed successfully"}
-                                {testStatus === "failed" && "Verification failed"}
-                            </div>
-
-                            {/* Test Results */}
-                            {testResults && (testStatus === "passed" || testStatus === "failed") && (
-                                <div className="mt-6 space-y-4">
-                                    <div className="text-center">
-                                        <div className={`text-sm font-medium ${testResults.success ? "text-green-400" : "text-red-400"
-                                            }`}>
-                                            {testResults.message}
-                                        </div>
-                                    </div>
-
-                                    {/* Similarity Scores */}
-                                    <div className="space-y-3">
-                                        {testResults.scores.map((score, idx) => (
-                                            <div key={idx} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-medium text-white/70">{score.pairName}</span>
-                                                    <span className={`text-sm font-bold ${score.similarityScore > 0.6 ? "text-green-400" : "text-yellow-400"
-                                                        }`}>
-                                                        {score.similarityScore.toFixed(4)}
-                                                    </span>
-                                                </div>
-                                                <div className="mt-1 text-xs text-white/50">
-                                                    Expected: {score.expected}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                            {/* Error Message */}
+                            {error && (
+                                <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                                    <p className="text-sm text-red-200">{error}</p>
                                 </div>
                             )}
                         </div>
-
-                        {/* Error Message */}
-                        {error && (
-                            <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-                                <p className="text-sm text-red-200">{error}</p>
-                            </div>
-                        )}
-                    </div>
+                    )}
 
                     {/* Cancel Button */}
                     {isDownloading && (
@@ -345,6 +452,6 @@ export function EmbeddingDownloadPage() {
                     )}
                 </motion.div>
             </main>
-        </div>
+        </div >
     );
 }

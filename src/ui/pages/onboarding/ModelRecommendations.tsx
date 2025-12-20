@@ -101,7 +101,7 @@ export function ModelRecommendationsPage() {
                             className="rounded-2xl border border-white/10 bg-white/5 p-4 hover:border-white/20 hover:bg-white/8 transition"
                         >
                             <div className="flex items-start gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-green-500/20 to-darkgreen-500/20 border border-white/10 flex-shrink-0">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-green-500/20 to-darkgreen-500/20 border border-white/10 shrink-0">
                                     <Icon size={20} className="text-green-300" />
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -113,7 +113,7 @@ export function ModelRecommendationsPage() {
                                         <ul className="space-y-1.5 text-xs text-white/75">
                                             {factor.questions.map((q) => (
                                                 <li key={q} className="flex gap-1.5">
-                                                    <span className="mt-[3px] h-1 w-1 rounded-full bg-white/40 flex-shrink-0" />
+                                                    <span className="mt-[3px] h-1 w-1 rounded-full bg-white/40 shrink-0" />
                                                     <span>{q}</span>
                                                 </li>
                                             ))}
@@ -127,7 +127,7 @@ export function ModelRecommendationsPage() {
             </div>
 
             {/* Where to look for models */}
-            <div className="mt-8 rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 space-y-3">
+            <div className="mt-8 rounded-2xl border border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 space-y-3">
                 <h2 className="text-sm font-semibold text-white">Where can I find models?</h2>
                 <p className="text-xs text-white/70">
                     Most providers and routers have a <span className="font-medium text-white/85">model list or catalog</span>.
