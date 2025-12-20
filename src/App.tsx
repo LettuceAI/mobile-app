@@ -208,7 +208,7 @@ function AppContent() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
-        className={`relative z-10 mx-auto flex min-h-screen w-full ${isChatDetailRoute ? "max-w-full" : "max-w-md"
+        className={`relative z-10 mx-auto flex min-h-screen w-full ${isChatDetailRoute ? "max-w-full" : "max-w-md lg:max-w-none"
           } flex-col ${showBottomNav ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
       >
         {showTopNav && (

@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, memo, useRef } from "react";
 import { Edit2, Trash2, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -114,7 +114,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full flex-col pb-6 text-gray-200">
-      <main className="flex-1 overflow-y-auto px-1 pt-4">
+      <main className="flex-1 overflow-y-auto px-1 lg:px-8 pt-4 mx-auto w-full max-w-md lg:max-w-none">
         {loading ? (
           <CharacterSkeleton />
         ) : characters.length ? (
@@ -232,7 +232,7 @@ function CharacterList({
   }, [characters]);
 
   return (
-    <div className="space-y-2 pb-24">
+    <div className="space-y-2 lg:space-y-3 pb-24">
       {characters.slice(0, visibleCount).map((character) => (
         <CharacterCard
           key={character.id}
@@ -355,8 +355,38 @@ const CharacterCard = memo(({
       textSecondary: character.customTextSecondary,
     } : undefined
   );
+  // Long-press support for desktop
+  const longPressTimer = useRef<number | null>(null);
+  const isLongPress = useRef(false);
+
+  const handlePointerDown = () => {
+    isLongPress.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      isLongPress.current = true;
+      onLongPress(character);
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handlePointerLeave = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   const handleClick = () => {
+    // Don't trigger click if it was a long press
+    if (isLongPress.current) {
+      isLongPress.current = false;
+      return;
+    }
     onSelect(character);
   };
 
@@ -370,9 +400,12 @@ const CharacterCard = memo(({
       layoutId={`character-${character.id}`}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
       className={cn(
-        "group relative flex w-full items-center gap-3.5 p-3.5 text-left",
-        "rounded-2xl",
+        "group relative flex w-full items-center gap-3.5 lg:gap-6 p-3.5 lg:p-6 text-left",
+        "rounded-2xl lg:rounded-3xl",
         interactive.transition.default,
         interactive.active.scale,
         hasGradient ? "" : "bg-[#1a1b23] hover:bg-[#22232d]"
@@ -381,7 +414,7 @@ const CharacterCard = memo(({
     >
       {/* Circular Avatar */}
       <div className={cn(
-        "relative h-14 w-14 shrink-0 overflow-hidden rounded-full",
+        "relative h-14 w-14 lg:h-24 lg:w-24 shrink-0 overflow-hidden rounded-full",
         hasGradient ? "ring-2 ring-white/20" : "ring-1 ring-white/10",
         "shadow-lg"
       )}>
@@ -389,10 +422,10 @@ const CharacterCard = memo(({
       </div>
 
       {/* Content */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:gap-1.5 py-1">
         <h3
           className={cn(
-            "truncate font-semibold text-[15px] leading-tight",
+            "truncate font-semibold text-[15px] lg:text-xl leading-tight",
             hasGradient ? "" : "text-white"
           )}
           style={hasGradient ? { color: textColor } : {}}
@@ -401,7 +434,7 @@ const CharacterCard = memo(({
         </h3>
         <p
           className={cn(
-            "line-clamp-1 text-[13px] leading-tight",
+            "line-clamp-1 lg:line-clamp-2 text-[13px] lg:text-base leading-tight lg:leading-relaxed",
             hasGradient ? "" : "text-white/50"
           )}
           style={hasGradient ? { color: textSecondary } : {}}

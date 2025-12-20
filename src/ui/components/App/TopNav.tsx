@@ -173,7 +173,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
       className="fixed top-0 left-0 right-0 z-30 border-b border-white/10 backdrop-blur-sm bg-black/60"
       style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)", paddingBottom: "12px" }}
     >
-      <div className="relative mx-auto flex w-full max-w-md items-center justify-between px-3 h-10">
+      <div className="relative mx-auto flex w-full max-w-md lg:max-w-none items-center justify-between px-3 lg:px-8 h-10">
         {/* Left side: Logo + Title */}
         <div className="flex items-center gap-1 overflow-hidden h-full">
           <div className={cn("flex items-center justify-center shrink-0", showBackButton ? "w-10" : "w-0")}>

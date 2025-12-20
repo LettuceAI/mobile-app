@@ -43,7 +43,7 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
     <div
       className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/8 bg-[#0b0b0d]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 text-white shadow-[0_-12px_32px_rgba(0,0,0,0.35)]"
     >
-      <div className="mx-auto flex w-full max-w-md items-stretch gap-2">
+      <div className="mx-auto flex w-full max-w-md lg:max-w-none items-stretch gap-2 lg:px-6">
         <TabItem
           to="/chat"
           icon={MessageCircle}

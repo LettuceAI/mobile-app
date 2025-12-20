@@ -41,12 +41,12 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
         ("macos", "aarch64") => (
             format!("https://github.com/microsoft/onnxruntime/releases/download/v{}/onnxruntime-osx-arm64-{}.tgz", ort_version, ort_version),
             "libonnxruntime.dylib",
-             format!("onnxruntime-osx-arm64-{}/lib/libonnxruntime.dylib", ort_version)
+            format!("onnxruntime-osx-arm64-{}/lib/libonnxruntime.dylib", ort_version)
         ),
         ("macos", "x86_64") => (
-             format!("https://github.com/microsoft/onnxruntime/releases/download/v{}/onnxruntime-osx-x86_64-{}.tgz", ort_version, ort_version),
+            format!("https://github.com/microsoft/onnxruntime/releases/download/v{}/onnxruntime-osx-x86_64-{}.tgz", ort_version, ort_version),
             "libonnxruntime.dylib",
-             format!("onnxruntime-osx-x86_64-{}/lib/libonnxruntime.dylib", ort_version)
+            format!("onnxruntime-osx-x86_64-{}/lib/libonnxruntime.dylib", ort_version)
         ),
         _ => {
             println!("cargo:warning=Unsupported desktop platform: {} {}, skipping ONNX Runtime download.", target_os, target_arch);
