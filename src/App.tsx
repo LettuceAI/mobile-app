@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-route
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { WelcomePage, ProviderSetupPage, ModelSetupPage, ModelRecommendationsPage, MemorySystemIntro } from "./ui/pages/onboarding";
+import { WelcomePage, ModelRecommendationsPage, OnboardingPage } from "./ui/pages/onboarding";
 import { WhereToFindPage } from "./ui/pages/onboarding/WhereToFind";
 import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
@@ -37,6 +37,7 @@ import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useAndroidBackHandler } from "./ui/hooks/useAndroidBackHandler";
 import { logManager, isLoggingEnabled } from "./core/utils/logger";
 import { storageBridge } from "./core/storage/files";
+import { getPlatform } from "./core/utils/platform";
 
 const chatLog = logManager({ component: "Chat" });
 
@@ -205,6 +206,11 @@ function AppContent() {
     return () => window.clearTimeout(id);
   }, [location.pathname]);
 
+  const isDesktop = useMemo(() => {
+    const platform = getPlatform();
+    return platform.type === "desktop";
+  }, [])
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
@@ -220,7 +226,7 @@ function AppContent() {
         <main
           ref={mainRef}
           className={`flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${isOnboardingRoute
-            ? "overflow-y-auto px-4"
+            ? `overflow-y-auto ${isDesktop ? "" : "px-0 pt-5 pb-5"}`
             : isChatDetailRoute
               ? "overflow-hidden px-0 pt-0 pb-0"
               : isCreateRoute
@@ -241,10 +247,10 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<OnboardingCheck />} />
               <Route path="/welcome" element={<WelcomePage />} />
-              <Route path="/onboarding/provider" element={<ProviderSetupPage />} />
-              <Route path="/onboarding/models" element={<ModelSetupPage />} />
+              <Route path="/onboarding/provider" element={<OnboardingPage />} />
+              <Route path="/onboarding/models" element={<OnboardingPage />} />
               <Route path="/onboarding/model-recommendations" element={<ModelRecommendationsPage />} />
-              <Route path="/onboarding/memory" element={<MemorySystemIntro />} />
+              <Route path="/onboarding/memory" element={<OnboardingPage />} />
               <Route path="/wheretofind" element={<WhereToFindPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/library" element={<LibraryPage />} />
