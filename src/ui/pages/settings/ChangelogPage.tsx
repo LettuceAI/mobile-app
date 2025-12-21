@@ -16,6 +16,100 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
     {
+        version: "1.0-beta.6",
+        date: "2025-12-21",
+        changes: [
+            {
+                type: "feature",
+                description: "In-chat image generation is now supported, allowing images to be generated directly inside conversations."
+            },
+            {
+                type: "feature",
+                description: "Introduced the Lorebook system for structured world, character, and knowledge injection."
+            },
+            {
+                type: "feature",
+                description: "Added support for the Chutes API endpoint."
+            },
+            {
+                type: "feature",
+                description: "Added an OpenAI-compatible API endpoint with extensive customization options, including user/assistant role names and chat completion behavior."
+            },
+            {
+                type: "feature",
+                description: "Introduced Reasoning support for models that expose reasoning tokens."
+            },
+            {
+                type: "feature",
+                description: "Added a new Chat Settings panel for easier per-chat configuration."
+            },
+            {
+                type: "improvement",
+                description: "Introduced Dynamic Memory v2 - a faster, more responsive, and significantly more accurate memory system with higher capacity."
+            },
+            {
+                type: "improvement",
+                description: "Added a new embedding model that is ~50% smaller, runs faster, and supports up to 4096 tokens (previously 512)."
+            },
+            {
+                type: "improvement",
+                description: "Introduced an experimental 'Context Enrichment' feature to enhance memory queries using the new embedding model."
+            },
+            {
+                type: "improvement",
+                description: "Character Cards have been redesigned for improved clarity, visual consistency, and information hierarchy."
+            },
+            {
+                type: "improvement",
+                description: "The Chat Header memory button now clearly displays memory status and the amount of memory currently in use."
+            },
+            {
+                type: "improvement",
+                description: "Improved UI consistency across chat, settings, and character screens."
+            },
+            {
+                type: "improvement",
+                description: "Refined spacing, typography, and interaction feedback for a more cohesive UI experience."
+            },
+            {
+                type: "improvement",
+                description: "Improved overall navigation clarity and reduced visual noise in frequently used views."
+            },
+            {
+                type: "improvement",
+                description: "Backup system robustness has been significantly improved."
+            },
+            {
+                type: "improvement",
+                description: "Chat history layout has been redesigned for better consistency and readability."
+            },
+            {
+                type: "improvement",
+                description: "Long chats now load up to ~8x faster."
+            },
+            {
+                type: "improvement",
+                description: "Character list on the homepage has been optimized for faster loading and smoother scrolling."
+            },
+            {
+                type: "improvement",
+                description: "Internal state handling and caching logic have been improved for better stability and performance."
+            },
+            {
+                type: "bugfix",
+                description: "Fixed an issue where Dynamic Memory could get stuck after cycle 2."
+            },
+            {
+                type: "bugfix",
+                description: "Fixed an app freeze caused by loading invalid or corrupted backup files."
+            },
+            {
+                type: "bugfix",
+                description: "Fixed an incorrect Google API endpoint URL."
+            }
+        ]
+    },
+    {
         version: "1.0-beta_5",
         date: "2025-12-08",
         changes: [
