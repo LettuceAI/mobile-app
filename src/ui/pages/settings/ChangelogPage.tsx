@@ -44,6 +44,10 @@ const changelog: ChangelogEntry[] = [
                 description: "Added a new Chat Settings panel for easier per-chat configuration."
             },
             {
+                type: "feature",
+                description: `Users can now use "Rewind to here" on user messages, allowing conversations to be resumed from any previous user turn.`
+            },
+            {
                 type: "improvement",
                 description: "Introduced Dynamic Memory v2 - a faster, more responsive, and significantly more accurate memory system with higher capacity."
             },

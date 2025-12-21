@@ -212,7 +212,7 @@ export function MessageActionsBottomSheet({
               <div className="h-px bg-white/5 my-2" />
 
               {/* Chat flow actions */}
-              {messageAction.message.role === "assistant" && (
+              {(messageAction.message.role === "assistant" || messageAction.message.role === "user") && (
                 <ActionRow
                   icon={RotateCcw}
                   label="Rewind to here"
