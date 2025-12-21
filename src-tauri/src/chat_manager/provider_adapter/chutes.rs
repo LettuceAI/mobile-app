@@ -50,6 +50,9 @@ impl ProviderAdapter for ChutesAdapter {
         presence_penalty: Option<f64>,
         top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         DeepSeekAdapter.body(
             model_name,
@@ -63,6 +66,9 @@ impl ProviderAdapter for ChutesAdapter {
             presence_penalty,
             top_k,
             tool_config,
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
         )
     }
 }

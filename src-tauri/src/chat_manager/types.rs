@@ -166,6 +166,13 @@ pub struct AdvancedModelSettings {
     pub frequency_penalty: Option<f64>,
     pub presence_penalty: Option<f64>,
     pub top_k: Option<u32>,
+    // Reasoning/thinking settings
+    #[serde(default)]
+    pub reasoning_enabled: Option<bool>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>, // "low", "medium", "high"
+    #[serde(default)]
+    pub reasoning_budget_tokens: Option<u32>,
 }
 
 impl Default for AdvancedModelSettings {
@@ -177,6 +184,9 @@ impl Default for AdvancedModelSettings {
             frequency_penalty: None,
             presence_penalty: None,
             top_k: None,
+            reasoning_enabled: None,
+            reasoning_effort: None,
+            reasoning_budget_tokens: None,
         }
     }
 }

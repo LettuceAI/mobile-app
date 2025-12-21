@@ -775,6 +775,9 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
                 mobj.insert("attachments".into(), parsed);
             }
         }
+        if let Some(r) = reasoning {
+            mobj.insert("reasoning".into(), JsonValue::String(r));
+        }
         out.push(JsonValue::Object(mobj));
     }
 

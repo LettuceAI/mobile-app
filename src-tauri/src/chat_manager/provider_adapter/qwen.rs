@@ -65,6 +65,9 @@ impl ProviderAdapter for QwenAdapter {
         presence_penalty: Option<f64>,
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         let (tools, tool_choice) = if let Some(cfg) = tool_config {
             let tools = openai_tools(cfg);
@@ -78,6 +81,8 @@ impl ProviderAdapter for QwenAdapter {
             (None, None)
         };
 
+        let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
+
         // Qwen uses OpenAI-compatible body
         let body = OpenAIChatRequest {
             model: model_name,
@@ -85,9 +90,15 @@ impl ProviderAdapter for QwenAdapter {
             stream: should_stream,
             temperature,
             top_p,
-            max_tokens,
+            max_tokens: Some(total_tokens),
+            max_completion_tokens: None,
             frequency_penalty,
             presence_penalty,
+            reasoning_effort: if reasoning_enabled {
+                reasoning_effort
+            } else {
+                None
+            },
             tools,
             tool_choice,
         };

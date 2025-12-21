@@ -45,6 +45,9 @@ type ControllerReturn = {
   handleFrequencyPenaltyChange: (value: number) => void;
   handlePresencePenaltyChange: (value: number) => void;
   handleTopKChange: (value: number | null) => void;
+  handleReasoningEnabledChange: (value: boolean) => void;
+  handleReasoningEffortChange: (value: "low" | "medium" | "high" | null) => void;
+  handleReasoningBudgetChange: (value: number | null) => void;
   handleSave: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleSetDefault: () => Promise<void>;
@@ -336,6 +339,77 @@ export function useModelEditorController(): ControllerReturn {
     [dispatch, state.modelAdvancedDraft],
   );
 
+  const handleReasoningEnabledChange = useCallback(
+    (value: boolean) => {
+      const effortBudgets: Record<string, number> = {
+        low: 2048,
+        medium: 8192,
+        high: 16384,
+      };
+
+      let newEffort = state.modelAdvancedDraft.reasoningEffort;
+      let newBudget = state.modelAdvancedDraft.reasoningBudgetTokens;
+
+      if (value) {
+        if (!newEffort) {
+          newEffort = "medium"; 
+        }
+        if (!newBudget && newEffort) {
+          newBudget = effortBudgets[newEffort] ?? 8192;
+        }
+      }
+
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          reasoningEnabled: value,
+          reasoningEffort: newEffort,
+          reasoningBudgetTokens: newBudget,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleReasoningEffortChange = useCallback(
+    (value: "low" | "medium" | "high" | null) => {
+      // Default budgets based on effort level
+      const effortBudgets: Record<string, number> = {
+        low: 2048,
+        medium: 8192,
+        high: 16384,
+      };
+
+      // If no budget is set, auto-set based on effort
+      const newBudget = state.modelAdvancedDraft.reasoningBudgetTokens ??
+        (value ? effortBudgets[value] : null);
+
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          reasoningEffort: value,
+          reasoningBudgetTokens: newBudget,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleReasoningBudgetChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          reasoningBudgetTokens: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
   const clearError = useCallback(() => {
     dispatch({ type: "set_error", payload: null });
   }, [dispatch]);
@@ -485,9 +559,13 @@ export function useModelEditorController(): ControllerReturn {
     handleFrequencyPenaltyChange,
     handlePresencePenaltyChange,
     handleTopKChange,
+    handleReasoningEnabledChange,
+    handleReasoningEffortChange,
+    handleReasoningBudgetChange,
     handleSave,
     handleDelete,
     handleSetDefault,
     clearError,
   };
+
 }

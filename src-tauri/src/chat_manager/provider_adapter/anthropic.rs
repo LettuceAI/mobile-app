@@ -39,6 +39,15 @@ struct AnthropicMessagesRequest {
     tools: Option<Vec<Value>>,
     #[serde(rename = "tool_choice", skip_serializing_if = "Option::is_none")]
     tool_choice: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<AnthropicThinking>,
+}
+
+#[derive(Serialize)]
+struct AnthropicThinking {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    budget_tokens: u32,
 }
 
 impl ProviderAdapter for AnthropicAdapter {
@@ -104,6 +113,9 @@ impl ProviderAdapter for AnthropicAdapter {
         _presence_penalty: Option<f64>,
         top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        _reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         let mut msgs: Vec<AnthropicMessage> = Vec::new();
         for msg in messages_for_api {
@@ -133,20 +145,38 @@ impl ProviderAdapter for AnthropicAdapter {
             });
         }
 
+        let thinking = if reasoning_enabled {
+            reasoning_budget.map(|budget| AnthropicThinking {
+                kind: "enabled",
+                budget_tokens: budget,
+            })
+        } else {
+            None
+        };
+
+        // If thinking is enabled, max_tokens must be greater than budget_tokens
+        let total_max_tokens = if let Some(ref t) = thinking {
+            max_tokens + t.budget_tokens
+        } else {
+            max_tokens
+        };
+
         let tools = tool_config.and_then(anthropic_tools);
         let tool_choice = tool_config.and_then(|cfg| anthropic_tool_choice(cfg.choice.as_ref()));
 
         let body = AnthropicMessagesRequest {
             model: model_name.to_string(),
             messages: msgs,
-            temperature,
+
+            temperature: if thinking.is_some() { 1.0 } else { temperature },
             top_p,
-            max_tokens,
+            max_tokens: total_max_tokens,
             stream: should_stream,
             system: system_prompt.filter(|s| !s.is_empty()),
             top_k,
             tools,
             tool_choice,
+            thinking,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }

@@ -33,6 +33,9 @@ pub fn build_chat_request(
     presence_penalty: Option<f64>,
     top_k: Option<u32>,
     tool_config: Option<&ToolConfig>,
+    reasoning_enabled: bool,
+    reasoning_effort: Option<String>,
+    reasoning_budget: Option<u32>,
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
 
@@ -53,6 +56,9 @@ pub fn build_chat_request(
         presence_penalty,
         top_k,
         tool_config,
+        reasoning_enabled,
+        reasoning_effort,
+        reasoning_budget,
     );
 
     BuiltRequest {

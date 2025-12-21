@@ -445,6 +445,68 @@ fn resolve_top_k(session: &Session, model: &Model, _settings: &Settings) -> Opti
         })
 }
 
+fn resolve_reasoning_enabled(session: &Session, model: &Model, _settings: &Settings) -> bool {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.reasoning_enabled)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.reasoning_enabled)
+        })
+        .unwrap_or(false)
+}
+
+fn resolve_reasoning_effort(
+    session: &Session,
+    model: &Model,
+    _settings: &Settings,
+) -> Option<String> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.reasoning_effort.clone())
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.reasoning_effort.clone())
+        })
+}
+
+fn resolve_reasoning_budget(
+    session: &Session,
+    model: &Model,
+    _settings: &Settings,
+    reasoning_effort: Option<&str>,
+) -> Option<u32> {
+    // First check for explicit budget
+    let explicit_budget = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.reasoning_budget_tokens)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.reasoning_budget_tokens)
+        });
+
+    if explicit_budget.is_some() {
+        return explicit_budget;
+    }
+
+    // Default budget based on effort level
+    reasoning_effort.map(|effort| match effort {
+        "low" => 2048,
+        "medium" => 8192,
+        "high" => 16384,
+        _ => 4096, // default fallback
+    })
+}
+
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.is_empty() || b.is_empty() || a.len() != b.len() {
         return 0.0;
@@ -973,6 +1035,25 @@ pub async fn chat_completion(
     let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
     let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
     let top_k = resolve_top_k(&session, &model, &settings);
+    let reasoning_enabled = resolve_reasoning_enabled(&session, &model, &settings);
+    let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
+    let reasoning_budget =
+        resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
+
+    log_info(
+        &app,
+        "chat_completion",
+        format!(
+            "reasoning settings: enabled={} effort={:?} budget={:?} model_adv={:?}",
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
+            model
+                .advanced_model_settings
+                .as_ref()
+                .map(|a| a.reasoning_enabled)
+        ),
+    );
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -989,6 +1070,9 @@ pub async fn chat_completion(
         presence_penalty,
         top_k,
         None,
+        reasoning_enabled,
+        reasoning_effort,
+        reasoning_budget,
     );
 
     log_info(
@@ -1490,6 +1574,10 @@ pub async fn chat_regenerate(
     let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
     let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
     let top_k = resolve_top_k(&session, &model, &settings);
+    let reasoning_enabled = resolve_reasoning_enabled(&session, &model, &settings);
+    let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
+    let reasoning_budget =
+        resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -1506,6 +1594,9 @@ pub async fn chat_regenerate(
         presence_penalty,
         top_k,
         None,
+        reasoning_enabled,
+        reasoning_effort,
+        reasoning_budget,
     );
 
     emit_debug(
@@ -1911,6 +2002,10 @@ pub async fn chat_continue(
     let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
     let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
     let top_k = resolve_top_k(&session, &model, &settings);
+    let reasoning_enabled = resolve_reasoning_enabled(&session, &model, &settings);
+    let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
+    let reasoning_budget =
+        resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -1927,6 +2022,9 @@ pub async fn chat_continue(
         presence_penalty,
         top_k,
         None,
+        reasoning_enabled,
+        reasoning_effort,
+        reasoning_budget,
     );
 
     emit_debug(
@@ -2625,13 +2723,16 @@ async fn run_memory_tool_update(
         None,
         0.2,
         1.0,
-        512,
+        1024, // increased from 512 for better summaries
         false,
         None,
         None,
         None,
         None,
         Some(&tool_config),
+        false,
+        None,
+        None,
     );
 
     let api_request_payload = ApiRequest {
@@ -3020,13 +3121,16 @@ async fn summarize_messages(
         None,
         0.2,
         1.0,
-        512,
+        1024,
         false,
         None,
         None,
         None,
         None,
         Some(&summarization_tool_config()),
+        false,
+        None,
+        None,
     );
 
     let api_request_payload = ApiRequest {

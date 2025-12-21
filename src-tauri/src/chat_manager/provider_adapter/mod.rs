@@ -45,6 +45,9 @@ pub trait ProviderAdapter {
         presence_penalty: Option<f64>,
         top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value;
 }
 
@@ -57,12 +60,19 @@ pub(crate) struct OpenAIChatRequest<'a> {
     pub(crate) temperature: f64,
     #[serde(rename = "top_p")]
     pub(crate) top_p: f64,
-    #[serde(rename = "max_tokens")]
-    pub(crate) max_tokens: u32,
+    #[serde(rename = "max_tokens", skip_serializing_if = "Option::is_none")]
+    pub(crate) max_tokens: Option<u32>,
+    #[serde(
+        rename = "max_completion_tokens",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) max_completion_tokens: Option<u32>,
     #[serde(rename = "frequency_penalty", skip_serializing_if = "Option::is_none")]
     pub(crate) frequency_penalty: Option<f64>,
     #[serde(rename = "presence_penalty", skip_serializing_if = "Option::is_none")]
     pub(crate) presence_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tools: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]

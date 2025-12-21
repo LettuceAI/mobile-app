@@ -1,6 +1,7 @@
-import { 
+import {
   PROVIDER_PARAMETER_SUPPORT,
-  type AdvancedModelSettings 
+  type AdvancedModelSettings,
+  getProviderReasoningCapability
 } from "../../core/storage/schemas";
 
 interface ProviderParameterSupportInfoProps {
@@ -15,6 +16,9 @@ const PARAMETER_LABELS: Record<keyof AdvancedModelSettings, string> = {
   frequencyPenalty: "Frequency Penalty",
   presencePenalty: "Presence Penalty",
   topK: "Top K",
+  reasoningEnabled: "Reasoning",
+  reasoningEffort: "Reasoning Effort",
+  reasoningBudgetTokens: "Reasoning Budget",
 };
 
 const PARAMETER_DESCRIPTIONS: Record<keyof AdvancedModelSettings, string> = {
@@ -24,15 +28,19 @@ const PARAMETER_DESCRIPTIONS: Record<keyof AdvancedModelSettings, string> = {
   frequencyPenalty: "Reduce token repetition (-2 to 2)",
   presencePenalty: "Encourage new topics (-2 to 2)",
   topK: "Limit token pool size (1-500)",
+  reasoningEnabled: "Enable/disable thinking mode",
+  reasoningEffort: "Thinking depth - OpenAI/DeepSeek style",
+  reasoningBudgetTokens: "Max tokens for extended thinking",
 };
+
 
 /**
  * Display which parameters are supported by a specific provider
  * Optimized for bottom menu display
  */
-export function ProviderParameterSupportInfo({ 
-  providerId, 
-  compact = false 
+export function ProviderParameterSupportInfo({
+  providerId,
+  compact = false
 }: ProviderParameterSupportInfoProps) {
   const provider = PROVIDER_PARAMETER_SUPPORT[providerId as keyof typeof PROVIDER_PARAMETER_SUPPORT];
 
@@ -45,13 +53,14 @@ export function ProviderParameterSupportInfo({
   }
 
   const parameters = Object.keys(provider.supportedParameters) as (keyof AdvancedModelSettings)[];
+  const reasoningCapability = getProviderReasoningCapability(providerId);
 
   if (compact) {
     const supported = parameters.filter(param => provider.supportedParameters[param]);
     return (
       <div className="flex flex-wrap gap-1">
         {supported.map(param => (
-          <span 
+          <span
             key={param}
             className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
           >
@@ -70,13 +79,12 @@ export function ProviderParameterSupportInfo({
           return (
             <div
               key={param}
-              className={`flex items-center gap-3 rounded-lg border p-3 transition ${
-                isSupported
-                  ? 'border-emerald-400/20 bg-emerald-400/5'
-                  : 'border-white/10 bg-white/5 opacity-50'
-              }`}
+              className={`flex items-center gap-3 rounded-lg border p-3 transition ${isSupported
+                ? 'border-emerald-400/20 bg-emerald-400/5'
+                : 'border-white/10 bg-white/5 opacity-50'
+                }`}
             >
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 {isSupported ? (
                   <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -92,7 +100,13 @@ export function ProviderParameterSupportInfo({
                   {PARAMETER_LABELS[param]}
                 </div>
                 <div className="text-xs text-white/50 truncate">
-                  {PARAMETER_DESCRIPTIONS[param]}
+                  {param === 'reasoningEffort' && reasoningCapability.type === 'none'
+                    ? "Not supported - this provider doesn't use effort levels"
+                    : param === 'reasoningEffort' && reasoningCapability.type === 'budget-only'
+                      ? "Not supported - this provider uses budget-only approach"
+                      : param === 'reasoningBudgetTokens' && reasoningCapability.type === 'none'
+                        ? "Not supported - this provider doesn't support reasoning"
+                        : PARAMETER_DESCRIPTIONS[param]}
                 </div>
               </div>
             </div>
@@ -102,13 +116,27 @@ export function ProviderParameterSupportInfo({
 
       <div className="rounded-lg border border-blue-400/20 bg-blue-400/5 p-3">
         <div className="flex gap-2">
-          <svg className="h-4 w-4 flex-shrink-0 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-4 w-4 shrink-0 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-xs text-blue-200/80 leading-relaxed">
-            Unsupported parameters will be ignored by {provider.displayName}. 
-            Settings are saved and will apply when switching to compatible models.
-          </p>
+          <div className="text-xs text-blue-200/80 leading-relaxed space-y-1">
+            <p>Unsupported parameters will be ignored by {provider.displayName}.</p>
+            {reasoningCapability.type === 'effort' && (
+              <p className="font-medium text-amber-200">
+                ⚡ Reasoning effort is supported for thinking models (o1, DeepSeek-R1, etc.)
+              </p>
+            )}
+            {reasoningCapability.type === 'budget-only' && (
+              <p className="font-medium text-amber-200">
+                💭 This provider uses budget-based thinking (no effort levels). Set reasoning budget tokens instead.
+              </p>
+            )}
+            {reasoningCapability.type === 'none' && (
+              <p className="text-white/50">
+                This provider doesn't support reasoning parameters.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -125,7 +153,7 @@ export function AllProvidersParameterSupport() {
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-semibold text-white">Provider Parameter Support Matrix</h3>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>

@@ -24,6 +24,8 @@ struct ZAIChatRequest<'a> {
     tools: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
 }
 
 impl ProviderAdapter for ZAIAdapter {
@@ -83,6 +85,9 @@ impl ProviderAdapter for ZAIAdapter {
         _presence_penalty: Option<f64>,
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         let (tools, tool_choice) = if let Some(cfg) = tool_config {
             let tools = openai_tools(cfg);
@@ -96,16 +101,24 @@ impl ProviderAdapter for ZAIAdapter {
             (None, None)
         };
 
+        let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
+
         let body = ZAIChatRequest {
             model: model_name,
             messages: messages_for_api,
             temperature,
             top_p,
-            max_tokens,
+            max_tokens: total_tokens,
             stream: should_stream,
             tools,
             tool_choice,
+            reasoning_effort: if reasoning_enabled {
+                reasoning_effort
+            } else {
+                None
+            },
         };
+
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }

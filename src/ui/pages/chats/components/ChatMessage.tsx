@@ -131,6 +131,26 @@ const ThinkingSection = React.memo(function ThinkingSection({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const THINKING_TEXTS = [
+    "Thinking really hard…",
+    "Consulting the lettuce council…",
+    "Stealing thoughts from the void…",
+    "Warming up the brain cells…",
+    "Loading forbidden knowledge…",
+    "Overthinking (as usual)…",
+    "Pretending to be smart…",
+    "Crunching imaginary numbers…",
+    "Arguing with myself…",
+    "Asking the universe nicely…",
+  ];
+
+  const thinkingText = React.useMemo(() => {
+    if (!isStreaming) return null;
+    return THINKING_TEXTS[Math.floor(Math.random() * THINKING_TEXTS.length)];
+  }, [isStreaming]);
+
+
+
   if (!reasoning || reasoning.trim().length === 0) {
     return null;
   }
@@ -159,7 +179,7 @@ const ThinkingSection = React.memo(function ThinkingSection({
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
           )}
           <span className="font-medium">
-            {isStreaming ? "Thinking..." : "Thought process"}
+            {isStreaming ? thinkingText : "Thought process"}
           </span>
         </span>
       </button>

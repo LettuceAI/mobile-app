@@ -65,6 +65,9 @@ impl ProviderAdapter for MistralAdapter {
         _presence_penalty: Option<f64>,
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         // Mistral's chat API rejects unsupported knobs like freq/presence penalties, so drop them.
         let frequency_penalty = None;
@@ -82,15 +85,23 @@ impl ProviderAdapter for MistralAdapter {
             (Vec::new(), None)
         };
 
+        let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
             stream: should_stream,
             temperature,
             top_p,
-            max_tokens,
+            max_tokens: Some(total_tokens),
+            max_completion_tokens: None,
             frequency_penalty,
             presence_penalty,
+            reasoning_effort: if reasoning_enabled {
+                reasoning_effort
+            } else {
+                None
+            },
             tools: if tools.is_empty() { None } else { Some(tools) },
             tool_choice,
         };

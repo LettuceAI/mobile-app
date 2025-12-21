@@ -31,8 +31,198 @@ export const AdvancedModelSettingsSchema = z.object({
   frequencyPenalty: z.number().min(-2).max(2).nullable().optional(),
   presencePenalty: z.number().min(-2).max(2).nullable().optional(),
   topK: z.number().int().min(1).max(500).nullable().optional(),
+  // Reasoning/thinking settings
+  reasoningEnabled: z.boolean().nullable().optional(),
+  reasoningEffort: z.enum(["low", "medium", "high"]).nullable().optional(),
+  reasoningBudgetTokens: z.number().int().min(1024).nullable().optional(),
 });
+
 export type AdvancedModelSettings = z.infer<typeof AdvancedModelSettingsSchema>;
+
+/**
+ * Reasoning capability metadata for providers
+ * 
+ * This system handles provider-specific reasoning/thinking capabilities:
+ * 
+ * - **'effort'**: Providers that use `reasoning_effort` parameter with values like 
+ *   "low", "medium", "high". Includes:
+ *   - OpenAI (o1 series): none/minimal/low/medium/high/xhigh
+ *   - Groq: none/default/low/medium/high (model-specific)
+ *   - Google Gemini 3: minimal/low/medium/high (thinkingLevel)
+ *   - OpenAI-compatible: Chutes, OpenRouter, NanoGPT, xAI, Anannas, ZAI
+ *   - DeepSeek R1: Outputs reasoning automatically (no effort control)
+ * 
+ * - **'budget-only'**: Uses thinking/reasoning with budget tokens only, no effort levels.
+ *   Includes:
+ *   - Anthropic Claude: uses `thinking.budget` parameter (min 1024 tokens)
+ *   - Google Gemini 2.5: uses thinkingBudget
+ *   - Mistral Magistral: uses thinking chunks with budget
+ *   - Moonshot Kimi K2: uses `enable_thinking` + `thinking_budget`
+ *   - Qwen3/QwQ: uses `enable_thinking` + `thinking_budget`
+ * 
+ * - **'none'**: Providers that don't support reasoning/thinking at all (Featherless)
+ * 
+ * **Special case - OpenRouter**: This provider proxies many models with varying capabilities.
+ * We show effort controls by default, but applications should fetch model metadata from
+ * OpenRouter's API to check if a specific model supports reasoning via the 
+ * `supported_parameters` field (look for "reasoning" and "include_reasoning").
+ * 
+ * The UI will:
+ * - Show reasoning effort dropdown only for 'effort' providers
+ * - Show reasoning budget for both 'effort' and 'budget-only' providers
+ * - Hide entire reasoning section for 'none' providers
+ */
+// Reasoning Support Types
+export type ReasoningSupport = 'none' | 'effort' | 'budget-only' | 'auto' | 'dynamic';
+
+export type ReasoningCapability =
+  | { type: 'none' } // Provider doesn't support reasoning
+  | { type: 'effort', options: Array<{ value: string; label: string; description: string }> } // OpenAI-style effort levels
+  | { type: 'budget-only' }; // Budget-based only (like Anthropic)
+
+
+export const PROVIDER_REASONING_CAPABILITIES: Record<string, ReasoningCapability> = {
+  openai: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses with less reasoning' },
+      { value: 'medium', label: 'Medium', description: 'Balanced reasoning depth' },
+      { value: 'high', label: 'High', description: 'Maximum reasoning depth' },
+    ],
+  },
+  chutes: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  openrouter: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  groq: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  deepseek: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  nanogpt: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  xai: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  anannas: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  zai: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Quick responses' },
+      { value: 'medium', label: 'Medium', description: 'Balanced' },
+      { value: 'high', label: 'High', description: 'Deep reasoning' },
+    ],
+  },
+  moonshot: { type: 'budget-only' }, // kimi-k2-thinking models use enable_thinking + thinking_budget
+  anthropic: { type: 'budget-only' },
+  mistral: { type: 'budget-only' }, // Magistral models use thinking chunks with budget
+  gemini: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Minimizes latency' },
+      { value: 'medium', label: 'Medium', description: 'Balanced thinking' },
+      { value: 'high', label: 'High', description: 'Maximum reasoning' },
+    ],
+  },
+  google: {
+    type: 'effort',
+    options: [
+      { value: 'low', label: 'Low', description: 'Minimizes latency' },
+      { value: 'medium', label: 'Medium', description: 'Balanced thinking' },
+      { value: 'high', label: 'High', description: 'Maximum reasoning' },
+    ],
+  },
+  qwen: { type: 'budget-only' }, // Qwen3/QwQ models use enable_thinking + thinking_budget
+  featherless: { type: 'none' },
+};
+
+/**
+ * Get reasoning capability for a provider
+ */
+export function getProviderReasoningCapability(providerId: string): ReasoningCapability {
+  return PROVIDER_REASONING_CAPABILITIES[providerId] ?? { type: 'none' };
+}
+
+/**
+ * Check if an OpenRouter model supports reasoning based on its supported_parameters
+ * 
+ * @param supportedParameters - Array from OpenRouter API's model.supported_parameters
+ * @returns true if the model supports reasoning
+ * 
+ * Usage example:
+ * ```typescript
+ * const models = await invoke('get_openrouter_models');
+ * const model = models.find(m => m.id === selectedModelId);
+ * const supportsReasoning = checkOpenRouterModelReasoning(model.supported_parameters);
+ * ```
+ */
+export function checkOpenRouterModelReasoning(supportedParameters: string[]): boolean {
+  return supportedParameters.includes('reasoning') || supportedParameters.includes('include_reasoning');
+}
+
+/**
+ * Get dynamic reasoning capability for OpenRouter model
+ * This should be called with fresh model data from the OpenRouter API
+ */
+export function getOpenRouterModelReasoningCapability(
+  supportedParameters: string[]
+): ReasoningCapability {
+  const supportsReasoning = checkOpenRouterModelReasoning(supportedParameters);
+
+  if (supportsReasoning) {
+    return {
+      type: 'effort',
+      options: [
+        { value: 'low', label: 'Low', description: 'Quick responses' },
+        { value: 'medium', label: 'Medium', description: 'Balanced' },
+        { value: 'high', label: 'High', description: 'Deep reasoning' },
+      ],
+    };
+  }
+
+  return { type: 'none' };
+}
 
 /**
  * Provider parameter support information
@@ -42,165 +232,260 @@ export const PROVIDER_PARAMETER_SUPPORT = {
   chutes: {
     providerId: 'chutes',
     displayName: 'Chutes',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
   openai: {
     providerId: 'openai',
     displayName: 'OpenAI',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
   openrouter: {
     providerId: 'openrouter',
     displayName: 'OpenRouter',
+    reasoningSupport: 'dynamic' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: true,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
   anthropic: {
     providerId: 'anthropic',
     displayName: 'Anthropic',
+    reasoningSupport: 'budget-only' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: false,
       presencePenalty: false,
       topK: true,
+      reasoningEnabled: true,
+      reasoningEffort: false, // Uses budget-based thinking instead
+      reasoningBudgetTokens: true,
     },
   },
   groq: {
     providerId: 'groq',
     displayName: 'Groq',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
   mistral: {
     providerId: 'mistral',
     displayName: 'Mistral',
+    reasoningSupport: 'budget-only' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: false,
+      reasoningBudgetTokens: true,
     },
   },
   google: {
     providerId: 'google',
     displayName: 'Google',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: false,
       presencePenalty: false,
       topK: true,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
   deepseek: {
     providerId: 'deepseek',
     displayName: 'DeepSeek',
+    reasoningSupport: 'none' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: false, // R1 auto-reasons, no control
+      reasoningEffort: false,
+      reasoningBudgetTokens: false,
     },
   },
-
   nanogpt: {
     providerId: 'nanogpt',
     displayName: 'NanoGPT',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: false,
     },
   },
-
   xai: {
     providerId: 'xai',
     displayName: 'xAI (Grok)',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
-      topK: false, // not supported in OpenAI-compatible API
+      topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
-
   anannas: {
     providerId: 'anannas',
     displayName: 'Anannas AI',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: false,
     },
   },
-
   zai: {
     providerId: 'zai',
     displayName: 'ZAI (Zhipu / GLM)',
+    reasoningSupport: 'effort' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
-      frequencyPenalty: false, // not documented
-      presencePenalty: false,  // not documented
-      topK: false, // GLM API uses top_p but not top_k exposed
+      frequencyPenalty: false,
+      presencePenalty: false,
+      topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
     },
   },
-
   moonshot: {
     providerId: 'moonshot',
     displayName: 'Moonshot AI (Kimi)',
+    reasoningSupport: 'budget-only' as ReasoningSupport,
     supportedParameters: {
+
       temperature: true,
       topP: true,
       maxOutputTokens: true,
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
+      reasoningEnabled: true,
+      reasoningEffort: false,
+      reasoningBudgetTokens: true,
+    },
+  },
+  qwen: {
+    providerId: 'qwen',
+    displayName: 'Qwen',
+    reasoningSupport: 'budget-only' as ReasoningSupport,
+    supportedParameters: {
+
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: true,
+      reasoningEnabled: true,
+      reasoningEffort: false,
+      reasoningBudgetTokens: true,
+    },
+  },
+  featherless: {
+    providerId: 'featherless',
+    displayName: 'Featherless AI',
+    reasoningSupport: 'none' as ReasoningSupport,
+    supportedParameters: {
+
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: true,
+      presencePenalty: true,
+      topK: false,
+      reasoningEnabled: false,
+      reasoningEffort: false,
+      reasoningBudgetTokens: false,
     },
   },
 } as const;
+
 
 export type ProviderId = keyof typeof PROVIDER_PARAMETER_SUPPORT;
 export type ProviderParameterSupport = typeof PROVIDER_PARAMETER_SUPPORT[ProviderId];
@@ -218,8 +503,18 @@ export function providerSupportsParameter(
 }
 
 /**
+ * Gets the reasoning support type for a specific provider
+ */
+export function getProviderReasoningSupport(providerId: string): ReasoningSupport {
+  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
+  if (!provider) return 'none';
+  return provider.reasoningSupport;
+}
+
+/**
  * Helper function to get all supported parameters for a provider
  */
+
 export function getSupportedParameters(providerId: string): (keyof AdvancedModelSettings)[] {
   const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
   if (!provider) return ['temperature', 'topP', 'maxOutputTokens'];

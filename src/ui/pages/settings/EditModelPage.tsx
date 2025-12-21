@@ -1,8 +1,8 @@
-import { Loader2, Trash2, SlidersHorizontal, FileText, Info, Cpu, Settings } from "lucide-react";
+import { Loader2, Trash2, SlidersHorizontal, FileText, Info, Cpu, Settings, Brain } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
-import { formatAdvancedModelSettingsSummary, sanitizeAdvancedModelSettings } from "../../components/AdvancedModelSettingsForm";
+import { formatAdvancedModelSettingsSummary, sanitizeAdvancedModelSettings, ADVANCED_REASONING_BUDGET_RANGE } from "../../components/AdvancedModelSettingsForm";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
@@ -14,7 +14,8 @@ import {
 import { BottomMenu } from "../../components/BottomMenu";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
-import type { SystemPromptTemplate } from "../../../core/storage/schemas";
+import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
+import { getProviderReasoningSupport } from "../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../core/prompts/service";
 import { cn, radius, colors, interactive } from "../../design-tokens";
 
@@ -53,10 +54,21 @@ export function EditModelPage() {
     handleFrequencyPenaltyChange,
     handlePresencePenaltyChange,
     handleTopKChange,
+    handleReasoningEnabledChange,
+    handleReasoningEffortChange,
+    handleReasoningBudgetChange,
     handleSave,
     handleDelete,
     handleSetDefault,
   } = useModelEditorController();
+
+  // Get reasoning support for the current provider
+  const reasoningSupport: ReasoningSupport = editorModel?.providerId
+    ? getProviderReasoningSupport(editorModel.providerId)
+    : 'none';
+  const showReasoningSection = reasoningSupport !== 'none';
+  const isAutoReasoning = reasoningSupport === 'auto';
+  const showEffortOptions = reasoningSupport === 'effort' || reasoningSupport === 'dynamic';
 
   // Register window globals for header save button
   useEffect(() => {
@@ -673,7 +685,100 @@ export function EditModelPage() {
                       </p>
                     </div>
 
+                    {/* Reasoning / Thinking Section */}
+                    {showReasoningSection && (
+                      <div className="space-y-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-white">
+                            <Brain className="h-4 w-4 text-amber-400" />
+                            <h3 className="text-sm font-semibold">Thinking / Reasoning</h3>
+                          </div>
+
+                          {!isAutoReasoning && (
+                            <div
+                              onClick={() => handleReasoningEnabledChange(!modelAdvancedDraft.reasoningEnabled)}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${modelAdvancedDraft.reasoningEnabled
+                                ? 'bg-amber-500 shadow-lg shadow-amber-500/30'
+                                : 'bg-white/20'
+                                }`}
+                            >
+                              <span
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${modelAdvancedDraft.reasoningEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                              />
+                            </div>
+                          )}
+
+                        </div>
+
+                        <p className="text-[11px] text-white/50 leading-relaxed">
+                          {isAutoReasoning
+                            ? "This model always uses reasoning. No configuration needed."
+                            : "Enable advanced thinking capabilities for complex problem solving."
+                          }
+                        </p>
+
+                        {(modelAdvancedDraft.reasoningEnabled || isAutoReasoning) && (
+                          <div className="space-y-3 pt-2">
+                            {/* Reasoning Effort */}
+                            {showEffortOptions && (
+                              <div className="rounded-xl border border-amber-400/30 bg-black/20 p-3">
+                                <div className="mb-2">
+                                  <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-2">
+                                  {[
+                                    { value: null, label: 'Auto' },
+                                    { value: 'low' as const, label: 'Low' },
+                                    { value: 'medium' as const, label: 'Medium' },
+                                    { value: 'high' as const, label: 'High' }
+                                  ].map(({ value, label }) => (
+                                    <button
+                                      key={label}
+                                      type="button"
+                                      onClick={() => handleReasoningEffortChange(value)}
+                                      className={cn(
+                                        "rounded-lg border px-2 py-2 text-xs font-medium transition active:scale-[0.98]",
+                                        modelAdvancedDraft.reasoningEffort === value
+                                          ? "border-amber-400/40 bg-amber-400/20 text-amber-100"
+                                          : "border-white/10 bg-white/5 text-white/60 active:bg-white/10"
+                                      )}
+                                    >
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Reasoning Budget Tokens */}
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                              <div className="mb-2">
+                                <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
+                                <p className="mt-0.5 text-[10px] text-white/50">Added to output token limit</p>
+                              </div>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={ADVANCED_REASONING_BUDGET_RANGE.min}
+                                max={ADVANCED_REASONING_BUDGET_RANGE.max}
+                                value={modelAdvancedDraft.reasoningBudgetTokens ?? ''}
+                                onChange={(e) => handleReasoningBudgetChange(e.target.value === '' ? null : Number(e.target.value))}
+                                placeholder={
+                                  modelAdvancedDraft.reasoningEffort === 'low' ? '2048' :
+                                    modelAdvancedDraft.reasoningEffort === 'medium' ? '8192' :
+                                      modelAdvancedDraft.reasoningEffort === 'high' ? '16384' : '4096'
+                                }
+                                className="w-full rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Presets */}
+
                     <div className="space-y-2">
                       <label className="text-xs font-medium uppercase tracking-wider text-white/60">Quick Presets</label>
                       <div className="grid grid-cols-3 gap-2">

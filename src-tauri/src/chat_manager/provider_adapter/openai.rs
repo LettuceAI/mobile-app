@@ -65,6 +65,9 @@ impl ProviderAdapter for OpenAIAdapter {
         presence_penalty: Option<f64>,
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         let (tools, tool_choice) = if let Some(cfg) = tool_config {
             let tools = openai_tools(cfg);
@@ -78,15 +81,31 @@ impl ProviderAdapter for OpenAIAdapter {
             (None, None)
         };
 
+        let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
             stream: should_stream,
             temperature,
             top_p,
-            max_tokens,
+            max_tokens: if reasoning_enabled {
+                None
+            } else {
+                Some(total_tokens)
+            },
+            max_completion_tokens: if reasoning_enabled {
+                Some(total_tokens)
+            } else {
+                None
+            },
             frequency_penalty,
             presence_penalty,
+            reasoning_effort: if reasoning_enabled {
+                reasoning_effort
+            } else {
+                None
+            },
             tools,
             tool_choice,
         };
@@ -155,6 +174,9 @@ impl ProviderAdapter for OpenRouterAdapter {
         presence_penalty: Option<f64>,
         _top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         // Reuse OpenAI body logic
         OpenAIAdapter.body(
@@ -169,6 +191,9 @@ impl ProviderAdapter for OpenRouterAdapter {
             presence_penalty,
             _top_k,
             tool_config,
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
         )
     }
 }

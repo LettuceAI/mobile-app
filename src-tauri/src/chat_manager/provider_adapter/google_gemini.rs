@@ -35,12 +35,12 @@ struct GeminiGenerationConfig {
     top_k: Option<u32>,
 }
 
-// Reserved for future use with thinking models
-#[allow(dead_code)]
 #[derive(Serialize)]
 struct GeminiThinkingConfig {
+    #[serde(rename = "includeThoughts")]
+    include_thoughts: bool,
     #[serde(rename = "thinkingBudget")]
-    thinking_budget: i32,
+    thinking_budget: u32,
 }
 
 #[derive(Serialize)]
@@ -54,6 +54,9 @@ struct GeminiChatRequest {
     tools: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_config: Option<Value>,
+
+    #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
+    thinking_config: Option<GeminiThinkingConfig>,
 }
 
 impl ProviderAdapter for GoogleGeminiAdapter {
@@ -118,6 +121,9 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         _presence_penalty: Option<f64>,
         top_k: Option<u32>,
         tool_config: Option<&ToolConfig>,
+        reasoning_enabled: bool,
+        _reasoning_effort: Option<String>,
+        reasoning_budget: Option<u32>,
     ) -> Value {
         // Convert OpenAI-style messages -> Gemini contents
         let mut contents: Vec<GeminiContent> = Vec::new();
@@ -172,6 +178,15 @@ impl ProviderAdapter for GoogleGeminiAdapter {
             generation_config,
             tools,
             tool_config,
+
+            thinking_config: if reasoning_enabled {
+                Some(GeminiThinkingConfig {
+                    include_thoughts: true,
+                    thinking_budget: reasoning_budget.unwrap_or(0),
+                })
+            } else {
+                None
+            },
         };
 
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
