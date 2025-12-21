@@ -48,6 +48,14 @@ const changelog: ChangelogEntry[] = [
                 description: `Users can now use "Rewind to here" on user messages, allowing conversations to be resumed from any previous user turn.`
             },
             {
+                type: "feature",
+                description: "Added lorebook management tools to the Library page."
+            },
+            {
+                type: "feature",
+                description: "Added the ability to create lorebooks directly from the Home page."
+            },
+            {
                 type: "improvement",
                 description: "Introduced Dynamic Memory v2 - a faster, more responsive, and significantly more accurate memory system with higher capacity."
             },

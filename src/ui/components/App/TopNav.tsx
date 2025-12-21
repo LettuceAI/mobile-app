@@ -57,6 +57,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
   const showBackButton = useMemo(() => {
     if (basePath.startsWith("/settings/") || basePath === "/settings") return true;
     if (basePath.startsWith("/create/")) return true;
+    if (basePath.startsWith("/library/lorebooks")) return true;
     return false;
   }, [basePath]);
 

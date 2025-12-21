@@ -29,6 +29,7 @@ import { CreateCharacterPage, EditCharacterPage, LorebookEditor } from "./ui/pag
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
 import { SearchPage } from "./ui/pages/search";
 import { LibraryPage } from "./ui/pages/library/LibraryPage";
+import { StandaloneLorebookEditor } from "./ui/pages/library/StandaloneLorebookEditor";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { V1UpgradeToast } from "./ui/components/V1UpgradeToast";
@@ -150,8 +151,13 @@ function AppContent() {
     [location.pathname]
   );
 
-  const showTopNav = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute;
-  const showBottomNav = !isSettingRoute && !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute;
+  const isLorebookEditorRoute = useMemo(
+    () => location.pathname.startsWith("/library/lorebooks/"),
+    [location.pathname]
+  );
+
+  const showTopNav = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute && !isLorebookEditorRoute;
+  const showBottomNav = !isSettingRoute && !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute && !isLorebookEditorRoute;
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } = useFirstTimeTooltip("create_button");
@@ -234,7 +240,9 @@ function AppContent() {
                 ? "overflow-hidden px-0 pt-0 pb-0"
                 : isSearchRoute
                   ? "overflow-hidden px-0 pt-0 pb-0"
-                  : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
+                  : isLorebookEditorRoute
+                    ? "overflow-hidden px-0 pt-0 pb-0"
+                    : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
             }`}
         >
           <motion.div
@@ -254,6 +262,7 @@ function AppContent() {
               <Route path="/wheretofind" element={<WhereToFindPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/library" element={<LibraryPage />} />
+              <Route path="/library/lorebooks/:lorebookId" element={<StandaloneLorebookEditor />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/providers" element={<ProvidersPage />} />
               <Route path="/settings/models" element={<ModelsPage />} />

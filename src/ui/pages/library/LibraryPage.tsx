@@ -1,20 +1,23 @@
 import { useEffect, useState, memo } from "react";
 import { motion } from "framer-motion";
-import { listCharacters, listPersonas, deleteCharacter, deletePersona, createSession } from "../../../core/storage/repo";
-import type { Character, Persona } from "../../../core/storage/schemas";
+import { listCharacters, listPersonas, deleteCharacter, deletePersona, createSession, listLorebooks, deleteLorebook, saveLorebook } from "../../../core/storage/repo";
+import type { Character, Persona, Lorebook } from "../../../core/storage/schemas";
 import { typography, interactive, cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
 import { useNavigate } from "react-router-dom";
 import { BottomMenu } from "../../components";
-import { MessageCircle, Edit2, Trash2, Download, Check, BookOpen, Users } from "lucide-react";
+import { MessageCircle, Edit2, Trash2, Download, Check, BookOpen, Users, Pencil } from "lucide-react";
 import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
+import { listen } from "@tauri-apps/api/event";
 
-type FilterOption = "All" | "Characters" | "Personas";
-type LibraryItem = (Character | Persona) & { itemType: "character" | "persona" };
+type FilterOption = "All" | "Characters" | "Personas" | "Lorebooks";
+type LibraryItem = (Character | Persona | Lorebook) & { itemType: "character" | "persona" | "lorebook" };
 
 function getItemName(item: LibraryItem): string {
-    return item.itemType === "character" ? (item as Character).name : (item as Persona).title;
+    if (item.itemType === "character") return (item as Character).name;
+    if (item.itemType === "persona") return (item as Persona).title;
+    return (item as Lorebook).name;
 }
 
 function getItemDisableGradient(item: LibraryItem): boolean | undefined {
@@ -24,19 +27,45 @@ function getItemDisableGradient(item: LibraryItem): boolean | undefined {
 export function LibraryPage() {
     const [characters, setCharacters] = useState<Character[]>([]);
     const [personas, setPersonas] = useState<Persona[]>([]);
+    const [lorebooks, setLorebooks] = useState<Lorebook[]>([]);
     const [filter, setFilter] = useState<FilterOption>("All");
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [exporting, setExporting] = useState(false);
+
+    // Rename state
+    const [renameItem, setRenameItem] = useState<LibraryItem | null>(null);
+    const [renameName, setRenameName] = useState("");
+    const [renaming, setRenaming] = useState(false);
+
     const navigate = useNavigate();
 
-    useEffect(() => {
-        Promise.all([listCharacters(), listPersonas()]).then(([chars, pers]) => {
+    const loadData = async () => {
+        try {
+            const [chars, pers, lbs] = await Promise.all([
+                listCharacters(),
+                listPersonas(),
+                listLorebooks()
+            ]);
             setCharacters(chars);
             setPersonas(pers);
+            setLorebooks(lbs);
+        } catch (error) {
+            console.error("Failed to load library data:", error);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+        const unlisten = listen("database-reloaded", () => {
+            console.log("Database reloaded, refreshing library data...");
+            loadData();
         });
+        return () => {
+            unlisten.then((f) => f());
+        };
     }, []);
 
     useEffect(() => {
@@ -44,6 +73,25 @@ export function LibraryPage() {
         window.addEventListener("library:openFilter", handleOpenFilter);
         return () => window.removeEventListener("library:openFilter", handleOpenFilter);
     }, []);
+
+    const handleRenameConfirm = async () => {
+        if (!renameItem || !renameName.trim()) return;
+
+        try {
+            setRenaming(true);
+            // Only lorebooks can be renamed this way for now
+            if (renameItem.itemType === "lorebook") {
+                await saveLorebook({ id: renameItem.id, name: renameName.trim() });
+            }
+            setRenameItem(null);
+            setRenameName("");
+            await loadData(); // Reload
+        } catch (error) {
+            console.error("Failed to rename:", error);
+        } finally {
+            setRenaming(false);
+        }
+    };
 
     const handleSelect = (item: LibraryItem) => {
         setSelectedItem(item);
@@ -67,8 +115,10 @@ export function LibraryPage() {
         if (selectedItem) {
             if (selectedItem.itemType === "character") {
                 navigate(`/settings/characters/${selectedItem.id}/edit`);
-            } else {
+            } else if (selectedItem.itemType === "persona") {
                 navigate(`/settings/personas/${selectedItem.id}/edit`);
+            } else {
+                navigate(`/library/lorebooks/${selectedItem.id}`);
             }
             setSelectedItem(null);
         }
@@ -82,10 +132,14 @@ export function LibraryPage() {
                 await deleteCharacter(selectedItem.id);
                 const list = await listCharacters();
                 setCharacters(list);
-            } else {
+            } else if (selectedItem.itemType === "persona") {
                 await deletePersona(selectedItem.id);
                 const list = await listPersonas();
                 setPersonas(list);
+            } else {
+                await deleteLorebook(selectedItem.id);
+                const list = await listLorebooks();
+                setLorebooks(list);
             }
             setShowDeleteConfirm(false);
             setSelectedItem(null);
@@ -113,13 +167,15 @@ export function LibraryPage() {
 
     const allItems: LibraryItem[] = [
         ...characters.map(c => ({ ...c, itemType: "character" as const })),
-        ...personas.map(p => ({ ...p, itemType: "persona" as const }))
+        ...personas.map(p => ({ ...p, itemType: "persona" as const })),
+        ...lorebooks.map(l => ({ ...l, itemType: "lorebook" as const }))
     ];
 
     const filteredItems = allItems.filter(item => {
         if (filter === "All") return true;
         if (filter === "Characters") return item.itemType === "character";
         if (filter === "Personas") return item.itemType === "persona";
+        if (filter === "Lorebooks") return item.itemType === "lorebook";
         return false;
     });
 
@@ -143,22 +199,28 @@ export function LibraryPage() {
                                 ? "Your library is empty"
                                 : filter === "Characters"
                                     ? "No characters yet"
-                                    : "No personas yet"}
+                                    : filter === "Personas"
+                                        ? "No personas yet"
+                                        : "No lorebooks yet"}
                         </h3>
                         <p className="mb-6 max-w-[280px] text-center text-sm text-white/50">
                             {filter === "All"
-                                ? "Create characters and personas to see them here"
+                                ? "Create characters, personas, and lorebooks to see them here"
                                 : filter === "Characters"
                                     ? "Create your first character to start chatting"
-                                    : "Create a persona to customize your chat identity"}
+                                    : filter === "Personas"
+                                        ? "Create a persona to customize your chat identity"
+                                        : "Lorebooks are created from within a character's settings"}
                         </p>
-                        <button
-                            onClick={() => navigate(filter === "Personas" ? "/personas/create" : "/characters/create")}
-                            className="flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-5 py-2.5 text-sm font-medium text-emerald-100 transition active:scale-95 active:bg-emerald-400/30"
-                        >
-                            <Users className="h-4 w-4" />
-                            {filter === "Personas" ? "Create Persona" : "Create Character"}
-                        </button>
+                        {filter !== "Lorebooks" && (
+                            <button
+                                onClick={() => navigate(filter === "Personas" ? "/personas/create" : "/characters/create")}
+                                className="flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-5 py-2.5 text-sm font-medium text-emerald-100 transition active:scale-95 active:bg-emerald-400/30"
+                            >
+                                <Users className="h-4 w-4" />
+                                {filter === "Personas" ? "Create Persona" : "Create Character"}
+                            </button>
+                        )}
                     </motion.div>
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-24">
@@ -180,7 +242,7 @@ export function LibraryPage() {
                 title="Filter Library"
             >
                 <div className="space-y-2">
-                    {(["All", "Characters", "Personas"] as FilterOption[]).map((option) => (
+                    {(["All", "Characters", "Personas", "Lorebooks"] as FilterOption[]).map((option) => (
                         <button
                             key={option}
                             onClick={() => {
@@ -228,8 +290,28 @@ export function LibraryPage() {
                             <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
                                 <Edit2 className="h-4 w-4 text-white/70" />
                             </div>
-                            <span className="text-sm font-medium text-white">Edit {selectedItem.itemType === "character" ? "Character" : "Persona"}</span>
+                            <span className="text-sm font-medium text-white">
+                                {selectedItem.itemType === "character" ? "Edit Character" : selectedItem.itemType === "persona" ? "Edit Persona" : "Edit Lorebook"}
+                            </span>
                         </button>
+
+                        {selectedItem.itemType === "lorebook" && (
+                            <button
+                                onClick={() => {
+                                    setRenameItem(selectedItem);
+                                    setRenameName(getItemName(selectedItem));
+                                    setSelectedItem(null); // Close main menu
+                                }}
+                                className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
+                            >
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
+                                    <Pencil className="h-4 w-4 text-white/70" />
+                                </div>
+                                <span className="text-sm font-medium text-white">
+                                    Rename Lorebook
+                                </span>
+                            </button>
+                        )}
 
                         {selectedItem.itemType === "character" && (
                             <button
@@ -253,7 +335,9 @@ export function LibraryPage() {
                             <div className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-red-500/20">
                                 <Trash2 className="h-4 w-4 text-red-400" />
                             </div>
-                            <span className="text-sm font-medium text-red-300">Delete {selectedItem.itemType === "character" ? "Character" : "Persona"}</span>
+                            <span className="text-sm font-medium text-red-300">
+                                {selectedItem.itemType === "character" ? "Delete Character" : selectedItem.itemType === "persona" ? "Delete Persona" : "Delete Lorebook"}
+                            </span>
                         </button>
                     </div>
                 )}
@@ -263,7 +347,7 @@ export function LibraryPage() {
             <BottomMenu
                 isOpen={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(false)}
-                title={`Delete ${selectedItem?.itemType === "character" ? "Character" : "Persona"}?`}
+                title={`Delete ${selectedItem?.itemType === "character" ? "Character" : selectedItem?.itemType === "persona" ? "Persona" : "Lorebook"}?`}
             >
                 <div className="space-y-4">
                     <p className="text-sm text-white/70">
@@ -288,6 +372,37 @@ export function LibraryPage() {
                     </div>
                 </div>
             </BottomMenu>
+            {/* Rename Menu */}
+            <BottomMenu
+                isOpen={Boolean(renameItem)}
+                onClose={() => setRenameItem(null)}
+                title="Rename Lorebook"
+            >
+                <div className="space-y-4">
+                    <input
+                        value={renameName}
+                        onChange={(e) => setRenameName(e.target.value)}
+                        placeholder="Enter new name..."
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-base text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                        autoFocus
+                    />
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setRenameItem(null)}
+                            className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleRenameConfirm}
+                            disabled={renaming || !renameName.trim()}
+                            className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/20 py-3 text-sm font-medium text-emerald-100 transition hover:border-emerald-500/50 hover:bg-emerald-500/30 disabled:opacity-50"
+                        >
+                            {renaming ? "Saving..." : "Save"}
+                        </button>
+                    </div>
+                </div>
+            </BottomMenu>
         </div>
     );
 }
@@ -298,8 +413,27 @@ function isImageLike(s?: string) {
     return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
 }
 
+function getItemAvatarPath(item: LibraryItem): string | undefined {
+    if (item.itemType === "lorebook") return undefined;
+    return (item as Character | Persona).avatarPath;
+}
+
+function getItemDescription(item: LibraryItem): string {
+    if (item.itemType === "lorebook") return "Lorebook";
+    return (item as Character | Persona).description?.trim() || "No description yet";
+}
+
 const ItemAvatar = memo(({ item, className }: { item: LibraryItem, className?: string }) => {
-    const avatarUrl = useAvatar(item.itemType, item.id, item.avatarPath);
+    if (item.itemType === "lorebook") {
+        return (
+            <div className={cn("flex h-full w-full items-center justify-center bg-linear-to-br from-amber-500/20 to-orange-600/30", className)}>
+                <BookOpen className="h-12 w-12 text-amber-300/80" />
+            </div>
+        );
+    }
+
+    const avatarPath = getItemAvatarPath(item);
+    const avatarUrl = useAvatar(item.itemType as "character" | "persona", item.id, avatarPath);
 
     if (avatarUrl && isImageLike(avatarUrl)) {
         return (
@@ -324,18 +458,23 @@ const LibraryCard = memo(({
     item: LibraryItem;
     onSelect: (item: LibraryItem) => void;
 }) => {
-    const descriptionPreview = item.description?.trim() || "No description yet";
+    const descriptionPreview = getItemDescription(item);
+    const avatarPath = getItemAvatarPath(item);
+
+    // Only use gradient for non-lorebook items
     const { gradientCss, hasGradient } = useAvatarGradient(
-        item.itemType,
+        item.itemType === "lorebook" ? "character" : item.itemType as "character" | "persona",
         item.id,
-        item.avatarPath,
+        avatarPath,
         getItemDisableGradient(item)
     );
 
     const badge =
         item.itemType === "character"
             ? { label: "Character", dotClass: "bg-sky-300" }
-            : { label: "Persona", dotClass: "bg-violet-300" };
+            : item.itemType === "persona"
+                ? { label: "Persona", dotClass: "bg-violet-300" }
+                : { label: "Lorebook", dotClass: "bg-amber-300" };
 
     return (
         <motion.button
@@ -346,7 +485,7 @@ const LibraryCard = memo(({
                 "border border-white/10",
                 interactive.active.scale
             )}
-            style={hasGradient ? { background: gradientCss } : {}}
+            style={hasGradient && item.itemType !== "lorebook" ? { background: gradientCss } : {}}
         >
             {/* Background Image / Avatar */}
             <div className="absolute inset-0 z-0">
