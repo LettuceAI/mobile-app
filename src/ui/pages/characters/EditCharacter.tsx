@@ -50,6 +50,9 @@ export function EditCharacterPage() {
     dynamicMemoryEnabled,
     models,
     loadingModels,
+    promptTemplates,
+    loadingTemplates,
+    systemPromptTemplateId,
 
     editingSceneId,
     editingSceneContent,
@@ -676,6 +679,45 @@ export function EditCharacterPage() {
                 )}
                 <p className="text-xs text-white/50">
                   Override the default AI model for this character
+                </p>
+              </div>
+
+              {/* System Prompt Template Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-1.5">
+                    <BookOpen className="h-4 w-4 text-cyan-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">System Prompt</h3>
+                  <span className="ml-auto text-xs text-white/40">(Optional)</span>
+                </div>
+
+                {loadingTemplates ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                    <span className="text-sm text-white/50">Loading templates...</span>
+                  </div>
+                ) : promptTemplates.length > 0 ? (
+                  <select
+                    value={systemPromptTemplateId || ""}
+                    onChange={(e) => setFields({ systemPromptTemplateId: e.target.value || null })}
+                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
+                  >
+                    <option value="">Use default system prompt</option>
+                    {promptTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <p className="text-sm text-white/50">No templates available</p>
+                    <p className="text-xs text-white/40 mt-1">Create templates in Settings → Prompts</p>
+                  </div>
+                )}
+                <p className="text-xs text-white/50">
+                  Override the default system prompt for this character
                 </p>
               </div>
 

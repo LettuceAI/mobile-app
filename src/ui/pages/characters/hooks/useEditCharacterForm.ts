@@ -22,6 +22,7 @@ type EditCharacterState = {
   defaultSceneId: string | null;
   newSceneContent: string;
   selectedModelId: string | null;
+  systemPromptTemplateId: string | null;
 
   disableAvatarGradient: boolean;
   customGradientEnabled: boolean;
@@ -58,6 +59,7 @@ const initialState: EditCharacterState = {
   defaultSceneId: null,
   newSceneContent: "",
   selectedModelId: null,
+  systemPromptTemplateId: null,
 
   disableAvatarGradient: false,
   customGradientEnabled: false,
@@ -105,6 +107,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
     scenes: string;
     defaultSceneId: string | null;
     selectedModelId: string | null;
+    systemPromptTemplateId: string | null;
     disableAvatarGradient: boolean;
     customGradientEnabled: boolean;
     customGradientColors: string;
@@ -178,6 +181,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: character.scenes || [],
         defaultSceneId: character.defaultSceneId || null,
         selectedModelId: character.defaultModelId || null,
+        systemPromptTemplateId: character.promptTemplateId || null,
 
         disableAvatarGradient: character.disableAvatarGradient || false,
         customGradientEnabled: character.customGradientEnabled || false,
@@ -196,6 +200,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: JSON.stringify(character.scenes || []),
         defaultSceneId: character.defaultSceneId || null,
         selectedModelId: character.defaultModelId || null,
+        systemPromptTemplateId: character.promptTemplateId || null,
         disableAvatarGradient: character.disableAvatarGradient || false,
         customGradientEnabled: character.customGradientEnabled || false,
         customGradientColors: JSON.stringify(character.customGradientColors || []),
@@ -287,6 +292,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId,
         defaultModelId: state.selectedModelId,
+        promptTemplateId: state.systemPromptTemplateId,
 
         disableAvatarGradient: state.disableAvatarGradient,
         customGradientEnabled: state.customGradientEnabled,
@@ -311,6 +317,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: JSON.stringify(state.scenes),
         defaultSceneId: state.defaultSceneId,
         selectedModelId: state.selectedModelId,
+        systemPromptTemplateId: state.systemPromptTemplateId,
         disableAvatarGradient: state.disableAvatarGradient,
         customGradientEnabled: state.customGradientEnabled,
         customGradientColors: JSON.stringify(state.customGradientColors),
@@ -459,6 +466,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
           JSON.stringify(state.scenes) !== initial.scenes ||
           state.defaultSceneId !== initial.defaultSceneId ||
           state.selectedModelId !== initial.selectedModelId ||
+          state.systemPromptTemplateId !== initial.systemPromptTemplateId ||
           state.disableAvatarGradient !== initial.disableAvatarGradient ||
           state.customGradientEnabled !== initial.customGradientEnabled ||
           JSON.stringify(state.customGradientColors) !== initial.customGradientColors ||
