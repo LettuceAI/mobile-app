@@ -2798,7 +2798,7 @@ async fn run_memory_tool_update(
         None,
         0.2,
         1.0,
-        1024, // increased from 512 for better summaries
+        resolve_max_tokens(session, model, settings), // Dynamic max tokens
         false,
         None,
         None,
@@ -3196,7 +3196,7 @@ async fn summarize_messages(
         None,
         0.2,
         1.0,
-        1024,
+        resolve_max_tokens(session, model, settings),
         false,
         None,
         None,
