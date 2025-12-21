@@ -811,7 +811,7 @@ function RestoreBackupModal({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-amber-200">Dynamic Memory Detected</p>
                   <p className="mt-1 text-xs text-amber-200/70">
-                    This backup contains characters with dynamic memory enabled, which requires the embedding model (~260MB).
+                    This backup contains characters with dynamic memory enabled, which requires the embedding model (~120MB).
                   </p>
                 </div>
               </div>

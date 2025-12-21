@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-route
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { WelcomePage, ModelRecommendationsPage, OnboardingPage } from "./ui/pages/onboarding";
+import { WelcomePage, OnboardingPage } from "./ui/pages/onboarding";
 import { WhereToFindPage } from "./ui/pages/onboarding/WhereToFind";
 import { SettingsPage } from "./ui/pages/settings/Settings";
 import { ProvidersPage } from "./ui/pages/settings/ProvidersPage";
@@ -250,7 +250,6 @@ function AppContent() {
               <Route path="/welcome" element={<WelcomePage />} />
               <Route path="/onboarding/provider" element={<OnboardingPage />} />
               <Route path="/onboarding/models" element={<OnboardingPage />} />
-              <Route path="/onboarding/model-recommendations" element={<ModelRecommendationsPage />} />
               <Route path="/onboarding/memory" element={<OnboardingPage />} />
               <Route path="/wheretofind" element={<WhereToFindPage />} />
               <Route path="/search" element={<SearchPage />} />

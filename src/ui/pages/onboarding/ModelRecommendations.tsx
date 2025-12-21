@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Sparkles, Zap, DollarSign, Brain } from "lucide-react";
 
 type FactorCard = {
@@ -63,15 +62,20 @@ const iconMap = {
     brain: Brain,
 };
 
-export function ModelRecommendationsPage() {
-    const navigate = useNavigate();
+
+interface ModelRecommendationsProps {
+    onBack: () => void;
+}
+
+export function ModelRecommendations({ onBack }: ModelRecommendationsProps) {
+
 
     return (
         <div className="flex min-h-screen flex-col bg-black text-white px-4 pb-8 pt-[calc(env(safe-area-inset-top)+12px)]">
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
                 <button
-                    onClick={() => navigate(-1)}
+                    onClick={onBack}
                     className="flexitems-center justify-center rounded-full border border-white/10 bg-white/10 text-white hover:border-white/25 hover:bg-white/15 active:scale-95 transition"
                     aria-label="Go back"
                 >

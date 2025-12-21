@@ -26,7 +26,7 @@ export function MemorySetupPrompt({ isOpen, onClose, onConfirm, onSkip }: Memory
                     </div>
                     <h3 className="text-lg font-semibold text-white">One Last Step</h3>
                     <p className="mt-2 text-sm text-white/60 leading-relaxed max-w-xs mx-auto">
-                        To use Dynamic Memory, we need to download a small embedding model (~260MB) to your device.
+                        To use Dynamic Memory, we need to download a small embedding model (~120MB) to your device.
                     </p>
                 </div>
 

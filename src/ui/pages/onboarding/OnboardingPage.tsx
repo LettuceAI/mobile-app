@@ -4,6 +4,7 @@ import { useOnboardingController, OnboardingStep } from "./hooks/useOnboardingCo
 import { ProviderStep } from "./steps/ProviderStep";
 import { ModelStep } from "./steps/ModelStep";
 import { MemoryStep } from "./steps/MemoryStep";
+import { ModelRecommendations } from "./ModelRecommendations";
 import { cn, typography } from "../../design-tokens";
 import { getPlatform } from "../../../core/utils/platform";
 import { useState, useCallback } from "react";
@@ -19,6 +20,7 @@ export function OnboardingPage() {
 
     // Modal state for memory download prompt
     const [showDownloadModal, setShowDownloadModal] = useState(false);
+    const [showRecommendations, setShowRecommendations] = useState(false);
 
     const stepLabel =
         state.step === OnboardingStep.Provider ? "Provider Setup" :
@@ -116,90 +118,95 @@ export function OnboardingPage() {
                 "flex flex-1 flex-col overflow-hidden",
                 !isDesktop && "px-4 pt-4 overflow-y-auto"
             )}>
-                <AnimatePresence mode="wait">
-                    {state.step === OnboardingStep.Provider && (
-                        <motion.div
-                            key="provider"
-                            variants={pageVariants}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                            transition={{ duration: 0.2 }}
-                            className="flex flex-1 flex-col"
-                        >
-                            <ProviderStep
-                                capabilities={state.capabilities}
-                                selectedProviderId={state.selectedProviderId}
-                                label={state.providerLabel}
-                                apiKey={state.apiKey}
-                                baseUrl={state.baseUrl}
-                                testResult={state.testResult}
-                                isTesting={state.isTesting}
-                                isSubmitting={state.isSubmittingProvider}
-                                canTest={controller.canTestProvider}
-                                canSave={controller.canSaveProvider}
-                                onSelectProvider={controller.handleSelectProvider}
-                                onLabelChange={controller.handleProviderLabelChange}
-                                onApiKeyChange={controller.handleApiKeyChange}
-                                onBaseUrlChange={controller.handleBaseUrlChange}
-                                onTestConnection={controller.handleTestConnection}
-                                onSave={controller.handleSaveProvider}
-                            />
-                        </motion.div>
-                    )}
+                {showRecommendations ? (
+                    <ModelRecommendations onBack={() => setShowRecommendations(false)} />
+                ) : (
+                    <AnimatePresence mode="wait">
+                        {state.step === OnboardingStep.Provider && (
+                            <motion.div
+                                key="provider"
+                                variants={pageVariants}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
+                                transition={{ duration: 0.2 }}
+                                className="flex flex-1 flex-col"
+                            >
+                                <ProviderStep
+                                    capabilities={state.capabilities}
+                                    selectedProviderId={state.selectedProviderId}
+                                    label={state.providerLabel}
+                                    apiKey={state.apiKey}
+                                    baseUrl={state.baseUrl}
+                                    testResult={state.testResult}
+                                    isTesting={state.isTesting}
+                                    isSubmitting={state.isSubmittingProvider}
+                                    canTest={controller.canTestProvider}
+                                    canSave={controller.canSaveProvider}
+                                    onSelectProvider={controller.handleSelectProvider}
+                                    onLabelChange={controller.handleProviderLabelChange}
+                                    onApiKeyChange={controller.handleApiKeyChange}
+                                    onBaseUrlChange={controller.handleBaseUrlChange}
+                                    onTestConnection={controller.handleTestConnection}
+                                    onSave={controller.handleSaveProvider}
+                                />
+                            </motion.div>
+                        )}
 
-                    {state.step === OnboardingStep.Model && (
-                        <motion.div
-                            key="model"
-                            variants={pageVariants}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                            transition={{ duration: 0.2 }}
-                            className="flex flex-1 flex-col"
-                        >
-                            <ModelStep
-                                providers={state.providerCredentials}
-                                selectedCredential={state.selectedCredential}
-                                modelName={state.modelName}
-                                displayName={state.displayName}
-                                error={state.modelError}
-                                isLoading={state.modelLoading}
-                                isSaving={state.isSavingModel}
-                                canSave={controller.canSaveModel}
-                                onSelectCredential={controller.handleSelectCredential}
-                                onModelNameChange={controller.handleModelNameChange}
-                                onDisplayNameChange={controller.handleDisplayNameChange}
-                                onSave={controller.handleSaveModel}
-                                onSkip={controller.handleSkipModel}
-                                onGoBack={controller.goBack}
-                            />
-                        </motion.div>
-                    )}
+                        {state.step === OnboardingStep.Model && (
+                            <motion.div
+                                key="model"
+                                variants={pageVariants}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
+                                transition={{ duration: 0.2 }}
+                                className="flex flex-1 flex-col"
+                            >
+                                <ModelStep
+                                    providers={state.providerCredentials}
+                                    selectedCredential={state.selectedCredential}
+                                    modelName={state.modelName}
+                                    displayName={state.displayName}
+                                    error={state.modelError}
+                                    isLoading={state.modelLoading}
+                                    isSaving={state.isSavingModel}
+                                    canSave={controller.canSaveModel}
+                                    onSelectCredential={controller.handleSelectCredential}
+                                    onModelNameChange={controller.handleModelNameChange}
+                                    onDisplayNameChange={controller.handleDisplayNameChange}
+                                    onSave={controller.handleSaveModel}
+                                    onSkip={controller.handleSkipModel}
+                                    onGoBack={controller.goBack}
+                                    onShowRecommendations={() => setShowRecommendations(true)}
+                                />
+                            </motion.div>
+                        )}
 
-                    {state.step === OnboardingStep.Memory && (
-                        <motion.div
-                            key="memory"
-                            variants={pageVariants}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                            transition={{ duration: 0.2 }}
-                            className="flex flex-1 flex-col"
-                        >
-                            <MemoryStep
-                                selectedType={state.memoryType}
-                                isProcessing={state.isProcessingMemory}
-                                showDownloadModal={showDownloadModal}
-                                onSelectType={controller.handleSelectMemoryType}
-                                onFinish={handleFinish}
-                                onCloseModal={() => setShowDownloadModal(false)}
-                                onConfirmDownload={handleConfirmDownload}
-                                onSkipDownload={handleSkipDownload}
-                            />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                        {state.step === OnboardingStep.Memory && (
+                            <motion.div
+                                key="memory"
+                                variants={pageVariants}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
+                                transition={{ duration: 0.2 }}
+                                className="flex flex-1 flex-col"
+                            >
+                                <MemoryStep
+                                    selectedType={state.memoryType}
+                                    isProcessing={state.isProcessingMemory}
+                                    showDownloadModal={showDownloadModal}
+                                    onSelectType={controller.handleSelectMemoryType}
+                                    onFinish={handleFinish}
+                                    onCloseModal={() => setShowDownloadModal(false)}
+                                    onConfirmDownload={handleConfirmDownload}
+                                    onSkipDownload={handleSkipDownload}
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                )}
             </main>
         </div>
     );

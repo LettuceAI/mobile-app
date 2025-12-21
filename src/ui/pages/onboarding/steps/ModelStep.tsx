@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { Settings, Check, HelpCircle, Loader } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
 import { ModelConfigForm } from "../components/ConfigForm";
 import { getPlatform } from "../../../../core/utils/platform";
@@ -20,6 +19,7 @@ interface ModelStepProps {
     onSave: () => void;
     onSkip: () => void;
     onGoBack: () => void;
+    onShowRecommendations: () => void;
 }
 
 export function ModelStep({
@@ -37,8 +37,8 @@ export function ModelStep({
     onSave,
     onSkip,
     onGoBack,
+    onShowRecommendations,
 }: ModelStepProps) {
-    const navigate = useNavigate();
     const platform = getPlatform();
     const isDesktop = platform.type === "desktop";
     const showForm = Boolean(selectedCredential);
@@ -153,7 +153,7 @@ export function ModelStep({
                                 : "Select a provider from the list to configure your model."}
                         </p>
                         <button
-                            onClick={() => navigate("/onboarding/model-recommendations")}
+                            onClick={onShowRecommendations}
                             className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-400/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:border-indigo-400/50 hover:bg-indigo-400/20 active:scale-95"
                         >
                             <HelpCircle size={14} />
@@ -193,7 +193,7 @@ export function ModelStep({
                     Choose which provider and model name LettuceAI should use by default. You'll be able to add more later.
                 </p>
                 <button
-                    onClick={() => navigate("/onboarding/model-recommendations")}
+                    onClick={onShowRecommendations}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-400/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:border-indigo-400/50 hover:bg-indigo-400/20 active:scale-95"
                 >
                     <HelpCircle size={14} />
