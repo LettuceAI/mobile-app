@@ -208,6 +208,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     rules: defaultRules,
     defaultModelId: c.defaultModelId ?? null,
     memoryType: c.memoryType ?? "manual",
+    promptTemplateId: c.promptTemplateId ?? null,
     disableAvatarGradient: c.disableAvatarGradient ?? false,
     customGradientEnabled: c.customGradientEnabled ?? false,
     customGradientColors: c.customGradientColors,

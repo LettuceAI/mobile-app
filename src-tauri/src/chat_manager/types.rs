@@ -354,9 +354,8 @@ pub struct Character {
     pub default_model_id: Option<String>,
     #[serde(default = "default_memory_type")]
     pub memory_type: String,
-    /// DEPRECATED: Character-level templates removed (use model/app templates only)
-    #[serde(default, skip_serializing)]
-    #[allow(dead_code)]
+    /// Reference to a character-specific system prompt template (if any)
+    #[serde(default)]
     pub prompt_template_id: Option<String>,
     /// DEPRECATED: Old system prompt field (migrated to templates)
     #[serde(default, skip_serializing)]

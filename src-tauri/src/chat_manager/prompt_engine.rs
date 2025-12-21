@@ -185,7 +185,7 @@ fn get_lorebook_content(
     Ok(format_lorebook_for_prompt(&active_entries))
 }
 
-/// model template > app default template (from database)
+/// character template > model template > app default template (from database)
 pub fn build_system_prompt(
     app: &AppHandle,
     character: &Character,
@@ -207,6 +207,21 @@ pub fn build_system_prompt(
             debug_parts.push(json!({
                 "source": "model_template_not_found",
                 "template_id": model_template_id,
+                "fallback": "character_or_app_default"
+            }));
+            get_character_or_app_template(app, character, settings, &mut debug_parts)
+        }
+    } else if let Some(char_template_id) = &character.prompt_template_id {
+        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
+            debug_parts.push(json!({
+                "source": "character_template",
+                "template_id": char_template_id
+            }));
+            template.content
+        } else {
+            debug_parts.push(json!({
+                "source": "character_template_not_found",
+                "template_id": char_template_id,
                 "fallback": "app_default"
             }));
             get_app_default_template_content(app, settings, &mut debug_parts)
@@ -265,6 +280,27 @@ pub fn build_system_prompt(
     } else {
         Some(trimmed.to_string())
     }
+}
+
+/// Helper function to check character template, then fall back to app default
+fn get_character_or_app_template(
+    app: &AppHandle,
+    character: &Character,
+    settings: &Settings,
+    debug_parts: &mut Vec<Value>,
+) -> String {
+    // Try character template first
+    if let Some(char_template_id) = &character.prompt_template_id {
+        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
+            debug_parts.push(json!({
+                "source": "character_template",
+                "template_id": char_template_id
+            }));
+            return template.content;
+        }
+    }
+    // Fall back to app default
+    get_app_default_template_content(app, settings, debug_parts)
 }
 
 /// Helper function to get app default template content from database

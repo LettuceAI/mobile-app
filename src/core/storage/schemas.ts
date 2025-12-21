@@ -753,6 +753,7 @@ export const CharacterSchema = z.object({
   defaultSceneId: z.string().uuid().nullish(),
   defaultModelId: z.string().uuid().nullable().optional(),
   memoryType: z.enum(["manual", "dynamic"]).default("manual"),
+  promptTemplateId: z.string().nullish().optional(),
   disableAvatarGradient: z.boolean().default(false).optional(),
   customGradientEnabled: z.boolean().default(false).optional(),
   customGradientColors: z.array(z.string()).optional(), // Array of hex colors, e.g. ["#ff6b6b", "#4ecdc4"]
