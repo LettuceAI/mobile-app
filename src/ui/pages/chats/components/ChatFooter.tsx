@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { ChevronsRight, Plus, SendHorizonal, Square, X } from "lucide-react";
 import type { Character, ImageAttachment } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, shadows, cn } from "../../../design-tokens";
+import { getPlatform } from "../../../../core/utils/platform";
 
 interface ChatFooterProps {
   draft: string;
@@ -33,6 +34,19 @@ export function ChatFooter({
   const hasAttachments = pendingAttachments.length > 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isDesktop = useMemo(() => getPlatform().type === "desktop", []);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!isDesktop) return;
+
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!sending && (hasDraft || hasAttachments)) {
+        onSendMessage();
+      }
+    }
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || !onAddAttachment) return;
@@ -43,7 +57,7 @@ export function ChatFooter({
       const reader = new FileReader();
       reader.onload = () => {
         const base64 = reader.result as string;
-        
+
         // Create image to get dimensions
         const img = new Image();
         img.onload = () => {
@@ -62,7 +76,6 @@ export function ChatFooter({
       reader.readAsDataURL(file);
     }
 
-    // Reset input so same file can be selected again
     event.target.value = "";
   };
 
@@ -83,13 +96,13 @@ export function ChatFooter({
           {error}
         </div>
       )}
-      
+
       {/* Attachment Preview */}
       {hasAttachments && (
         <div className="mb-2 flex flex-wrap gap-2 overflow-visible p-1">
           {pendingAttachments.map((attachment) => (
-            <div 
-              key={attachment.id} 
+            <div
+              key={attachment.id}
               className={cn(
                 "relative",
                 radius.md,
@@ -159,6 +172,7 @@ export function ChatFooter({
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder={" "}
           rows={1}
           className={cn(
