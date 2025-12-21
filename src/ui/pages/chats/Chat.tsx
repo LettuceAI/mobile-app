@@ -481,7 +481,7 @@ export function ChatConversationPage() {
                   character={character}
                   persona={persona}
                   onImageClick={handleImageClick}
-                  reasoning={streamingReasoning[message.id] || message.reasoning}
+                  reasoning={streamingReasoning[message.id] || (message.reasoning ?? undefined)}
                 />
               </div>
             );
