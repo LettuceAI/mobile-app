@@ -228,7 +228,7 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
 }
 
 /// Extract reasoning tokens from thinking models (e.g., Gemini 2.5 Pro via OpenRouter)
-/// The reasoning content is found in choices[0].delta.reasoning
+/// The reasoning content is found in choices[0].delta.reasoning or choices[0].delta.reasoning_content
 fn extract_reasoning_from_value(v: &Value) -> Option<String> {
     // OpenAI/OpenRouter style: choices[0].delta.reasoning
     if let Some(s) = v
@@ -240,12 +240,32 @@ fn extract_reasoning_from_value(v: &Value) -> Option<String> {
     {
         return Some(s.to_string());
     }
+    // Some models use reasoning_content instead
+    if let Some(s) = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("delta"))
+        .and_then(|d| d.get("reasoning_content"))
+        .and_then(|t| t.as_str())
+    {
+        return Some(s.to_string());
+    }
     // Also check message.reasoning for non-streaming responses
     if let Some(s) = v
         .get("choices")
         .and_then(|c| c.get(0))
         .and_then(|c| c.get("message"))
         .and_then(|m| m.get("reasoning"))
+        .and_then(|t| t.as_str())
+    {
+        return Some(s.to_string());
+    }
+    // Check message.reasoning_content for non-streaming responses
+    if let Some(s) = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("reasoning_content"))
         .and_then(|t| t.as_str())
     {
         return Some(s.to_string());

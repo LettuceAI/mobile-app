@@ -46,12 +46,23 @@ pub fn extract_reasoning(data: &Value) -> Option<String> {
             None
         }
         Value::Object(map) => {
-            // Check choices[0].message.reasoning for non-streaming responses
+            // Check choices[0].message.reasoning or reasoning_content for non-streaming responses
             if let Some(choices) = map.get("choices").and_then(|c| c.as_array()) {
                 if let Some(first) = choices.first() {
+                    // Try reasoning field first
                     if let Some(reasoning) = first
                         .get("message")
                         .and_then(|m| m.get("reasoning"))
+                        .and_then(|r| r.as_str())
+                    {
+                        if !reasoning.is_empty() {
+                            return Some(reasoning.to_string());
+                        }
+                    }
+                    // Try reasoning_content field (used by some models like ZhipuAI GLM)
+                    if let Some(reasoning) = first
+                        .get("message")
+                        .and_then(|m| m.get("reasoning_content"))
                         .and_then(|r| r.as_str())
                     {
                         if !reasoning.is_empty() {

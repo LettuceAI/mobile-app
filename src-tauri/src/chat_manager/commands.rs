@@ -1184,16 +1184,55 @@ pub async fn chat_completion(
     };
 
     let text = extract_text(api_response.data()).unwrap_or_default();
+    let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
+
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
             serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+        
+        // Enhanced debug info for diagnosing model-specific parsing issues
+        let raw_len = match api_response.data() {
+            Value::String(s) => s.len(),
+            _ => 0,
+        };
+        let has_sse_marker = match api_response.data() {
+            Value::String(s) => s.contains("data:"),
+            _ => false,
+        };
+
+        let has_reasoning = reasoning.as_ref().map_or(false, |r| !r.trim().is_empty());
+        let reasoning_len = reasoning.as_ref().map_or(0, |r| r.len());
+        let error_detail = if has_reasoning {
+            "Model completed reasoning but generated no response text. This may indicate the model ran out of tokens or encountered an issue during generation."
+        } else {
+            "Empty response from provider"
+        };
+
         log_error(
             &app,
             "chat_completion",
-            format!("empty response from provider, preview={}", &preview),
+            format!(
+                "empty response from provider: has_reasoning={}, reasoning_len={}, raw_len={}, has_sse_marker={}, preview_start={}",
+                has_reasoning, 
+                reasoning_len,
+                raw_len,
+                has_sse_marker,
+                preview.chars().take(500).collect::<String>()
+            ),
         );
-        emit_debug(&app, "empty_response", json!({ "preview": preview }));
-        return Err("Empty response from provider".to_string());
+        emit_debug(
+            &app,
+            "empty_response",
+            json!({ 
+                "preview": preview, 
+                "hasReasoning": has_reasoning,
+                "reasoningLen": reasoning_len,
+                "rawLen": raw_len,
+                "hasSseMarker": has_sse_marker
+            }),
+        );
+        return Err(error_detail.to_string());
     }
 
     emit_debug(
@@ -1203,9 +1242,6 @@ pub async fn chat_completion(
             "length": text.len(),
         }),
     );
-
-    let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
 
     let assistant_created_at = now_millis()?;
     let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
@@ -1727,19 +1763,28 @@ pub async fn chat_regenerate(
     };
 
     let text = extract_text(api_response.data()).unwrap_or_default();
+    let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
+
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
             serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+
+        let has_reasoning = reasoning.as_ref().map_or(false, |r| !r.trim().is_empty());
+        let error_detail = if has_reasoning {
+            "Model completed reasoning but generated no response text. This may indicate the model ran out of tokens or encountered an issue during generation."
+        } else {
+            "Empty response from provider"
+        };
+
         emit_debug(
             &app,
             "regenerate_empty_response",
-            json!({ "preview": preview }),
+            json!({ "preview": preview, "hasReasoning": has_reasoning }),
         );
-        return Err("Empty response from provider".to_string());
+        return Err(error_detail.to_string());
     }
 
-    let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
     let created_at = now_millis()?;
     let new_variant = new_assistant_variant(text.clone(), usage.clone(), created_at);
 
@@ -2192,20 +2237,34 @@ pub async fn chat_continue(
     };
 
     let text = extract_text(api_response.data()).unwrap_or_default();
+    let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
+
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
             serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
+
+        let has_reasoning = reasoning.as_ref().map_or(false, |r| !r.trim().is_empty());
+        let error_detail = if has_reasoning {
+            "Model completed reasoning but generated no response text. This may indicate the model ran out of tokens or encountered an issue during generation."
+        } else {
+            "Empty response from provider"
+        };
+
         log_warn(
             &app,
             "chat_continue",
-            format!("empty response from provider, preview={}", &preview),
+            format!(
+                "empty response from provider, has_reasoning={}, preview={}",
+                has_reasoning, &preview
+            ),
         );
         emit_debug(
             &app,
             "continue_empty_response",
-            json!({ "preview": preview }),
+            json!({ "preview": preview, "hasReasoning": has_reasoning }),
         );
-        return Err("Empty response from provider".to_string());
+        return Err(error_detail.to_string());
     }
 
     emit_debug(
@@ -2215,9 +2274,6 @@ pub async fn chat_continue(
             "length": text.len(),
         }),
     );
-
-    let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
 
     let assistant_created_at = now_millis()?;
     let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
