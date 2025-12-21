@@ -440,11 +440,8 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
 
     let model_dir = embedding_model_dir(&app)?;
 
-    // For v2 model, read user's preferred max token capacity from settings
-    // Falls back to MAX_SEQ_LENGTH_V2 (4096) if not configured
     let (model_path, max_seq_length) = match detect_model_version(&app)? {
         Some(EmbeddingModelVersion::V2) => {
-            // Read user's selected capacity from advanced settings JSON
             let user_max_tokens = crate::storage_manager::settings::internal_read_settings(&app)
                 .ok()
                 .flatten()
@@ -496,11 +493,11 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     let input_ids = &input_ids[..seq_len];
     let attention_mask = &attention_mask[..seq_len];
 
-    // Convert to i64 arrays (ONNX expects i64 for input_ids and attention_mask)
+    // Convert to i64 arrays
     let input_ids_i64: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
     let attention_mask_i64: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
 
-    // Create ndarray tensors with shape [1, seq_len]
+    // ndarray tensors with shape [1, seq_len]
     let input_ids_array = Array2::from_shape_vec((1, seq_len), input_ids_i64)
         .map_err(|e| format!("Failed to create input_ids array: {}", e))?;
 

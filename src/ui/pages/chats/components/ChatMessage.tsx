@@ -1,6 +1,6 @@
-import { motion, type PanInfo } from "framer-motion";
-import React, { useMemo } from "react";
-import { RefreshCw, Pin, User, Bot } from "lucide-react";
+import { motion, type PanInfo, AnimatePresence } from "framer-motion";
+import React, { useMemo, useState } from "react";
+import { RefreshCw, Pin, User, Bot, ChevronDown } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage, Character, Persona } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
@@ -31,6 +31,7 @@ interface ChatMessageProps {
   persona: Persona | null;
   displayContent?: string;
   onImageClick?: (src: string, alt: string) => void;
+  reasoning?: string;
 }
 
 // Avatar component for user/assistant
@@ -84,13 +85,13 @@ const MessageActions = React.memo(function MessageActions({
   onRegenerate: () => void;
 }) {
   return (
-    <motion.div 
+    <motion.div
       className="absolute -bottom-4 right-0 flex items-center gap-2"
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ 
-        type: "tween", 
-        duration: 0.15, 
+      transition={{
+        type: "tween",
+        duration: 0.15,
         ease: [0.25, 0.46, 0.45, 0.94],
         delay: 0.1
       }}
@@ -121,6 +122,74 @@ const MessageActions = React.memo(function MessageActions({
   );
 });
 
+const ThinkingSection = React.memo(function ThinkingSection({
+  reasoning,
+  isStreaming,
+}: {
+  reasoning: string;
+  isStreaming: boolean;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!reasoning || reasoning.trim().length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={cn(
+          "flex items-center gap-2 py-1 text-left text-xs transition-colors",
+          isStreaming
+            ? "text-white/60 hover:text-white/80"
+            : "text-white/40 hover:text-white/60"
+        )}
+      >
+        <motion.div
+          animate={{ rotate: isExpanded ? 90 : 0 }}
+          transition={{ duration: 0.15 }}
+          className="opacity-60"
+        >
+          <ChevronDown size={12} />
+        </motion.div>
+        <span className="flex items-center gap-1.5">
+          {isStreaming && (
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
+          )}
+          <span className="font-medium">
+            {isStreaming ? "Thinking..." : "Thought process"}
+          </span>
+        </span>
+      </button>
+
+      <AnimatePresence mode="wait">
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className={cn(
+              "mt-1 pl-5 border-l border-white/10",
+              "text-xs text-white/40 italic leading-relaxed",
+              "max-h-40 overflow-y-auto"
+            )}>
+              <MarkdownRenderer
+                content={reasoning}
+                className="text-xs text-white/40 **:text-white/40"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
 function ChatMessageInner({
   message,
   index,
@@ -138,6 +207,7 @@ function ChatMessageInner({
   persona,
   displayContent,
   onImageClick,
+  reasoning,
 }: ChatMessageProps) {
   // Memoize all computed values
   const computed = useMemo(() => {
@@ -151,11 +221,11 @@ function ChatMessageInner({
     const totalVariants = variantState.total || ((isAssistant || isScene) ? 1 : 0);
     const selectedVariantIndex =
       variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
-    
-    const enableSwipe = isStartingSceneMessage 
+
+    const enableSwipe = isStartingSceneMessage
       ? (index === 0 && variantState.total > 1)
       : isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
-    
+
     const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
     const showRegenerateButton = isLatestAssistant && !isStartingSceneMessage;
     const shouldAnimate = !isPlaceholder;
@@ -179,17 +249,17 @@ function ChatMessageInner({
     () =>
       computed.enableSwipe
         ? {
-            drag: "x" as const,
-            dragConstraints: { left: -140, right: 140 },
-            dragElastic: 0.08,
-            dragMomentum: false,
-            dragSnapToOrigin: true,
-            dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
-            onDragEnd: (_: unknown, info: PanInfo) =>
-              void handleVariantDrag(message.id, info.offset.x),
-            whileDrag: { scale: 0.98 },
-            style: { willChange: "transform", transform: "translate3d(0,0,0)" },
-          }
+          drag: "x" as const,
+          dragConstraints: { left: -140, right: 140 },
+          dragElastic: 0.08,
+          dragMomentum: false,
+          dragSnapToOrigin: true,
+          dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
+          onDragEnd: (_: unknown, info: PanInfo) =>
+            void handleVariantDrag(message.id, info.offset.x),
+          whileDrag: { scale: 0.98 },
+          style: { willChange: "transform", transform: "translate3d(0,0,0)" },
+        }
         : {},
     [computed.enableSwipe, handleVariantDrag, message.id]
   );
@@ -227,20 +297,20 @@ function ChatMessageInner({
           typography.body.size,
           message.role === "user"
             ? cn(
-                `ml-auto ${theme.userBg} ${theme.userText} border ${theme.userBorder}`,
-                heldMessageId === message.id && "ring-2 ring-emerald-400/50"
-              )
+              `ml-auto ${theme.userBg} ${theme.userText} border ${theme.userBorder}`,
+              heldMessageId === message.id && "ring-2 ring-emerald-400/50"
+            )
             : cn(
-                `border ${theme.assistantBg} ${theme.assistantText}`,
-                heldMessageId === message.id ? "border-white/30" : theme.assistantBorder
-              )
+              `border ${theme.assistantBg} ${theme.assistantText}`,
+              heldMessageId === message.id ? "border-white/30" : theme.assistantBorder
+            )
         )}
         {...eventHandlers}
         {...dragProps}
       >
         {/* Pin indicator */}
         {message.isPinned && (
-          <motion.div 
+          <motion.div
             className="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-blue-500/40 bg-blue-500/20 shadow-lg"
             initial={{ scale: 0, rotate: -45 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -249,16 +319,25 @@ function ChatMessageInner({
             <Pin size={12} className="text-blue-300" />
           </motion.div>
         )}
-        
-        {computed.showTypingIndicator ? (
+
+        {/* Thinking/Reasoning section - shown even during typing indicator */}
+        {computed.isAssistant && reasoning && (
+          <ThinkingSection
+            reasoning={reasoning}
+            isStreaming={computed.isPlaceholder && sending}
+          />
+        )}
+
+        {/* Show typing indicator only if no reasoning (reasoning section has its own indicator) */}
+        {computed.showTypingIndicator && !reasoning ? (
           <TypingIndicator />
-        ) : (
+        ) : computed.showTypingIndicator ? null : (
           <>
             {/* Display attachments if present (with lazy loading support) */}
             {loadedAttachments.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {loadedAttachments.map((attachment) => (
-                  <div 
+                  <div
                     key={attachment.id}
                     className={cn(
                       radius.md,
@@ -281,7 +360,7 @@ function ChatMessageInner({
                       />
                     ) : (
                       // Loading placeholder
-                      <div 
+                      <div
                         className="flex items-center justify-center bg-white/5"
                         style={{
                           width: Math.min(attachment.width || 150, 300),
@@ -295,16 +374,17 @@ function ChatMessageInner({
                 ))}
               </div>
             )}
-            <MarkdownRenderer 
+
+            <MarkdownRenderer
               key={message.id + ":" + computed.selectedVariantIndex}
-              content={displayContent ?? message.content} 
-              className="text-inherit select-none" 
+              content={displayContent ?? message.content}
+              className="text-inherit select-none"
             />
           </>
         )}
 
         {(computed.isAssistant || computed.isScene) && computed.totalVariants > 1 && (
-          <motion.div 
+          <motion.div
             className={cn(
               "mt-2.5 flex items-center justify-between pr-2",
               typography.caption.size,
@@ -320,7 +400,7 @@ function ChatMessageInner({
               {computed.totalVariants > 0 ? ` / ${computed.totalVariants}` : ""}
             </span>
             {regeneratingMessageId === message.id && (
-              <motion.span 
+              <motion.span
                 className="flex items-center gap-1.5 text-emerald-300"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -383,7 +463,9 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     prev.character?.id === next.character?.id &&
     prev.character?.avatarPath === next.character?.avatarPath &&
     prev.persona?.id === next.persona?.id &&
-    prev.persona?.avatarPath === next.persona?.avatarPath
+    prev.persona?.avatarPath === next.persona?.avatarPath &&
+    a.reasoning === b.reasoning &&
+    prev.reasoning === next.reasoning
   );
 });
 

@@ -11,27 +11,30 @@ export interface ChatState {
   persona: Persona | null;
   session: Session | null;
   messages: StoredMessage[];
-  
+
   // UI state
   draft: string;
   loading: boolean;
   sending: boolean;
   error: string | null;
-  
+
   // Message actions
   messageAction: MessageActionState | null;
   actionError: string | null;
   actionStatus: string | null;
   actionBusy: boolean;
   editDraft: string;
-  
+
   // Interaction state
   heldMessageId: string | null;
   regeneratingMessageId: string | null;
   activeRequestId: string | null;
-  
+
   // Attachments
   pendingAttachments: ImageAttachment[];
+
+  // Streaming reasoning (for thinking models)
+  streamingReasoning: Record<string, string>;
 }
 
 export type ChatAction =
@@ -59,7 +62,10 @@ export type ChatAction =
   | { type: "SET_PENDING_ATTACHMENTS"; payload: ImageAttachment[] }
   | { type: "ADD_PENDING_ATTACHMENT"; payload: ImageAttachment }
   | { type: "REMOVE_PENDING_ATTACHMENT"; payload: string }
-  | { type: "CLEAR_PENDING_ATTACHMENTS" };
+  | { type: "CLEAR_PENDING_ATTACHMENTS" }
+  | { type: "UPDATE_MESSAGE_REASONING"; payload: { messageId: string; reasoning: string } }
+  | { type: "CLEAR_STREAMING_REASONING"; payload: string }
+  | { type: "TRANSFER_REASONING"; payload: { fromId: string; toId: string } };
 
 export const initialChatState: ChatState = {
   character: null,
@@ -79,6 +85,7 @@ export const initialChatState: ChatState = {
   regeneratingMessageId: null,
   activeRequestId: null,
   pendingAttachments: [],
+  streamingReasoning: {},
 };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -89,52 +96,52 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "SET_CHARACTER":
       return { ...state, character: action.payload };
-    
+
     case "SET_PERSONA":
       return { ...state, persona: action.payload };
-    
+
     case "SET_SESSION":
       return { ...state, session: action.payload };
-    
+
     case "SET_MESSAGES":
       return { ...state, messages: action.payload };
-    
+
     case "SET_DRAFT":
       return { ...state, draft: action.payload };
-    
+
     case "SET_LOADING":
       return { ...state, loading: action.payload };
-    
+
     case "SET_SENDING":
       return { ...state, sending: action.payload };
-    
+
     case "SET_ERROR":
       return { ...state, error: action.payload };
-    
+
     case "SET_MESSAGE_ACTION":
       return { ...state, messageAction: action.payload };
-    
+
     case "SET_ACTION_ERROR":
       return { ...state, actionError: action.payload };
-    
+
     case "SET_ACTION_STATUS":
       return { ...state, actionStatus: action.payload };
-    
+
     case "SET_ACTION_BUSY":
       return { ...state, actionBusy: action.payload };
-    
+
     case "SET_EDIT_DRAFT":
       return { ...state, editDraft: action.payload };
-    
+
     case "SET_HELD_MESSAGE_ID":
       return { ...state, heldMessageId: action.payload };
-    
+
     case "SET_REGENERATING_MESSAGE_ID":
       return { ...state, regeneratingMessageId: action.payload };
-    
+
     case "SET_ACTIVE_REQUEST_ID":
       return { ...state, activeRequestId: action.payload };
-    
+
     case "RESET_MESSAGE_ACTIONS":
       return {
         ...state,
@@ -143,7 +150,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         actionError: null,
         actionStatus: null,
       };
-    
+
     case "UPDATE_MESSAGE_CONTENT":
       return {
         ...state,
@@ -153,7 +160,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             : msg
         ),
       };
-    
+
     case "REPLACE_PLACEHOLDER_MESSAGES":
       const { userPlaceholder, assistantPlaceholder, userMessage, assistantMessage } = action.payload;
       return {
@@ -164,28 +171,54 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           return msg;
         }),
       };
-    
+
     case "REWIND_TO_MESSAGE":
       return {
         ...state,
         messages: action.payload.messages,
       };
-    
+
     case "SET_PENDING_ATTACHMENTS":
       return { ...state, pendingAttachments: action.payload };
-    
+
     case "ADD_PENDING_ATTACHMENT":
       return { ...state, pendingAttachments: [...state.pendingAttachments, action.payload] };
-    
+
     case "REMOVE_PENDING_ATTACHMENT":
-      return { 
-        ...state, 
-        pendingAttachments: state.pendingAttachments.filter(a => a.id !== action.payload) 
+      return {
+        ...state,
+        pendingAttachments: state.pendingAttachments.filter(a => a.id !== action.payload)
       };
-    
+
     case "CLEAR_PENDING_ATTACHMENTS":
       return { ...state, pendingAttachments: [] };
-    
+
+    case "UPDATE_MESSAGE_REASONING":
+      return {
+        ...state,
+        streamingReasoning: {
+          ...state.streamingReasoning,
+          [action.payload.messageId]: (state.streamingReasoning[action.payload.messageId] || '') + action.payload.reasoning,
+        },
+      };
+
+    case "CLEAR_STREAMING_REASONING":
+      const { [action.payload]: _, ...remainingReasoning } = state.streamingReasoning;
+      return { ...state, streamingReasoning: remainingReasoning };
+
+    case "TRANSFER_REASONING": {
+      const reasoning = state.streamingReasoning[action.payload.fromId];
+      if (!reasoning) return state;
+      const { [action.payload.fromId]: removed, ...rest } = state.streamingReasoning;
+      return {
+        ...state,
+        streamingReasoning: {
+          ...rest,
+          [action.payload.toId]: reasoning,
+        },
+      };
+    }
+
     default:
       return state;
   }

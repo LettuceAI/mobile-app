@@ -112,6 +112,7 @@ export function ChatConversationPage() {
     resetMessageActions,
     initializeLongPressTimer,
     isStartingSceneMessage,
+    streamingReasoning,
   } = chatController;
 
   const isGenerating = sending || regeneratingMessageId !== null;
@@ -480,6 +481,7 @@ export function ChatConversationPage() {
                   character={character}
                   persona={persona}
                   onImageClick={handleImageClick}
+                  reasoning={streamingReasoning[message.id] || message.reasoning}
                 />
               </div>
             );

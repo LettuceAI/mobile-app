@@ -42,18 +42,18 @@ const sessionSaveQueue = new Map<string, Promise<void>>();
  */
 async function safeSaveSession(session: Session): Promise<void> {
   const sessionId = session.id;
-  
+
   const pendingSave = sessionSaveQueue.get(sessionId);
   if (pendingSave) {
     await pendingSave;
   }
-  
+
   const savePromise = saveSession(session).finally(() => {
     if (sessionSaveQueue.get(sessionId) === savePromise) {
       sessionSaveQueue.delete(sessionId);
     }
   });
-  
+
   sessionSaveQueue.set(sessionId, savePromise);
   return savePromise;
 }
@@ -83,6 +83,7 @@ export interface ChatController {
   regeneratingMessageId: string | null;
   activeRequestId: string | null;
   pendingAttachments: ImageAttachment[];
+  streamingReasoning: Record<string, string>;
   hasMoreMessagesBefore: boolean;
   loadOlderMessages: () => Promise<void>;
   ensureMessageLoaded: (messageId: string) => Promise<void>;
@@ -450,7 +451,7 @@ export function useChatController(
         log.info("Skipping settings reload - session operation in progress");
         return;
       }
-      
+
       if (characterId && state.character) {
         try {
           const list = await listCharacters();
@@ -690,6 +691,7 @@ export function useChatController(
         ...currentMessage,
         content: targetVariant.content,
         usage: targetVariant.usage ?? currentMessage.usage,
+        reasoning: targetVariant.reasoning,
         selectedVariantId: targetVariant.id,
       };
 
@@ -806,7 +808,7 @@ export function useChatController(
     async (message: string, attachments?: ImageAttachment[]) => {
       if (!state.session || !state.character) return;
       const requestId = crypto.randomUUID();
-      
+
       // Use provided attachments or fall back to pending attachments from state
       const messageAttachments = attachments ?? state.pendingAttachments;
 
@@ -833,6 +835,11 @@ export function useChatController(
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+            } else if (payload && payload.type === "reasoning" && payload.data?.text) {
+              dispatch({
+                type: "UPDATE_MESSAGE_REASONING",
+                payload: { messageId: assistantPlaceholder.id, reasoning: String(payload.data.text) }
+              });
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
             }
@@ -866,6 +873,7 @@ export function useChatController(
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
             { type: "SET_MESSAGES", payload: replaced },
+            { type: "TRANSFER_REASONING", payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id } },
           ]
         });
 
@@ -917,6 +925,11 @@ export function useChatController(
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+            } else if (payload && payload.type === "reasoning" && payload.data?.text) {
+              dispatch({
+                type: "UPDATE_MESSAGE_REASONING",
+                payload: { messageId: assistantPlaceholder.id, reasoning: String(payload.data.text) }
+              });
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
             }
@@ -942,7 +955,9 @@ export function useChatController(
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
-            { type: "SET_MESSAGES", payload: replaced }
+            { type: "SET_MESSAGES", payload: replaced },
+            // Transfer reasoning from placeholder to real message ID
+            { type: "TRANSFER_REASONING", payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id } },
           ]
         });
 
@@ -1004,7 +1019,7 @@ export function useChatController(
           { type: "SET_HELD_MESSAGE_ID", payload: null },
           {
             type: "SET_MESSAGES",
-            payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "" } : msg))
+            payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "", reasoning: undefined } : msg))
           }
         ]
       });
@@ -1018,6 +1033,11 @@ export function useChatController(
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(message.id, String(payload.data.text));
+            } else if (payload && payload.type === "reasoning" && payload.data?.text) {
+              dispatch({
+                type: "UPDATE_MESSAGE_REASONING",
+                payload: { messageId: message.id, reasoning: String(payload.data.text) }
+              });
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
             }
@@ -1381,14 +1401,14 @@ export function useChatController(
         }
 
         const branchedSession = await createBranchedSession(fullSession, message.id);
-        
+
         dispatch({ type: "SET_ACTION_STATUS", payload: "Chat branch created! Redirecting..." });
-        
+
         // Return the new session ID so the caller can navigate to it
         setTimeout(() => {
           resetMessageActions();
         }, 500);
-        
+
         return branchedSession.id;
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
@@ -1422,17 +1442,17 @@ export function useChatController(
         }
 
         const branchedSession = await createBranchedSessionToCharacter(
-          fullSession, 
-          message.id, 
+          fullSession,
+          message.id,
           targetCharacterId
         );
-        
+
         dispatch({ type: "SET_ACTION_STATUS", payload: "Chat branch created! Redirecting..." });
-        
+
         setTimeout(() => {
           resetMessageActions();
         }, 500);
-        
+
         return { sessionId: branchedSession.id, characterId: targetCharacterId };
       } catch (err) {
         dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
@@ -1471,6 +1491,7 @@ export function useChatController(
     regeneratingMessageId: state.regeneratingMessageId,
     activeRequestId: state.activeRequestId,
     pendingAttachments: state.pendingAttachments,
+    streamingReasoning: state.streamingReasoning,
     hasMoreMessagesBefore: hasMoreMessagesBeforeRef.current,
 
     // Setters

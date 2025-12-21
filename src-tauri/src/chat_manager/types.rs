@@ -216,6 +216,9 @@ pub struct StoredMessage {
     pub is_pinned: bool,
     #[serde(default)]
     pub attachments: Vec<ImageAttachment>,
+    /// Reasoning/thinking content from thinking models (not sent in API requests)
+    #[serde(default)]
+    pub reasoning: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -228,6 +231,8 @@ pub struct MessageVariant {
     pub usage: Option<UsageSummary>,
     #[serde(default)]
     pub attachments: Vec<ImageAttachment>,
+    #[serde(default)]
+    pub reasoning: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -495,6 +500,8 @@ pub struct ErrorEnvelope {
 pub enum NormalizedEvent {
     #[serde(rename = "delta")]
     Delta { text: String },
+    #[serde(rename = "reasoning")]
+    Reasoning { text: String },
     #[serde(rename = "usage")]
     Usage { usage: UsageSummary },
     #[serde(rename = "toolCall")]

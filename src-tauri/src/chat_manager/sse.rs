@@ -27,6 +27,31 @@ pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
     }
 }
 
+/// Accumulate reasoning tokens from SSE response (for thinking models)
+pub fn accumulate_reasoning_from_sse(raw: &str) -> Option<String> {
+    let mut out = String::new();
+    for line in raw.lines() {
+        let l = line.trim();
+        if !l.starts_with("data:") {
+            continue;
+        }
+        let payload = l[5..].trim();
+        if payload.is_empty() || payload == "[DONE]" {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<Value>(payload) {
+            if let Some(piece) = extract_reasoning_from_value(&v) {
+                out.push_str(&piece);
+            }
+        }
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
 pub fn accumulate_image_data_urls_from_sse(raw: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for line in raw.lines() {
@@ -110,6 +135,11 @@ impl SseDecoder {
                                 events.push(NormalizedEvent::Delta { text: piece });
                             }
                         }
+                        if let Some(reasoning) = extract_reasoning_from_value(&v) {
+                            if !reasoning.is_empty() {
+                                events.push(NormalizedEvent::Reasoning { text: reasoning });
+                            }
+                        }
                         if let Some(usage) = usage_from_value(&v) {
                             events.push(NormalizedEvent::Usage { usage });
                         }
@@ -142,6 +172,15 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
     {
         return Some(s.to_string());
     }
+    if let Some(s) = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|t| t.as_str())
+    {
+        return Some(s.to_string());
+    }
     // Anthropic Messages API streaming: content_block_delta -> delta -> text
     if v.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
         if let Some(s) = v
@@ -150,6 +189,26 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
             .and_then(|t| t.as_str())
         {
             return Some(s.to_string());
+        }
+    }
+
+    if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
+        let mut combined = String::new();
+        for candidate in candidates {
+            if let Some(parts) = candidate
+                .get("content")
+                .and_then(|c| c.get("parts"))
+                .and_then(|p| p.as_array())
+            {
+                for part in parts {
+                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                        combined.push_str(text);
+                    }
+                }
+            }
+        }
+        if !combined.is_empty() {
+            return Some(combined);
         }
     }
     if let Some(s) = v.get("content").and_then(|t| t.as_str()) {
@@ -163,6 +222,32 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
         return Some(s.to_string());
     }
     if let Some(s) = v.get("text").and_then(|t| t.as_str()) {
+        return Some(s.to_string());
+    }
+    None
+}
+
+/// Extract reasoning tokens from thinking models (e.g., Gemini 2.5 Pro via OpenRouter)
+/// The reasoning content is found in choices[0].delta.reasoning
+fn extract_reasoning_from_value(v: &Value) -> Option<String> {
+    // OpenAI/OpenRouter style: choices[0].delta.reasoning
+    if let Some(s) = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("delta"))
+        .and_then(|d| d.get("reasoning"))
+        .and_then(|t| t.as_str())
+    {
+        return Some(s.to_string());
+    }
+    // Also check message.reasoning for non-streaming responses
+    if let Some(s) = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("reasoning"))
+        .and_then(|t| t.as_str())
+    {
         return Some(s.to_string());
     }
     None

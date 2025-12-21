@@ -252,6 +252,8 @@ export const MessageVariantSchema = z.object({
   createdAt: z.number().int(),
   usage: UsageSummarySchema.optional().nullable(),
   attachments: z.array(ImageAttachmentSchema).optional(),
+  /** Reasoning/thinking content from thinking models */
+  reasoning: z.string().optional(),
 });
 export type MessageVariant = z.infer<typeof MessageVariantSchema>;
 
@@ -267,6 +269,8 @@ export const MessageSchema = z.object({
   memoryRefs: z.array(z.string()).optional().default([]),
   /** Image attachments for multimodal messages */
   attachments: z.array(ImageAttachmentSchema).optional(),
+  /** Reasoning/thinking content from thinking models (not sent in API requests) */
+  reasoning: z.string().optional(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
 

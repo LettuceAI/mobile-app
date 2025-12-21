@@ -35,6 +35,37 @@ pub fn message_text_for_api(message: &StoredMessage) -> String {
         .unwrap_or_else(|| message.content.clone())
 }
 
+/// Extract reasoning tokens from API response (for thinking models)
+/// Returns None if no reasoning was found
+pub fn extract_reasoning(data: &Value) -> Option<String> {
+    match data {
+        Value::String(s) => {
+            if s.contains("data:") {
+                return super::sse::accumulate_reasoning_from_sse(s);
+            }
+            None
+        }
+        Value::Object(map) => {
+            // Check choices[0].message.reasoning for non-streaming responses
+            if let Some(choices) = map.get("choices").and_then(|c| c.as_array()) {
+                if let Some(first) = choices.first() {
+                    if let Some(reasoning) = first
+                        .get("message")
+                        .and_then(|m| m.get("reasoning"))
+                        .and_then(|r| r.as_str())
+                    {
+                        if !reasoning.is_empty() {
+                            return Some(reasoning.to_string());
+                        }
+                    }
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 pub fn extract_text(data: &Value) -> Option<String> {
     match data {
         Value::String(s) => {
@@ -335,6 +366,7 @@ pub fn ensure_assistant_variant(message: &mut StoredMessage) {
             created_at: message.created_at,
             usage: message.usage.clone(),
             attachments: Vec::new(),
+            reasoning: None,
         });
         message.selected_variant_id = Some(id);
     } else if message.selected_variant_id.is_none() {
@@ -355,5 +387,6 @@ pub fn new_assistant_variant(
         created_at,
         usage,
         attachments: Vec::new(),
+        reasoning: None,
     }
 }

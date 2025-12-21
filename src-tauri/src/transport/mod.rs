@@ -23,6 +23,11 @@ pub fn emit_normalized(app: &tauri::AppHandle, request_id: &str, event: Normaliz
             "type": "delta",
             "data": { "text": text },
         }),
+        NormalizedEvent::Reasoning { text } => json!({
+            "requestId": request_id,
+            "type": "reasoning",
+            "data": { "text": text },
+        }),
         NormalizedEvent::Usage { usage } => json!({
             "requestId": request_id,
             "type": "usage",

@@ -11,8 +11,8 @@ use super::prompt_engine;
 use super::prompts;
 use super::prompts::{APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID};
 use super::request::{
-    ensure_assistant_variant, extract_error_message, extract_text, extract_usage,
-    new_assistant_variant,
+    ensure_assistant_variant, extract_error_message, extract_reasoning, extract_text,
+    extract_usage, new_assistant_variant,
 };
 use super::service::{record_usage_if_available, resolve_api_key, ChatContext};
 use super::storage::{default_character_rules, recent_messages, save_session};
@@ -27,7 +27,7 @@ use crate::utils::emit_debug;
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
-const FALLBACK_MAX_OUTPUT_TOKENS: u32 = 1024;
+const FALLBACK_MAX_OUTPUT_TOKENS: u32 = 4096;
 const FALLBACK_DYNAMIC_WINDOW: u32 = 20;
 const FALLBACK_DYNAMIC_MAX_ENTRIES: u32 = 50;
 const MEMORY_ID_SPACE: u64 = 1_000_000;
@@ -803,6 +803,7 @@ pub async fn chat_completion(
         memory_refs: Vec::new(),
         is_pinned: false,
         attachments: persisted_attachments,
+        reasoning: None,
     };
     session.messages.push(user_msg.clone());
     session.updated_at = now;
@@ -1101,6 +1102,7 @@ pub async fn chat_completion(
     );
 
     let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
 
     let assistant_created_at = now_millis()?;
     let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
@@ -1161,6 +1163,7 @@ pub async fn chat_completion(
         },
         is_pinned: false,
         attachments: persisted_assistant_attachments,
+        reasoning,
     };
 
     session.messages.push(assistant_message.clone());
@@ -1598,6 +1601,7 @@ pub async fn chat_regenerate(
     }
 
     let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
     let created_at = now_millis()?;
     let new_variant = new_assistant_variant(text.clone(), usage.clone(), created_at);
 
@@ -1636,6 +1640,7 @@ pub async fn chat_regenerate(
 
         assistant_message.content = text.clone();
         assistant_message.usage = usage.clone();
+        assistant_message.reasoning = reasoning.clone();
         assistant_message.variants.push(new_variant);
         if let Some(last) = assistant_message.variants.last() {
             assistant_message.selected_variant_id = Some(last.id.clone());
@@ -2039,6 +2044,7 @@ pub async fn chat_continue(
     );
 
     let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
 
     let assistant_created_at = now_millis()?;
     let variant = new_assistant_variant(text.clone(), usage.clone(), assistant_created_at);
@@ -2097,6 +2103,7 @@ pub async fn chat_continue(
         },
         is_pinned: false,
         attachments: persisted_assistant_attachments,
+        reasoning,
     };
 
     session.messages.push(assistant_message.clone());

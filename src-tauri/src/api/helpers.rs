@@ -161,6 +161,7 @@ pub(crate) async fn handle_streaming_response(
     };
 
     let mut usage_emitted = false;
+    let mut text_emitted = false;
     let mut decoder = sse::SseDecoder::new();
     let mut aborted = false;
 
@@ -176,26 +177,16 @@ pub(crate) async fn handle_streaming_response(
                 aborted = true;
                 break;
             }
-            // Process stream chunks
             chunk_result = body_stream.next() => {
                 match chunk_result {
                     Some(Ok(chunk)) => {
                         let text = String::from_utf8_lossy(&chunk).to_string();
-                        // Do not forward raw provider SSE chunks to the frontend.
-                        // Some providers include very large base64 payloads (e.g. image outputs) in SSE which
-                        // should never be surfaced as raw text events.
-                        /*log_info(
-                            app,
-                            "api_request",
-                            &format!(
-                                "[api_request] stream chunk: {} bytes for {}",
-                                chunk.len(),
-                                url_for_log
-                            ),
-                        );*/
-                        // Buffered SSE decoding to normalized events
                         for event in decoder.feed(&text, req.provider_id.as_deref()) {
-                            if let NormalizedEvent::Usage { .. } = event { usage_emitted = true; }
+                            match &event {
+                                NormalizedEvent::Usage { .. } => { usage_emitted = true; }
+                                NormalizedEvent::Delta { .. } => { text_emitted = true; }
+                                _ => {}
+                            }
                             emit_normalized(app, &request_id, event);
                         }
                         collected.extend_from_slice(&chunk);
@@ -250,7 +241,22 @@ pub(crate) async fn handle_streaming_response(
             collected.len()
         ),
     );
+
     let value = parse_body_to_value(&text);
+
+    if !text_emitted && ok {
+        if let Some(content) = chat_request::extract_text(&value) {
+            if !content.is_empty() {
+                log_info(
+                    app,
+                    "api_request",
+                    "[api_request] non-SSE response detected, emitting content as delta",
+                );
+                emit_normalized(app, &request_id, NormalizedEvent::Delta { text: content });
+            }
+        }
+    }
+
     let provider_id = req.provider_id.as_deref().unwrap_or_default();
     let calls = parse_tool_calls(provider_id, &value);
     if !calls.is_empty() {

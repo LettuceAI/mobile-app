@@ -371,6 +371,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           is_pinned INTEGER NOT NULL DEFAULT 0,
           memory_refs TEXT NOT NULL DEFAULT '[]',
           attachments TEXT NOT NULL DEFAULT '[]',
+          reasoning TEXT,
           FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
 
@@ -382,6 +383,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           prompt_tokens INTEGER,
           completion_tokens INTEGER,
           total_tokens INTEGER,
+          reasoning TEXT,
           FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
         );
 
@@ -463,7 +465,40 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .map_err(|e| e.to_string())?;
     }
 
-    // Migrations: add custom gradient columns to characters if missing
+    let mut has_reasoning = false;
+    let mut stmt_reasoning = conn
+        .prepare("PRAGMA table_info(messages)")
+        .map_err(|e| e.to_string())?;
+    let mut rows_reasoning = stmt_reasoning.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows_reasoning.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        if col_name == "reasoning" {
+            has_reasoning = true;
+            break;
+        }
+    }
+    if !has_reasoning {
+        let _ = conn.execute("ALTER TABLE messages ADD COLUMN reasoning TEXT", []);
+    }
+
+    let mut has_variant_reasoning = false;
+    let mut stmt_variant_reasoning = conn
+        .prepare("PRAGMA table_info(message_variants)")
+        .map_err(|e| e.to_string())?;
+    let mut rows_variant_reasoning = stmt_variant_reasoning
+        .query([])
+        .map_err(|e| e.to_string())?;
+    while let Some(row) = rows_variant_reasoning.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        if col_name == "reasoning" {
+            has_variant_reasoning = true;
+            break;
+        }
+    }
+    if !has_variant_reasoning {
+        let _ = conn.execute("ALTER TABLE message_variants ADD COLUMN reasoning TEXT", []);
+    }
+
     let mut stmt2 = conn
         .prepare("PRAGMA table_info(characters)")
         .map_err(|e| e.to_string())?;

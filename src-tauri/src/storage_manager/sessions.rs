@@ -174,7 +174,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
     };
 
     // messages
-    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
     let mrows = mstmt
         .query_map(params![id], |r| {
             Ok((
@@ -189,6 +189,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
                 r.get::<_, i64>(8)?,
                 r.get::<_, Option<String>>(9)?,
                 r.get::<_, Option<String>>(10)?,
+                r.get::<_, Option<String>>(11)?,
             ))
         })
         .map_err(|e| e.to_string())?;
@@ -206,8 +207,9 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
             is_pinned,
             memory_refs_json,
             attachments_json,
+            reasoning,
         ) = mr.map_err(|e| e.to_string())?;
-        let mut vstmt = conn.prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens FROM message_variants WHERE message_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+        let mut vstmt = conn.prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
         let vrows = vstmt
             .query_map(params![&mid], |r| {
                 Ok((
@@ -217,18 +219,23 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
                     r.get::<_, Option<i64>>(3)?,
                     r.get::<_, Option<i64>>(4)?,
                     r.get::<_, Option<i64>>(5)?,
+                    r.get::<_, Option<String>>(6)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
         let mut variants: Vec<JsonValue> = Vec::new();
         for vr in vrows {
-            let (vid, vcontent, vcreated, vp, vc, vt) = vr.map_err(|e| e.to_string())?;
+            let (vid, vcontent, vcreated, vp, vc, vt, vreasoning) =
+                vr.map_err(|e| e.to_string())?;
             let mut vobj = JsonMap::new();
             vobj.insert("id".into(), JsonValue::String(vid));
             vobj.insert("content".into(), JsonValue::String(vcontent));
             vobj.insert("createdAt".into(), JsonValue::from(vcreated));
             if let Some(usage) = json_usage_summary(vp, vc, vt) {
                 vobj.insert("usage".into(), usage);
+            }
+            if let Some(r) = vreasoning {
+                vobj.insert("reasoning".into(), JsonValue::String(r));
             }
             variants.push(JsonValue::Object(vobj));
         }
@@ -257,6 +264,10 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(&att_json) {
                 mobj.insert("attachments".into(), parsed);
             }
+        }
+        // Add reasoning if present
+        if let Some(r) = reasoning {
+            mobj.insert("reasoning".into(), JsonValue::String(r));
         }
         messages.push(JsonValue::Object(mobj));
     }
@@ -317,7 +328,7 @@ fn fetch_messages_page(
     before_id: Option<&str>,
 ) -> Result<Vec<JsonValue>, String> {
     let mut sql = String::from(
-        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments FROM messages WHERE session_id = ?1",
+        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ?1",
     );
 
     let use_before = before_created_at.is_some() && before_id.is_some();
@@ -348,6 +359,7 @@ fn fetch_messages_page(
                             r.get::<_, i64>(8)?,
                             r.get::<_, Option<String>>(9)?,
                             r.get::<_, Option<String>>(10)?,
+                            r.get::<_, Option<String>>(11)?,
                         ))
                     },
                 )
@@ -372,6 +384,7 @@ fn fetch_messages_page(
                         r.get::<_, i64>(8)?,
                         r.get::<_, Option<String>>(9)?,
                         r.get::<_, Option<String>>(10)?,
+                        r.get::<_, Option<String>>(11)?,
                     ))
                 })
                 .map_err(|e| e.to_string())?;
@@ -391,7 +404,7 @@ fn fetch_messages_page(
             .collect::<Vec<_>>()
             .join(",");
         let vsql = format!(
-            "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
+            "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
             placeholders
         );
         let mut vstmt = conn.prepare(&vsql).map_err(|e| e.to_string())?;
@@ -405,16 +418,20 @@ fn fetch_messages_page(
                     r.get::<_, Option<i64>>(4)?,
                     r.get::<_, Option<i64>>(5)?,
                     r.get::<_, Option<i64>>(6)?,
+                    r.get::<_, Option<String>>(7)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
 
         for vr in vrows {
-            let (message_id, vid, vcontent, vcreated, vp, vc, vt) =
+            let (message_id, vid, vcontent, vcreated, vp, vc, vt, vreasoning) =
                 vr.map_err(|e| e.to_string())?;
             variants_by_message.entry(message_id).or_default().push({
                 let mut vobj = JsonMap::new();
                 vobj.insert("id".into(), JsonValue::String(vid));
+                if let Some(r) = vreasoning {
+                    vobj.insert("reasoning".into(), JsonValue::String(r));
+                }
                 vobj.insert("content".into(), JsonValue::String(vcontent));
                 vobj.insert("createdAt".into(), JsonValue::from(vcreated));
                 if let Some(usage) = json_usage_summary(vp, vc, vt) {
@@ -438,6 +455,7 @@ fn fetch_messages_page(
         is_pinned,
         memory_refs_json,
         attachments_json,
+        reasoning,
     ) in raw_messages
     {
         let mut mobj = JsonMap::new();
@@ -466,6 +484,9 @@ fn fetch_messages_page(
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(&att_json) {
                 mobj.insert("attachments".into(), parsed);
             }
+        }
+        if let Some(r) = reasoning {
+            mobj.insert("reasoning".into(), JsonValue::String(r));
         }
         out.push(JsonValue::Object(mobj));
     }
@@ -628,7 +649,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
 
     let placeholders = pinned_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
-        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments FROM messages WHERE session_id = ?1 AND id IN ({}) ORDER BY created_at ASC, id ASC",
+        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ?1 AND id IN ({}) ORDER BY created_at ASC, id ASC",
         placeholders
     );
     let mut mstmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -652,6 +673,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
                 r.get::<_, i64>(8)?,
                 r.get::<_, Option<String>>(9)?,
                 r.get::<_, Option<String>>(10)?,
+                r.get::<_, Option<String>>(11)?,
             ))
         })
         .map_err(|e| e.to_string())?;
@@ -672,7 +694,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
             .collect::<Vec<_>>()
             .join(",");
         let vsql = format!(
-            "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
+            "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
             placeholders
         );
         let mut vstmt = conn.prepare(&vsql).map_err(|e| e.to_string())?;
@@ -686,16 +708,20 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
                     r.get::<_, Option<i64>>(4)?,
                     r.get::<_, Option<i64>>(5)?,
                     r.get::<_, Option<i64>>(6)?,
+                    r.get::<_, Option<String>>(7)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
 
         for vr in vrows {
-            let (message_id, vid, vcontent, vcreated, vp, vc, vt) =
+            let (message_id, vid, vcontent, vcreated, vp, vc, vt, vreasoning) =
                 vr.map_err(|e| e.to_string())?;
             variants_by_message.entry(message_id).or_default().push({
                 let mut vobj = JsonMap::new();
                 vobj.insert("id".into(), JsonValue::String(vid));
+                if let Some(r) = vreasoning {
+                    vobj.insert("reasoning".into(), JsonValue::String(r));
+                }
                 vobj.insert("content".into(), JsonValue::String(vcontent));
                 vobj.insert("createdAt".into(), JsonValue::from(vcreated));
                 if let Some(usage) = json_usage_summary(vp, vc, vt) {
@@ -719,6 +745,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         is_pinned,
         memory_refs_json,
         attachments_json,
+        reasoning,
     ) in raw_messages
     {
         let mut mobj = JsonMap::new();
@@ -920,10 +947,14 @@ pub fn messages_upsert_batch(
             .get("attachments")
             .cloned()
             .unwrap_or_else(|| JsonValue::Array(Vec::new()));
+        let reasoning = m
+            .get("reasoning")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         tx.execute(
-            r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  session_id=excluded.session_id,
                  role=excluded.role,
@@ -935,7 +966,8 @@ pub fn messages_upsert_batch(
                  selected_variant_id=excluded.selected_variant_id,
                  is_pinned=excluded.is_pinned,
                  memory_refs=excluded.memory_refs,
-                 attachments=excluded.attachments"#,
+                 attachments=excluded.attachments,
+                 reasoning=excluded.reasoning"#,
             params![
                 &mid,
                 &session_id,
@@ -948,7 +980,8 @@ pub fn messages_upsert_batch(
                 selected_variant_id,
                 is_pinned,
                 memory_refs.to_string(),
-                attachments.to_string()
+                attachments.to_string(),
+                reasoning
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -978,9 +1011,13 @@ pub fn messages_upsert_batch(
                     let vt = u
                         .and_then(|u| u.get("totalTokens"))
                         .and_then(|v| v.as_i64());
+                    let vreasoning = v
+                        .get("reasoning")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string());
                     tx.execute(
-                        "INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        params![vid, &mid, vcontent, vcreated, vp, vc, vt],
+                        "INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        params![vid, &mid, vcontent, vcreated, vp, vc, vt, vreasoning],
                     )
                     .map_err(|e| e.to_string())?;
                 }
@@ -1213,9 +1250,13 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                 .get("attachments")
                 .cloned()
                 .unwrap_or_else(|| JsonValue::Array(Vec::new()));
+            let reasoning = m
+                .get("reasoning")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             tx.execute(
-                r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      session_id=excluded.session_id,
                      role=excluded.role,
@@ -1227,7 +1268,8 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                      selected_variant_id=excluded.selected_variant_id,
                      is_pinned=excluded.is_pinned,
                      memory_refs=excluded.memory_refs,
-                     attachments=excluded.attachments"#,
+                     attachments=excluded.attachments,
+                     reasoning=excluded.reasoning"#,
                 params![
                     &mid,
                     &id,
@@ -1240,7 +1282,8 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                     selected_variant_id,
                     is_pinned,
                     memory_refs.to_string(),
-                    attachments.to_string()
+                    attachments.to_string(),
+                    reasoning
                 ],
             ).map_err(|e| e.to_string())?;
 
@@ -1272,9 +1315,13 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                         let vt = u
                             .and_then(|u| u.get("totalTokens"))
                             .and_then(|v| v.as_i64());
+                        let vreasoning = v
+                            .get("reasoning")
+                            .and_then(|x| x.as_str())
+                            .map(|s| s.to_string());
                         tx.execute(
-                            "INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            params![vid, &mid, vcontent, vcreated, vp, vc, vt],
+                            "INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            params![vid, &mid, vcontent, vcreated, vp, vc, vt, vreasoning],
                         )
                         .map_err(|e| e.to_string())?;
                     }
