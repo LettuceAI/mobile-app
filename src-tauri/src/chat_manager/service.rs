@@ -136,8 +136,10 @@ pub async fn record_usage_if_available(
         prompt_tokens: usage_info.prompt_tokens,
         completion_tokens: usage_info.completion_tokens,
         total_tokens: usage_info.total_tokens,
-        memory_tokens: None,  // Will be calculated below
-        summary_tokens: None, // Will be calculated below
+        memory_tokens: None,  
+        summary_tokens: None, 
+        reasoning_tokens: usage_info.reasoning_tokens,
+        image_tokens: usage_info.image_tokens,
         cost: None,
         success: true,
         error_message: None,
@@ -218,4 +220,59 @@ pub async fn record_usage_if_available(
     }
 }
 
-// Message helpers moved to chat_manager/messages.rs
+pub fn record_failed_usage(
+    app: &tauri::AppHandle,
+    usage: &Option<UsageSummary>,
+    session: &Session,
+    character: &Character,
+    model: &Model,
+    provider_cred: &ProviderCredential,
+    operation_type: &str,
+    error_message: &str,
+    log_scope: &str,
+) {
+    let Some(usage_info) = usage else {
+        return;
+    };
+
+    let request_usage = RequestUsage {
+        id: Uuid::new_v4().to_string(),
+        timestamp: now_millis().unwrap_or(0),
+        session_id: session.id.clone(),
+        character_id: character.id.clone(),
+        character_name: character.name.clone(),
+        model_id: model.id.clone(),
+        model_name: model.name.clone(),
+        provider_id: provider_cred.provider_id.clone(),
+        provider_label: provider_cred.provider_id.clone(),
+        operation_type: operation_type.to_string(),
+        prompt_tokens: usage_info.prompt_tokens,
+        completion_tokens: usage_info.completion_tokens,
+        total_tokens: usage_info.total_tokens,
+        memory_tokens: None,
+        summary_tokens: None,
+        reasoning_tokens: usage_info.reasoning_tokens,
+        image_tokens: usage_info.image_tokens,
+        cost: None,
+        success: false,
+        error_message: Some(error_message.to_string()),
+        metadata: Default::default(),
+    };
+
+    log_info(
+        app,
+        log_scope,
+        format!(
+            "recording failed usage: tokens={:?} error={}",
+            usage_info.total_tokens, error_message
+        ),
+    );
+
+    if let Err(err) = add_usage_record(app, request_usage) {
+        log_error(
+            app,
+            log_scope,
+            format!("failed to save failed usage record: {}", err),
+        );
+    }
+}

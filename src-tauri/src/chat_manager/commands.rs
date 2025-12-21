@@ -14,7 +14,9 @@ use super::request::{
     ensure_assistant_variant, extract_error_message, extract_reasoning, extract_text,
     extract_usage, new_assistant_variant,
 };
-use super::service::{record_usage_if_available, resolve_api_key, ChatContext};
+use super::service::{
+    record_failed_usage, record_usage_if_available, resolve_api_key, ChatContext,
+};
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
@@ -54,6 +56,7 @@ fn is_dynamic_memory_active(
             .eq_ignore_ascii_case("dynamic")
 }
 
+#[allow(dead_code)]
 fn has_image_generation_model(settings: &Settings) -> bool {
     settings.models.iter().any(|m| {
         m.output_scopes
@@ -64,27 +67,9 @@ fn has_image_generation_model(settings: &Settings) -> bool {
 
 fn append_image_directive_instructions(
     system_prompt: Option<String>,
-    settings: &Settings,
+    _settings: &Settings,
 ) -> Option<String> {
-    if !has_image_generation_model(settings) {
-        return system_prompt;
-    }
-
-    let instructions = r#"
-
-[In-chat image generation]
-If the user asks you to generate an image, respond normally in-character, then include a directive on its own line in this exact format:
-<<image:{"prompt":"...","size":"1024x1024","n":1}>>
-Only include the directive when an image is requested. Never mention the directive itself.
-"#;
-
-    Some(match system_prompt {
-        Some(mut existing) => {
-            existing.push_str(instructions);
-            existing
-        }
-        None => instructions.trim_start().to_string(),
-    })
+    return system_prompt;
 }
 
 fn dynamic_window_size(settings: &Settings) -> usize {
@@ -1134,12 +1119,46 @@ pub async fn chat_completion(
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+
+        // Extract usage even from failed requests (some providers report tokens used before failure)
+        let failed_usage = extract_usage(api_response.data());
+        if let Some(ref usage) = failed_usage {
+            log_info(
+                &app,
+                "chat_completion",
+                format!("usage from failed request: prompt={:?} completion={:?} total={:?} reasoning={:?}",
+                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens, usage.reasoning_tokens),
+            );
+            emit_debug(
+                &app,
+                "failed_request_usage",
+                json!({
+                    "promptTokens": usage.prompt_tokens,
+                    "completionTokens": usage.completion_tokens,
+                    "totalTokens": usage.total_tokens,
+                    "reasoningTokens": usage.reasoning_tokens,
+                }),
+            );
+            record_failed_usage(
+                &app,
+                &failed_usage,
+                &session,
+                &character,
+                model,
+                provider_cred,
+                "chat",
+                &err_message,
+                "chat_completion",
+            );
+        }
+
         emit_debug(
             &app,
             "provider_error",
             json!({
                 "status": api_response.status,
                 "message": err_message,
+                "usage": failed_usage,
             }),
         );
         let combined_error = if err_message == fallback {
@@ -1657,13 +1676,41 @@ pub async fn chat_regenerate(
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+
+        // Extract usage even from failed requests
+        let failed_usage = extract_usage(api_response.data());
+        if let Some(ref usage) = failed_usage {
+            emit_debug(
+                &app,
+                "failed_request_usage",
+                json!({
+                    "promptTokens": usage.prompt_tokens,
+                    "completionTokens": usage.completion_tokens,
+                    "totalTokens": usage.total_tokens,
+                    "reasoningTokens": usage.reasoning_tokens,
+                }),
+            );
+        }
+
         emit_debug(
             &app,
             "regenerate_provider_error",
             json!({
                 "status": api_response.status,
                 "message": err_message,
+                "usage": failed_usage,
             }),
+        );
+        record_failed_usage(
+            &app,
+            &failed_usage,
+            &session,
+            &character,
+            model,
+            provider_cred,
+            "regenerate",
+            &err_message,
+            "chat_regenerate",
         );
         return if err_message == fallback {
             Err(err_message)
@@ -2086,6 +2133,22 @@ pub async fn chat_continue(
     if !api_response.ok {
         let fallback = format!("Provider returned status {}", api_response.status);
         let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+
+        // Extract usage even from failed requests
+        let failed_usage = extract_usage(api_response.data());
+        if let Some(ref usage) = failed_usage {
+            emit_debug(
+                &app,
+                "failed_request_usage",
+                json!({
+                    "promptTokens": usage.prompt_tokens,
+                    "completionTokens": usage.completion_tokens,
+                    "totalTokens": usage.total_tokens,
+                    "reasoningTokens": usage.reasoning_tokens,
+                }),
+            );
+        }
+
         log_error(
             &app,
             "chat_continue",
@@ -2100,7 +2163,19 @@ pub async fn chat_continue(
             json!({
                 "status": api_response.status,
                 "message": err_message,
+                "usage": failed_usage,
             }),
+        );
+        record_failed_usage(
+            &app,
+            &failed_usage,
+            &session,
+            &character,
+            model,
+            provider_cred,
+            "continue",
+            &err_message,
+            "chat_continue",
         );
         return if err_message == fallback {
             Err(err_message)

@@ -24,6 +24,11 @@ pub struct RequestUsage {
     // Token breakdown for prompt analysis
     pub memory_tokens: Option<u64>,  // Tokens from memory embeddings
     pub summary_tokens: Option<u64>, // Tokens from memory summary
+    // Extended token tracking
+    #[serde(default)]
+    pub reasoning_tokens: Option<u64>, // Tokens used for reasoning/thinking
+    #[serde(default)]
+    pub image_tokens: Option<u64>, // Tokens used for image processing
 
     pub cost: Option<RequestCost>, // Calculated cost (only for OpenRouter for now)
 

@@ -37,7 +37,7 @@ function formatNumber(value: number): string {
  */
 function getOperationTypeInfo(operationType: string): { label: string; color: string } {
   const normalized = operationType.toLowerCase();
-  
+
   switch (normalized) {
     case 'chat':
       return { label: 'Chat', color: 'bg-blue-500/15 border-blue-400/30 text-blue-100' };
@@ -199,7 +199,7 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
                   <span className="text-white/60">{getOperationTypeInfo(request.operationType).label}</span>
                 </div>
               )}
-              
+
               <div className="flex justify-between text-xs">
                 <span className="text-white/40">Time</span>
                 <span className="text-white/60">
@@ -238,6 +238,20 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
                 </div>
               )}
 
+              {request.reasoningTokens !== undefined && request.reasoningTokens > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-white/40">Reasoning</span>
+                  <span className="text-white/60">{request.reasoningTokens.toLocaleString()} tokens</span>
+                </div>
+              )}
+
+              {request.imageTokens !== undefined && request.imageTokens > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-white/40">Image</span>
+                  <span className="text-white/60">{request.imageTokens.toLocaleString()} tokens</span>
+                </div>
+              )}
+
               {request.cost && (
                 <>
                   <div className="h-px bg-white/10 my-2" />
@@ -249,6 +263,7 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
                     <span className="text-white/40">Output Cost</span>
                     <span className="text-white/60">{formatCurrency(request.cost.completionCost)}</span>
                   </div>
+
                   <div className="flex justify-between text-sm font-medium">
                     <span className="text-white/70">Total</span>
                     <span className="text-emerald-400">{formatCurrency(request.cost.totalCost)}</span>
@@ -358,11 +373,11 @@ export function UsagePage() {
 
       console.log('[UsagePage] Exporting CSV with filter:', filter);
       console.log('[UsagePage] Current records count:', records.length);
-      
+
       const csv = await exportCSV(filter);
       console.log('[UsagePage] CSV generated, length:', csv?.length);
       console.log('[UsagePage] CSV preview:', csv?.substring(0, 200));
-      
+
       if (!csv) {
         const errorMsg = 'exportCSV returned null - check console for errors';
         console.error('[UsagePage]', errorMsg);
@@ -370,7 +385,7 @@ export function UsagePage() {
         alert(errorMsg);
         return;
       }
-      
+
       if (csv.length === 0) {
         const errorMsg = 'No CSV data generated - check if there are records in the selected date range';
         console.error('[UsagePage]', errorMsg);
@@ -529,7 +544,7 @@ export function UsagePage() {
         </div>
       </BottomMenu>
 
-  {/* Content */}
+      {/* Content */}
       <div className="space-y-4 px-4 py-4">
         {/* Export Success/Error Toast */}
         <AnimatePresence>
@@ -789,21 +804,21 @@ export function UsagePage() {
                 </h3>
                 <div className="space-y-2">
                   <AnimatePresence initial={false}>
-                  {filteredRecords
-                    .sort((a, b) => b.timestamp - a.timestamp)
-                    .slice(0, visibleCount)
-                    .map((request, idx) => (
-                      <motion.div
-                        key={request.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.15 }}
-                        layout
-                      >
-                        <RequestRow request={request} alt={idx % 2 === 1} />
-                      </motion.div>
-                    ))}
+                    {filteredRecords
+                      .sort((a, b) => b.timestamp - a.timestamp)
+                      .slice(0, visibleCount)
+                      .map((request, idx) => (
+                        <motion.div
+                          key={request.id}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.15 }}
+                          layout
+                        >
+                          <RequestRow request={request} alt={idx % 2 === 1} />
+                        </motion.div>
+                      ))}
                   </AnimatePresence>
                 </div>
                 {visibleCount < filteredRecords.length && (

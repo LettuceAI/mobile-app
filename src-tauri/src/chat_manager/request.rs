@@ -300,6 +300,34 @@ fn usage_from_map(map: &Map<String, Value>) -> Option<UsageSummary> {
             "outputTokens",
         ],
     );
+    let reasoning_tokens = take_first(
+        map,
+        &[
+            "reasoning_tokens",
+            "reasoningTokens",
+            "thinking_tokens",
+            "thinkingTokens",
+        ],
+    )
+    .or_else(|| {
+        // Some providers nest reasoning tokens in completion_tokens_details
+        map.get("completion_tokens_details")
+            .and_then(|v| v.as_object())
+            .and_then(|details| take_first(details, &["reasoning_tokens", "reasoningTokens"]))
+    });
+    let image_tokens = take_first(map, &["image_tokens", "imageTokens"]).or_else(|| {
+        // Some providers nest image tokens in prompt_tokens_details or completion_tokens_details
+        map.get("prompt_tokens_details")
+            .and_then(|v| v.as_object())
+            .and_then(|details| {
+                take_first(details, &["image_tokens", "imageTokens", "cached_tokens"])
+            })
+            .or_else(|| {
+                map.get("completion_tokens_details")
+                    .and_then(|v| v.as_object())
+                    .and_then(|details| take_first(details, &["image_tokens", "imageTokens"]))
+            })
+    });
     let total_tokens = take_first(map, &["total_tokens", "totalTokens"]).or_else(|| {
         match (prompt_tokens, completion_tokens) {
             (Some(p), Some(c)) => Some(p + c),
@@ -314,6 +342,8 @@ fn usage_from_map(map: &Map<String, Value>) -> Option<UsageSummary> {
             prompt_tokens,
             completion_tokens,
             total_tokens,
+            reasoning_tokens,
+            image_tokens,
         })
     }
 }

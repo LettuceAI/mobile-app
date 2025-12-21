@@ -21,6 +21,8 @@ export const UsageSummarySchema = z.object({
   promptTokens: OptionalTokenCount,
   completionTokens: OptionalTokenCount,
   totalTokens: OptionalTokenCount,
+  reasoningTokens: OptionalTokenCount,
+  imageTokens: OptionalTokenCount,
 });
 export type UsageSummary = z.infer<typeof UsageSummarySchema>;
 

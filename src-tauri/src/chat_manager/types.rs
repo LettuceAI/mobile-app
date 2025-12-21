@@ -388,6 +388,10 @@ pub struct UsageSummary {
     pub prompt_tokens: Option<u64>,
     pub completion_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    #[serde(default)]
+    pub reasoning_tokens: Option<u64>,
+    #[serde(default)]
+    pub image_tokens: Option<u64>,
 }
 
 #[derive(Serialize)]

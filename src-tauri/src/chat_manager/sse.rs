@@ -303,12 +303,27 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             "output_tokens",
             "completionTokens",
             "outputTokens",
-            "reasoningTokens",
-            "reasoning_tokens",
-            "imageTokens",
-            "image_tokens",
         ],
     );
+    let reasoning_tokens = take_first(
+        u,
+        &[
+            "reasoning_tokens",
+            "reasoningTokens",
+            "thinking_tokens",
+            "thinkingTokens",
+        ],
+    )
+    .or_else(|| {
+        // Check nested completion_tokens_details
+        u.get("completion_tokens_details")
+            .and_then(|d| take_first(d, &["reasoning_tokens", "reasoningTokens"]))
+    });
+    let image_tokens = take_first(u, &["image_tokens", "imageTokens"]).or_else(|| {
+        // Check nested details
+        u.get("prompt_tokens_details")
+            .and_then(|d| take_first(d, &["image_tokens", "imageTokens", "cached_tokens"]))
+    });
     let total_tokens = take_first(u, &["total_tokens", "totalTokens"]).or_else(|| {
         match (prompt_tokens, completion_tokens) {
             (Some(p), Some(c)) => Some(p + c),
@@ -323,6 +338,8 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             prompt_tokens,
             completion_tokens,
             total_tokens,
+            reasoning_tokens,
+            image_tokens,
         })
     }
 }

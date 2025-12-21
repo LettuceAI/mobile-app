@@ -26,6 +26,8 @@ export interface RequestUsage {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  reasoningTokens?: number;
+  imageTokens?: number;  
   
   // Token breakdown for prompt analysis
   memoryTokens?: number;  // Tokens from memory embeddings

@@ -404,6 +404,8 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           total_tokens INTEGER,
           memory_tokens INTEGER,
           summary_tokens INTEGER,
+          reasoning_tokens INTEGER,
+          image_tokens INTEGER,
           prompt_cost REAL,
           completion_cost REAL,
           total_cost REAL,
@@ -443,6 +445,32 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
       "#,
     )
     .map_err(|e| e.to_string())?;
+
+    // Migrations: add reasoning_tokens and image_tokens to usage_records if missing
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(usage_records)")
+        .map_err(|e| e.to_string())?;
+    let mut cols = std::collections::HashSet::new();
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        cols.insert(col_name);
+    }
+
+    if !cols.contains("reasoning_tokens") {
+        conn.execute(
+            "ALTER TABLE usage_records ADD COLUMN reasoning_tokens INTEGER",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    if !cols.contains("image_tokens") {
+        conn.execute(
+            "ALTER TABLE usage_records ADD COLUMN image_tokens INTEGER",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
 
     // Migrations: add memory_refs to messages if missing
     let mut stmt = conn
