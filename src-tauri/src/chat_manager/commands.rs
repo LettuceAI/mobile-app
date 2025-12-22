@@ -1071,6 +1071,26 @@ pub async fn chat_completion(
         ),
     );
 
+    log_info(
+        &app,
+        "chat_completion",
+        format!(
+            "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
+            built.body.get("reasoning_effort"),
+            built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
+            built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
+            reasoning_enabled
+        ),
+    );
+
+    if let Some(reasoning_config) = built.body.get("reasoning") {
+        log_info(
+            &app,
+            "chat_completion",
+            format!("reasoning config: {}", reasoning_config),
+        );
+    }
+
     emit_debug(
         &app,
         "sending_request",
@@ -1080,6 +1100,9 @@ pub async fn chat_completion(
             "stream": should_stream,
             "requestId": request_id,
             "endpoint": built.url,
+            "reasoning": built.body.get("reasoning"),
+            "reasoning_effort": built.body.get("reasoning_effort"),
+            "max_completion_tokens": built.body.get("max_completion_tokens"),
         }),
     );
 
@@ -1676,6 +1699,26 @@ pub async fn chat_regenerate(
         ),
     );
 
+    log_info(
+        &app,
+        "chat_regenerate",
+        format!(
+            "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
+            built.body.get("reasoning_effort"),
+            built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
+            built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
+            reasoning_enabled
+        ),
+    );
+
+    if let Some(reasoning_config) = built.body.get("reasoning") {
+        log_info(
+            &app,
+            "chat_regenerate",
+            format!("reasoning config: {}", reasoning_config),
+        );
+    }
+
     let api_request_payload = ApiRequest {
         url: built.url,
         method: Some("POST".into()),
@@ -2141,6 +2184,26 @@ pub async fn chat_continue(
             &request_id
         ),
     );
+
+    log_info(
+        &app,
+        "chat_continue",
+        format!(
+            "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
+            built.body.get("reasoning_effort"),
+            built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
+            built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
+            reasoning_enabled
+        ),
+    );
+
+    if let Some(reasoning_config) = built.body.get("reasoning") {
+        log_info(
+            &app,
+            "chat_continue",
+            format!("reasoning config: {}", reasoning_config),
+        );
+    }
 
     let api_request_payload = ApiRequest {
         url: built.url,

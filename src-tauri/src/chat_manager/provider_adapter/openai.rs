@@ -106,6 +106,7 @@ impl ProviderAdapter for OpenAIAdapter {
             } else {
                 None
             },
+            reasoning: None, // OpenAI uses reasoning_effort at top level
             tools,
             tool_choice,
         };
@@ -178,22 +179,53 @@ impl ProviderAdapter for OpenRouterAdapter {
         reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value {
-        // Reuse OpenAI body logic
-        OpenAIAdapter.body(
-            model_name,
-            messages_for_api,
-            _system_prompt,
+        let (tools, tool_choice) = if let Some(cfg) = tool_config {
+            let tools = openai_tools(cfg);
+            let choice = if tools.is_some() {
+                openai_tool_choice(cfg.choice.as_ref())
+            } else {
+                None
+            };
+            (tools, choice)
+        } else {
+            (None, None)
+        };
+
+        let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
+
+        // OpenRouter uses nested reasoning config, not top-level reasoning_effort
+        let reasoning_config = if reasoning_enabled {
+            Some(super::ReasoningConfig {
+                effort: reasoning_effort,
+                max_tokens: reasoning_budget,
+            })
+        } else {
+            None
+        };
+
+        let body = OpenAIChatRequest {
+            model: model_name,
+            messages: messages_for_api,
+            stream: should_stream,
             temperature,
             top_p,
-            max_tokens,
-            should_stream,
+            max_tokens: if reasoning_enabled {
+                None
+            } else {
+                Some(total_tokens)
+            },
+            max_completion_tokens: if reasoning_enabled {
+                Some(total_tokens)
+            } else {
+                None
+            },
             frequency_penalty,
             presence_penalty,
-            _top_k,
-            tool_config,
-            reasoning_enabled,
-            reasoning_effort,
-            reasoning_budget,
-        )
+            reasoning_effort: None, // OpenRouter uses nested reasoning object instead
+            reasoning: reasoning_config,
+            tools,
+            tool_choice,
+        };
+        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
 }

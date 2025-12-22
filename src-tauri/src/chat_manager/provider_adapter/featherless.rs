@@ -111,6 +111,7 @@ impl ProviderAdapter for FeatherlessAdapter {
             } else {
                 None
             },
+            reasoning: None,
             tools,
             tool_choice,
         };

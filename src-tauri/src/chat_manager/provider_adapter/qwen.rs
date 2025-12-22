@@ -99,6 +99,7 @@ impl ProviderAdapter for QwenAdapter {
             } else {
                 None
             },
+            reasoning: None,
             tools,
             tool_choice,
         };

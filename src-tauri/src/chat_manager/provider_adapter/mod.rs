@@ -74,9 +74,21 @@ pub(crate) struct OpenAIChatRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reasoning: Option<ReasoningConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tools: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tool_choice: Option<Value>,
+}
+
+/// Reasoning configuration for OpenRouter and compatible providers.
+/// OpenRouter expects reasoning params in a nested object.
+#[derive(Serialize)]
+pub(crate) struct ReasoningConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
 }
 
 mod anannas;

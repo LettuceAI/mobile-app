@@ -87,6 +87,17 @@ impl ProviderAdapter for MistralAdapter {
 
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
+        let mistral_effort = if reasoning_enabled {
+            reasoning_effort.map(|e| {
+                match e.to_lowercase().as_str() {
+                    "none" => "none".to_string(),
+                    _ => "high".to_string(), 
+                }
+            })
+        } else {
+            None
+        };
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -97,11 +108,8 @@ impl ProviderAdapter for MistralAdapter {
             max_completion_tokens: None,
             frequency_penalty,
             presence_penalty,
-            reasoning_effort: if reasoning_enabled {
-                reasoning_effort
-            } else {
-                None
-            },
+            reasoning_effort: mistral_effort,
+            reasoning: None,
             tools: if tools.is_empty() { None } else { Some(tools) },
             tool_choice,
         };

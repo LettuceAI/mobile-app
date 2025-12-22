@@ -101,6 +101,7 @@ impl ProviderAdapter for DeepSeekAdapter {
             } else {
                 None
             },
+            reasoning: None,
             tools,
             tool_choice,
         };
