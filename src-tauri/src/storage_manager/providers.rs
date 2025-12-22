@@ -35,17 +35,21 @@ pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result
     let headers = cred
         .get("headers")
         .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+    let config = cred
+        .get("config")
+        .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
     conn.execute(
-        r#"INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers, config)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 provider_id = excluded.provider_id,
                 label = excluded.label,
                 api_key = excluded.api_key,
                 base_url = excluded.base_url,
                 default_model = excluded.default_model,
-                headers = excluded.headers"#,
-        params![id, provider_id, label, api_key, base_url, default_model, headers],
+                headers = excluded.headers,
+                config = excluded.config"#,
+        params![id, provider_id, label, api_key, base_url, default_model, headers, config],
     ).map_err(|e| e.to_string())?;
 
     let mut out = JsonMap::new();
@@ -77,6 +81,11 @@ pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result
             out.insert("headers".into(), v);
         }
     }
+    if let Some(v) = cred.get("config").cloned() {
+        if !v.is_null() {
+            out.insert("config".into(), v);
+        }
+    }
     Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| e.to_string())?)
 }
 
@@ -94,7 +103,7 @@ pub fn get_provider_credential(
 ) -> Result<crate::chat_manager::types::ProviderCredential, String> {
     let conn = open_db(app).map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials WHERE id = ?")
+        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers, config FROM provider_credentials WHERE id = ?")
         .map_err(|e| e.to_string())?;
 
     let row = stmt
@@ -113,6 +122,13 @@ pub fn get_provider_credential(
                 None
             };
 
+            let config_json: Option<String> = r.get(7)?;
+            let config = if let Some(s) = config_json {
+                serde_json::from_str(&s).ok()
+            } else {
+                None
+            };
+
             Ok(crate::chat_manager::types::ProviderCredential {
                 id,
                 provider_id,
@@ -121,6 +137,7 @@ pub fn get_provider_credential(
                 base_url,
                 default_model,
                 headers,
+                config,
             })
         })
         .optional()

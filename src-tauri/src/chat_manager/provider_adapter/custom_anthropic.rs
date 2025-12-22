@@ -1,12 +1,32 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::ProviderAdapter;
-use crate::chat_manager::tooling::{anthropic_tool_choice, anthropic_tools, ToolConfig};
+use crate::chat_manager::tooling::ToolConfig;
+use crate::chat_manager::types::ProviderCredential;
 
-pub struct AnthropicAdapter;
+pub struct CustomAnthropicAdapter {
+    credential_config: Option<Value>,
+}
+
+impl CustomAnthropicAdapter {
+    pub fn new(credential: &ProviderCredential) -> Self {
+        Self {
+            credential_config: credential.config.clone(),
+        }
+    }
+
+    fn config_value(&self, key: &str) -> Option<String> {
+        self.credential_config
+            .as_ref()
+            .and_then(|v| v.get(key))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+}
 
 #[derive(Serialize)]
 struct AnthropicContent {
@@ -36,10 +56,6 @@ struct AnthropicMessagesRequest {
     #[serde(rename = "top_k", skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<Value>>,
-    #[serde(rename = "tool_choice", skip_serializing_if = "Option::is_none")]
-    tool_choice: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     thinking: Option<AnthropicThinking>,
 }
 
@@ -50,34 +66,36 @@ struct AnthropicThinking {
     budget_tokens: u32,
 }
 
-impl ProviderAdapter for AnthropicAdapter {
+impl ProviderAdapter for CustomAnthropicAdapter {
     fn endpoint(&self, base_url: &str) -> String {
-        let trimmed = base_url.trim_end_matches('/');
-        if trimmed.ends_with("/v1") {
-            format!("{}/messages", trimmed)
-        } else {
-            format!("{}/v1/messages", trimmed)
-        }
+        let path = self
+            .config_value("chatEndpoint")
+            .unwrap_or_else(|| "/v1/messages".to_string());
+        format!("{}{}", base_url.trim_end_matches('/'), path)
     }
 
-    fn system_role(&self) -> std::borrow::Cow<'static, str> {
-        "system".into()
+    fn system_role(&self) -> Cow<'static, str> {
+        self.config_value("systemRole")
+            .map(|s| Cow::Owned(s))
+            .unwrap_or(Cow::Borrowed("system"))
     }
 
     fn supports_stream(&self) -> bool {
-        true
+        self.credential_config
+            .as_ref()
+            .and_then(|v| v.get("supportsStream"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
-        &["x-api-key", "X-API-Key"]
+        &["x-api-key"]
     }
 
     fn default_headers_template(&self) -> HashMap<String, String> {
-        let mut out = HashMap::new();
-        out.insert("x-api-key".into(), "<apiKey>".into());
-        out.insert("Content-Type".into(), "application/json".into());
-        out.insert("Accept".into(), "text/event-stream".into());
-        out
+        let mut map = HashMap::new();
+        map.insert("x-api-key".to_string(), "$API_KEY".to_string());
+        map
     }
 
     fn headers(
@@ -85,19 +103,18 @@ impl ProviderAdapter for AnthropicAdapter {
         api_key: &str,
         extra: Option<&HashMap<String, String>>,
     ) -> HashMap<String, String> {
-        let mut out: HashMap<String, String> = HashMap::new();
-        out.insert("x-api-key".into(), api_key.to_string());
-        out.insert("Content-Type".into(), "application/json".into());
-        out.insert("Accept".into(), "text/event-stream".into());
-        out.insert("anthropic-version".into(), "2023-06-01".into());
-        out.entry("User-Agent".into())
-            .or_insert_with(|| "LettuceAI/0.1".into());
-        if let Some(extra) = extra {
-            for (k, v) in extra.iter() {
-                out.insert(k.clone(), v.clone());
+        let mut headers = HashMap::new();
+        headers.insert("x-api-key".to_string(), api_key.to_string());
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+        headers.insert("Accept".to_string(), "text/event-stream".to_string());
+        headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
+
+        if let Some(extra_headers) = extra {
+            for (k, v) in extra_headers {
+                headers.insert(k.clone(), v.clone());
             }
         }
-        out
+        headers
     }
 
     fn body(
@@ -112,11 +129,19 @@ impl ProviderAdapter for AnthropicAdapter {
         _frequency_penalty: Option<f64>,
         _presence_penalty: Option<f64>,
         top_k: Option<u32>,
-        tool_config: Option<&ToolConfig>,
+        _tool_config: Option<&ToolConfig>,
         reasoning_enabled: bool,
         _reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value {
+        // Get custom role mappings
+        let user_role = self
+            .config_value("userRole")
+            .unwrap_or_else(|| "user".to_string());
+        let assistant_role = self
+            .config_value("assistantRole")
+            .unwrap_or_else(|| "assistant".to_string());
+
         let mut msgs: Vec<AnthropicMessage> = Vec::new();
         for msg in messages_for_api {
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
@@ -131,11 +156,14 @@ impl ProviderAdapter for AnthropicAdapter {
             if content_text.is_empty() {
                 continue;
             }
-            let mapped_role = match role {
-                "assistant" => "assistant",
-                _ => "user",
-            }
-            .to_string();
+
+            // Map to custom roles
+            let mapped_role = if role == "assistant" {
+                assistant_role.clone()
+            } else {
+                user_role.clone()
+            };
+
             msgs.push(AnthropicMessage {
                 role: mapped_role,
                 content: vec![AnthropicContent {
@@ -154,28 +182,21 @@ impl ProviderAdapter for AnthropicAdapter {
             None
         };
 
-        // If thinking is enabled, max_tokens must be greater than budget_tokens
         let total_max_tokens = if let Some(ref t) = thinking {
             max_tokens + t.budget_tokens
         } else {
             max_tokens
         };
 
-        let tools = tool_config.and_then(anthropic_tools);
-        let tool_choice = tool_config.and_then(|cfg| anthropic_tool_choice(cfg.choice.as_ref()));
-
         let body = AnthropicMessagesRequest {
             model: model_name.to_string(),
             messages: msgs,
-
             temperature: if thinking.is_some() { 1.0 } else { temperature },
             top_p,
             max_tokens: total_max_tokens,
             stream: should_stream,
             system: system_prompt.filter(|s| !s.is_empty()),
             top_k,
-            tools,
-            tool_choice,
             thinking,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))

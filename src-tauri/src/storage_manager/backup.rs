@@ -167,7 +167,7 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
 fn export_provider_credentials(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
     let mut stmt = conn
-        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials")
+        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers, config FROM provider_credentials")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -180,6 +180,7 @@ fn export_provider_credentials(app: &tauri::AppHandle) -> Result<Vec<JsonValue>,
                 "base_url": r.get::<_, Option<String>>(4)?,
                 "default_model": r.get::<_, Option<String>>(5)?,
                 "headers": r.get::<_, Option<String>>(6)?,
+                "config": r.get::<_, Option<String>>(7)?,
             }))
         })
         .map_err(|e| e.to_string())?;
@@ -987,8 +988,8 @@ fn import_provider_credentials(app: &tauri::AppHandle, data: &JsonValue) -> Resu
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
-                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers, config) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     item.get("id").and_then(|v| v.as_str()),
                     item.get("provider_id").and_then(|v| v.as_str()),
@@ -997,6 +998,7 @@ fn import_provider_credentials(app: &tauri::AppHandle, data: &JsonValue) -> Resu
                     item.get("base_url").and_then(|v| v.as_str()),
                     item.get("default_model").and_then(|v| v.as_str()),
                     item.get("headers").and_then(|v| v.as_str()),
+                    item.get("config").and_then(|v| v.as_str()),
                 ],
             ).map_err(|e| e.to_string())?;
         }

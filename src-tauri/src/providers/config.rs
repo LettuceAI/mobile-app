@@ -1,6 +1,7 @@
 use crate::chat_manager::provider_adapter::adapter_for;
-use crate::chat_manager::types::ProviderId;
+use crate::chat_manager::types::{ProviderCredential, ProviderId};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -66,12 +67,26 @@ fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
         ),
         ("anannas", "Anannas AI", "https://api.anannas.ai/v1"),
         ("groq", "Groq", "https://api.groq.com"),
+        ("ollama", "Ollama (Local)", ""),
+        ("lmstudio", "LM Studio (Local)", ""),
+        ("custom", "Custom (OpenAI-format)", ""),
+        ("custom-anthropic", "Custom (Anthropic-format)", ""),
     ];
 
     base_configs
         .into_iter()
         .map(|(id, name, base)| {
-            let adapter = adapter_for(&ProviderId(id.to_string()));
+            let cred = ProviderCredential {
+                id: "temp".to_string(), // dummy
+                provider_id: id.to_string(),
+                label: name.to_string(),
+                api_key: None,
+                base_url: Some(base.to_string()),
+                default_model: None,
+                headers: None,
+                config: None,
+            };
+            let adapter = adapter_for(&cred);
             let endpoint_full = adapter.endpoint(base);
             let api_endpoint_path = path_from_url(&endpoint_full);
             let required_auth_headers: Vec<String> = adapter
@@ -132,8 +147,18 @@ pub fn build_endpoint_url(provider_id: &ProviderId, custom_base_url: Option<&str
 }
 
 #[allow(dead_code)]
-pub fn get_system_role(provider_id: &ProviderId) -> &'static str {
-    adapter_for(provider_id).system_role()
+pub fn get_system_role(provider_id: &ProviderId) -> Cow<'static, str> {
+    let cred = ProviderCredential {
+        id: "temp".to_string(),
+        provider_id: provider_id.0.clone(),
+        label: "".to_string(),
+        api_key: None,
+        base_url: None,
+        default_model: None,
+        headers: None,
+        config: None,
+    };
+    adapter_for(&cred).system_role()
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ interface ProviderConfigFormProps {
     label: string;
     apiKey: string;
     baseUrl: string;
+    config?: Record<string, any>;
     testResult: TestResult;
     isTesting: boolean;
     isSubmitting: boolean;
@@ -16,6 +17,7 @@ interface ProviderConfigFormProps {
     onLabelChange: (value: string) => void;
     onApiKeyChange: (value: string) => void;
     onBaseUrlChange: (value: string) => void;
+    onConfigChange?: (config: Record<string, any>) => void;
     onTestConnection: () => void;
     onSave: () => void;
 }
@@ -26,6 +28,7 @@ export function ProviderConfigForm({
     label,
     apiKey,
     baseUrl,
+    config,
     testResult,
     isTesting,
     isSubmitting,
@@ -34,10 +37,13 @@ export function ProviderConfigForm({
     onLabelChange,
     onApiKeyChange,
     onBaseUrlChange,
+    onConfigChange,
     onTestConnection,
     onSave,
 }: ProviderConfigFormProps) {
     const navigate = useNavigate();
+    const isCustomProvider = ["custom", "custom-anthropic"].includes(selectedProviderId);
+    const isLocalProvider = ["ollama", "lmstudio"].includes(selectedProviderId);
 
     return (
         <div className="space-y-4">
@@ -55,35 +61,104 @@ export function ProviderConfigForm({
 
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-white/70">API Key</label>
-                    <button
-                        onClick={() => navigate(`/wheretofind${selectedProviderId ? `?provider=${selectedProviderId}` : ""}`)}
-                        className="text-[11px] text-gray-400 hover:text-white transition-colors"
-                    >
-                        Where to find it
-                    </button>
+                    <label className="text-xs font-medium text-white/70">API Key{isLocalProvider ? " (Optional)" : ""}</label>
+                    {!isLocalProvider && !isCustomProvider && (
+                        <button
+                            onClick={() => navigate(`/wheretofind${selectedProviderId ? `?provider=${selectedProviderId}` : ""}`)}
+                            className="text-[11px] text-gray-400 hover:text-white transition-colors"
+                        >
+                            Where to find it
+                        </button>
+                    )}
                 </div>
                 <input
                     type="text"
                     value={apiKey}
                     onChange={(e) => onApiKeyChange(e.target.value)}
-                    placeholder="sk-..."
+                    placeholder={isLocalProvider ? "Usually not required" : "sk-..."}
                     className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
                 <p className="text-[11px] text-gray-500">Keys are encrypted locally</p>
             </div>
 
             <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70">Base URL (Optional)</label>
+                <label className="text-xs font-medium text-white/70">Base URL{isLocalProvider ? "" : " (Optional)"}</label>
                 <input
                     type="text"
                     value={baseUrl}
                     onChange={(e) => onBaseUrlChange(e.target.value)}
-                    placeholder="https://api.provider.com"
+                    placeholder={isLocalProvider ? "http://localhost:11434" : "https://api.provider.com"}
                     className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
                 />
-                <p className="text-[11px] text-gray-500">Override the default endpoint if needed</p>
+                <p className="text-[11px] text-gray-500">{isLocalProvider ? "Your local server address with port" : "Override the default endpoint if needed"}</p>
             </div>
+
+            {isCustomProvider && onConfigChange && (
+                <>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-white/70">Chat Endpoint</label>
+                            <input
+                                type="text"
+                                value={config?.chatEndpoint ?? "/v1/chat/completions"}
+                                onChange={(e) => onConfigChange({ ...config, chatEndpoint: e.target.value })}
+                                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-white/70">System Role</label>
+                            <input
+                                type="text"
+                                value={config?.systemRole ?? "system"}
+                                onChange={(e) => onConfigChange({ ...config, systemRole: e.target.value })}
+                                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-white/70">User Role</label>
+                            <input
+                                type="text"
+                                value={config?.userRole ?? "user"}
+                                onChange={(e) => onConfigChange({ ...config, userRole: e.target.value })}
+                                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-white/70">Assistant Role</label>
+                            <input
+                                type="text"
+                                value={config?.assistantRole ?? "assistant"}
+                                onChange={(e) => onConfigChange({ ...config, assistantRole: e.target.value })}
+                                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs font-medium text-white/70">Supports Streaming</span>
+                        <div className="flex items-center">
+                            <input
+                                id="supportsStream-onboarding"
+                                type="checkbox"
+                                checked={config?.supportsStream ?? true}
+                                onChange={(e) => onConfigChange({ ...config, supportsStream: e.target.checked })}
+                                className="peer sr-only"
+                            />
+                            <label
+                                htmlFor="supportsStream-onboarding"
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out ${(config?.supportsStream ?? true) ? 'bg-emerald-500' : 'bg-white/20'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${(config?.supportsStream ?? true) ? 'translate-x-5' : 'translate-x-0'
+                                        }`}
+                                />
+                            </label>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {testResult && (
                 <div className={`rounded-xl border px-4 py-3 text-sm ${testResult.success

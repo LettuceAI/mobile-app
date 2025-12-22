@@ -17,8 +17,8 @@ impl ProviderAdapter for OpenAIAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str {
-        "developer"
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
+        "developer".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
@@ -126,8 +126,8 @@ impl ProviderAdapter for OpenRouterAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str {
-        "system"
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {

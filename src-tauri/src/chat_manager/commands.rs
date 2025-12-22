@@ -930,7 +930,7 @@ pub async fn chat_completion(
     let mut messages_for_api = Vec::new();
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
-        system_role,
+        &system_role,
         system_prompt,
     );
 
@@ -965,7 +965,7 @@ pub async fn chat_completion(
     if let Some(block) = memory_block {
         crate::chat_manager::messages::push_system_message(
             &mut messages_for_api,
-            system_role,
+            &system_role,
             Some(format!("Relevant memories:\n{}", block)),
         );
     }
@@ -1558,7 +1558,7 @@ pub async fn chat_regenerate(
     let system_role = super::request_builder::system_role_for(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
-        crate::chat_manager::messages::push_system_message(&mut out, system_role, system_prompt);
+        crate::chat_manager::messages::push_system_message(&mut out, &system_role, system_prompt);
 
         let char_name = &character.name;
         let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -2081,7 +2081,7 @@ pub async fn chat_continue(
     let mut messages_for_api = Vec::new();
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
-        system_role,
+        &system_role,
         system_prompt,
     );
 
@@ -2895,7 +2895,7 @@ async fn run_memory_tool_update(
 
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
-        system_role,
+        &system_role,
         Some(rendered),
     );
     let memory_lines = format_memories_with_ids(session);
@@ -3292,7 +3292,7 @@ async fn summarize_messages(
     rendered = rendered.replace("{{prev_summary}}", prev_text);
     crate::chat_manager::messages::push_system_message(
         &mut messages_for_api,
-        system_role,
+        &system_role,
         Some(rendered),
     );
     for msg in convo_window {

@@ -18,9 +18,9 @@ impl ProviderAdapter for FeatherlessAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str {
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
         // Uses classic system / user / assistant roles
-        "system"
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {

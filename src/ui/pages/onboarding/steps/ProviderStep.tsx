@@ -11,6 +11,7 @@ interface ProviderStepProps {
     label: string;
     apiKey: string;
     baseUrl: string;
+    config?: Record<string, any>;
     testResult: TestResult;
     isTesting: boolean;
     isSubmitting: boolean;
@@ -20,6 +21,7 @@ interface ProviderStepProps {
     onLabelChange: (value: string) => void;
     onApiKeyChange: (value: string) => void;
     onBaseUrlChange: (value: string) => void;
+    onConfigChange?: (config: Record<string, any>) => void;
     onTestConnection: () => void;
     onSave: () => void;
 }
@@ -30,6 +32,7 @@ export function ProviderStep({
     label,
     apiKey,
     baseUrl,
+    config,
     testResult,
     isTesting,
     isSubmitting,
@@ -39,6 +42,7 @@ export function ProviderStep({
     onLabelChange,
     onApiKeyChange,
     onBaseUrlChange,
+    onConfigChange,
     onTestConnection,
     onSave,
 }: ProviderStepProps) {
@@ -111,6 +115,7 @@ export function ProviderStep({
                             label={label}
                             apiKey={apiKey}
                             baseUrl={baseUrl}
+                            config={config}
                             testResult={testResult}
                             isTesting={isTesting}
                             isSubmitting={isSubmitting}
@@ -119,6 +124,7 @@ export function ProviderStep({
                             onLabelChange={onLabelChange}
                             onApiKeyChange={onApiKeyChange}
                             onBaseUrlChange={onBaseUrlChange}
+                            onConfigChange={onConfigChange}
                             onTestConnection={onTestConnection}
                             onSave={onSave}
                         />
@@ -177,6 +183,7 @@ export function ProviderStep({
                         label={label}
                         apiKey={apiKey}
                         baseUrl={baseUrl}
+                        config={config}
                         testResult={testResult}
                         isTesting={isTesting}
                         isSubmitting={isSubmitting}
@@ -185,6 +192,7 @@ export function ProviderStep({
                         onLabelChange={onLabelChange}
                         onApiKeyChange={onApiKeyChange}
                         onBaseUrlChange={onBaseUrlChange}
+                        onConfigChange={onConfigChange}
                         onTestConnection={onTestConnection}
                         onSave={onSave}
                     />

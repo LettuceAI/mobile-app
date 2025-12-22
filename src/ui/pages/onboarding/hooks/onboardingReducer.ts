@@ -23,6 +23,7 @@ export interface OnboardingState {
     providerLabel: string;
     apiKey: string;
     baseUrl: string;
+    config: Record<string, any> | undefined;
     isTesting: boolean;
     testResult: TestResult;
     isSubmittingProvider: boolean;
@@ -50,10 +51,11 @@ export type OnboardingAction =
     | { type: "SET_CAPABILITIES_LOADING"; payload: boolean }
 
     // Provider
-    | { type: "SELECT_PROVIDER"; payload: { providerId: string; label: string; baseUrl: string } }
+    | { type: "SELECT_PROVIDER"; payload: { providerId: string; label: string; baseUrl: string; config?: Record<string, any> } }
     | { type: "SET_PROVIDER_LABEL"; payload: string }
     | { type: "SET_API_KEY"; payload: string }
     | { type: "SET_BASE_URL"; payload: string }
+    | { type: "SET_CONFIG"; payload: Record<string, any> | undefined }
     | { type: "SET_TESTING"; payload: boolean }
     | { type: "SET_TEST_RESULT"; payload: TestResult }
     | { type: "SET_SUBMITTING_PROVIDER"; payload: boolean }
@@ -84,6 +86,7 @@ export const initialOnboardingState: OnboardingState = {
     providerLabel: "",
     apiKey: "",
     baseUrl: "",
+    config: undefined,
     isTesting: false,
     testResult: null,
     isSubmittingProvider: false,
@@ -119,6 +122,7 @@ export function onboardingReducer(state: OnboardingState, action: OnboardingActi
                 selectedProviderId: action.payload.providerId,
                 providerLabel: action.payload.label,
                 baseUrl: action.payload.baseUrl,
+                config: action.payload.config,
                 testResult: null,
             };
         case "SET_PROVIDER_LABEL":
@@ -127,6 +131,8 @@ export function onboardingReducer(state: OnboardingState, action: OnboardingActi
             return { ...state, apiKey: action.payload };
         case "SET_BASE_URL":
             return { ...state, baseUrl: action.payload };
+        case "SET_CONFIG":
+            return { ...state, config: action.payload };
         case "SET_TESTING":
             return { ...state, isTesting: action.payload };
         case "SET_TEST_RESULT":

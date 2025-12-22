@@ -39,9 +39,9 @@ impl ProviderAdapter for ZAIAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str {
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
         // ZAI uses standard OpenAI-style roles
-        "system"
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {

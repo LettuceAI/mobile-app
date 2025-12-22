@@ -18,8 +18,8 @@ impl ProviderAdapter for QwenAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str {
-        "system"
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {

@@ -15,9 +15,9 @@ impl ProviderAdapter for ChutesAdapter {
         DeepSeekAdapter.endpoint(base_url)
     }
 
-    fn system_role(&self) -> &'static str {
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
         // vLLM / SGLang deployments generally expect classic OpenAI roles.
-        "system"
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {

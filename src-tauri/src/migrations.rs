@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 20;
+pub const CURRENT_MIGRATION_VERSION: u32 = 21;
 
 /// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
@@ -244,6 +244,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v19_to_v20(app)?;
         version = 20;
+    }
+
+    if version < 21 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v20 -> v21: Add config column to provider_credentials".to_string(),
+        );
+        migrate_v20_to_v21(app)?;
+        version = 21;
     }
 
     // v6 -> v7 (model list cache) removed; feature dropped
@@ -757,18 +767,16 @@ fn migrate_v11_to_v12(app: &AppHandle) -> Result<(), String> {
 /// Migration v6 -> v7: move per-credential model list cache from models-cache.json to SQLite table
 // migrate_v6_to_v7 removed (feature dropped)
 
-/// Migration v2 -> v3: Normalize prompt templates to global prompts (remove reliance on scopes)
-///
-/// We keep the same storage file/format (no new file), but update all templates so they no longer
-/// carry meaningful scope assignments:
-/// - Set `scope` to AppWide for all non-default templates
-/// - Clear `targetIds` for all templates
-///
-/// Notes:
-/// - App Default template already uses AppWide scope; we don't change its scope (and updates are
-///   prevented by prompts::update_template anyway)
-/// - Character/Model/Settings continue to reference templates by ID; behavior is unchanged because
-///   runtime selection uses explicit references, not scope matching
+// We keep the same storage file/format (no new file), but update all templates so they no longer
+// carry meaningful scope assignments:
+// - Set `scope` to AppWide for all non-default templates
+// - Clear `targetIds` for all templates
+//
+// Notes:
+// - App Default template already uses AppWide scope; we don't change its scope (and updates are
+//   prevented by prompts::update_template anyway)
+// - Character/Model/Settings continue to reference templates by ID; behavior is unchanged because
+//   runtime selection uses explicit references, not scope matching
 fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
     use crate::chat_manager::prompts;
     use crate::chat_manager::types::PromptScope;
@@ -798,33 +806,40 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
         }
 
         let mut need_update = false;
-        let mut new_scope: Option<PromptScope> = None;
-        let mut new_targets: Option<Vec<String>> = None;
+        let new_scope = if t.scope != PromptScope::AppWide {
+            need_update = true;
+            PromptScope::AppWide
+        } else {
+            t.scope.clone()
+        };
 
-        if t.scope != PromptScope::AppWide {
-            new_scope = Some(PromptScope::AppWide);
+        let new_target_ids = if !t.target_ids.is_empty() {
             need_update = true;
-        }
-        if !t.target_ids.is_empty() {
-            new_targets = Some(Vec::new());
-            need_update = true;
-        }
+            Vec::new()
+        } else {
+            t.target_ids.clone()
+        };
 
         if need_update {
-            let _updated =
-                prompts::update_template(app, t.id.clone(), None, new_scope, new_targets, None)?;
+            let _ = prompts::update_template(
+                app,
+                t.id.clone(),
+                None,
+                Some(new_scope),
+                Some(new_target_ids),
+                None,
+            )?;
             changed += 1;
         }
     }
 
-    log_info(
-        app,
-        "migrations",
-        format!(
-            "v2->v3 migration completed. Templates normalized: {}",
-            changed
-        ),
-    );
+    if changed > 0 {
+        log_info(
+            app,
+            "migrations",
+            format!("Migrated {} templates to AppWide scope", changed),
+        );
+    }
 
     Ok(())
 }
@@ -1591,5 +1606,20 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         "migrations",
         "v19->v20 migration completed".to_string(),
     );
+    Ok(())
+}
+
+/// Migration v20 -> v21: Add config column to provider_credentials
+fn migrate_v20_to_v21(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+    // Add column with default NULL if it doesn't exist
+    // We use TEXT to store JSON blob
+    let _ = conn.execute(
+        "ALTER TABLE provider_credentials ADD COLUMN config TEXT",
+        [],
+    );
+
     Ok(())
 }

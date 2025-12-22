@@ -138,6 +138,7 @@ export function OnboardingPage() {
                                     label={state.providerLabel}
                                     apiKey={state.apiKey}
                                     baseUrl={state.baseUrl}
+                                    config={state.config}
                                     testResult={state.testResult}
                                     isTesting={state.isTesting}
                                     isSubmitting={state.isSubmittingProvider}
@@ -147,6 +148,7 @@ export function OnboardingPage() {
                                     onLabelChange={controller.handleProviderLabelChange}
                                     onApiKeyChange={controller.handleApiKeyChange}
                                     onBaseUrlChange={controller.handleBaseUrlChange}
+                                    onConfigChange={controller.handleConfigChange}
                                     onTestConnection={controller.handleTestConnection}
                                     onSave={controller.handleSaveProvider}
                                 />

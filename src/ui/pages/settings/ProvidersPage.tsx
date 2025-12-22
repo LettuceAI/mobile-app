@@ -41,21 +41,21 @@ export function ProvidersPage() {
     };
   }, [openEditor]);
 
-      const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
-        <div className="flex h-64 flex-col items-center justify-center">
-            <EthernetPort className="mb-3 h-12 w-12 text-white/20" />
-            <h3 className="mb-1 text-lg font-medium text-white">No Providers yet</h3>
-            <p className="mb-4 text-center text-sm text-white/50">
-                Add and manage API providers for AI models
-            </p>
-            <button
-                onClick={onCreate}
-                className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 active:scale-[0.99]"
-            >
-                Add Provider
-            </button>
-        </div>
-    );
+  const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
+    <div className="flex h-64 flex-col items-center justify-center">
+      <EthernetPort className="mb-3 h-12 w-12 text-white/20" />
+      <h3 className="mb-1 text-lg font-medium text-white">No Providers yet</h3>
+      <p className="mb-4 text-center text-sm text-white/50">
+        Add and manage API providers for AI models
+      </p>
+      <button
+        onClick={onCreate}
+        className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 active:scale-[0.99]"
+      >
+        Add Provider
+      </button>
+    </div>
+  );
 
 
   return (
@@ -138,7 +138,23 @@ export function ProvidersPage() {
                 value={editorProvider.providerId}
                 onChange={(e) => {
                   const providerId = e.target.value;
-                  updateEditorProvider({ providerId });
+                  // Reset config when switching providers
+                  updateEditorProvider({
+                    providerId,
+                    config: providerId === 'custom' ? {
+                      chatEndpoint: '/v1/chat/completions',
+                      systemRole: 'system',
+                      userRole: 'user',
+                      assistantRole: 'assistant',
+                      supportsStream: true
+                    } : providerId === 'custom-anthropic' ? {
+                      chatEndpoint: '/v1/messages',
+                      systemRole: 'system',
+                      userRole: 'user',
+                      assistantRole: 'assistant',
+                      supportsStream: true
+                    } : undefined
+                  });
                   setValidationError(null);
                 }}
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
@@ -184,6 +200,78 @@ export function ProvidersPage() {
                 className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
               />
             </div>
+            {(editorProvider.providerId === 'custom' || editorProvider.providerId === 'custom-anthropic') && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-white/70">Chat Endpoint</label>
+                    <input
+                      type="text"
+                      value={editorProvider.config?.chatEndpoint ?? '/v1/chat/completions'}
+                      onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, chatEndpoint: e.target.value } })}
+                      placeholder="/v1/chat/completions"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-white/70">System Role</label>
+                    <input
+                      type="text"
+                      value={editorProvider.config?.systemRole ?? 'system'}
+                      onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, systemRole: e.target.value } })}
+                      placeholder="system"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-white/70">User Role</label>
+                    <input
+                      type="text"
+                      value={editorProvider.config?.userRole ?? 'user'}
+                      onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, userRole: e.target.value } })}
+                      placeholder="user"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-white/70">Assistant Role</label>
+                    <input
+                      type="text"
+                      value={editorProvider.config?.assistantRole ?? 'assistant'}
+                      onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, assistantRole: e.target.value } })}
+                      placeholder="assistant"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-sm font-medium text-white/70">Supports Streaming (SSE/Delta)</span>
+                  <div className="flex items-center">
+                    <input
+                      id="supportsStream"
+                      type="checkbox"
+                      checked={editorProvider.config?.supportsStream ?? true}
+                      onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, supportsStream: e.target.checked } })}
+                      className="peer sr-only"
+                    />
+                    <label
+                      htmlFor="supportsStream"
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out ${(editorProvider.config?.supportsStream ?? true)
+                        ? 'bg-emerald-500'
+                        : 'bg-white/20'
+                        }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${(editorProvider.config?.supportsStream ?? true) ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
             {validationError && (
               <p className="text-xs font-medium text-rose-300">{validationError}</p>
             )}

@@ -37,6 +37,8 @@ pub struct ProviderCredential {
     pub base_url: Option<String>,
     pub default_model: Option<String>,
     pub headers: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub config: Option<Value>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

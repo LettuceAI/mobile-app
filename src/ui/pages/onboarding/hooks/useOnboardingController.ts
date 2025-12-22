@@ -35,6 +35,7 @@ export interface OnboardingController {
     handleProviderLabelChange: (value: string) => void;
     handleApiKeyChange: (value: string) => void;
     handleBaseUrlChange: (value: string) => void;
+    handleConfigChange: (config: Record<string, any> | undefined) => void;
     handleTestConnection: () => Promise<void>;
     handleSaveProvider: () => Promise<void>;
 
@@ -134,12 +135,21 @@ export function useOnboardingController(): OnboardingController {
     }, [state.step, navigate]);
 
     const handleSelectProvider = useCallback((provider: { id: string; name: string; defaultBaseUrl?: string }) => {
+        // Set defaults for custom providers
+        let config: Record<string, any> | undefined = undefined;
+        if (provider.id === 'custom') {
+            config = { chatEndpoint: '/v1/chat/completions', systemRole: 'system', userRole: 'user', assistantRole: 'assistant', supportsStream: true };
+        } else if (provider.id === 'custom-anthropic') {
+            config = { chatEndpoint: '/v1/messages', systemRole: 'system', userRole: 'user', assistantRole: 'assistant', supportsStream: true };
+        }
+
         dispatch({
             type: "SELECT_PROVIDER",
             payload: {
                 providerId: provider.id,
                 label: `My ${provider.name}`,
                 baseUrl: provider.defaultBaseUrl || getDefaultBaseUrl(provider.id),
+                config,
             },
         });
     }, []);
@@ -154,6 +164,10 @@ export function useOnboardingController(): OnboardingController {
 
     const handleBaseUrlChange = useCallback((value: string) => {
         dispatch({ type: "SET_BASE_URL", payload: value });
+    }, []);
+
+    const handleConfigChange = useCallback((config: Record<string, any> | undefined) => {
+        dispatch({ type: "SET_CONFIG", payload: config });
     }, []);
 
     const handleTestConnection = useCallback(async () => {
@@ -204,7 +218,17 @@ export function useOnboardingController(): OnboardingController {
         try {
             const credentialId = crypto.randomUUID();
             const trimmedKey = apiKey.trim();
-            const requiresVerification = ["chutes", "openai", "anthropic", "openrouter"].includes(selectedProviderId);
+            const isLocalProvider = ["custom", "custom-anthropic", "ollama", "lmstudio"].includes(selectedProviderId);
+            const requiresVerification = !isLocalProvider && ["chutes", "openai", "anthropic", "openrouter"].includes(selectedProviderId);
+
+            // Local providers require base URL
+            if (["ollama", "lmstudio"].includes(selectedProviderId) && !baseUrl?.trim()) {
+                dispatch({
+                    type: "SET_TEST_RESULT",
+                    payload: { success: false, message: "Base URL is required (e.g., http://localhost:11434)" },
+                });
+                return;
+            }
 
             if (requiresVerification) {
                 const verification = await invoke<{ providerId: string; valid: boolean; status?: number; error?: string }>(
@@ -232,6 +256,7 @@ export function useOnboardingController(): OnboardingController {
                 label: providerLabel.trim(),
                 apiKey: trimmedKey,
                 baseUrl: baseUrl || undefined,
+                config: state.config,
             };
 
             const result = await addOrUpdateProviderCredential(credential);
@@ -410,6 +435,7 @@ export function useOnboardingController(): OnboardingController {
         handleProviderLabelChange,
         handleApiKeyChange,
         handleBaseUrlChange,
+        handleConfigChange,
         handleTestConnection,
         handleSaveProvider,
         canSaveModel,

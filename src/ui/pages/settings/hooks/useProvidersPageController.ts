@@ -44,7 +44,7 @@ export function useProvidersPageController(): ControllerReturn {
 
   const reload = useCallback(async () => {
     const settings = await readSettings();
-    console.log("[ProvidersPage] Loaded providers from storage:", 
+    console.log("[ProvidersPage] Loaded providers from storage:",
       settings.providerCredentials.map(p => ({
         id: p.id,
         label: p.label,
@@ -90,11 +90,11 @@ export function useProvidersPageController(): ControllerReturn {
       const baseProvider: ProviderCredential = provider
         ? { ...provider }
         : ({
-            id: newId,
-            providerId: firstCap?.id || "openai",
-            label: "",
-            apiKey: "",
-          } as ProviderCredential);
+          id: newId,
+          providerId: firstCap?.id || "openai",
+          label: "",
+          apiKey: "",
+        } as ProviderCredential);
 
       console.log("[ProvidersPage] Opening editor with provider:", {
         id: baseProvider.id,
@@ -145,10 +145,21 @@ export function useProvidersPageController(): ControllerReturn {
     dispatch({ type: "set_is_saving", payload: true });
 
     try {
-      const requiresVerification = ["chutes", "openai", "anthropic", "openrouter", "groq", "mistral"].includes(
-        editorProvider.providerId,
-      );
+      const isLocalProvider = ["custom", "custom-anthropic", "ollama", "lmstudio"].includes(editorProvider.providerId);
+      const requiresVerification = !isLocalProvider &&
+        ["chutes", "openai", "anthropic", "openrouter", "groq", "mistral"].includes(
+          editorProvider.providerId,
+        );
       const trimmedKey = apiKey.trim();
+
+      const requiresBaseUrl = ["ollama", "lmstudio"].includes(editorProvider.providerId);
+      if (requiresBaseUrl && !editorProvider.baseUrl?.trim()) {
+        dispatch({
+          type: "set_validation_error",
+          payload: "Base URL is required (e.g., http://localhost:11434)",
+        });
+        return;
+      }
 
       if (requiresVerification) {
         if (!trimmedKey) {

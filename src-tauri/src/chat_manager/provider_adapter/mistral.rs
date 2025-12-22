@@ -17,8 +17,8 @@ impl ProviderAdapter for MistralAdapter {
         }
     }
 
-    fn system_role(&self) -> &'static str {
-        "system"
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
@@ -88,11 +88,9 @@ impl ProviderAdapter for MistralAdapter {
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
         let mistral_effort = if reasoning_enabled {
-            reasoning_effort.map(|e| {
-                match e.to_lowercase().as_str() {
-                    "none" => "none".to_string(),
-                    _ => "high".to_string(), 
-                }
+            reasoning_effort.map(|e| match e.to_lowercase().as_str() {
+                "none" => "none".to_string(),
+                _ => "high".to_string(),
             })
         } else {
             None

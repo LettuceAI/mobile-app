@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use serde::Serialize;
 use serde_json::Value;
 
-use super::types::ProviderId;
+use super::types::ProviderCredential;
 use crate::chat_manager::tooling::ToolConfig;
 
 pub trait ProviderAdapter {
@@ -16,7 +17,7 @@ pub trait ProviderAdapter {
     }
 
     /// Preferred system role keyword for this provider when sending a system message.
-    fn system_role(&self) -> &'static str;
+    fn system_role(&self) -> Cow<'static, str>;
     /// Whether this provider supports Server-Sent Events (streaming responses).
     fn supports_stream(&self) -> bool {
         true
@@ -106,8 +107,15 @@ mod qwen;
 mod xai;
 mod zai;
 
-pub fn adapter_for(provider_id: &ProviderId) -> Box<dyn ProviderAdapter + Send + Sync> {
-    match provider_id.0.as_str() {
+mod custom;
+mod custom_anthropic;
+
+pub fn adapter_for(credential: &ProviderCredential) -> Box<dyn ProviderAdapter + Send + Sync> {
+    match credential.provider_id.as_str() {
+        "custom" => Box::new(custom::CustomGenericAdapter::new(credential)),
+        "custom-anthropic" => Box::new(custom_anthropic::CustomAnthropicAdapter::new(credential)),
+        "ollama" => Box::new(openai::OpenAIAdapter), // Ollama uses OpenAI-compatible API
+        "lmstudio" => Box::new(openai::OpenAIAdapter), // LM Studio uses OpenAI-compatible API
         "chutes" | "chutes.ai" => Box::new(chutes::ChutesAdapter),
         "anthropic" => Box::new(anthropic::AnthropicAdapter),
         "mistral" => Box::new(mistral::MistralAdapter),

@@ -5,7 +5,7 @@ use serde_json::Value;
 use super::provider_adapter::adapter_for;
 use super::request::provider_base_url;
 use super::tooling::ToolConfig;
-use super::types::{ProviderCredential, ProviderId};
+use super::types::ProviderCredential;
 
 pub struct BuiltRequest {
     pub url: String,
@@ -16,7 +16,7 @@ pub struct BuiltRequest {
 }
 
 /// Build a provider-specific chat API request (endpoint, headers, body).
-/// This function accepts messages already normalized into OpenAI-style
+/// This function accepts messages normalized into OpenAI-style
 /// role/content objects and adapts them for each provider.
 pub fn build_chat_request(
     provider_cred: &ProviderCredential,
@@ -39,7 +39,7 @@ pub fn build_chat_request(
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
 
-    let adapter = adapter_for(&ProviderId(provider_cred.provider_id.clone()));
+    let adapter = adapter_for(provider_cred);
     let url = adapter.build_url(&base_url, model_name, api_key);
     let headers = adapter.headers(api_key, provider_cred.headers.as_ref());
     let effective_stream = should_stream && adapter.supports_stream();
@@ -71,7 +71,7 @@ pub fn build_chat_request(
 }
 
 /// Returns the preferred system role keyword for the given provider.
-pub fn system_role_for(provider_cred: &ProviderCredential) -> &'static str {
-    let adapter = adapter_for(&ProviderId(provider_cred.provider_id.clone()));
+pub fn system_role_for(provider_cred: &ProviderCredential) -> std::borrow::Cow<'static, str> {
+    let adapter = adapter_for(provider_cred);
     adapter.system_role()
 }

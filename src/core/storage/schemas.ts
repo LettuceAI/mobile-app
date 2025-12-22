@@ -596,6 +596,7 @@ export const ProviderCredentialSchema = z.object({
   baseUrl: z.string().optional(),
   defaultModel: z.string().optional(),
   headers: z.record(z.string()).optional(),
+  config: z.record(z.any()).optional(),
 });
 export type ProviderCredential = z.infer<typeof ProviderCredentialSchema>;
 

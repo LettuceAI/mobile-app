@@ -73,8 +73,8 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         )
     }
 
-    fn system_role(&self) -> &'static str {
-        "system"
+    fn system_role(&self) -> std::borrow::Cow<'static, str> {
+        "system".into()
     }
 
     fn supports_stream(&self) -> bool {
