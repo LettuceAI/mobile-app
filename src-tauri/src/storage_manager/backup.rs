@@ -291,7 +291,7 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 
     // Get all characters
     let mut stmt = conn
-        .prepare("SELECT id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at FROM characters")
+        .prepare("SELECT id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters")
         .map_err(|e| e.to_string())?;
 
     let characters: Vec<(String, JsonValue)> = stmt
@@ -309,8 +309,12 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "prompt_template_id": r.get::<_, Option<String>>(8)?,
                 "system_prompt": r.get::<_, Option<String>>(9)?,
                 "disable_avatar_gradient": r.get::<_, i64>(10)? != 0,
-                "created_at": r.get::<_, i64>(11)?,
-                "updated_at": r.get::<_, i64>(12)?,
+                "custom_gradient_enabled": r.get::<_, i64>(11)? != 0,
+                "custom_gradient_colors": r.get::<_, Option<String>>(12)?,
+                "custom_text_color": r.get::<_, Option<String>>(13)?,
+                "custom_text_secondary": r.get::<_, Option<String>>(14)?,
+                "created_at": r.get::<_, i64>(15)?,
+                "updated_at": r.get::<_, i64>(16)?,
             });
             Ok((id, json))
         })
@@ -426,7 +430,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     for (session_id, mut session_json) in sessions {
         let mut messages_stmt = conn
             .prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, 
-                             selected_variant_id, is_pinned, memory_refs, attachments FROM messages 
+                             selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages 
                       WHERE session_id = ? ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
 
@@ -445,6 +449,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                     "is_pinned": r.get::<_, i64>(8)? != 0,
                     "memory_refs": r.get::<_, String>(9)?,
                     "attachments": r.get::<_, String>(10)?,
+                    "reasoning": r.get::<_, Option<String>>(11)?,
                 });
                 Ok((msg_id, json))
             })
@@ -456,7 +461,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
         let mut messages_with_variants = Vec::new();
         for (msg_id, mut msg_json) in messages {
             let mut variants_stmt = conn
-                .prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens 
+                .prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning 
                           FROM message_variants WHERE message_id = ?")
                 .map_err(|e| e.to_string())?;
 
@@ -469,6 +474,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                         "prompt_tokens": r.get::<_, Option<i64>>(3)?,
                         "completion_tokens": r.get::<_, Option<i64>>(4)?,
                         "total_tokens": r.get::<_, Option<i64>>(5)?,
+                        "reasoning": r.get::<_, Option<String>>(6)?,
                     }))
                 })
                 .map_err(|e| e.to_string())?
@@ -551,6 +557,88 @@ fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String
     }
 
     Ok(result)
+}
+
+fn export_lorebooks(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
+    let conn = open_db(app)?;
+
+    // Get all lorebooks
+    let mut stmt = conn
+        .prepare("SELECT id, name, description, created_at, updated_at FROM lorebooks")
+        .map_err(|e| e.to_string())?;
+
+    let lorebooks: Vec<(String, JsonValue)> = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let json = serde_json::json!({
+                "id": id.clone(),
+                "name": r.get::<_, String>(1)?,
+                "description": r.get::<_, Option<String>>(2)?,
+                "created_at": r.get::<_, i64>(3)?,
+                "updated_at": r.get::<_, i64>(4)?,
+            });
+            Ok((id, json))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    // For each lorebook, get its entries
+    let mut result = Vec::new();
+    for (lorebook_id, mut lorebook_json) in lorebooks {
+        let mut entries_stmt = conn
+            .prepare("SELECT id, title, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at FROM lorebook_entries WHERE lorebook_id = ? ORDER BY display_order ASC")
+            .map_err(|e| e.to_string())?;
+
+        let entries: Vec<JsonValue> = entries_stmt
+            .query_map([&lorebook_id], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "title": r.get::<_, String>(1)?,
+                    "enabled": r.get::<_, i64>(2)? != 0,
+                    "always_active": r.get::<_, i64>(3)? != 0,
+                    "keywords": r.get::<_, String>(4)?,
+                    "content": r.get::<_, String>(5)?,
+                    "priority": r.get::<_, i64>(6)?,
+                    "display_order": r.get::<_, i64>(7)?,
+                    "created_at": r.get::<_, i64>(8)?,
+                    "updated_at": r.get::<_, i64>(9)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        lorebook_json["entries"] = serde_json::json!(entries);
+        result.push(lorebook_json);
+    }
+
+    Ok(result)
+}
+
+fn export_character_lorebooks(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
+    let conn = open_db(app)?;
+
+    let mut stmt = conn
+        .prepare("SELECT character_id, lorebook_id, enabled, display_order, created_at, updated_at FROM character_lorebooks")
+        .map_err(|e| e.to_string())?;
+
+    let links: Vec<JsonValue> = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "character_id": r.get::<_, String>(0)?,
+                "lorebook_id": r.get::<_, String>(1)?,
+                "enabled": r.get::<_, i64>(2)? != 0,
+                "display_order": r.get::<_, i64>(3)?,
+                "created_at": r.get::<_, i64>(4)?,
+                "updated_at": r.get::<_, i64>(5)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(links)
 }
 
 /// Export full app backup to a .lettuce file
@@ -687,6 +775,24 @@ pub async fn backup_export(
         &mut zip,
         "usage_records",
         &serde_json::json!(usage_data),
+        &encryption,
+    )?;
+
+    log_info(&app, "backup", "Exporting lorebooks...");
+    let lorebooks = export_lorebooks(&app)?;
+    add_json_to_zip(
+        &mut zip,
+        "lorebooks",
+        &serde_json::json!(lorebooks),
+        &encryption,
+    )?;
+
+    log_info(&app, "backup", "Exporting character-lorebook links...");
+    let char_lorebooks = export_character_lorebooks(&app)?;
+    add_json_to_zip(
+        &mut zip,
+        "character_lorebooks",
+        &serde_json::json!(char_lorebooks),
         &encryption,
     )?;
 
@@ -1076,16 +1182,32 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
     conn.execute("DELETE FROM characters", [])
         .map_err(|e| e.to_string())?;
 
+    let mut char_count = 0;
+    let mut scene_count = 0;
+    let mut variant_count = 0;
+    let mut rule_count = 0;
+
     if let Some(arr) = data.as_array() {
+        log_info(
+            app,
+            "backup",
+            format!("Importing {} characters...", arr.len()),
+        );
+
         for item in arr {
             let char_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let char_name = item
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
 
             // Insert character
             conn.execute(
                 "INSERT INTO characters (id, name, avatar_path, background_image_path, description, 
                  default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt,
-                 disable_avatar_gradient, created_at, updated_at) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                 disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, 
+                 custom_text_color, custom_text_secondary, created_at, updated_at) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
                 params![
                     char_id,
                     item.get("name").and_then(|v| v.as_str()),
@@ -1098,10 +1220,15 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                     item.get("prompt_template_id").and_then(|v| v.as_str()),
                     item.get("system_prompt").and_then(|v| v.as_str()),
                     item.get("disable_avatar_gradient").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
+                    item.get("custom_gradient_enabled").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
+                    item.get("custom_gradient_colors").and_then(|v| v.as_str()),
+                    item.get("custom_text_color").and_then(|v| v.as_str()),
+                    item.get("custom_text_secondary").and_then(|v| v.as_str()),
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
-            ).map_err(|e| e.to_string())?;
+            ).map_err(|e| format!("Failed to insert character '{}': {}", char_name, e))?;
+            char_count += 1;
 
             // Insert rules
             if let Some(rules) = item.get("rules").and_then(|v| v.as_array()) {
@@ -1110,7 +1237,9 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                         conn.execute(
                             "INSERT INTO character_rules (character_id, idx, rule) VALUES (?1, ?2, ?3)",
                             params![char_id, idx as i64, rule_str],
-                        ).map_err(|e| e.to_string())?;
+                        )
+                        .map_err(|e| format!("Failed to insert rule for '{}': {}", char_name, e))?;
+                        rule_count += 1;
                     }
                 }
             }
@@ -1130,9 +1259,9 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                             scene.get("created_at").and_then(|v| v.as_i64()),
                             scene.get("selected_variant_id").and_then(|v| v.as_str()),
                         ],
-                    ).map_err(|e| e.to_string())?;
+                    ).map_err(|e| format!("Failed to insert scene for '{}': {}", char_name, e))?;
+                    scene_count += 1;
 
-                    // Insert scene variants
                     if let Some(variants) = scene.get("variants").and_then(|v| v.as_array()) {
                         for variant in variants {
                             conn.execute(
@@ -1145,13 +1274,26 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                                     variant.get("created_at").and_then(|v| v.as_i64()),
                                 ],
                             )
-                            .map_err(|e| e.to_string())?;
+                            .map_err(|e| {
+                                format!("Failed to insert scene variant for '{}': {}", char_name, e)
+                            })?;
+                            variant_count += 1;
                         }
                     }
                 }
             }
         }
     }
+
+    log_info(
+        app,
+        "backup",
+        format!(
+            "Characters import complete: {} characters, {} scenes, {} variants, {} rules",
+            char_count, scene_count, variant_count, rule_count
+        ),
+    );
+
     Ok(())
 }
 
@@ -1166,9 +1308,23 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
     conn.execute("DELETE FROM sessions", [])
         .map_err(|e| e.to_string())?;
 
+    let mut session_count = 0;
+    let mut message_count = 0;
+    let mut variant_count = 0;
+
     if let Some(arr) = data.as_array() {
+        log_info(
+            app,
+            "backup",
+            format!("Importing {} sessions...", arr.len()),
+        );
+
         for item in arr {
             let session_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let character_id = item
+                .get("character_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
             // Insert session
             conn.execute(
@@ -1179,7 +1335,7 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
                 params![
                     session_id,
-                    item.get("character_id").and_then(|v| v.as_str()),
+                    character_id,
                     item.get("title").and_then(|v| v.as_str()),
                     item.get("system_prompt").and_then(|v| v.as_str()),
                     item.get("selected_scene_id").and_then(|v| v.as_str()),
@@ -1199,7 +1355,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
-            ).map_err(|e| e.to_string())?;
+            ).map_err(|e| format!("Failed to insert session (character_id={}): {}", character_id, e))?;
+            session_count += 1;
 
             // Insert messages
             if let Some(messages) = item.get("messages").and_then(|v| v.as_array()) {
@@ -1208,8 +1365,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
 
                     conn.execute(
                         "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, 
-                         completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments) 
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                         completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning) 
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                         params![
                             msg_id,
                             session_id,
@@ -1223,16 +1380,18 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                             msg.get("is_pinned").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
                             msg.get("memory_refs").and_then(|v| v.as_str()).unwrap_or("[]"),
                             msg.get("attachments").and_then(|v| v.as_str()).unwrap_or("[]"),
+                            msg.get("reasoning").and_then(|v| v.as_str()),
                         ],
-                    ).map_err(|e| e.to_string())?;
+                    ).map_err(|e| format!("Failed to insert message in session {}: {}", session_id, e))?;
+                    message_count += 1;
 
                     // Insert message variants
                     if let Some(variants) = msg.get("variants").and_then(|v| v.as_array()) {
                         for variant in variants {
                             conn.execute(
                                 "INSERT INTO message_variants (id, message_id, content, created_at, 
-                                 prompt_tokens, completion_tokens, total_tokens) 
-                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                                 prompt_tokens, completion_tokens, total_tokens, reasoning) 
+                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                                 params![
                                     variant.get("id").and_then(|v| v.as_str()),
                                     msg_id,
@@ -1241,14 +1400,26 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                                     variant.get("prompt_tokens").and_then(|v| v.as_i64()),
                                     variant.get("completion_tokens").and_then(|v| v.as_i64()),
                                     variant.get("total_tokens").and_then(|v| v.as_i64()),
+                                    variant.get("reasoning").and_then(|v| v.as_str()),
                                 ],
-                            ).map_err(|e| e.to_string())?;
+                            ).map_err(|e| format!("Failed to insert message variant: {}", e))?;
+                            variant_count += 1;
                         }
                     }
                 }
             }
         }
     }
+
+    log_info(
+        app,
+        "backup",
+        format!(
+            "Sessions import complete: {} sessions, {} messages, {} variants",
+            session_count, message_count, variant_count
+        ),
+    );
+
     Ok(())
 }
 
@@ -1310,6 +1481,86 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
                     .map_err(|e| e.to_string())?;
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+fn import_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
+    let conn = open_db(app)?;
+
+    // Delete existing lorebook entries and lorebooks (entries have FK to lorebooks)
+    conn.execute("DELETE FROM lorebook_entries", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM lorebooks", [])
+        .map_err(|e| e.to_string())?;
+
+    if let Some(arr) = data.as_array() {
+        for item in arr {
+            let lorebook_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Insert lorebook
+            conn.execute(
+                "INSERT INTO lorebooks (id, name, description, created_at, updated_at) 
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    lorebook_id,
+                    item.get("name").and_then(|v| v.as_str()),
+                    item.get("description").and_then(|v| v.as_str()),
+                    item.get("created_at").and_then(|v| v.as_i64()),
+                    item.get("updated_at").and_then(|v| v.as_i64()),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+
+            // Insert entries
+            if let Some(entries) = item.get("entries").and_then(|v| v.as_array()) {
+                for entry in entries {
+                    conn.execute(
+                        "INSERT INTO lorebook_entries (id, lorebook_id, title, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at) 
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        params![
+                            entry.get("id").and_then(|v| v.as_str()),
+                            lorebook_id,
+                            entry.get("title").and_then(|v| v.as_str()),
+                            entry.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true) as i64,
+                            entry.get("always_active").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
+                            entry.get("keywords").and_then(|v| v.as_str()).unwrap_or("[]"),
+                            entry.get("content").and_then(|v| v.as_str()),
+                            entry.get("priority").and_then(|v| v.as_i64()).unwrap_or(0),
+                            entry.get("display_order").and_then(|v| v.as_i64()).unwrap_or(0),
+                            entry.get("created_at").and_then(|v| v.as_i64()),
+                            entry.get("updated_at").and_then(|v| v.as_i64()),
+                        ],
+                    ).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn import_character_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
+    let conn = open_db(app)?;
+
+    // Delete existing character-lorebook links
+    conn.execute("DELETE FROM character_lorebooks", [])
+        .map_err(|e| e.to_string())?;
+
+    if let Some(arr) = data.as_array() {
+        for item in arr {
+            conn.execute(
+                "INSERT INTO character_lorebooks (character_id, lorebook_id, enabled, display_order, created_at, updated_at) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    item.get("character_id").and_then(|v| v.as_str()),
+                    item.get("lorebook_id").and_then(|v| v.as_str()),
+                    item.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true) as i64,
+                    item.get("display_order").and_then(|v| v.as_i64()).unwrap_or(0),
+                    item.get("created_at").and_then(|v| v.as_i64()),
+                    item.get("updated_at").and_then(|v| v.as_i64()),
+                ],
+            ).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -1609,6 +1860,12 @@ pub async fn backup_import(
     let sessions_data = read_backup_file(&mut archive, "data/sessions.json", &encryption_params)?;
     let usage_records_data =
         read_backup_file(&mut archive, "data/usage_records.json", &encryption_params)?;
+    let lorebooks_data = read_backup_file(&mut archive, "data/lorebooks.json", &encryption_params)?;
+    let character_lorebooks_data = read_backup_file(
+        &mut archive,
+        "data/character_lorebooks.json",
+        &encryption_params,
+    )?;
 
     log_info(&app, "backup", "Importing data to database...");
 
@@ -1692,6 +1949,24 @@ pub async fn backup_import(
             .map_err(|e| format!("Failed to parse usage_records JSON: {}", e))?;
         import_usage_records(&app, &json_value)?;
         log_info(&app, "backup", "Usage records imported");
+    }
+
+    // Lorebooks (no dependencies, import before character_lorebooks)
+    if let Some(data) = lorebooks_data {
+        let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| format!("Failed to parse lorebooks JSON: {}", e))?;
+        import_lorebooks(&app, &json_value)?;
+        log_info(&app, "backup", "Lorebooks imported");
+    }
+
+    // Character-lorebook links (depends on characters and lorebooks)
+    if let Some(data) = character_lorebooks_data {
+        let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| format!("Failed to parse character_lorebooks JSON: {}", e))?;
+        import_character_lorebooks(&app, &json_value)?;
+        log_info(&app, "backup", "Character-lorebook links imported");
     }
 
     log_info(&app, "backup", "Extracting media files...");
@@ -2193,6 +2468,9 @@ pub async fn backup_import_from_bytes(
     let sessions_data = read_backup_file_bytes(&data, "data/sessions.json", &encryption_params)?;
     let usage_records_data =
         read_backup_file_bytes(&data, "data/usage_records.json", &encryption_params)?;
+    let lorebooks_data = read_backup_file_bytes(&data, "data/lorebooks.json", &encryption_params)?;
+    let character_lorebooks_data =
+        read_backup_file_bytes(&data, "data/character_lorebooks.json", &encryption_params)?;
 
     log_info(&app, "backup", "Importing data to database...");
 
@@ -2267,6 +2545,24 @@ pub async fn backup_import_from_bytes(
             .map_err(|e| format!("Failed to parse usage_records JSON: {}", e))?;
         import_usage_records(&app, &json_value)?;
         log_info(&app, "backup", "Usage records imported");
+    }
+
+    // Lorebooks (no dependencies, import before character_lorebooks)
+    if let Some(file_data) = lorebooks_data {
+        let json_str = String::from_utf8(file_data).map_err(|e| e.to_string())?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| format!("Failed to parse lorebooks JSON: {}", e))?;
+        import_lorebooks(&app, &json_value)?;
+        log_info(&app, "backup", "Lorebooks imported");
+    }
+
+    // Character-lorebook links (depends on characters and lorebooks)
+    if let Some(file_data) = character_lorebooks_data {
+        let json_str = String::from_utf8(file_data).map_err(|e| e.to_string())?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| format!("Failed to parse character_lorebooks JSON: {}", e))?;
+        import_character_lorebooks(&app, &json_value)?;
+        log_info(&app, "backup", "Character-lorebook links imported");
     }
 
     log_info(&app, "backup", "Extracting media files...");
