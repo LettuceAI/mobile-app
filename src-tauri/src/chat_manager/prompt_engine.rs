@@ -560,7 +560,6 @@ fn render_with_context_internal(
 
     result = result.replace("{{char}}", char_name);
     result = result.replace("{{persona}}", persona_name);
-
     result = result.replace("{{ai_name}}", char_name);
     result = result.replace("{{ai_description}}", &char_desc);
     result = result.replace("{{ai_rules}}", "");

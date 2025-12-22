@@ -16,37 +16,6 @@ use super::types::{
     StoredMessage,
 };
 
-/// # Custom System Prompts
-///
-/// Users can customize system prompts at different levels with this priority order:
-/// 1. **Session-level** (session.system_prompt) - Highest priority
-/// 2. **Character-level** (character.system_prompt)
-/// 3. **Model-level** (model.system_prompt)
-/// 4. **App-wide** (settings.system_prompt)
-/// 5. **Default** (default_system_prompt_template()) - Lowest priority
-///
-/// ## Template Variables
-/// - `{{char.name}}` - Character name
-/// - `{{char.desc}}` - Character description
-/// - `{{scene}}` - Starting scene content (auto-formatted with header)
-/// - `{{persona.name}}` - Persona name
-/// - `{{persona.desc}}` - Persona description
-/// - `{{rules}}` - Character rules (formatted as bullet list)
-///
-/// ### Character Description Placeholders
-/// In the character description field itself, you can also use:
-/// - `{{char}}` → Replaced with the character's name
-/// - `{{persona}}` → Replaced with the selected persona's name (empty string if none)
-///
-/// ## Important Notes
-/// - **NSFW toggle is ignored when using custom prompts** - users must handle content filtering
-///   in their custom prompt if desired
-/// - Custom prompts should include at minimum: `{{char.name}}`, `{{char.desc}}`, and `{{scene}}`
-/// - Legacy variables (`{{ai_name}}`, `{{ai_description}}`, etc.) are still supported for
-///   backwards compatibility
-
-/// Default system prompt template when no custom prompt is set
-/// Delegates to the centralized prompt engine.
 
 #[derive(Debug, Clone, Copy)]
 pub enum PromptType {

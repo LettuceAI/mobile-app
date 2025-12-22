@@ -1112,19 +1112,14 @@ fn import_secrets(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String
 
 fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
     let conn = open_db(app)?;
-    // Don't delete the default template
-    conn.execute(
-        "DELETE FROM prompt_templates WHERE id != 'prompt_app_default'",
-        [],
-    )
-    .map_err(|e| e.to_string())?;
+    // Delete all existing templates to ensure a clean state matching the backup
+    conn.execute("DELETE FROM prompt_templates", [])
+        .map_err(|e| e.to_string())?;
 
     if let Some(arr) = data.as_array() {
         for item in arr {
             let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            if id == "prompt_app_default" {
-                continue;
-            } // Skip default
+            // We now actively restore all templates, including prompt_app_default if present
 
             conn.execute(
                 "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) 
