@@ -18,15 +18,16 @@ impl ProviderAdapter for LMStudioAdapter {
     }
 
     fn system_role(&self) -> std::borrow::Cow<'static, str> {
-        "system".into() // LM Studio uses standard "system" role, not "developer"
+        "system".into()
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
-        &[] // LM Studio typically doesn't require auth headers for local use
+        &["Authorization"]
     }
 
     fn default_headers_template(&self) -> HashMap<String, String> {
         let mut out = HashMap::new();
+        out.insert("Authorization".into(), "Bearer <apiKey>".into());
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("Accept".into(), "text/event-stream".into());
         out
@@ -38,14 +39,11 @@ impl ProviderAdapter for LMStudioAdapter {
         extra: Option<&HashMap<String, String>>,
     ) -> HashMap<String, String> {
         let mut out: HashMap<String, String> = HashMap::new();
+        out.insert("Authorization".into(), format!("Bearer {}", api_key));
         out.insert("Content-Type".into(), "application/json".into());
         out.insert("Accept".into(), "text/event-stream".into());
-
-        // Only add Authorization if api_key is provided (optional for LM Studio)
-        if !api_key.is_empty() {
-            out.insert("Authorization".into(), format!("Bearer {}", api_key));
-        }
-
+        out.entry("User-Agent".into())
+            .or_insert_with(|| "LettuceAI/0.1".into());
         if let Some(extra) = extra {
             for (k, v) in extra.iter() {
                 out.insert(k.clone(), v.clone());
@@ -85,6 +83,15 @@ impl ProviderAdapter for LMStudioAdapter {
 
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
+        let reasoning_config = if reasoning_enabled {
+            Some(super::ReasoningConfig {
+                effort: reasoning_effort.clone(),
+                max_tokens: reasoning_budget,
+            })
+        } else {
+            None
+        };
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -108,7 +115,7 @@ impl ProviderAdapter for LMStudioAdapter {
             } else {
                 None
             },
-            reasoning: None,
+            reasoning: reasoning_config,
             tools,
             tool_choice,
         };
