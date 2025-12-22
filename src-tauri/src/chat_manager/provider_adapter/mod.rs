@@ -99,9 +99,11 @@ mod deepseek;
 mod featherless;
 mod google_gemini;
 mod groq;
+mod lmstudio;
 mod mistral;
 mod moonshot;
 mod nanogpt;
+mod ollama;
 mod openai;
 mod qwen;
 mod xai;
@@ -114,8 +116,8 @@ pub fn adapter_for(credential: &ProviderCredential) -> Box<dyn ProviderAdapter +
     match credential.provider_id.as_str() {
         "custom" => Box::new(custom::CustomGenericAdapter::new(credential)),
         "custom-anthropic" => Box::new(custom_anthropic::CustomAnthropicAdapter::new(credential)),
-        "ollama" => Box::new(openai::OpenAIAdapter), // Ollama uses OpenAI-compatible API
-        "lmstudio" => Box::new(openai::OpenAIAdapter), // LM Studio uses OpenAI-compatible API
+        "ollama" => Box::new(ollama::OllamaAdapter),
+        "lmstudio" => Box::new(lmstudio::LMStudioAdapter),
         "chutes" | "chutes.ai" => Box::new(chutes::ChutesAdapter),
         "anthropic" => Box::new(anthropic::AnthropicAdapter),
         "mistral" => Box::new(mistral::MistralAdapter),
