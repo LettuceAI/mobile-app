@@ -719,8 +719,97 @@ export function EditModelPage() {
 
                         {(modelAdvancedDraft.reasoningEnabled || isAutoReasoning) && (
                           <div className="space-y-3 pt-2">
-                            {/* Reasoning Effort */}
-                            {showEffortOptions && (
+                            {/* Mode Toggle for Dynamic Support (OpenRouter) - exclusive choice */}
+                            {reasoningSupport === 'dynamic' && (() => {
+                              // Explicit mode detection: budget mode is active when budget has a truthy value AND effort is null/undefined
+                              const isBudgetMode = Boolean(modelAdvancedDraft.reasoningBudgetTokens) && !modelAdvancedDraft.reasoningEffort;
+
+                              return (
+                                <>
+                                  <div className="flex gap-2 p-1 rounded-xl bg-black/30 border border-white/5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setModelAdvancedDraft({ ...modelAdvancedDraft, reasoningBudgetTokens: null })}
+                                      className={cn(
+                                        "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                                        !isBudgetMode
+                                          ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                                          : "text-white/40 hover:text-white/60"
+                                      )}
+                                    >
+                                      Effort Mode
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setModelAdvancedDraft({ ...modelAdvancedDraft, reasoningEffort: null, reasoningBudgetTokens: 8192 })}
+                                      className={cn(
+                                        "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                                        isBudgetMode
+                                          ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                                          : "text-white/40 hover:text-white/60"
+                                      )}
+                                    >
+                                      Budget Mode
+                                    </button>
+                                  </div>
+
+                                  {/* Effort controls - shown when NOT in budget mode */}
+                                  {!isBudgetMode && (
+                                    <div className="rounded-xl border border-amber-400/30 bg-black/20 p-3">
+                                      <div className="mb-2">
+                                        <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
+                                      </div>
+
+                                      <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                          { value: null, label: 'Auto' },
+                                          { value: 'low' as const, label: 'Low' },
+                                          { value: 'medium' as const, label: 'Med' },
+                                          { value: 'high' as const, label: 'High' }
+                                        ].map(({ value, label }) => (
+                                          <button
+                                            key={label}
+                                            type="button"
+                                            onClick={() => handleReasoningEffortChange(value)}
+                                            className={cn(
+                                              "rounded-lg border px-2 py-2 text-xs font-medium transition active:scale-[0.98]",
+                                              modelAdvancedDraft.reasoningEffort === value
+                                                ? "border-amber-400/40 bg-amber-400/20 text-amber-100"
+                                                : "border-white/10 bg-white/5 text-white/60 active:bg-white/10"
+                                            )}
+                                          >
+                                            {label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Budget controls - shown when IN budget mode */}
+                                  {isBudgetMode && (
+                                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                      <div className="mb-2">
+                                        <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
+                                        <p className="mt-0.5 text-[10px] text-white/50">Added to output token limit</p>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={ADVANCED_REASONING_BUDGET_RANGE.min}
+                                        max={ADVANCED_REASONING_BUDGET_RANGE.max}
+                                        value={modelAdvancedDraft.reasoningBudgetTokens ?? ''}
+                                        onChange={(e) => handleReasoningBudgetChange(e.target.value === '' ? null : Number(e.target.value))}
+                                        placeholder="8192"
+                                        className="w-full rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                                      />
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+
+                            {/* Non-dynamic providers: show effort options if supported */}
+                            {reasoningSupport !== 'dynamic' && showEffortOptions && (
                               <div className="rounded-xl border border-amber-400/30 bg-black/20 p-3">
                                 <div className="mb-2">
                                   <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
@@ -751,27 +840,25 @@ export function EditModelPage() {
                               </div>
                             )}
 
-                            {/* Reasoning Budget Tokens */}
-                            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                              <div className="mb-2">
-                                <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
-                                <p className="mt-0.5 text-[10px] text-white/50">Added to output token limit</p>
+                            {/* Non-dynamic providers: show budget if budget-only */}
+                            {reasoningSupport === 'budget-only' && (
+                              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                <div className="mb-2">
+                                  <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
+                                  <p className="mt-0.5 text-[10px] text-white/50">Added to output token limit</p>
+                                </div>
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={ADVANCED_REASONING_BUDGET_RANGE.min}
+                                  max={ADVANCED_REASONING_BUDGET_RANGE.max}
+                                  value={modelAdvancedDraft.reasoningBudgetTokens ?? ''}
+                                  onChange={(e) => handleReasoningBudgetChange(e.target.value === '' ? null : Number(e.target.value))}
+                                  placeholder="8192"
+                                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                                />
                               </div>
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                min={ADVANCED_REASONING_BUDGET_RANGE.min}
-                                max={ADVANCED_REASONING_BUDGET_RANGE.max}
-                                value={modelAdvancedDraft.reasoningBudgetTokens ?? ''}
-                                onChange={(e) => handleReasoningBudgetChange(e.target.value === '' ? null : Number(e.target.value))}
-                                placeholder={
-                                  modelAdvancedDraft.reasoningEffort === 'low' ? '2048' :
-                                    modelAdvancedDraft.reasoningEffort === 'medium' ? '8192' :
-                                      modelAdvancedDraft.reasoningEffort === 'high' ? '16384' : '4096'
-                                }
-                                className="w-full rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                              />
-                            </div>
+                            )}
                           </div>
                         )}
                       </div>

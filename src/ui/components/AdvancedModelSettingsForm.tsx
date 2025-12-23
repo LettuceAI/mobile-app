@@ -348,8 +348,99 @@ export function AdvancedModelSettingsForm({
 
           {(settings.reasoningEnabled || isAutoReasoning) && (
             <div className="space-y-4 pt-2">
-              {/* Reasoning Effort - only for effort/dynamic support */}
-              {showEffortOptions && (
+              {/* Mode Toggle for Dynamic Support (OpenRouter) - exclusive choice */}
+              {reasoningSupport === 'dynamic' && (() => {
+                // Explicit mode detection: budget mode is active when budget has a truthy value AND effort is null/undefined
+                const isBudgetMode = Boolean(settings.reasoningBudgetTokens) && !settings.reasoningEffort;
+
+                return (
+                  <>
+                    <div className="flex gap-2 p-1 rounded-xl bg-black/30 border border-white/5">
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...settings, reasoningBudgetTokens: null })}
+                        className={cn(
+                          "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                          !isBudgetMode
+                            ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                            : "text-white/40 hover:text-white/60"
+                        )}
+                      >
+                        Effort Mode
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...settings, reasoningEffort: null, reasoningBudgetTokens: 8192 })}
+                        className={cn(
+                          "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                          isBudgetMode
+                            ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                            : "text-white/40 hover:text-white/60"
+                        )}
+                      >
+                        Budget Mode
+                      </button>
+                    </div>
+
+                    {/* Effort controls - shown when NOT in budget mode */}
+                    {!isBudgetMode && (
+                      <div className="rounded-xl border border-amber-400/30 bg-black/20 p-4">
+                        <div className="mb-3">
+                          <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
+                          <p className="mt-0.5 text-[11px] text-white/50">Controls thinking depth</p>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { value: null, label: 'Auto' },
+                            { value: 'low' as const, label: 'Low' },
+                            { value: 'medium' as const, label: 'Med' },
+                            { value: 'high' as const, label: 'High' }
+                          ].map(({ value, label }) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => onChange({ ...settings, reasoningEffort: value })}
+                              disabled={disabled}
+                              className={cn(
+                                "rounded-lg border px-2 py-2 text-xs font-medium transition-all active:scale-[0.98] disabled:opacity-50",
+                                settings.reasoningEffort === value
+                                  ? "border-amber-400/40 bg-amber-400/20 text-amber-100"
+                                  : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Budget controls - shown when IN budget mode */}
+                    {isBudgetMode && (
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                        <div className="mb-3">
+                          <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
+                          <p className="mt-0.5 text-[11px] text-white/50">Max tokens reserved for thinking</p>
+                        </div>
+                        <input
+                          type="number"
+                          min={ADVANCED_REASONING_BUDGET_RANGE.min}
+                          max={ADVANCED_REASONING_BUDGET_RANGE.max}
+                          value={settings.reasoningBudgetTokens ?? ''}
+                          onChange={handleNumberChange('reasoningBudgetTokens')}
+                          disabled={disabled}
+                          placeholder="8192"
+                          className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* Non-dynamic providers: show effort options if supported */}
+              {reasoningSupport !== 'dynamic' && showEffortOptions && (
                 <div className="rounded-xl border border-amber-400/30 bg-black/20 p-4">
                   <div className="mb-3">
                     <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
@@ -401,23 +492,25 @@ export function AdvancedModelSettingsForm({
                 </div>
               )}
 
-              {/* Reasoning Budget Tokens */}
-              <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                <div className="mb-3">
-                  <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
-                  <p className="mt-0.5 text-[11px] text-white/50">Max tokens reserved for thinking. Added to output limit.</p>
+              {/* Non-dynamic providers: show budget if budget-only */}
+              {reasoningSupport === 'budget-only' && (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
+                    <p className="mt-0.5 text-[11px] text-white/50">Max tokens reserved for thinking. Added to output limit.</p>
+                  </div>
+                  <input
+                    type="number"
+                    min={ADVANCED_REASONING_BUDGET_RANGE.min}
+                    max={ADVANCED_REASONING_BUDGET_RANGE.max}
+                    value={settings.reasoningBudgetTokens ?? ''}
+                    onChange={handleNumberChange('reasoningBudgetTokens')}
+                    disabled={disabled}
+                    placeholder="8192"
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
+                  />
                 </div>
-                <input
-                  type="number"
-                  min={ADVANCED_REASONING_BUDGET_RANGE.min}
-                  max={ADVANCED_REASONING_BUDGET_RANGE.max}
-                  value={settings.reasoningBudgetTokens ?? ''}
-                  onChange={handleNumberChange('reasoningBudgetTokens')}
-                  disabled={disabled}
-                  placeholder="8192"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
-                />
-              </div>
+              )}
             </div>
           )}
         </div>

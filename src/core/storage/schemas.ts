@@ -158,7 +158,7 @@ export const PROVIDER_REASONING_CAPABILITIES: Record<string, ReasoningCapability
   },
   moonshot: { type: 'budget-only' }, // kimi-k2-thinking models use enable_thinking + thinking_budget
   anthropic: { type: 'budget-only' },
-  mistral: { type: 'budget-only' }, // Magistral models use thinking chunks with budget
+  mistral: { type: 'none' }, // Mistral does not support reasoning yet
   gemini: {
     type: 'effort',
     options: [
@@ -344,7 +344,7 @@ export const PROVIDER_PARAMETER_SUPPORT = {
   mistral: {
     providerId: 'mistral',
     displayName: 'Mistral',
-    reasoningSupport: 'budget-only' as ReasoningSupport,
+    reasoningSupport: 'none' as ReasoningSupport,
     supportedParameters: {
 
       temperature: true,
@@ -353,9 +353,9 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       frequencyPenalty: true,
       presencePenalty: true,
       topK: false,
-      reasoningEnabled: true,
+      reasoningEnabled: false,
       reasoningEffort: false,
-      reasoningBudgetTokens: true,
+      reasoningBudgetTokens: false,
     },
   },
   google: {

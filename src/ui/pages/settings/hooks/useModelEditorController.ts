@@ -352,7 +352,7 @@ export function useModelEditorController(): ControllerReturn {
 
       if (value) {
         if (!newEffort) {
-          newEffort = "medium"; 
+          newEffort = "medium";
         }
         if (!newBudget && newEffort) {
           newBudget = effortBudgets[newEffort] ?? 8192;
@@ -381,9 +381,12 @@ export function useModelEditorController(): ControllerReturn {
         high: 16384,
       };
 
-      // If no budget is set, auto-set based on effort
-      const newBudget = state.modelAdvancedDraft.reasoningBudgetTokens ??
-        (value ? effortBudgets[value] : null);
+      // Only auto-set budget if setting a non-null effort AND no budget exists
+      // When setting effort to null (for budget mode), don't touch the budget
+      let newBudget = state.modelAdvancedDraft.reasoningBudgetTokens;
+      if (value && !newBudget) {
+        newBudget = effortBudgets[value];
+      }
 
       dispatch({
         type: "set_model_advanced_draft",
