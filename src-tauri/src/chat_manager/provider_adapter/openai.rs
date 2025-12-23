@@ -193,9 +193,6 @@ impl ProviderAdapter for OpenRouterAdapter {
 
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
-        // OpenRouter uses nested reasoning config, not top-level reasoning_effort
-        // Max reasoning tokens and reasoning effort cannot be used at the same time.
-        // We prioritize effort if both are provided (safeguard).
         let reasoning_config = if reasoning_enabled {
             if reasoning_effort.is_some() {
                 Some(super::ReasoningConfig {

@@ -156,9 +156,9 @@ export const PROVIDER_REASONING_CAPABILITIES: Record<string, ReasoningCapability
       { value: 'high', label: 'High', description: 'Deep reasoning' },
     ],
   },
-  moonshot: { type: 'budget-only' }, // kimi-k2-thinking models use enable_thinking + thinking_budget
+  moonshot: { type: 'budget-only' }, 
   anthropic: { type: 'budget-only' },
-  mistral: { type: 'none' }, // Mistral does not support reasoning yet
+  mistral: { type: 'none' }, 
   gemini: {
     type: 'effort',
     options: [

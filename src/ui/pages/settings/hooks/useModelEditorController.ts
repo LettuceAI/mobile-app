@@ -374,15 +374,12 @@ export function useModelEditorController(): ControllerReturn {
 
   const handleReasoningEffortChange = useCallback(
     (value: "low" | "medium" | "high" | null) => {
-      // Default budgets based on effort level
       const effortBudgets: Record<string, number> = {
         low: 2048,
         medium: 8192,
         high: 16384,
       };
 
-      // Only auto-set budget if setting a non-null effort AND no budget exists
-      // When setting effort to null (for budget mode), don't touch the budget
       let newBudget = state.modelAdvancedDraft.reasoningBudgetTokens;
       if (value && !newBudget) {
         newBudget = effortBudgets[value];

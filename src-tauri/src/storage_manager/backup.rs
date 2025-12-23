@@ -563,9 +563,8 @@ fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String
 fn export_lorebooks(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
 
-    // Get all lorebooks
     let mut stmt = conn
-        .prepare("SELECT id, name, description, created_at, updated_at FROM lorebooks")
+        .prepare("SELECT id, name, created_at, updated_at FROM lorebooks")
         .map_err(|e| e.to_string())?;
 
     let lorebooks: Vec<(String, JsonValue)> = stmt
@@ -574,9 +573,8 @@ fn export_lorebooks(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
             let json = serde_json::json!({
                 "id": id.clone(),
                 "name": r.get::<_, String>(1)?,
-                "description": r.get::<_, Option<String>>(2)?,
-                "created_at": r.get::<_, i64>(3)?,
-                "updated_at": r.get::<_, i64>(4)?,
+                "created_at": r.get::<_, i64>(2)?,
+                "updated_at": r.get::<_, i64>(3)?,
             });
             Ok((id, json))
         })
@@ -588,22 +586,21 @@ fn export_lorebooks(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let mut result = Vec::new();
     for (lorebook_id, mut lorebook_json) in lorebooks {
         let mut entries_stmt = conn
-            .prepare("SELECT id, title, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at FROM lorebook_entries WHERE lorebook_id = ? ORDER BY display_order ASC")
+            .prepare("SELECT id, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at FROM lorebook_entries WHERE lorebook_id = ? ORDER BY display_order ASC")
             .map_err(|e| e.to_string())?;
 
         let entries: Vec<JsonValue> = entries_stmt
             .query_map([&lorebook_id], |r| {
                 Ok(serde_json::json!({
                     "id": r.get::<_, String>(0)?,
-                    "title": r.get::<_, String>(1)?,
-                    "enabled": r.get::<_, i64>(2)? != 0,
-                    "always_active": r.get::<_, i64>(3)? != 0,
-                    "keywords": r.get::<_, String>(4)?,
-                    "content": r.get::<_, String>(5)?,
-                    "priority": r.get::<_, i64>(6)?,
-                    "display_order": r.get::<_, i64>(7)?,
-                    "created_at": r.get::<_, i64>(8)?,
-                    "updated_at": r.get::<_, i64>(9)?,
+                    "enabled": r.get::<_, i64>(1)? != 0,
+                    "always_active": r.get::<_, i64>(2)? != 0,
+                    "keywords": r.get::<_, String>(3)?,
+                    "content": r.get::<_, String>(4)?,
+                    "priority": r.get::<_, i64>(5)?,
+                    "display_order": r.get::<_, i64>(6)?,
+                    "created_at": r.get::<_, i64>(7)?,
+                    "updated_at": r.get::<_, i64>(8)?,
                 }))
             })
             .map_err(|e| e.to_string())?
@@ -1496,30 +1493,27 @@ fn import_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Stri
         for item in arr {
             let lorebook_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
-            // Insert lorebook
             conn.execute(
-                "INSERT INTO lorebooks (id, name, description, created_at, updated_at) 
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO lorebooks (id, name, created_at, updated_at) 
+                 VALUES (?1, ?2, ?3, ?4)",
                 params![
                     lorebook_id,
                     item.get("name").and_then(|v| v.as_str()),
-                    item.get("description").and_then(|v| v.as_str()),
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
             )
             .map_err(|e| e.to_string())?;
 
-            // Insert entries
+            // Insert entries (table schema has no title column)
             if let Some(entries) = item.get("entries").and_then(|v| v.as_array()) {
                 for entry in entries {
                     conn.execute(
-                        "INSERT INTO lorebook_entries (id, lorebook_id, title, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at) 
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        "INSERT INTO lorebook_entries (id, lorebook_id, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at) 
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                         params![
                             entry.get("id").and_then(|v| v.as_str()),
                             lorebook_id,
-                            entry.get("title").and_then(|v| v.as_str()),
                             entry.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true) as i64,
                             entry.get("always_active").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
                             entry.get("keywords").and_then(|v| v.as_str()).unwrap_or("[]"),

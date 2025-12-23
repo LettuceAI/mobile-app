@@ -16,6 +16,44 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
     {
+        version: "1.0-beta.6.1",
+        date: "2025-12-23",
+        changes: [
+            {
+                type: "bugfix",
+                description: "Fixed multiple issues in the backup system where not all data was being saved correctly."
+            },
+            {
+                type: "bugfix",
+                description: "Fixed characters losing context and behaving clueless after being restored from backups."
+            },
+            {
+                type: "bugfix",
+                description: "Fixed OpenRouter and MistralAI reasoning support not functioning correctly."
+            },
+            {
+                type: "bugfix",
+                description: "Fixed backups containing images failing to load properly."
+            },
+            {
+                type: "feature",
+                description: "Added support for Ollama endpoints."
+            },
+            {
+                type: "feature",
+                description: "Added support for LM Studio endpoints."
+            },
+            {
+                type: "feature",
+                description: "Added custom endpoint support using OpenAI-compatible or Anthropic-compatible formats."
+            },
+            {
+                type: "improvement",
+                description: "Increased request timeout from 2 minutes to 15 minutes to improve stability for long-running and local inference requests."
+            }
+        ]
+    },
+    {
         version: "1.0-beta.6",
         date: "2025-12-21",
         changes: [
