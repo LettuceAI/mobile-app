@@ -41,6 +41,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
         { match: p => p === "/settings/advanced/memory", title: "Dynamic Memory" },
         { match: p => p.startsWith("/settings/personas/") && p.endsWith("/edit"), title: "Edit Persona" },
         { match: p => p.startsWith("/settings/characters/") && p.endsWith("/edit"), title: "Edit Character" },
+        { match: p => p === "/settings/sync", title: "Sync" },
         { match: p => p.startsWith("/settings"), title: "Settings" },
         { match: p => p.startsWith("/create"), title: "Create" },
         { match: p => p.startsWith("/onboarding"), title: "Setup" },

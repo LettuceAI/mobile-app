@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
-import { X, ChevronRight, LucideIcon } from "lucide-react";
+import { X, ChevronRight, LucideIcon, Loader2 } from "lucide-react";
 import { ReactNode, useCallback, useMemo, useEffect } from "react";
 
 const ICON_ACCENT_MAP: Record<string, string> = {
@@ -17,6 +17,7 @@ export interface MenuButtonProps {
   color?: string;
   onClick: () => void;
   disabled?: boolean;
+  loading?: boolean;
 }
 
 export interface MenuDividerProps {
@@ -53,7 +54,7 @@ export function BottomMenu({
 
   const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (!isBottomMenu) return;
-    const hasPulledFarEnough = info.offset.y > 100; 
+    const hasPulledFarEnough = info.offset.y > 100;
     const hasQuickSwipe = info.velocity.y > 600 && info.offset.y > 20;
     if (hasPulledFarEnough || hasQuickSwipe) {
       onClose();
@@ -177,41 +178,42 @@ export function MenuButton({
   color = "from-purple-500 to-blue-500",
   onClick,
   disabled = false,
+  loading = false,
 }: MenuButtonProps) {
   const handleClick = useCallback(() => {
-    if (!disabled) onClick();
-  }, [disabled, onClick]);
+    if (!disabled && !loading) onClick();
+  }, [disabled, loading, onClick]);
 
   const iconAccentClasses = ICON_ACCENT_MAP[color] || "border-white/10 bg-white/5 text-white/60";
 
   return (
     <motion.button
-      className={`group relative w-full rounded-xl border border-white/10 bg-white/4 p-3 text-left text-white ${disabled
-          ? "cursor-not-allowed opacity-50"
-          : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
+      className={`group relative w-full rounded-xl border border-white/10 bg-white/4 p-3 text-left text-white ${disabled || loading
+        ? "cursor-not-allowed opacity-50"
+        : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
         } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}
       onClick={handleClick}
-      disabled={disabled}
+      disabled={disabled || loading}
     >
       <div className="flex items-center gap-2">
         <div
-          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${disabled ? "opacity-60" : ""
+          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${disabled || loading ? "opacity-60" : ""
             }`}
         >
-          <Icon size={18} />
+          {loading ? <Loader2 size={18} className="animate-spin" /> : <Icon size={18} />}
         </div>
         <div className="flex flex-1 items-center gap-2">
           <div className="flex-1">
             <h4 className="text-sm font-medium text-white group-hover:text-white">
-              {title}
+              {loading ? "Processing..." : title}
             </h4>
-            {description && (
+            {description && !loading && (
               <p className="mt-0.5 text-xs text-white/55">
                 {description}
               </p>
             )}
           </div>
-          {!disabled && (
+          {!disabled && !loading && (
             <ChevronRight className="h-4 w-4 text-white/30 transition group-hover:text-white/60" />
           )}
         </div>

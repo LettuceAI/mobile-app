@@ -114,6 +114,24 @@ pub(crate) fn app_version() -> String {
     "1.0.0-beta.6.1".to_string()
 }
 
+pub fn get_local_ip() -> Result<String, String> {
+    // Try if-addrs for better mobile support
+    if let Ok(addrs) = if_addrs::get_if_addrs() {
+        for iface in addrs {
+            if !iface.is_loopback() {
+                if let if_addrs::IfAddr::V4(v4) = iface.addr {
+                    return Ok(v4.ip.to_string());
+                }
+            }
+        }
+    }
+
+    // Fallback to local-ip-address
+    local_ip_address::local_ip()
+        .map(|ip| ip.to_string())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn get_app_version() -> String {
     app_version()

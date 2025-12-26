@@ -51,6 +51,7 @@ export const Routes = {
   settingsModel: (modelId: string) => `/settings/models/${modelId}`,
   settingsImageGeneration: "/settings/image-generation",
   characterLorebook: (characterId: string) => `/settings/characters/${characterId}/lorebook`,
+  sync: "/settings/sync",
 } as const;
 
 export type BackMapping = {

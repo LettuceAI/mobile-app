@@ -30,6 +30,7 @@ import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/per
 import { SearchPage } from "./ui/pages/search";
 import { LibraryPage } from "./ui/pages/library/LibraryPage";
 import { StandaloneLorebookEditor } from "./ui/pages/library/StandaloneLorebookEditor";
+import { SyncPage } from "./ui/pages/sync/SyncPage";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { V1UpgradeToast } from "./ui/components/V1UpgradeToast";
@@ -283,6 +284,7 @@ function AppContent() {
               <Route path="/settings/developer" element={<DeveloperPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />
               <Route path="/settings/backup" element={<BackupRestorePage />} />
+              <Route path="/settings/sync" element={<SyncPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />
               <Route path="/chat/:characterId/search" element={<SearchMessagesPage />} />

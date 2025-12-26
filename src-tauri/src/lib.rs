@@ -1,16 +1,18 @@
 mod abort_manager;
 mod api;
 mod chat_manager;
+pub mod commands;
 mod embedding_model;
 mod error;
 mod image_generator;
 mod logger;
-mod migrations;
-mod models;
+pub mod migrations;
+pub mod models;
 mod pricing_cache;
 mod providers;
 mod serde_utils;
-mod storage_manager;
+pub mod storage_manager;
+pub mod sync;
 mod tokenizer;
 mod transport;
 mod usage;
@@ -59,11 +61,21 @@ pub fn run() {
                 eprintln!("Failed to ensure app default template: {}", e);
             }
 
+            // Initialize Sync Manager
+            app.manage(sync::manager::SyncManagerState::new());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             api::api_request,
             api::abort_request,
+            sync::commands::start_driver,
+            sync::commands::connect_as_passenger,
+            sync::commands::stop_sync,
+            sync::commands::get_sync_status,
+            sync::commands::get_local_ip,
+            sync::commands::approve_connection,
+            sync::commands::start_sync_session,
             models::verify_model_exists,
             providers::verify_provider_api_key,
             providers::get_provider_configs,

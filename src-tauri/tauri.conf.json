@@ -4,7 +4,7 @@
   "version": "1.0.0-beta.6-1",
   "identifier": "com.lettuceai.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
