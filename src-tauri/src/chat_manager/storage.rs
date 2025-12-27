@@ -16,7 +16,6 @@ use super::types::{
     StoredMessage,
 };
 
-
 #[derive(Debug, Clone, Copy)]
 pub enum PromptType {
     SystemPrompt,

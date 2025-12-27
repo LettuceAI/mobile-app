@@ -1213,7 +1213,7 @@ pub async fn chat_completion(
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
             serde_json::to_string(api_response.data()).unwrap_or_else(|_| "<non-json>".into());
-        
+
         // Enhanced debug info for diagnosing model-specific parsing issues
         let raw_len = match api_response.data() {
             Value::String(s) => s.len(),
@@ -1247,8 +1247,8 @@ pub async fn chat_completion(
         emit_debug(
             &app,
             "empty_response",
-            json!({ 
-                "preview": preview, 
+            json!({
+                "preview": preview,
                 "hasReasoning": has_reasoning,
                 "reasoningLen": reasoning_len,
                 "rawLen": raw_len,

@@ -2743,7 +2743,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lettuceai"
-version = "1.0.0-beta.6-1"
+version = "1.0.0-beta.7"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2777,6 +2777,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-android-fs",
  "tauri-plugin-app-events",
+ "tauri-plugin-barcode-scanner",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-opener",
@@ -5760,6 +5761,20 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "tauri-plugin-barcode-scanner"
+version = "2.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afca04ac7b8363b8f054edf797ab688935dffb26bc1f88b35b762c508aa9d1bd"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

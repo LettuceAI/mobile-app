@@ -12,8 +12,11 @@ import {
     Check,
     HelpCircle,
     X,
-    RefreshCw
+    RefreshCw,
+    Scan
 } from "lucide-react";
+import { type as osType } from "@tauri-apps/plugin-os";
+import { scan, cancel, checkPermissions, requestPermissions, Format } from "@tauri-apps/plugin-barcode-scanner";
 import { interactive, radius, cn } from "../../design-tokens";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
 
@@ -32,7 +35,6 @@ export function SyncPage() {
     const [activeTab, setActiveTab] = useState<"host" | "client">("client");
     const [status, setStatus] = useState<SyncStatus>({ status: "Idle" });
     const [hostIp, setHostIp] = useState("");
-    const [hostPort] = useState("8000");
     const [localIp, setLocalIp] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [pin, setPin] = useState(""); // PIN for joining
@@ -41,6 +43,19 @@ export function SyncPage() {
     const [role, setRole] = useState<"host" | "client" | null>(null);
     const [isAccepting, setIsAccepting] = useState(false);
     const [isStartingSyncSession, setIsStartingSyncSession] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = async () => {
+            try {
+                const type = await osType();
+                setIsMobile(type === "android" || type === "ios");
+            } catch (e) {
+                console.error("Failed to check OS", e);
+            }
+        }
+        checkMobile();
+    }, []);
 
     // Poll status
     useEffect(() => {
@@ -53,14 +68,13 @@ export function SyncPage() {
             }
         };
         fetchStatus();
-        const interval = setInterval(fetchStatus, 500); // Fast polling for responsive UI
+        const interval = setInterval(fetchStatus, 500);
         return () => {
             clearInterval(interval);
             invoke("stop_sync").catch(console.error);
         };
     }, []);
 
-    // Clear loading states when status changes
     useEffect(() => {
         if (status.status === "DriverRunning") {
             setIsStartingHost(false);
@@ -81,8 +95,7 @@ export function SyncPage() {
         setIsStartingHost(true);
         setRole("host");
         try {
-            await invoke("start_driver", { port: 8000 });
-            // Loading state cleared by useEffect when status changes
+            await invoke("start_driver", { port: 0 });
         } catch (e) {
             console.error("Failed to start driver", e);
             setIsStartingHost(false);
@@ -90,13 +103,33 @@ export function SyncPage() {
         }
     };
 
-    const connectToHost = async () => {
+    const connectToHost = async (overrideIp?: string, overridePin?: string) => {
         setIsConnectingToHost(true);
         setRole("client");
         try {
-            console.log("Connecting to host", hostIp, hostPort, "with PIN", pin);
-            await invoke("connect_as_passenger", { ip: hostIp, port: parseInt(hostPort), pin });
-            // Loading state cleared by useEffect when status changes
+            let ipToUse = overrideIp || hostIp;
+            let pinToUse = overridePin || pin;
+            let portToUse = 8000;
+
+            try {
+                const data = JSON.parse(ipToUse);
+                if (data.ip && data.port && data.pin) {
+                    ipToUse = data.ip;
+                    portToUse = data.port;
+                    pinToUse = data.pin;
+                    setHostIp(`${ipToUse}:${portToUse}`);
+                    setPin(pinToUse);
+                }
+            } catch (e) {
+                if (ipToUse.includes(":")) {
+                    const parts = ipToUse.split(":");
+                    ipToUse = parts[0];
+                    portToUse = parseInt(parts[1]);
+                }
+            }
+
+            console.log("Connecting to host", ipToUse, portToUse, "with PIN", pinToUse);
+            await invoke("connect_as_passenger", { ip: ipToUse, port: portToUse, pin: pinToUse });
         } catch (e) {
             console.error("Failed to connect", e);
             setIsConnectingToHost(false);
@@ -147,14 +180,56 @@ export function SyncPage() {
         }
     };
 
-    const copyAddress = (ipToCopy: string | null) => {
-        const addr = ipToCopy ? `${ipToCopy}:8000` : null;
+    const copyAddress = (ipToCopy: string | null, port: number) => {
+        const addr = ipToCopy ? `${ipToCopy}:${port}` : null;
         if (addr) {
             navigator.clipboard.writeText(addr);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         }
     };
+
+    const [isScanning, setIsScanning] = useState(false);
+
+    const stopScan = async () => {
+        try {
+            await cancel();
+            setIsScanning(false);
+        } catch (e) {
+            console.error("Failed to cancel scan", e);
+        } finally {
+        }
+    };
+
+    const startScan = async () => {
+        try {
+            // Check/Request Camera Permissions
+            const permission = await checkPermissions();
+            if (permission === "prompt") {
+                const result = await requestPermissions();
+                if (result !== "granted") {
+                    console.error("Camera permission denied");
+                    return;
+                }
+            } else if (permission === 'denied') {
+                console.error("Camera permission denied");
+                return;
+            }
+
+            setIsScanning(true);
+
+            const scanned = await scan({ formats: [Format.QRCode] });
+            console.log("Scanned result:", scanned);
+            if (scanned.content) {
+                connectToHost(scanned.content);
+            }
+        } catch (e) {
+            console.error("Scan failed", e);
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
 
     return (
         <div className="flex h-full flex-col pb-16 relative">
@@ -200,11 +275,13 @@ export function SyncPage() {
                 </div>
             </BottomMenu>
 
+
+
             <BottomMenu
                 isOpen={isReadyToStart}
                 onClose={() => { }}
                 title="Ready to Sync"
-                includeExitIcon={false}
+
             >
                 <div className="mb-6 px-1 text-center">
                     <div className="mb-4 flex justify-center">
@@ -310,14 +387,22 @@ export function SyncPage() {
                 {(isIdle || isError) && activeTab === "client" && (
                     <div className="space-y-3">
                         <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">Connect to Host</h2>
+                        {isMobile && (
+                            <button
+                                onClick={startScan}
+                                className={cn("flex w-full items-center justify-center gap-2 border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white mb-3", radius.lg, "hover:bg-white/10")}
+                            >
+                                <Scan className="h-4 w-4" /> Scan QR Code
+                            </button>
+                        )}
                         <div className="border border-white/10 bg-white/5 p-4 rounded-xl space-y-3">
                             <div>
-                                <label className="mb-1.5 block text-xs font-medium text-white/50">Host Address</label>
+                                <label className="mb-1.5 block text-xs font-medium text-white/50">Host Address or JSON</label>
                                 <input
                                     type="text"
                                     value={hostIp}
-                                    onChange={(e) => setHostIp(e.target.value.split(":")[0])}
-                                    placeholder="e.g. 192.168.1.100"
+                                    onChange={(e) => setHostIp(e.target.value)}
+                                    placeholder="e.g. 192.168.1.100:12345"
                                     className={cn("w-full border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 font-mono", radius.lg, "focus:border-white/20 focus:outline-none")}
                                 />
                             </div>
@@ -339,8 +424,8 @@ export function SyncPage() {
                             </div>
                         </div>
                         <button
-                            onClick={connectToHost}
-                            disabled={!hostIp || pin.length !== 6 || isConnectingToHost}
+                            onClick={() => connectToHost()}
+                            disabled={!hostIp || (pin.length !== 6 && !hostIp.trim().startsWith("{")) || isConnectingToHost}
                             className={cn("flex w-full items-center justify-center gap-2 bg-blue-500 px-4 py-3 text-sm font-medium text-white", radius.lg, "hover:bg-blue-600 disabled:opacity-50")}
                         >
                             {isConnectingToHost ? (
@@ -410,7 +495,7 @@ export function SyncPage() {
                     </div>
                 )}
 
-                {/* Active Host UI (The Vertical Mobile-Optimized One) */}
+                {/* Active Host UI */}
                 {role === "host" && (isDriver || isPendingApproval || isReadyToStart || isSyncing) && (
                     <div className="space-y-4 pb-6">
                         <div className="flex items-center justify-between px-1">
@@ -443,7 +528,11 @@ export function SyncPage() {
                                     <>
                                         <div className="bg-white p-3 rounded-xl mb-6 shadow-2xl">
                                             <QRCode
-                                                value={`${(status as any).details?.ip || localIp}:8000`}
+                                                value={JSON.stringify({
+                                                    ip: (status as any).details?.ip || localIp,
+                                                    port: (status as any).details?.port || 8000,
+                                                    pin: (status as any).details?.pin || ""
+                                                })}
                                                 size={Math.min(window.innerWidth - 120, 180)}
                                             />
                                         </div>
@@ -451,10 +540,10 @@ export function SyncPage() {
                                             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Local Network Address</p>
                                             <div className="flex items-center justify-center gap-2">
                                                 <code className="text-2xl font-mono font-bold text-white leading-none">
-                                                    {(status as any).details?.ip || localIp}:8000
+                                                    {(status as any).details?.ip || localIp}:{(status as any).details?.port || 8000}
                                                 </code>
                                                 <button
-                                                    onClick={() => copyAddress((status as any).details?.ip || localIp)}
+                                                    onClick={() => copyAddress((status as any).details?.ip || localIp, (status as any).details?.port || 8000)}
                                                     className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white/60"
                                                 >
                                                     {copied ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-5 w-5" />}
@@ -466,7 +555,7 @@ export function SyncPage() {
                             </div>
                         </div>
 
-                        {/* PIN display (only when not syncing) */}
+                        {/* PIN display */}
                         {!isSyncing && (
                             <div className="border border-emerald-400/20 bg-emerald-400/10 p-4 rounded-xl text-center">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-300/60 mb-2">Connection PIN</p>
@@ -522,7 +611,7 @@ export function SyncPage() {
                     </div>
                 )}
 
-                {/* Completed state footer */}
+                {/* footer */}
                 {isCompleted && (
                     <div className="flex gap-3 pt-2">
                         <button
@@ -544,6 +633,33 @@ export function SyncPage() {
                     Sync works over your local network. Both devices must be on the same WiFi.
                 </p>
             </section>
+
+            {/* Scanner Overlay */}
+            {isScanning && (
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-end pb-20 bg-transparent">
+                    <div className="mb-8 text-center">
+                        <div className="w-64 h-64 border-2 border-white/50 rounded-3xl mb-4 mx-auto relative overflow-hidden">
+                            <div className="absolute inset-0 border-2 border-white/20 rounded-3xl animate-pulse"></div>
+                            <div className="absolute top-0 left-0 w-full h-1 bg-white/50 shadow-[0_0_10px_white] animate-[scan_2s_infinite]"></div>
+                        </div>
+                        <p className="text-white font-medium shadow-black/50 drop-shadow-md">Scan QR Code</p>
+                    </div>
+                    <button
+                        onClick={stopScan}
+                        className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full font-medium active:scale-95 transition-all flex items-center gap-2"
+                    >
+                        <X className="w-5 h-5" /> Cancel Scan
+                    </button>
+                    <style>{`
+                        @keyframes scan {
+                            0% { transform: translateY(0); opacity: 0.5; }
+                            50% { opacity: 1; }
+                            100% { transform: translateY(256px); opacity: 0.5; }
+                        }
+                    `}</style>
+                </div>
+            )}
         </div>
     );
 }
+

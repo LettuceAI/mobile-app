@@ -1,11 +1,12 @@
 use crate::logger::{LogEntry, LogManager};
+use if_addrs::get_if_addrs;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
-pub const _SERVICE: &str = "1.0.0-beta.6-1";
+pub const _SERVICE: &str = "1.0.0-beta.7";
 
 pub fn lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -115,18 +116,27 @@ pub(crate) fn app_version() -> String {
 }
 
 pub fn get_local_ip() -> Result<String, String> {
-    // Try if-addrs for better mobile support
-    if let Ok(addrs) = if_addrs::get_if_addrs() {
-        for iface in addrs {
+    if let Ok(ifaces) = get_if_addrs() {
+        for iface in &ifaces {
             if !iface.is_loopback() {
-                if let if_addrs::IfAddr::V4(v4) = iface.addr {
+                if let if_addrs::IfAddr::V4(v4) = &iface.addr {
+                    let ip = v4.ip.to_string();
+                    if ip.starts_with("192.168.") {
+                        return Ok(ip);
+                    }
+                }
+            }
+        }
+
+        for iface in &ifaces {
+            if !iface.is_loopback() {
+                if let if_addrs::IfAddr::V4(v4) = &iface.addr {
                     return Ok(v4.ip.to_string());
                 }
             }
         }
     }
 
-    // Fallback to local-ip-address
     local_ip_address::local_ip()
         .map(|ip| ip.to_string())
         .map_err(|e| e.to_string())

@@ -1,6 +1,6 @@
 [package]
 name = "lettuceai"
-version = "1.0.0-beta.6-1"
+version = "1.0.0-beta.7"
 description = "LettuceAI mobile AI roleplaying app."
 authors = ["MegalithOfficial"]
 edition = "2021"
@@ -71,3 +71,6 @@ machine-uid = "0.3"
 tauri-plugin-android-fs = "2"
 ort = { version = "2.0.0-rc.9", default-features = false, features = ["load-dynamic", "half", "nnapi", "ndarray"] }
 openssl = { version = "0.10", features = ["vendored"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"

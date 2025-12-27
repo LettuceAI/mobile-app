@@ -161,3 +161,12 @@ button { padding: 0.6em 0.9em; }
     color: #9b87f5;
   }
 }
+
+.scanning-active,
+.scanning-active body,
+.scanning-active #root,
+.scanning-active #app-root,
+.scanning-active .app-shell,
+.scanning-active .app-main {
+  background: transparent !important;
+}

@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "lettuceai",
-  "version": "1.0.0-beta.6-1",
+  "version": "1.0.0-beta.7",
   "identifier": "com.lettuceai.app",
   "build": {
-    "beforeDevCommand": "",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
@@ -16,7 +16,8 @@
         "width": 1100,
         "height": 720,
         "minHeight": 600,
-        "minWidth": 900
+        "minWidth": 900,
+        "transparent": true
       }
     ],
     "security": {

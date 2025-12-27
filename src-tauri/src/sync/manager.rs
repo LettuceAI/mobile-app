@@ -85,19 +85,19 @@ impl SyncManagerState {
 }
 
 // Driver Logic (Host)
-pub async fn start_driver(app: AppHandle, port: u16) -> Result<String, String> {
+pub async fn start_driver(app: AppHandle, _port: u16) -> Result<String, String> {
     let state = app.state::<SyncManagerState>();
     let mut current_tx = state.shutdown_tx.lock().await;
     if current_tx.is_some() {
         return Err("Sync service is already running".to_string());
     }
 
-    let my_ip_str = crate::utils::get_local_ip()?;
-    let my_ip: std::net::IpAddr = my_ip_str
-        .parse()
-        .map_err(|e: std::net::AddrParseError| e.to_string())?;
-    let addr = SocketAddr::new(my_ip, port);
-    let listener = TcpListener::bind(addr).await.map_err(|e| e.to_string())?;
+    let listener = TcpListener::bind("0.0.0.0:0")
+        .await
+        .map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+
+    let my_ip = crate::utils::get_local_ip().unwrap_or_else(|_| "0.0.0.0".into());
 
     // Generate PIN
     let pin: String = (0..6)
@@ -118,7 +118,7 @@ pub async fn start_driver(app: AppHandle, port: u16) -> Result<String, String> {
         .set_status(
             &app,
             SyncStatus::DriverRunning {
-                ip: my_ip.to_string(),
+                ip: my_ip,
                 port,
                 pin: pin.clone(),
                 clients: 0,

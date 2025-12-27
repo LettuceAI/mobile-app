@@ -133,7 +133,7 @@ pub struct Character {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CharacterRule {
-    pub id: Option<i64>, 
+    pub id: Option<i64>,
     pub character_id: String,
     pub idx: i64,
     pub rule: String,

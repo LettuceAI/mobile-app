@@ -1,7 +1,6 @@
 mod abort_manager;
 mod api;
 mod chat_manager;
-pub mod commands;
 mod embedding_model;
 mod error;
 mod image_generator;
@@ -30,7 +29,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init());
 
     #[cfg(target_os = "android")]
-    let builder = builder.plugin(tauri_plugin_android_fs::init());
+    let builder = builder
+        .plugin(tauri_plugin_android_fs::init())
+        .plugin(tauri_plugin_barcode_scanner::init());
 
     builder
         .setup(|app| {

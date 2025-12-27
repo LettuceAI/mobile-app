@@ -120,7 +120,7 @@ function App() {
           v7_relativeSplatPath: true,
         }}
       >
-        <div className="min-h-screen bg-[#000000] text-gray-100 antialiased">
+        <div id="app-root" className="min-h-screen bg-[#000000] text-gray-100 antialiased">
           <AppContent />
         </div>
       </BrowserRouter>
