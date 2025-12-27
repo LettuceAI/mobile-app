@@ -14,6 +14,7 @@ pub mod storage_manager;
 pub mod sync;
 mod tokenizer;
 mod transport;
+mod tts_manager;
 mod usage;
 mod utils;
 
@@ -22,6 +23,7 @@ pub fn run() {
     use tauri::Manager;
 
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_tts::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
@@ -221,6 +223,20 @@ pub fn run() {
             logger::clear_all_logs,
             logger::get_log_dir_path,
             logger::save_log_to_downloads,
+            tts_manager::commands::audio_provider_list,
+            tts_manager::commands::audio_provider_upsert,
+            tts_manager::commands::audio_provider_delete,
+            tts_manager::commands::audio_models_list,
+            tts_manager::commands::audio_provider_voices,
+            tts_manager::commands::audio_provider_refresh_voices,
+            tts_manager::commands::user_voice_list,
+            tts_manager::commands::user_voice_upsert,
+            tts_manager::commands::user_voice_delete,
+            tts_manager::commands::tts_preview,
+            tts_manager::commands::audio_provider_verify,
+            tts_manager::commands::audio_provider_search_voices,
+            tts_manager::commands::voice_design_preview,
+            tts_manager::commands::voice_design_create,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

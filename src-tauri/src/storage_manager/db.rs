@@ -428,6 +428,43 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           cached_at INTEGER NOT NULL
         );
 
+        -- Audio providers for TTS
+        CREATE TABLE IF NOT EXISTS audio_providers (
+          id TEXT PRIMARY KEY,
+          provider_type TEXT NOT NULL,
+          label TEXT NOT NULL,
+          api_key TEXT,
+          project_id TEXT,
+          location TEXT DEFAULT 'us-central1',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Cached voices from audio providers
+        CREATE TABLE IF NOT EXISTS audio_voice_cache (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL,
+          voice_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          preview_url TEXT,
+          labels TEXT,
+          cached_at INTEGER NOT NULL,
+          FOREIGN KEY(provider_id) REFERENCES audio_providers(id) ON DELETE CASCADE
+        );
+
+        -- User-created voice configurations
+        CREATE TABLE IF NOT EXISTS user_voices (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          model_id TEXT NOT NULL,
+          voice_id TEXT NOT NULL,
+          prompt TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY(provider_id) REFERENCES audio_providers(id) ON DELETE CASCADE
+        );
+
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_sessions_character ON sessions(character_id);
         CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);

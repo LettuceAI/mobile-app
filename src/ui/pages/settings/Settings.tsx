@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode, RefreshCw } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode, RefreshCw, Volume2 } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -140,29 +140,13 @@ export function SettingsPage() {
       count: modelCount,
       onClick: () => toModelsList()
     },
-    /*{
-      key: 'image-generation',
-      icon: <Image />,
-      title: 'Image Generation',
-      subtitle: 'Generate images with AI',
-      onClick: () => navigate('/settings/image-generation')
-    },*/
-    /*{
-      key: 'characters',
-      icon: <Sparkles />,
-      title: 'Characters',
-      subtitle: 'Manage AI characters',
-      count: characterCount,
-      onClick: () => navigate('/settings/characters')
-    },*/
-    /*{
-      key: 'personas',
-      icon: <User />,
-      title: 'Personas',
-      subtitle: 'Manage user personas',
-      count: personaCount,
-      onClick: () => navigate('/settings/personas')
-    },*/
+    {
+      key: 'voices',
+      icon: <Volume2 />,
+      title: 'Voices',
+      subtitle: 'TTS audio providers & voices',
+      onClick: () => navigate('/settings/voices')
+    },
     {
       key: 'prompts',
       icon: <FileText />,
@@ -295,9 +279,19 @@ export function SettingsPage() {
             Core
           </h2>
           <div className={spacing.field}>
-            {items.filter(i => ['providers', 'models', 'image-generation', 'characters', 'personas', 'prompts', 'security', 'backup', 'sync', 'usage', 'advanced', 'logs'].includes(i.key)).map(item => (
-              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
-            ))}
+            {items.filter(i => [
+              'providers',
+              'models',
+              'voices',
+              'prompts',
+              'security',
+              'backup',
+              'sync',
+              'usage',
+              'advanced',
+              'logs'].includes(i.key)).map(item => (
+                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
+              ))}
           </div>
         </div>
 
@@ -314,7 +308,9 @@ export function SettingsPage() {
             Assistance
           </h2>
           <div className={spacing.field}>
-            {items.filter(i => ['guide'].includes(i.key)).map(item => (
+            {items.filter(i => [
+              'guide'
+            ].includes(i.key)).map(item => (
               <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
             ))}
           </div>
@@ -333,7 +329,11 @@ export function SettingsPage() {
             Info
           </h2>
           <div className={spacing.field}>
-            {items.filter(i => ['github', 'discord', 'changelog'].includes(i.key)).map(item => (
+            {items.filter(i => [
+              'github',
+              'discord',
+              'changelog'
+            ].includes(i.key)).map(item => (
               <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} />
             ))}
           </div>
@@ -352,7 +352,9 @@ export function SettingsPage() {
             Danger Zone
           </h2>
           <div className={spacing.field}>
-            {items.filter(i => ['reset'].includes(i.key)).map(item => (
+            {items.filter(i => [
+              'reset'
+            ].includes(i.key)).map(item => (
               <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
             ))}
           </div>
@@ -372,7 +374,9 @@ export function SettingsPage() {
               Developer
             </h2>
             <div className={spacing.field}>
-              {items.filter(i => ['developer'].includes(i.key)).map(item => (
+              {items.filter(i => [
+                'developer'
+              ].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
               ))}
             </div>

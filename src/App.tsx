@@ -20,6 +20,7 @@ import { CharactersPage } from "./ui/pages/settings/CharactersPage";
 import { DeveloperPage } from "./ui/pages/settings/DeveloperPage";
 import { ChangelogPage } from "./ui/pages/settings/ChangelogPage";
 import { AdvancedPage } from "./ui/pages/settings/AdvancedPage";
+import { VoicesPage } from "./ui/pages/settings/VoicesPage";
 import { DynamicMemoryPage } from "./ui/pages/settings/DynamicMemoryPage";
 import { EmbeddingDownloadPage } from "./ui/pages/settings/EmbeddingDownloadPage";
 import { EmbeddingTestPage } from "./ui/pages/settings/EmbeddingTestPage";
@@ -269,6 +270,7 @@ function AppContent() {
               <Route path="/settings/models" element={<ModelsPage />} />
               <Route path="/settings/models/new" element={<EditModelPage />} />
               <Route path="/settings/models/:modelId" element={<EditModelPage />} />
+              <Route path="/settings/voices" element={<VoicesPage />} />
               <Route path="/settings/image-generation" element={<ImageGenerationPage />} />
               <Route path="/settings/prompts" element={<SystemPromptsPage />} />
               <Route path="/settings/prompts/new" element={<EditPromptTemplate />} />
