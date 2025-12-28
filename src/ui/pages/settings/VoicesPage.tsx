@@ -15,6 +15,7 @@ import {
     playAudioFromBase64,
     designVoicePreview,
     createVoiceFromPreview,
+    DEVICE_TTS_PROVIDER_ID,
     type AudioProvider,
     type AudioProviderType,
     type AudioModel,
@@ -40,6 +41,9 @@ export function VoicesPage() {
     // Selection menu state
     const [selectedVoice, setSelectedVoice] = useState<UserVoice | null>(null);
     const [selectedProvider, setSelectedProvider] = useState<AudioProvider | null>(null);
+    const editableProviders = providers.filter((provider) => provider.providerType !== "device_tts");
+    const isDeviceProvider = (provider: AudioProvider | null) =>
+        !!provider && (provider.providerType === "device_tts" || provider.id === DEVICE_TTS_PROVIDER_ID);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -62,9 +66,13 @@ export function VoicesPage() {
     }, [loadData]);
 
     const handleCreateVoice = () => {
+        const firstEditable = editableProviders[0];
+        if (!firstEditable) {
+            return;
+        }
         setEditingVoice({
             id: "",
-            providerId: providers[0]?.id ?? "",
+            providerId: firstEditable.id,
             name: "",
             modelId: "",
             voiceId: "", // Not used but required by type
@@ -100,12 +108,18 @@ export function VoicesPage() {
     };
 
     const handleEditProvider = (provider: AudioProvider) => {
+        if (provider.providerType === "device_tts") {
+            return;
+        }
         setEditingProvider({ ...provider });
         setIsProviderEditorOpen(true);
         setSelectedProvider(null);
     };
 
     const handleDeleteProvider = async (id: string) => {
+        if (id === DEVICE_TTS_PROVIDER_ID) {
+            return;
+        }
         try {
             await deleteAudioProvider(id);
             await loadData();
@@ -158,6 +172,8 @@ export function VoicesPage() {
                                     <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
                                         {provider.providerType === "gemini_tts" ? (
                                             <span className="text-xs">G</span>
+                                        ) : provider.providerType === "device_tts" ? (
+                                            <span className="text-[10px]">OS</span>
                                         ) : (
                                             <span className="text-xs">11</span>
                                         )}
@@ -165,7 +181,11 @@ export function VoicesPage() {
                                     <div className="flex-1 min-w-0">
                                         <p className="truncate text-sm font-medium text-white">{provider.label}</p>
                                         <p className="text-xs text-white/50">
-                                            {provider.providerType === "gemini_tts" ? "Gemini TTS" : "ElevenLabs"}
+                                            {provider.providerType === "gemini_tts"
+                                                ? "Gemini TTS"
+                                                : provider.providerType === "device_tts"
+                                                    ? "Device TTS"
+                                                    : "ElevenLabs"}
                                         </p>
                                     </div>
                                     <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60" />
@@ -182,7 +202,7 @@ export function VoicesPage() {
                     <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
                         My Voices
                     </h2>
-                    {providers.length > 0 && (
+                    {editableProviders.length > 0 && (
                         <button
                             onClick={handleCreateVoice}
                             className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70 transition hover:border-white/20 hover:bg-white/10"
@@ -198,7 +218,7 @@ export function VoicesPage() {
                         <Volume2 className="mb-2 h-8 w-8 text-white/20" />
                         <p className="text-sm text-white/50">No voices created yet</p>
                         <p className="text-xs text-white/30">
-                            {providers.length > 0
+                            {editableProviders.length > 0
                                 ? "Create voices with custom prompts for your characters"
                                 : "Add an audio provider first"}
                         </p>
@@ -265,22 +285,28 @@ export function VoicesPage() {
                 title={selectedProvider?.label || "Provider"}
             >
                 {selectedProvider && (
-                    <div className="space-y-4">
-                        <MenuButton
-                            icon={Edit3}
-                            title="Edit"
-                            description="Modify provider settings"
-                            onClick={() => handleEditProvider(selectedProvider)}
-                            color="from-indigo-500 to-blue-600"
-                        />
-                        <MenuButton
-                            icon={Trash2}
-                            title="Delete"
-                            description="Remove this provider"
-                            onClick={() => void handleDeleteProvider(selectedProvider.id)}
-                            color="from-rose-500 to-red-600"
-                        />
-                    </div>
+                    isDeviceProvider(selectedProvider) ? (
+                        <p className="text-sm text-white/60">
+                            This is a built-in system provider.
+                        </p>
+                    ) : (
+                        <div className="space-y-4">
+                            <MenuButton
+                                icon={Edit3}
+                                title="Edit"
+                                description="Modify provider settings"
+                                onClick={() => handleEditProvider(selectedProvider)}
+                                color="from-indigo-500 to-blue-600"
+                            />
+                            <MenuButton
+                                icon={Trash2}
+                                title="Delete"
+                                description="Remove this provider"
+                                onClick={() => void handleDeleteProvider(selectedProvider.id)}
+                                color="from-rose-500 to-red-600"
+                            />
+                        </div>
+                    )
                 )}
             </BottomMenu>
 
@@ -288,7 +314,7 @@ export function VoicesPage() {
             <VoiceEditor
                 isOpen={isVoiceEditorOpen}
                 voice={editingVoice}
-                providers={providers}
+                providers={editableProviders}
                 onClose={() => {
                     setIsVoiceEditorOpen(false);
                     setEditingVoice(null);
