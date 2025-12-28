@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
 import type { Character, Model, StoredMessage } from "../../../core/storage/schemas";
 import {
+  abortAudioPreview,
   generateTtsPreview,
   listAudioModels,
   listAudioProviders,
@@ -12,6 +13,7 @@ import {
   type AudioModel,
   type AudioProvider,
   type AudioProviderType,
+  type TtsPreviewResponse,
   type UserVoice,
 } from "../../../core/storage/audioProviders";
 import { useImageData } from "../../hooks/useImageData";
@@ -36,6 +38,7 @@ const LONG_PRESS_DELAY = 450;
 const SCROLL_THRESHOLD = 10; // pixels of movement to cancel long press
 const AUTOLOAD_TOP_THRESHOLD_PX = 120;
 const STICKY_BOTTOM_THRESHOLD_PX = 80;
+const MAX_AUDIO_CACHE_ENTRIES = 50;
 
 export function ChatConversationPage() {
   const { characterId } = useParams<{ characterId: string }>();
@@ -67,11 +70,18 @@ export function ChatConversationPage() {
     userVoices: null,
     modelsByProviderType: new Map(),
   });
+  const audioPreviewCacheRef = useRef<Map<string, TtsPreviewResponse>>(new Map());
+  const [audioStatusByMessage, setAudioStatusByMessage] = useState<Record<string, "loading" | "playing">>({});
+  const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
+  const audioPlayingMessageIdRef = useRef<string | null>(null);
+  const audioRequestRef = useRef<{ requestId: string; messageId: string } | null>(null);
+  const cancelledAudioRequestsRef = useRef<Set<string>>(new Set());
   const abortRequestedRef = useRef(false);
   const autoPlaySignatureRef = useRef<string | null>(null);
   const autoPlayInFlightRef = useRef(false);
   const sendStartSignatureRef = useRef<string | null>(null);
   const sendingPrevRef = useRef(false);
+  const previousChatKeyRef = useRef<string | null>(null);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
     setSelectedImage({ src, alt });
@@ -233,6 +243,121 @@ export function ChatConversationPage() {
     return models;
   }, []);
 
+  const setAudioStatus = useCallback((messageId: string, status: "loading" | "playing" | null) => {
+    setAudioStatusByMessage((prev) => {
+      if (status === null) {
+        if (!(messageId in prev)) return prev;
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      }
+      if (prev[messageId] === status) return prev;
+      return { ...prev, [messageId]: status };
+    });
+  }, []);
+
+  const buildAudioCacheKey = useCallback((params: {
+    providerId: string;
+    modelId: string;
+    voiceId: string;
+    text: string;
+    prompt?: string | null;
+  }) => {
+    const promptKey = params.prompt?.trim() ?? "";
+    return [params.providerId, params.modelId, params.voiceId, promptKey, params.text].join("::");
+  }, []);
+
+  const cacheAudioPreview = useCallback((key: string, response: TtsPreviewResponse) => {
+    const cache = audioPreviewCacheRef.current;
+    cache.set(key, response);
+    if (cache.size <= MAX_AUDIO_CACHE_ENTRIES) return;
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) {
+      cache.delete(oldestKey);
+    }
+  }, []);
+
+  const startAudioPlayback = useCallback((messageId: string, response: TtsPreviewResponse) => {
+    setAudioStatus(messageId, "playing");
+    const audio = playAudioFromBase64(response.audioBase64, response.format);
+    audioPlaybackRef.current = audio;
+    audioPlayingMessageIdRef.current = messageId;
+    audio.onended = () => {
+      if (audioPlaybackRef.current === audio) {
+        audioPlaybackRef.current = null;
+        audioPlayingMessageIdRef.current = null;
+        setAudioStatus(messageId, null);
+      }
+    };
+    audio.onerror = () => {
+      if (audioPlaybackRef.current === audio) {
+        audioPlaybackRef.current = null;
+        audioPlayingMessageIdRef.current = null;
+        setAudioStatus(messageId, null);
+      }
+    };
+  }, [setAudioStatus]);
+
+  const stopAudioPlayback = useCallback(() => {
+    const audio = audioPlaybackRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.onended = null;
+      audio.onerror = null;
+    }
+    audioPlaybackRef.current = null;
+    const messageId = audioPlayingMessageIdRef.current;
+    if (messageId) {
+      audioPlayingMessageIdRef.current = null;
+      setAudioStatus(messageId, null);
+    }
+  }, [setAudioStatus]);
+
+  const cancelAudioGeneration = useCallback(async () => {
+    const pending = audioRequestRef.current;
+    if (!pending) return;
+    audioRequestRef.current = null;
+    cancelledAudioRequestsRef.current.add(pending.requestId);
+    setAudioStatus(pending.messageId, null);
+    try {
+      await abortAudioPreview(pending.requestId);
+    } catch (error) {
+      console.warn("Failed to cancel audio preview:", error);
+    }
+  }, [setAudioStatus]);
+
+  const handleStopAudio = useCallback((message: StoredMessage) => {
+    if (audioPlayingMessageIdRef.current && audioPlayingMessageIdRef.current !== message.id) {
+      return;
+    }
+    stopAudioPlayback();
+  }, [stopAudioPlayback]);
+
+  const handleCancelAudio = useCallback((message: StoredMessage) => {
+    if (audioRequestRef.current && audioRequestRef.current.messageId !== message.id) {
+      return;
+    }
+    void cancelAudioGeneration();
+  }, [cancelAudioGeneration]);
+
+  useEffect(() => {
+    const chatKey = `${characterId ?? ""}:${sessionId ?? ""}`;
+    const previousKey = previousChatKeyRef.current;
+    if (previousKey && previousKey !== chatKey) {
+      stopAudioPlayback();
+      void cancelAudioGeneration();
+    }
+    previousChatKeyRef.current = chatKey;
+  }, [cancelAudioGeneration, characterId, sessionId, stopAudioPlayback]);
+
+  useEffect(() => {
+    return () => {
+      stopAudioPlayback();
+      void cancelAudioGeneration();
+    };
+  }, [cancelAudioGeneration, stopAudioPlayback]);
+
   const handlePlayMessageAudio = useCallback(
     async (message: StoredMessage, text: string) => {
       if (message.id.startsWith("placeholder")) return;
@@ -242,7 +367,39 @@ export function ChatConversationPage() {
       const trimmedText = text.trim();
       if (!trimmedText) return;
 
-      const providers = await ensureAudioProviders();
+      if (audioRequestRef.current?.messageId === message.id) {
+        await cancelAudioGeneration();
+        return;
+      }
+      if (audioPlayingMessageIdRef.current === message.id) {
+        stopAudioPlayback();
+        return;
+      }
+
+      if (audioRequestRef.current) {
+        await cancelAudioGeneration();
+      }
+      if (audioPlaybackRef.current) {
+        stopAudioPlayback();
+      }
+
+      const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      audioRequestRef.current = { requestId, messageId: message.id };
+      setAudioStatus(message.id, "loading");
+
+      let providers: AudioProvider[];
+      try {
+        providers = await ensureAudioProviders();
+      } catch (error) {
+        if (audioRequestRef.current?.requestId === requestId) {
+          audioRequestRef.current = null;
+        }
+        setAudioStatus(message.id, null);
+        const messageText = error instanceof Error ? error.message : String(error);
+        const isAbort = messageText.toLowerCase().includes("aborted") || messageText.toLowerCase().includes("cancel");
+        if (isAbort) return;
+        throw error;
+      }
 
       if (character.voiceConfig.source === "user" && character.voiceConfig.userVoiceId) {
         let voices = await ensureUserVoices();
@@ -256,15 +413,61 @@ export function ChatConversationPage() {
           throw new Error("Assigned voice not found.");
         }
 
-        const response = await generateTtsPreview(
-          voice.providerId,
-          voice.modelId,
-          voice.voiceId,
-          trimmedText,
-          voice.prompt
-        );
-        playAudioFromBase64(response.audioBase64, response.format);
-        return;
+        const cacheKey = buildAudioCacheKey({
+          providerId: voice.providerId,
+          modelId: voice.modelId,
+          voiceId: voice.voiceId,
+          text: trimmedText,
+          prompt: voice.prompt,
+        });
+        const cached = audioPreviewCacheRef.current.get(cacheKey);
+        if (cached) {
+          if (audioRequestRef.current?.requestId !== requestId) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            return;
+          }
+          audioRequestRef.current = null;
+          if (cancelledAudioRequestsRef.current.has(requestId)) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            setAudioStatus(message.id, null);
+            return;
+          }
+          startAudioPlayback(message.id, cached);
+          return;
+        }
+
+        try {
+          const response = await generateTtsPreview(
+            voice.providerId,
+            voice.modelId,
+            voice.voiceId,
+            trimmedText,
+            voice.prompt,
+            requestId
+          );
+          if (audioRequestRef.current?.requestId !== requestId) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            return;
+          }
+          audioRequestRef.current = null;
+          if (cancelledAudioRequestsRef.current.has(requestId)) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            setAudioStatus(message.id, null);
+            return;
+          }
+          cacheAudioPreview(cacheKey, response);
+          startAudioPlayback(message.id, response);
+          return;
+        } catch (error) {
+          if (audioRequestRef.current?.requestId === requestId) {
+            audioRequestRef.current = null;
+          }
+          setAudioStatus(message.id, null);
+          const messageText = error instanceof Error ? error.message : String(error);
+          const isAbort = messageText.toLowerCase().includes("aborted") || messageText.toLowerCase().includes("cancel");
+          if (isAbort) return;
+          throw error;
+        }
       }
 
       if (character.voiceConfig.source === "provider") {
@@ -287,16 +490,73 @@ export function ChatConversationPage() {
           throw new Error("No audio models available for this provider.");
         }
 
-        const response = await generateTtsPreview(
+        const cacheKey = buildAudioCacheKey({
           providerId,
           modelId,
           voiceId,
-          trimmedText
-        );
-        playAudioFromBase64(response.audioBase64, response.format);
+          text: trimmedText,
+        });
+        const cached = audioPreviewCacheRef.current.get(cacheKey);
+        if (cached) {
+          if (audioRequestRef.current?.requestId !== requestId) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            return;
+          }
+          audioRequestRef.current = null;
+          if (cancelledAudioRequestsRef.current.has(requestId)) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            setAudioStatus(message.id, null);
+            return;
+          }
+          startAudioPlayback(message.id, cached);
+          return;
+        }
+
+        try {
+          const response = await generateTtsPreview(
+            providerId,
+            modelId,
+            voiceId,
+            trimmedText,
+            undefined,
+            requestId
+          );
+          if (audioRequestRef.current?.requestId !== requestId) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            return;
+          }
+          audioRequestRef.current = null;
+          if (cancelledAudioRequestsRef.current.has(requestId)) {
+            cancelledAudioRequestsRef.current.delete(requestId);
+            setAudioStatus(message.id, null);
+            return;
+          }
+          cacheAudioPreview(cacheKey, response);
+          startAudioPlayback(message.id, response);
+        } catch (error) {
+          if (audioRequestRef.current?.requestId === requestId) {
+            audioRequestRef.current = null;
+          }
+          setAudioStatus(message.id, null);
+          const messageText = error instanceof Error ? error.message : String(error);
+          const isAbort = messageText.toLowerCase().includes("aborted") || messageText.toLowerCase().includes("cancel");
+          if (isAbort) return;
+          throw error;
+        }
       }
     },
-    [character, ensureAudioModels, ensureAudioProviders, ensureUserVoices]
+    [
+      buildAudioCacheKey,
+      cacheAudioPreview,
+      cancelAudioGeneration,
+      character,
+      ensureAudioModels,
+      ensureAudioProviders,
+      ensureUserVoices,
+      setAudioStatus,
+      startAudioPlayback,
+      stopAudioPlayback,
+    ]
   );
 
   const effectiveVoiceAutoplay = useMemo(() => {
@@ -665,7 +925,10 @@ export function ChatConversationPage() {
                   displayContent={displayContent}
                   character={character}
                   persona={persona}
+                  audioStatus={audioStatusByMessage[message.id]}
                   onPlayAudio={handlePlayMessageAudio}
+                  onStopAudio={handleStopAudio}
+                  onCancelAudio={handleCancelAudio}
                   onImageClick={handleImageClick}
                   reasoning={streamingReasoning[message.id] || (message.reasoning ?? undefined)}
                 />

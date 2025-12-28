@@ -8,6 +8,7 @@ use super::types::{
     TtsPreviewResponse, UserVoice, VoiceDesignPreview,
 };
 use super::{elevenlabs, gemini};
+use crate::abort_manager::AbortRegistry;
 use crate::storage_manager::db::{now_ms, open_db};
 
 /// List all audio providers
@@ -341,6 +342,7 @@ pub async fn tts_preview(
     voice_id: String,
     prompt: Option<String>,
     text: String,
+    request_id: Option<String>,
 ) -> Result<TtsPreviewResponse, String> {
     let conn = open_db(&app)?;
 
@@ -360,27 +362,59 @@ pub async fn tts_preview(
 
     let api_key = api_key.ok_or("API key not configured")?;
 
-    let (audio_data, format) = match provider_type.as_str() {
-        "gemini_tts" => {
-            let project_id = project_id.ok_or("Project ID required for Gemini TTS")?;
-            let data = gemini::generate_speech(
-                &text,
-                &voice_id,
-                &model_id,
-                prompt.as_deref(),
-                &api_key,
-                &project_id,
-                location.as_deref(),
-            )
-            .await?;
-            (data, "audio/wav".to_string())
+    let mut abort_rx = request_id.as_ref().map(|id| {
+        use tauri::Manager;
+        let registry = app.state::<AbortRegistry>();
+        registry.register(id.clone())
+    });
+
+    let generate_audio = async {
+        match provider_type.as_str() {
+            "gemini_tts" => {
+                let project_id = project_id.ok_or("Project ID required for Gemini TTS")?;
+                let data = gemini::generate_speech(
+                    &text,
+                    &voice_id,
+                    &model_id,
+                    prompt.as_deref(),
+                    &api_key,
+                    &project_id,
+                    location.as_deref(),
+                )
+                .await?;
+                Ok((data, "audio/wav".to_string()))
+            }
+            "elevenlabs" => {
+                let data = elevenlabs::generate_speech(&text, &voice_id, &model_id, &api_key).await?;
+                Ok((data, "audio/mpeg".to_string()))
+            }
+            _ => Err(format!("Unknown provider type: {}", provider_type)),
         }
-        "elevenlabs" => {
-            let data = elevenlabs::generate_speech(&text, &voice_id, &model_id, &api_key).await?;
-            (data, "audio/mpeg".to_string())
-        }
-        _ => return Err(format!("Unknown provider type: {}", provider_type)),
     };
+
+    let result = if let Some(rx) = abort_rx.as_mut() {
+        tokio::select! {
+            _ = rx => {
+                if let Some(id) = request_id.as_ref() {
+                    use tauri::Manager;
+                    let registry = app.state::<AbortRegistry>();
+                    registry.unregister(id);
+                }
+                return Err("Request aborted by user".to_string());
+            }
+            value = generate_audio => value,
+        }
+    } else {
+        generate_audio.await
+    };
+
+    if let Some(id) = request_id.as_ref() {
+        use tauri::Manager;
+        let registry = app.state::<AbortRegistry>();
+        registry.unregister(id);
+    }
+
+    let (audio_data, format) = result?;
 
     let audio_base64 = STANDARD.encode(&audio_data);
 

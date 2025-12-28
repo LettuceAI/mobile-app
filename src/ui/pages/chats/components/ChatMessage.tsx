@@ -1,6 +1,6 @@
 import { motion, type PanInfo, AnimatePresence } from "framer-motion";
 import React, { useCallback, useMemo, useState } from "react";
-import { RefreshCw, Pin, User, Bot, ChevronDown, Volume2, Loader2 } from "lucide-react";
+import { RefreshCw, Pin, User, Bot, ChevronDown, Volume2, Loader2, Square } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage, Character, Persona } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
@@ -31,7 +31,10 @@ interface ChatMessageProps {
   persona: Persona | null;
   displayContent?: string;
   onImageClick?: (src: string, alt: string) => void;
+  audioStatus?: "loading" | "playing";
   onPlayAudio?: (message: StoredMessage, text: string) => Promise<void>;
+  onStopAudio?: (message: StoredMessage) => void;
+  onCancelAudio?: (message: StoredMessage) => void;
   reasoning?: string;
 }
 
@@ -228,7 +231,10 @@ function ChatMessageInner({
   persona,
   displayContent,
   onImageClick,
+  audioStatus,
   onPlayAudio,
+  onStopAudio,
+  onCancelAudio,
   reasoning,
 }: ChatMessageProps) {
   // Memoize all computed values
@@ -279,21 +285,28 @@ function ChatMessageInner({
     !computed.isPlaceholder &&
     hasVoiceAssignment &&
     playText.trim().length > 0;
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const isAudioLoading = audioStatus === "loading";
+  const isAudioPlaying = audioStatus === "playing";
 
   const handlePlayAudio = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!onPlayAudio || !canPlayAudio || isPlayingAudio) return;
-    setIsPlayingAudio(true);
+    if (!canPlayAudio) return;
+    if (isAudioLoading) {
+      onCancelAudio?.(message);
+      return;
+    }
+    if (isAudioPlaying) {
+      onStopAudio?.(message);
+      return;
+    }
+    if (!onPlayAudio) return;
     try {
       await onPlayAudio(message, playText);
     } catch (error) {
       console.error("Failed to play message audio:", error);
-    } finally {
-      setIsPlayingAudio(false);
     }
-  }, [canPlayAudio, isPlayingAudio, message, onPlayAudio, playText]);
+  }, [canPlayAudio, isAudioLoading, isAudioPlaying, message, onCancelAudio, onPlayAudio, onStopAudio, playText]);
 
   const dragProps = useMemo(
     () =>
@@ -344,17 +357,20 @@ function ChatMessageInner({
             <button
               type="button"
               onClick={handlePlayAudio}
-              disabled={isPlayingAudio}
               className={cn(
-                "audio-btn flex w-6 items-center justify-center rounded-full",
+                "audio-btn flex h-6 w-6 items-center justify-center rounded-full",
                 "border border-white/40 bg-white/10 text-white shadow-sm",
                 "transition hover:bg-white/20 active:scale-95",
                 "disabled:cursor-not-allowed disabled:opacity-70"
               )}
+              aria-label={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play message audio"}
+              title={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play audio"}
             >
 
-              {isPlayingAudio ? (
+              {isAudioLoading ? (
                 <Loader2 size={16} className="animate-spin" />
+              ) : isAudioPlaying ? (
+                <Square size={14} />
               ) : (
                 <Volume2 size={16} />
               )}
@@ -556,9 +572,12 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     })() &&
     prev.persona?.id === next.persona?.id &&
     prev.persona?.avatarPath === next.persona?.avatarPath &&
+    prev.audioStatus === next.audioStatus &&
     a.reasoning === b.reasoning &&
     prev.reasoning === next.reasoning &&
-    prev.onPlayAudio === next.onPlayAudio
+    prev.onPlayAudio === next.onPlayAudio &&
+    prev.onStopAudio === next.onStopAudio &&
+    prev.onCancelAudio === next.onCancelAudio
   );
 });
 

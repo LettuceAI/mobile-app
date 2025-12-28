@@ -110,7 +110,8 @@ export async function generateTtsPreview(
     modelId: string,
     voiceId: string,
     text: string,
-    prompt?: string
+    prompt?: string,
+    requestId?: string
 ): Promise<TtsPreviewResponse> {
     return invoke<TtsPreviewResponse>("tts_preview", {
         providerId,
@@ -118,12 +119,18 @@ export async function generateTtsPreview(
         voiceId,
         prompt,
         text,
+        requestId: requestId ?? null,
     });
 }
 
-export function playAudioFromBase64(audioBase64: string, format: string): void {
+export function playAudioFromBase64(audioBase64: string, format: string): HTMLAudioElement {
     const audio = new Audio(`data:${format};base64,${audioBase64}`);
-    audio.play();
+    void audio.play();
+    return audio;
+}
+
+export async function abortAudioPreview(requestId: string): Promise<void> {
+    return invoke("abort_request", { requestId });
 }
 
 export async function searchProviderVoices(
@@ -180,4 +187,3 @@ export async function createVoiceFromPreview(
         voiceDescription,
     });
 }
-
