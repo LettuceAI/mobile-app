@@ -60,6 +60,7 @@ export function AccessibilityPage() {
       const settings = await readSettings();
       const advancedSettings = {
         ...(settings.advancedSettings ?? {}),
+        creationHelperEnabled: settings.advancedSettings?.creationHelperEnabled ?? false,
         accessibility: next,
       };
       await saveAdvancedSettings(advancedSettings);

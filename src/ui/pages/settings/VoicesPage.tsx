@@ -20,7 +20,6 @@ import {
     type AudioProviderType,
     type AudioModel,
     type UserVoice,
-    type CachedVoice,
 } from "../../../core/storage/audioProviders";
 
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";

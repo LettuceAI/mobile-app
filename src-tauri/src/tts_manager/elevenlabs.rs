@@ -52,6 +52,7 @@ pub fn get_models() -> Vec<AudioModel> {
 struct VoicesResponse {
     voices: Vec<VoiceData>,
     #[serde(default)]
+    #[allow(dead_code)]
     has_more: bool,
 }
 

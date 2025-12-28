@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
-pub const _SERVICE: &str = "1.0.0-beta.7";
+pub const _SERVICE: &str = "1.0.0-beta-7";
 
 pub fn lettuce_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;

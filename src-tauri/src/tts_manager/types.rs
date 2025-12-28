@@ -9,13 +9,6 @@ pub enum AudioProviderType {
 }
 
 impl AudioProviderType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::GeminiTts => "gemini_tts",
-            Self::Elevenlabs => "elevenlabs",
-        }
-    }
-
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "gemini_tts" => Some(Self::GeminiTts),
@@ -90,17 +83,6 @@ pub struct UserVoice {
     pub created_at: u64,
     #[serde(default)]
     pub updated_at: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TtsPreviewRequest {
-    pub provider_id: String,
-    pub model_id: String,
-    pub voice_id: String,
-    #[serde(default)]
-    pub prompt: Option<String>,
-    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
