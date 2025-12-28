@@ -10,6 +10,6 @@
   "permissions": [
     "barcode-scanner:default",
     "tts:default",
-    "allow-read-file"
+    "fs:allow-read-file"
   ]
 }
