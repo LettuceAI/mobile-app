@@ -751,6 +751,27 @@ export const AppStateSchema = z.object({
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
+export const AccessibilitySoundSchema = z.object({
+  enabled: z.boolean().default(false),
+  volume: z.number().min(0).max(1).default(0.6),
+});
+export type AccessibilitySound = z.infer<typeof AccessibilitySoundSchema>;
+
+export const AccessibilitySettingsSchema = z.object({
+  send: AccessibilitySoundSchema.default({ enabled: false, volume: 0.5 }),
+  success: AccessibilitySoundSchema.default({ enabled: false, volume: 0.6 }),
+  failure: AccessibilitySoundSchema.default({ enabled: false, volume: 0.6 }),
+});
+export type AccessibilitySettings = z.infer<typeof AccessibilitySettingsSchema>;
+
+export function createDefaultAccessibilitySettings(): AccessibilitySettings {
+  return {
+    send: { enabled: false, volume: 0.5 },
+    success: { enabled: false, volume: 0.6 },
+    failure: { enabled: false, volume: 0.6 },
+  };
+}
+
 export function createDefaultAppState(): AppState {
   return {
     onboarding: createDefaultOnboardingState(),
@@ -784,6 +805,7 @@ export const SettingsSchema = z.object({
       coldThreshold: z.number().min(0.1).max(0.5).default(0.3),
       contextEnrichmentEnabled: z.boolean().default(true), // v2 exclusive: use last 2 messages for retrieval
     }).optional(),
+    accessibility: AccessibilitySettingsSchema.optional(),
   }).optional(),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated
@@ -800,6 +822,10 @@ export function createDefaultSettings(): Settings {
     models: [],
     appState: createDefaultAppState(),
     advancedModelSettings: createDefaultAdvancedModelSettings(),
+    advancedSettings: {
+      creationHelperEnabled: false,
+      accessibility: createDefaultAccessibilitySettings(),
+    },
     promptTemplateId: null,
     systemPrompt: null,
     migrationVersion: 0,

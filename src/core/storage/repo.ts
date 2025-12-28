@@ -22,6 +22,7 @@ import {
   type LorebookEntry,
   createDefaultSettings,
   createDefaultAdvancedModelSettings,
+  createDefaultAccessibilitySettings,
 } from "./schemas";
 
 const SessionPreviewSchema = z.object({
@@ -77,6 +78,7 @@ export async function readSettings(): Promise<Settings> {
 
     const modelsWithoutProviderLabel = settings.models.filter(m => !m.providerLabel);
     const missingAdvancedSettings = !settings.advancedModelSettings;
+    const missingAccessibility = !settings.advancedSettings?.accessibility;
 
     for (const model of modelsWithoutProviderLabel) {
       const providerCred = settings.providerCredentials.find((p) => p.providerId === model.providerId);
@@ -89,6 +91,15 @@ export async function readSettings(): Promise<Settings> {
       settings.advancedModelSettings = createDefaultAdvancedModelSettings();
       console.log("[repo] readSettings: Initializing default advanced model settings");
       await saveAdvancedModelSettings(settings.advancedModelSettings);
+    }
+
+    if (missingAccessibility) {
+      settings.advancedSettings = {
+        ...(settings.advancedSettings ?? {}),
+        creationHelperEnabled: settings.advancedSettings?.creationHelperEnabled ?? false,
+        accessibility: createDefaultAccessibilitySettings(),
+      };
+      await saveAdvancedSettings(settings.advancedSettings);
     }
 
     return settings;

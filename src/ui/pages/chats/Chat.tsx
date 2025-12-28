@@ -2,7 +2,8 @@ import { CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
-import type { Character, Model, StoredMessage } from "../../../core/storage/schemas";
+import type { AccessibilitySettings, Character, Model, StoredMessage } from "../../../core/storage/schemas";
+import { createDefaultAccessibilitySettings } from "../../../core/storage/schemas";
 import {
   abortAudioPreview,
   generateTtsPreview,
@@ -21,7 +22,8 @@ import {
 } from "../../../core/storage/audioProviders";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
-import { getSessionMeta, listCharacters, readSettings } from "../../../core/storage";
+import { getSessionMeta, listCharacters, readSettings, SETTINGS_UPDATED_EVENT } from "../../../core/storage";
+import { playAccessibilitySound } from "../../../core/utils/accessibilityAudio";
 
 import { useChatController } from "./hooks/useChatController";
 import { replacePlaceholders } from "../../../core/utils/placeholders";
@@ -73,6 +75,9 @@ export function ChatConversationPage() {
     userVoices: null,
     modelsByProviderType: new Map(),
   });
+  const [accessibilitySettings, setAccessibilitySettings] = useState<AccessibilitySettings>(
+    createDefaultAccessibilitySettings()
+  );
   const audioPreviewCacheRef = useRef<Map<string, TtsPreviewResponse>>(new Map());
   const [audioStatusByMessage, setAudioStatusByMessage] = useState<Record<string, "loading" | "playing">>({});
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
@@ -83,6 +88,8 @@ export function ChatConversationPage() {
   const audioRequestRef = useRef<{ requestId: string; messageId: string } | null>(null);
   const cancelledAudioRequestsRef = useRef<Set<string>>(new Set());
   const abortRequestedRef = useRef(false);
+  const abortSoundRef = useRef(false);
+  const wasGeneratingRef = useRef(false);
   const autoPlaySignatureRef = useRef<string | null>(null);
   const autoPlayInFlightRef = useRef(false);
   const sendStartSignatureRef = useRef<string | null>(null);
@@ -98,6 +105,31 @@ export function ChatConversationPage() {
       listCharacters().then(setAvailableCharacters).catch(console.error);
     }
   }, [showCharacterSelector]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadAccessibilitySettings = async () => {
+      try {
+        const settings = await readSettings();
+        const next = settings.advancedSettings?.accessibility ?? createDefaultAccessibilitySettings();
+        if (mounted) {
+          setAccessibilitySettings(next);
+        }
+      } catch (error) {
+        console.error("Failed to load accessibility settings:", error);
+      }
+    };
+
+    void loadAccessibilitySettings();
+    const listener = () => {
+      void loadAccessibilitySettings();
+    };
+    window.addEventListener(SETTINGS_UPDATED_EVENT, listener);
+    return () => {
+      mounted = false;
+      window.removeEventListener(SETTINGS_UPDATED_EVENT, listener);
+    };
+  }, []);
 
 
   // Reload session data when memories change
@@ -688,8 +720,10 @@ export function ChatConversationPage() {
 
   const handleAbortWithFlag = useCallback(async () => {
     abortRequestedRef.current = true;
+    abortSoundRef.current = true;
+    playAccessibilitySound("failure", accessibilitySettings);
     await handleAbort();
-  }, [handleAbort]);
+  }, [accessibilitySettings, handleAbort]);
 
   const openMessageActions = useCallback((message: StoredMessage) => {
     setMessageAction({ message, mode: "view" });
@@ -810,11 +844,13 @@ export function ChatConversationPage() {
     if (hasContent) {
       const content = draft.trim();
       setDraft("");
+      playAccessibilitySound("send", accessibilitySettings);
       await handleSend(content);
     } else {
+      playAccessibilitySound("send", accessibilitySettings);
       await handleContinue();
     }
-  }, [sending, setError, draft, setDraft, handleSend, handleContinue, pendingAttachments]);
+  }, [sending, setError, draft, setDraft, handleSend, handleContinue, pendingAttachments, accessibilitySettings]);
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
@@ -888,6 +924,25 @@ export function ChatConversationPage() {
         autoPlayInFlightRef.current = false;
       });
   }, [character?.name, effectiveVoiceAutoplay, handlePlayMessageAudio, messages, persona?.title, sending]);
+
+  useEffect(() => {
+    const wasGenerating = wasGeneratingRef.current;
+    if (!wasGenerating && isGenerating) {
+      abortSoundRef.current = false;
+    }
+    if (wasGenerating && !isGenerating) {
+      if (abortSoundRef.current) {
+        abortSoundRef.current = false;
+        return;
+      }
+      if (error) {
+        playAccessibilitySound("failure", accessibilitySettings);
+      } else {
+        playAccessibilitySound("success", accessibilitySettings);
+      }
+    }
+    wasGeneratingRef.current = isGenerating;
+  }, [accessibilitySettings, error, isGenerating]);
 
   useEffect(() => {
     if (!isAtBottom || !isGenerating) return;

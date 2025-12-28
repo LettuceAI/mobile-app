@@ -116,6 +116,23 @@ pub struct AdvancedSettings {
     /// Max token capacity for embedding model (1024, 2048, or 4096)
     #[serde(default)]
     pub embedding_max_tokens: Option<u32>,
+    #[serde(default)]
+    pub accessibility: Option<AccessibilitySettings>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessibilitySettings {
+    pub send: AccessibilitySoundSettings,
+    pub success: AccessibilitySoundSettings,
+    pub failure: AccessibilitySoundSettings,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessibilitySoundSettings {
+    pub enabled: bool,
+    pub volume: f32,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

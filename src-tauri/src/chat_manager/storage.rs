@@ -12,8 +12,8 @@ use crate::storage_manager::{
 
 use super::prompt_engine;
 use super::types::{
-    AdvancedModelSettings, Character, Model, Persona, ProviderCredential, Session, Settings,
-    StoredMessage,
+    AccessibilitySettings, AccessibilitySoundSettings, AdvancedModelSettings, AdvancedSettings,
+    Character, Model, Persona, ProviderCredential, Session, Settings, StoredMessage,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -70,7 +70,28 @@ fn default_settings() -> Settings {
         models: Vec::new(),
         app_state: serde_json::Value::Null,
         advanced_model_settings: AdvancedModelSettings::default(),
-        advanced_settings: None,
+        advanced_settings: Some(AdvancedSettings {
+            summarisation_model_id: None,
+            creation_helper_enabled: None,
+            creation_helper_model_id: None,
+            dynamic_memory: None,
+            manual_mode_context_window: None,
+            embedding_max_tokens: None,
+            accessibility: Some(AccessibilitySettings {
+                send: AccessibilitySoundSettings {
+                    enabled: false,
+                    volume: 0.5,
+                },
+                success: AccessibilitySoundSettings {
+                    enabled: false,
+                    volume: 0.6,
+                },
+                failure: AccessibilitySoundSettings {
+                    enabled: false,
+                    volume: 0.6,
+                },
+            }),
+        }),
         prompt_template_id: None,
         system_prompt: None,
         migration_version: 0,

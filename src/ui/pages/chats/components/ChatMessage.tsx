@@ -364,6 +364,8 @@ function ChatMessageInner({
                 "disabled:cursor-not-allowed disabled:opacity-70"
               )}
               aria-label={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play message audio"}
+              aria-pressed={isAudioPlaying}
+              aria-busy={isAudioLoading}
               title={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play audio"}
             >
 

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode, RefreshCw, Volume2 } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode, RefreshCw, Volume2, Accessibility } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -148,6 +148,13 @@ export function SettingsPage() {
       onClick: () => navigate('/settings/providers?tab=audio')
     },
     {
+      key: 'accessibility',
+      icon: <Accessibility />,
+      title: 'Accessibility',
+      subtitle: 'Sound cues and feedback',
+      onClick: () => navigate('/settings/accessibility')
+    },
+    {
       key: 'prompts',
       icon: <FileText />,
       title: 'System Prompts',
@@ -289,7 +296,9 @@ export function SettingsPage() {
               'sync',
               'usage',
               'advanced',
-              'logs'].includes(i.key)).map(item => (
+              'logs',
+              'accessibility',            
+            ].includes(i.key)).map(item => (
                 <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
               ))}
           </div>

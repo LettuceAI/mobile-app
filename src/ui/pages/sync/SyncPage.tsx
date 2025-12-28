@@ -321,7 +321,14 @@ export function SyncPage() {
                             <p className="text-sm font-medium text-emerald-200">Sync Complete!</p>
                             <p className="text-xs text-emerald-200/60">All data synchronized</p>
                         </div>
-                        <button onClick={stopSync} className="text-emerald-300/60 hover:text-emerald-300 text-lg px-1">×</button>
+                        <button
+                          type="button"
+                          onClick={stopSync}
+                          className="text-emerald-300/60 hover:text-emerald-300 text-lg px-1"
+                          aria-label="Dismiss sync status"
+                        >
+                          ×
+                        </button>
                     </div>
                 )}
 
@@ -332,7 +339,14 @@ export function SyncPage() {
                             <p className="text-sm font-medium text-red-200">Connection Error</p>
                             <p className="text-xs text-red-200/60">{(status as any).details?.message}</p>
                         </div>
-                        <button onClick={stopSync} className="text-red-300/60 hover:text-red-300 text-lg px-1">×</button>
+                        <button
+                          type="button"
+                          onClick={stopSync}
+                          className="text-red-300/60 hover:text-red-300 text-lg px-1"
+                          aria-label="Dismiss sync error"
+                        >
+                          ×
+                        </button>
                     </div>
                 )}
 
@@ -662,4 +676,3 @@ export function SyncPage() {
         </div>
     );
 }
-

@@ -69,7 +69,6 @@ impl ProviderAdapter for MistralAdapter {
         reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value {
-        // Mistral's chat API rejects unsupported knobs like freq/presence penalties, so drop them.
         let frequency_penalty = None;
         let presence_penalty = None;
 

@@ -1,5 +1,5 @@
 import { Trash2, ChevronRight, Edit3, EthernetPort, Cpu, Volume2 } from "lucide-react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useProvidersPageController } from "./hooks/useProvidersPageController";
@@ -19,6 +19,11 @@ export function ProvidersPage() {
     const tab = searchParams.get("tab");
     return tab === "audio" ? "audio" : "llm";
   });
+  const tabsId = useId();
+  const llmTabId = `${tabsId}-llm-tab`;
+  const audioTabId = `${tabsId}-audio-tab`;
+  const llmPanelId = `${tabsId}-llm-panel`;
+  const audioPanelId = `${tabsId}-audio-panel`;
   const {
     state: {
       providers,
@@ -93,7 +98,13 @@ export function ProvidersPage() {
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {activeTab === "llm" ? (
-          <div className="space-y-2">
+          <div
+            role="tabpanel"
+            id={llmPanelId}
+            aria-labelledby={llmTabId}
+            tabIndex={0}
+            className="space-y-2"
+          >
             {providers.length === 0 && (
               <EmptyState onCreate={() => openEditor()} />
             )}
@@ -128,7 +139,15 @@ export function ProvidersPage() {
             })}
           </div>
         ) : (
-          <VoicesPage />
+          <div
+            role="tabpanel"
+            id={audioPanelId}
+            aria-labelledby={audioTabId}
+            tabIndex={0}
+            className="h-full"
+          >
+            <VoicesPage />
+          </div>
         )}
       </div>
 
@@ -339,11 +358,15 @@ export function ProvidersPage() {
         "fixed bottom-0 left-0 right-0 z-30 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
         colors.glass.strong
       )}>
-        <div className={cn(
-          radius.lg,
-          "grid grid-cols-2 gap-2 p-1",
-          colors.surface.elevated
-        )}>
+        <div
+          role="tablist"
+          aria-label="Provider categories"
+          className={cn(
+            radius.lg,
+            "grid grid-cols-2 gap-2 p-1",
+            colors.surface.elevated
+          )}
+        >
           {[
             { id: "llm" as const, icon: Cpu, label: "AI" },
             { id: "audio" as const, icon: Volume2, label: "Audio" },
@@ -352,6 +375,10 @@ export function ProvidersPage() {
               key={id}
               type="button"
               onClick={() => handleTabChange(id)}
+              role="tab"
+              id={id === "llm" ? llmTabId : audioTabId}
+              aria-selected={activeTab === id}
+              aria-controls={id === "llm" ? llmPanelId : audioPanelId}
               className={cn(
                 radius.md,
                 "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",

@@ -26,6 +26,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
         { match: p => p.includes("view=advanced"), title: "Response Style" },
         { match: p => p === "/settings/models" || p.startsWith("/settings/models/"), title: "Models" },
         { match: p => p === "/settings/security", title: "Security" },
+        { match: p => p === "/settings/accessibility", title: "Accessibility" },
         { match: p => p === "/settings/reset", title: "Reset" },
         { match: p => p === "/settings/backup", title: "Backup & Restore" },
         { match: p => p === "/settings/usage", title: "Usage Analytics" },

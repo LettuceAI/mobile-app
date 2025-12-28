@@ -93,7 +93,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
 
     fn headers(
         &self,
-        _api_key: &str, // API key goes in URL for Gemini
+        _api_key: &str, 
         extra: Option<&HashMap<String, String>>,
     ) -> HashMap<String, String> {
         let mut out: HashMap<String, String> = HashMap::new();
@@ -125,13 +125,11 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         _reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value {
-        // Convert OpenAI-style messages -> Gemini contents
         let mut contents: Vec<GeminiContent> = Vec::new();
 
         for msg in messages_for_api {
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("user");
 
-            // Gemini only knows "user" and "model" in contents.
             let gem_role = match role {
                 "assistant" | "model" => "model",
                 _ => "user",

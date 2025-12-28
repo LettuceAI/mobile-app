@@ -1,6 +1,6 @@
 import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
 import { X, ChevronRight, LucideIcon, Loader2 } from "lucide-react";
-import { ReactNode, useCallback, useMemo, useEffect } from "react";
+import { ReactNode, useCallback, useMemo, useEffect, useId } from "react";
 
 const ICON_ACCENT_MAP: Record<string, string> = {
   "from-blue-500 to-blue-600": "border-blue-400/40 bg-blue-500/15 text-blue-200 group-hover:border-blue-300/50 group-hover:text-blue-100",
@@ -51,6 +51,7 @@ export function BottomMenu({
 }: BottomMenuProps) {
   const isBottomMenu = location === "bottom";
   const dragControls = useDragControls();
+  const titleId = useId();
 
   const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (!isBottomMenu) return;
@@ -110,6 +111,7 @@ export function BottomMenu({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             onClick={onClose}
+            aria-hidden="true"
           />
 
           <motion.div
@@ -124,6 +126,9 @@ export function BottomMenu({
               stiffness: 300,
               mass: 0.8
             }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
             {...(isBottomMenu
               ? {
                 drag: "y" as const,
@@ -151,7 +156,7 @@ export function BottomMenu({
             )}
 
             <div className={`flex items-center justify-between px-6 ${isBottomMenu ? "pb-4" : "pt-4 pb-4"} shrink-0`}>
-              <h3 className="text-lg font-semibold text-white">{title}</h3>
+              <h3 id={titleId} className="text-lg font-semibold text-white">{title}</h3>
               {includeExitIcon && (
                 <button
                   className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white hover:bg-white/10 active:scale-95"

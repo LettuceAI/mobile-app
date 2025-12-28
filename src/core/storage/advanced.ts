@@ -7,6 +7,11 @@ export interface AdvancedSettings {
     creationHelperModelId?: string;
     manualModeContextWindow?: number;
     embeddingMaxTokens?: number; // 1024, 2048, or 4096
+    accessibility?: {
+        send: { enabled: boolean; volume: number };
+        success: { enabled: boolean; volume: number };
+        failure: { enabled: boolean; volume: number };
+    };
     dynamicMemory?: {
         enabled: boolean;
         summaryMessageInterval: number;

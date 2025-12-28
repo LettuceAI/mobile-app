@@ -15,7 +15,11 @@ export function TabItem({
   className?: string;
 }) {
   return (
-    <Link to={to} className={`relative block ${className}`}>
+    <Link
+      to={to}
+      aria-current={active ? "page" : undefined}
+      className={`relative block ${className}`}
+    >
       <motion.div
         className={`relative flex h-full w-full flex-col items-center justify-center gap-0.2 pt-1 rounded-2xl text-[11px] font-medium transition ${
           active ? "text-white" : "text-gray-500 hover:text-white"

@@ -35,6 +35,10 @@ export function EditCharacterPage() {
 
   // Tab state
   const [activeTab, setActiveTab] = React.useState<"character" | "settings">("character");
+  const tabsId = React.useId();
+  const tabPanelId = `${tabsId}-panel`;
+  const characterTabId = `${tabsId}-tab-character`;
+  const settingsTabId = `${tabsId}-tab-settings`;
 
   const {
     loading,
@@ -190,7 +194,13 @@ export function EditCharacterPage() {
 
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
-      <main className="flex-1 overflow-y-auto px-4">
+      <main
+        id={tabPanelId}
+        role="tabpanel"
+        aria-labelledby={activeTab === "character" ? characterTabId : settingsTabId}
+        tabIndex={0}
+        className="flex-1 overflow-y-auto px-4"
+      >
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -243,6 +253,7 @@ export function EditCharacterPage() {
                       type="button"
                       onClick={() => setFields({ avatarPath: "" })}
                       className="absolute -top-1 -left-1 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
+                      aria-label="Remove avatar"
                     >
                       <X size={14} strokeWidth={2.5} />
                     </button>
@@ -496,8 +507,10 @@ export function EditCharacterPage() {
                         </span>
                       </div>
                       <button
+                        type="button"
                         onClick={() => setFields({ backgroundImagePath: "" })}
                         className="absolute top-2 right-2 rounded-full border border-white/20 bg-black/50 p-1 text-white/70 transition hover:bg-black/70 active:scale-95"
+                        aria-label="Remove background image"
                       >
                         <X size={14} />
                       </button>
@@ -679,6 +692,7 @@ export function EditCharacterPage() {
                                             startEditingScene(scene);
                                           }}
                                           className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/60 transition active:scale-95 active:bg-white/10"
+                                          aria-label={`Edit scene ${index + 1}`}
                                         >
                                           <Edit2 className="h-3.5 w-3.5" />
                                         </button>
@@ -688,6 +702,7 @@ export function EditCharacterPage() {
                                             deleteScene(scene.id);
                                           }}
                                           className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 transition active:bg-red-400/10 active:text-red-400"
+                                          aria-label={`Delete scene ${index + 1}`}
                                         >
                                           <X className="h-3.5 w-3.5" />
                                         </button>
@@ -1019,11 +1034,15 @@ export function EditCharacterPage() {
         "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
         colors.glass.strong
       )}>
-        <div className={cn(
-          radius.lg,
-          "grid grid-cols-2 gap-2 p-1",
-          colors.surface.elevated
-        )}>
+        <div
+          role="tablist"
+          aria-label="Character editor tabs"
+          className={cn(
+            radius.lg,
+            "grid grid-cols-2 gap-2 p-1",
+            colors.surface.elevated
+          )}
+        >
           {[
             { id: "character" as const, icon: User, label: "Character" },
             { id: "settings" as const, icon: Settings, label: "Settings" }
@@ -1032,6 +1051,10 @@ export function EditCharacterPage() {
               key={id}
               type="button"
               onClick={() => setActiveTab(id)}
+              role="tab"
+              id={id === "character" ? characterTabId : settingsTabId}
+              aria-selected={activeTab === id}
+              aria-controls={tabPanelId}
               className={cn(
                 radius.md,
                 "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
