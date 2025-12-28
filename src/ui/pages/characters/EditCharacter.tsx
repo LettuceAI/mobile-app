@@ -1041,8 +1041,8 @@ export function EditCharacterPage() {
                   : cn(colors.text.tertiary, "hover:text-white")
               )}
             >
-              <Icon size={16} />
-              {label}
+              <Icon size={16} className="block" />
+              <span className="pt-1">{label}</span>
             </button>
           ))}
         </div>

@@ -362,7 +362,7 @@ export function ProvidersPage() {
               )}
             >
               <Icon size={16} />
-              {label}
+              <span className="pt-1">{label}</span>
             </button>
           ))}
         </div>
