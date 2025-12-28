@@ -2566,6 +2566,7 @@ pub fn render_prompt_preview(
             system_prompt: None,
             selected_scene_id: None,
             persona_id: None,
+            voice_autoplay: None,
             advanced_model_settings: None,
             messages: vec![],
             archived: false,

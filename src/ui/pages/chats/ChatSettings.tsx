@@ -477,6 +477,42 @@ function ChatSettingsContent({ character }: { character: Character }) {
     }
   }, [currentSession]);
 
+  const handleToggleSessionVoiceAutoplay = useCallback(async () => {
+    if (!currentSession) {
+      return;
+    }
+    const fallback = currentCharacter?.voiceAutoplay ?? false;
+    const currentValue = currentSession.voiceAutoplay ?? fallback;
+    const updatedSession: Session = {
+      ...currentSession,
+      voiceAutoplay: !currentValue,
+      updatedAt: Date.now(),
+    };
+    try {
+      await saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+    } catch (error) {
+      console.error("Failed to update session voice autoplay:", error);
+    }
+  }, [currentCharacter?.voiceAutoplay, currentSession]);
+
+  const handleResetSessionVoiceAutoplay = useCallback(async () => {
+    if (!currentSession) {
+      return;
+    }
+    const updatedSession: Session = {
+      ...currentSession,
+      voiceAutoplay: undefined,
+      updatedAt: Date.now(),
+    };
+    try {
+      await saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+    } catch (error) {
+      console.error("Failed to reset session voice autoplay:", error);
+    }
+  }, [currentSession]);
+
   const handleViewHistory = useCallback(() => {
     if (!characterId) return;
     navigate(Routes.chatHistory(characterId));
@@ -512,6 +548,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const advancedDefaultsLabel = useMemo(() => {
     return currentModel?.advancedModelSettings ? "Model defaults" : "App defaults";
   }, [currentModel?.advancedModelSettings]);
+
+  const effectiveVoiceAutoplay = useMemo(() => {
+    return currentSession?.voiceAutoplay ?? currentCharacter?.voiceAutoplay ?? false;
+  }, [currentCharacter?.voiceAutoplay, currentSession?.voiceAutoplay]);
 
   const sessionAdvancedSummary = useMemo(() => {
     if (!currentSession) {
@@ -754,6 +794,59 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 onClick={() => setShowModelSelector(true)}
               />
             </div>
+          </section>
+
+          {/* Voice */}
+          <section className={spacing.item}>
+            <SectionHeader title="Voice" subtitle="Text-to-speech playback" />
+            <div
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-xl border px-4 py-3",
+                !currentSession
+                  ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+                  : "border-white/10 bg-[#0c0d13]/85"
+              )}
+            >
+              <div>
+                <p className="text-sm font-semibold text-white">Autoplay voice</p>
+                <p className="mt-1 text-xs text-white/50">
+                  {currentSession
+                    ? (currentSession.voiceAutoplay == null ? "Using character default" : "Session override active")
+                    : "Open a chat session first"}
+                </p>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="session-voice-autoplay"
+                  type="checkbox"
+                  checked={effectiveVoiceAutoplay}
+                  onChange={handleToggleSessionVoiceAutoplay}
+                  disabled={!currentSession}
+                  className="peer sr-only"
+                />
+                <label
+                  htmlFor="session-voice-autoplay"
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all ${effectiveVoiceAutoplay
+                    ? 'bg-emerald-500'
+                    : 'bg-white/20'
+                    } ${currentSession ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${effectiveVoiceAutoplay ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                  />
+                </label>
+              </div>
+            </div>
+            {currentSession && currentSession.voiceAutoplay != null && (
+              <button
+                type="button"
+                onClick={handleResetSessionVoiceAutoplay}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/70 transition hover:border-white/20 hover:bg-white/10"
+              >
+                Use character default
+              </button>
+            )}
           </section>
 
           {/* Advanced (Important) */}

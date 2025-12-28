@@ -214,6 +214,8 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     customGradientColors: c.customGradientColors,
     customTextColor: c.customTextColor,
     customTextSecondary: c.customTextSecondary,
+    voiceConfig: c.voiceConfig,
+    voiceAutoplay: c.voiceAutoplay ?? false,
     createdAt: c.createdAt ?? timestamp,
     updatedAt: timestamp,
   } as Character;

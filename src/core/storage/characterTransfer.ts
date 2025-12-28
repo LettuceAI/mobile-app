@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Character } from "./schemas";
+import type { Character, CharacterVoiceConfig } from "./schemas";
 
 /**
  * Character export package format
@@ -25,6 +25,8 @@ export interface CharacterExportData {
   memoryType?: "manual" | "dynamic";
   promptTemplateId?: string;
   systemPrompt?: string;
+  voiceConfig?: CharacterVoiceConfig;
+  voiceAutoplay?: boolean;
   disableAvatarGradient: boolean;
   createdAt: number;
   updatedAt: number;

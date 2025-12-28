@@ -263,7 +263,7 @@ fn fetch_characters(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, Stri
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
     // Characters
-    let sql = format!("SELECT id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id IN ({})", placeholders);
+    let sql = format!("SELECT id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id IN ({})", placeholders);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let chars: Vec<Character> = stmt
         .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
@@ -278,13 +278,15 @@ fn fetch_characters(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, Stri
                 memory_type: r.get(7)?,
                 prompt_template_id: r.get(8)?,
                 system_prompt: r.get(9)?,
-                disable_avatar_gradient: r.get(10)?,
-                custom_gradient_enabled: r.get(11)?,
-                custom_gradient_colors: r.get(12)?,
-                custom_text_color: r.get(13)?,
-                custom_text_secondary: r.get(14)?,
-                created_at: r.get(15)?,
-                updated_at: r.get(16)?,
+                voice_config: r.get(10)?,
+                voice_autoplay: r.get(11)?,
+                disable_avatar_gradient: r.get(12)?,
+                custom_gradient_enabled: r.get(13)?,
+                custom_gradient_colors: r.get(14)?,
+                custom_text_color: r.get(15)?,
+                custom_text_secondary: r.get(16)?,
+                created_at: r.get(17)?,
+                updated_at: r.get(18)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -371,7 +373,7 @@ fn fetch_sessions(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, String
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
     // Sessions
-    let sql = format!("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id IN ({})", placeholders);
+    let sql = format!("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id IN ({})", placeholders);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let sessions: Vec<Session> = stmt
         .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
@@ -382,20 +384,21 @@ fn fetch_sessions(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, String
                 system_prompt: r.get(3)?,
                 selected_scene_id: r.get(4)?,
                 persona_id: r.get(5)?,
-                temperature: r.get(6)?,
-                top_p: r.get(7)?,
-                max_output_tokens: r.get(8)?,
-                frequency_penalty: r.get(9)?,
-                presence_penalty: r.get(10)?,
-                top_k: r.get(11)?,
-                memories: r.get(12)?,
-                memory_embeddings: r.get(13)?,
-                memory_summary: r.get(14)?,
-                memory_summary_token_count: r.get(15)?,
-                memory_tool_events: r.get(16)?,
-                archived: r.get(17)?,
-                created_at: r.get(18)?,
-                updated_at: r.get(19)?,
+                voice_autoplay: r.get(6)?,
+                temperature: r.get(7)?,
+                top_p: r.get(8)?,
+                max_output_tokens: r.get(9)?,
+                frequency_penalty: r.get(10)?,
+                presence_penalty: r.get(11)?,
+                top_k: r.get(12)?,
+                memories: r.get(13)?,
+                memory_embeddings: r.get(14)?,
+                memory_summary: r.get(15)?,
+                memory_summary_token_count: r.get(16)?,
+                memory_tool_events: r.get(17)?,
+                archived: r.get(18)?,
+                created_at: r.get(19)?,
+                updated_at: r.get(20)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -605,9 +608,9 @@ fn apply_characters(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for c in chars {
-        tx.execute(r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)"#,
-                    params![c.id, c.name, c.avatar_path, c.background_image_path, c.description, c.default_scene_id, c.default_model_id, c.memory_type, c.prompt_template_id, c.system_prompt, c.disable_avatar_gradient, c.custom_gradient_enabled, c.custom_gradient_colors, c.custom_text_color, c.custom_text_secondary, c.created_at, c.updated_at]).map_err(|e| e.to_string())?;
+        tx.execute(r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"#,
+                    params![c.id, c.name, c.avatar_path, c.background_image_path, c.description, c.default_scene_id, c.default_model_id, c.memory_type, c.prompt_template_id, c.system_prompt, c.voice_config, c.voice_autoplay, c.disable_avatar_gradient, c.custom_gradient_enabled, c.custom_gradient_colors, c.custom_text_color, c.custom_text_secondary, c.created_at, c.updated_at]).map_err(|e| e.to_string())?;
     }
 
     for r in &rules {
@@ -656,9 +659,9 @@ fn apply_sessions(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for s in sessions {
-        tx.execute(r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)"#,
-                    params![s.id, s.character_id, s.title, s.system_prompt, s.selected_scene_id, s.persona_id, s.temperature, s.top_p, s.max_output_tokens, s.frequency_penalty, s.presence_penalty, s.top_k, s.memories, s.memory_embeddings, s.memory_summary, s.memory_summary_token_count, s.memory_tool_events, s.archived, s.created_at, s.updated_at]).map_err(|e| e.to_string())?;
+        tx.execute(r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)"#,
+                    params![s.id, s.character_id, s.title, s.system_prompt, s.selected_scene_id, s.persona_id, s.voice_autoplay, s.temperature, s.top_p, s.max_output_tokens, s.frequency_penalty, s.presence_penalty, s.top_k, s.memories, s.memory_embeddings, s.memory_summary, s.memory_summary_token_count, s.memory_tool_events, s.archived, s.created_at, s.updated_at]).map_err(|e| e.to_string())?;
     }
 
     for m in messages {

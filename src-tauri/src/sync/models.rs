@@ -122,6 +122,9 @@ pub struct Character {
     pub memory_type: String,
     pub prompt_template_id: Option<String>,
     pub system_prompt: Option<String>,
+    pub voice_config: Option<String>,
+    #[serde(default)]
+    pub voice_autoplay: i64,
     pub disable_avatar_gradient: i64,
     pub custom_gradient_enabled: Option<i64>,
     pub custom_gradient_colors: Option<String>,
@@ -176,6 +179,8 @@ pub struct Session {
     pub system_prompt: Option<String>,
     pub selected_scene_id: Option<String>,
     pub persona_id: Option<String>,
+    #[serde(default)]
+    pub voice_autoplay: Option<i64>,
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
     pub max_output_tokens: Option<i64>,

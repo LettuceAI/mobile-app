@@ -3,6 +3,17 @@ import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
 import type { Character, Model, StoredMessage } from "../../../core/storage/schemas";
+import {
+  generateTtsPreview,
+  listAudioModels,
+  listAudioProviders,
+  listUserVoices,
+  playAudioFromBase64,
+  type AudioModel,
+  type AudioProvider,
+  type AudioProviderType,
+  type UserVoice,
+} from "../../../core/storage/audioProviders";
 import { useImageData } from "../../hooks/useImageData";
 import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
 import { getSessionMeta, listCharacters, readSettings } from "../../../core/storage";
@@ -47,6 +58,20 @@ export function ChatConversationPage() {
   const [messageToBranch, setMessageToBranch] = useState<StoredMessage | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
   const [supportsImageInput, setSupportsImageInput] = useState(false);
+  const audioCacheRef = useRef<{
+    providers: AudioProvider[] | null;
+    userVoices: UserVoice[] | null;
+    modelsByProviderType: Map<AudioProviderType, AudioModel[]>;
+  }>({
+    providers: null,
+    userVoices: null,
+    modelsByProviderType: new Map(),
+  });
+  const abortRequestedRef = useRef(false);
+  const autoPlaySignatureRef = useRef<string | null>(null);
+  const autoPlayInFlightRef = useRef(false);
+  const sendStartSignatureRef = useRef<string | null>(null);
+  const sendingPrevRef = useRef(false);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
     setSelectedImage({ src, alt });
@@ -179,6 +204,109 @@ export function ChatConversationPage() {
       backgroundRepeat: "no-repeat",
     };
   }, [backgroundImageData]);
+
+  const ensureAudioProviders = useCallback(async () => {
+    if (audioCacheRef.current.providers) {
+      return audioCacheRef.current.providers;
+    }
+    const providers = await listAudioProviders();
+    audioCacheRef.current.providers = providers;
+    return providers;
+  }, []);
+
+  const ensureUserVoices = useCallback(async () => {
+    if (audioCacheRef.current.userVoices) {
+      return audioCacheRef.current.userVoices;
+    }
+    const voices = await listUserVoices();
+    audioCacheRef.current.userVoices = voices;
+    return voices;
+  }, []);
+
+  const ensureAudioModels = useCallback(async (providerType: AudioProviderType) => {
+    const cached = audioCacheRef.current.modelsByProviderType.get(providerType);
+    if (cached) {
+      return cached;
+    }
+    const models = await listAudioModels(providerType);
+    audioCacheRef.current.modelsByProviderType.set(providerType, models);
+    return models;
+  }, []);
+
+  const handlePlayMessageAudio = useCallback(
+    async (message: StoredMessage, text: string) => {
+      if (message.id.startsWith("placeholder")) return;
+      if (message.role !== "assistant" && message.role !== "scene") return;
+      if (!character?.voiceConfig) return;
+
+      const trimmedText = text.trim();
+      if (!trimmedText) return;
+
+      const providers = await ensureAudioProviders();
+
+      if (character.voiceConfig.source === "user" && character.voiceConfig.userVoiceId) {
+        let voices = await ensureUserVoices();
+        let voice = voices.find((v) => v.id === character.voiceConfig?.userVoiceId);
+        if (!voice) {
+          audioCacheRef.current.userVoices = null;
+          voices = await ensureUserVoices();
+          voice = voices.find((v) => v.id === character.voiceConfig?.userVoiceId);
+        }
+        if (!voice) {
+          throw new Error("Assigned voice not found.");
+        }
+
+        const response = await generateTtsPreview(
+          voice.providerId,
+          voice.modelId,
+          voice.voiceId,
+          trimmedText,
+          voice.prompt
+        );
+        playAudioFromBase64(response.audioBase64, response.format);
+        return;
+      }
+
+      if (character.voiceConfig.source === "provider") {
+        const providerId = character.voiceConfig.providerId;
+        const voiceId = character.voiceConfig.voiceId;
+        if (!providerId || !voiceId) {
+          throw new Error("Voice assignment is missing provider details.");
+        }
+        const provider = providers.find((p) => p.id === providerId);
+        if (!provider) {
+          throw new Error("Assigned provider not found.");
+        }
+
+        let modelId = character.voiceConfig.modelId;
+        if (!modelId) {
+          const models = await ensureAudioModels(provider.providerType as AudioProviderType);
+          modelId = models[0]?.id;
+        }
+        if (!modelId) {
+          throw new Error("No audio models available for this provider.");
+        }
+
+        const response = await generateTtsPreview(
+          providerId,
+          modelId,
+          voiceId,
+          trimmedText
+        );
+        playAudioFromBase64(response.audioBase64, response.format);
+      }
+    },
+    [character, ensureAudioModels, ensureAudioProviders, ensureUserVoices]
+  );
+
+  const effectiveVoiceAutoplay = useMemo(() => {
+    return session?.voiceAutoplay ?? character?.voiceAutoplay ?? false;
+  }, [character?.voiceAutoplay, session?.voiceAutoplay]);
+
+  const handleAbortWithFlag = useCallback(async () => {
+    abortRequestedRef.current = true;
+    await handleAbort();
+  }, [handleAbort]);
 
   const openMessageActions = useCallback((message: StoredMessage) => {
     setMessageAction({ message, mode: "view" });
@@ -320,6 +448,63 @@ export function ChatConversationPage() {
 
     return () => window.cancelAnimationFrame(frame);
   }, [messages.length, lastMessageContentLength, isGenerating, updateIsAtBottom]);
+
+  useEffect(() => {
+    if (sending && !sendingPrevRef.current) {
+      abortRequestedRef.current = false;
+      const lastPlayable = [...messages]
+        .reverse()
+        .find((msg) => (msg.role === "assistant" || msg.role === "scene")
+          && !msg.id.startsWith("placeholder")
+          && msg.content.trim().length > 0);
+      if (lastPlayable) {
+        sendStartSignatureRef.current = `${lastPlayable.id}:${replacePlaceholders(
+          lastPlayable.content,
+          character?.name ?? "",
+          persona?.title ?? ""
+        )}`;
+      } else {
+        sendStartSignatureRef.current = null;
+      }
+    }
+    const wasSending = sendingPrevRef.current;
+    sendingPrevRef.current = sending;
+
+    if (!wasSending || sending) return;
+    if (!effectiveVoiceAutoplay) return;
+    if (abortRequestedRef.current) {
+      abortRequestedRef.current = false;
+      return;
+    }
+    if (autoPlayInFlightRef.current) return;
+
+    const lastPlayable = [...messages]
+      .reverse()
+      .find((msg) => (msg.role === "assistant" || msg.role === "scene")
+        && !msg.id.startsWith("placeholder")
+        && msg.content.trim().length > 0);
+
+    if (!lastPlayable) return;
+
+    const displayText = replacePlaceholders(
+      lastPlayable.content,
+      character?.name ?? "",
+      persona?.title ?? ""
+    );
+    const signature = `${lastPlayable.id}:${displayText}`;
+    if (signature === sendStartSignatureRef.current) return;
+    if (signature === autoPlaySignatureRef.current) return;
+
+    autoPlaySignatureRef.current = signature;
+    autoPlayInFlightRef.current = true;
+    void handlePlayMessageAudio(lastPlayable, displayText)
+      .catch((error) => {
+        console.error("Failed to autoplay message audio:", error);
+      })
+      .finally(() => {
+        autoPlayInFlightRef.current = false;
+      });
+  }, [character?.name, effectiveVoiceAutoplay, handlePlayMessageAudio, messages, persona?.title, sending]);
 
   useEffect(() => {
     if (!isAtBottom || !isGenerating) return;
@@ -480,6 +665,7 @@ export function ChatConversationPage() {
                   displayContent={displayContent}
                   character={character}
                   persona={persona}
+                  onPlayAudio={handlePlayMessageAudio}
                   onImageClick={handleImageClick}
                   reasoning={streamingReasoning[message.id] || (message.reasoning ?? undefined)}
                 />
@@ -521,7 +707,7 @@ export function ChatConversationPage() {
           sending={sending}
           character={character}
           onSendMessage={handleSendMessage}
-          onAbort={handleAbort}
+          onAbort={handleAbortWithFlag}
           hasBackgroundImage={!!backgroundImageData}
           pendingAttachments={pendingAttachments}
           onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}

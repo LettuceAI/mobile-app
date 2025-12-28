@@ -832,6 +832,16 @@ export const LorebookEntrySchema = z.object({
 
 export type LorebookEntry = z.infer<typeof LorebookEntrySchema>;
 
+export const CharacterVoiceConfigSchema = z.object({
+  source: z.enum(["user", "provider"]),
+  userVoiceId: z.string().optional(),
+  providerId: z.string().optional(),
+  voiceId: z.string().optional(),
+  modelId: z.string().optional(),
+  voiceName: z.string().optional(),
+});
+export type CharacterVoiceConfig = z.infer<typeof CharacterVoiceConfigSchema>;
+
 export const CharacterSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
@@ -849,6 +859,8 @@ export const CharacterSchema = z.object({
   customGradientColors: z.array(z.string()).optional(), // Array of hex colors, e.g. ["#ff6b6b", "#4ecdc4"]
   customTextColor: z.string().optional(), // Custom text color hex
   customTextSecondary: z.string().optional(), // Custom secondary text color hex
+  voiceConfig: CharacterVoiceConfigSchema.optional(),
+  voiceAutoplay: z.boolean().default(false).optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
@@ -865,6 +877,7 @@ export const SessionSchema = z.object({
     z.null(),
     z.undefined()
   ]).optional(),
+  voiceAutoplay: z.boolean().nullable().optional(),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   memories: z.array(z.string()).default([]),
   memoryEmbeddings: z.array(z.object({

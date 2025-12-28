@@ -150,6 +150,13 @@ h1 {
 input, select, textarea, button { min-height: 44px; }
 input, select, textarea { width: 100%; box-sizing: border-box; }
 button { padding: 0.6em 0.9em; }
+.audio-btn {
+  padding: 0 !important;
+  min-height: 25px !important;
+  line-height: 1 !important;
+}
+
+
 
 @media (prefers-color-scheme: dark) {
   :root {

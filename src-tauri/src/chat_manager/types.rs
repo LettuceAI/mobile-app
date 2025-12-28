@@ -59,6 +59,8 @@ pub struct Model {
     /// Reference to a system prompt template (if any)
     #[serde(default)]
     pub prompt_template_id: Option<String>,
+    #[serde(default)]
+    pub voice_config: Option<serde_json::Value>,
     /// DEPRECATED: Old system prompt field (migrated to templates)
     #[serde(default, skip_serializing)]
     #[allow(dead_code)]
@@ -315,6 +317,8 @@ pub struct Session {
     pub selected_scene_id: Option<String>,
     #[serde(default)]
     pub persona_id: Option<String>,
+    #[serde(default)]
+    pub voice_autoplay: Option<bool>,
     #[serde(default)]
     pub advanced_model_settings: Option<AdvancedModelSettings>,
     #[serde(default)]

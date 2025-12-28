@@ -645,6 +645,7 @@ mod tests {
             output_scopes: vec!["text".into()],
             advanced_model_settings: None,
             prompt_template_id: None,
+            voice_config: None,
             system_prompt: None,
         }
     }
@@ -657,6 +658,7 @@ mod tests {
             system_prompt: None,
             selected_scene_id: None,
             persona_id: None,
+            voice_autoplay: None,
             advanced_model_settings: None,
             memories: vec![],
             memory_summary: None,

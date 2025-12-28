@@ -4,12 +4,12 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use super::db::{now_ms, open_db};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
+    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get::<_, i64>(9)?, r.get::<_, i64>(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get::<_, i64>(11)?, r.get::<_, i64>(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get(16)?, r.get(17)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -100,6 +100,17 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
     if let Some(sp) = system_prompt {
         root.insert("systemPrompt".into(), JsonValue::String(sp));
     }
+    if let Some(vc) = voice_config {
+        if let Ok(value) = serde_json::from_str::<JsonValue>(&vc) {
+            if !value.is_null() {
+                root.insert("voiceConfig".into(), value);
+            }
+        }
+    }
+    root.insert(
+        "voiceAutoplay".into(),
+        JsonValue::Bool(voice_autoplay.unwrap_or(0) != 0),
+    );
     root.insert(
         "disableAvatarGradient".into(),
         JsonValue::Bool(disable_avatar_gradient != 0),
@@ -183,6 +194,13 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         Some("dynamic") => "dynamic".to_string(),
         _ => "manual".to_string(),
     };
+    let voice_config: Option<String> = c
+        .get("voiceConfig")
+        .and_then(|v| if v.is_null() { None } else { serde_json::to_string(v).ok() });
+    let voice_autoplay = c
+        .get("voiceAutoplay")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false) as i64;
     let disable_avatar_gradient = c
         .get("disableAvatarGradient")
         .and_then(|v| v.as_bool())
@@ -218,8 +236,8 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               avatar_path=excluded.avatar_path,
@@ -228,6 +246,8 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               default_model_id=excluded.default_model_id,
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt,
+              voice_config=excluded.voice_config,
+              voice_autoplay=excluded.voice_autoplay,
               memory_type=excluded.memory_type,
               disable_avatar_gradient=excluded.disable_avatar_gradient,
               custom_gradient_enabled=excluded.custom_gradient_enabled,
@@ -235,7 +255,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               custom_text_color=excluded.custom_text_color,
               custom_text_secondary=excluded.custom_text_secondary,
               updated_at=excluded.updated_at"#,
-        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, now],
+        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, now],
     ).map_err(|e| e.to_string())?;
 
     // Replace rules

@@ -1,12 +1,21 @@
 import React from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, Plus, X, Sparkles, BookOpen, Cpu, Image, Download, Layers, Edit2, ChevronDown, Crop, Upload, User, Settings } from "lucide-react";
+import { Loader2, Plus, X, Sparkles, BookOpen, Cpu, Image, Download, Layers, Edit2, ChevronDown, Crop, Upload, User, Settings, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 import { AvatarPicker } from "../../components/AvatarPicker";
 import { BottomMenu } from "../../components/BottomMenu";
 import { BackgroundPositionModal } from "../../components/BackgroundPositionModal";
 import { cn, radius, colors, interactive } from "../../design-tokens";
+import {
+  listAudioProviders,
+  listUserVoices,
+  getProviderVoices,
+  refreshProviderVoices,
+  type AudioProvider,
+  type CachedVoice,
+  type UserVoice,
+} from "../../../core/storage/audioProviders";
 
 const wordCount = (text: string) => {
   const trimmed = text.trim();
@@ -53,6 +62,8 @@ export function EditCharacterPage() {
     promptTemplates,
     loadingTemplates,
     systemPromptTemplateId,
+    voiceConfig,
+    voiceAutoplay,
 
     editingSceneId,
     editingSceneContent,
@@ -71,6 +82,45 @@ export function EditCharacterPage() {
 
   const { avatarInitial, canSave } = computed;
 
+  const [audioProviders, setAudioProviders] = React.useState<AudioProvider[]>([]);
+  const [userVoices, setUserVoices] = React.useState<UserVoice[]>([]);
+  const [providerVoices, setProviderVoices] = React.useState<Record<string, CachedVoice[]>>({});
+  const [loadingVoices, setLoadingVoices] = React.useState(false);
+  const [voiceError, setVoiceError] = React.useState<string | null>(null);
+  const [hasLoadedVoices, setHasLoadedVoices] = React.useState(false);
+
+  const buildUserVoiceValue = (id: string) => `user:${id}`;
+  const buildProviderVoiceValue = (providerId: string, voiceId: string) =>
+    `provider:${providerId}:${voiceId}`;
+
+  const voiceSelectionValue = (() => {
+    if (!voiceConfig) return "";
+    if (voiceConfig.source === "user" && voiceConfig.userVoiceId) {
+      return buildUserVoiceValue(voiceConfig.userVoiceId);
+    }
+    if (voiceConfig.source === "provider" && voiceConfig.providerId && voiceConfig.voiceId) {
+      return buildProviderVoiceValue(voiceConfig.providerId, voiceConfig.voiceId);
+    }
+    return "";
+  })();
+
+  const availableVoiceValues = React.useMemo(() => {
+    const values = new Set<string>();
+    for (const voice of userVoices) {
+      values.add(buildUserVoiceValue(voice.id));
+    }
+    for (const provider of audioProviders) {
+      const voices = providerVoices[provider.id] ?? [];
+      for (const voice of voices) {
+        values.add(buildProviderVoiceValue(provider.id, voice.voiceId));
+      }
+    }
+    return values;
+  }, [audioProviders, providerVoices, userVoices]);
+
+  const isMissingVoiceSelection =
+    Boolean(voiceSelectionValue) && !availableVoiceValues.has(voiceSelectionValue);
+
   // Register window global for header save button (BEFORE any early returns - Rules of Hooks)
   React.useEffect(() => {
     const globalWindow = window as any;
@@ -83,6 +133,52 @@ export function EditCharacterPage() {
       delete globalWindow.__saveCharacterSaving;
     };
   }, [handleSave, canSave, saving]);
+
+  const loadVoices = React.useCallback(async () => {
+    setLoadingVoices(true);
+    setVoiceError(null);
+    try {
+      const [providers, voices] = await Promise.all([
+        listAudioProviders(),
+        listUserVoices(),
+      ]);
+      setAudioProviders(providers);
+      setUserVoices(voices);
+
+      const voicesByProvider: Record<string, CachedVoice[]> = {};
+      await Promise.all(
+        providers.map(async (provider) => {
+          try {
+            if (provider.providerType === "elevenlabs" && provider.apiKey) {
+              voicesByProvider[provider.id] = await refreshProviderVoices(provider.id);
+            } else {
+              voicesByProvider[provider.id] = await getProviderVoices(provider.id);
+            }
+          } catch (err) {
+            console.warn("Failed to refresh provider voices:", err);
+            try {
+              voicesByProvider[provider.id] = await getProviderVoices(provider.id);
+            } catch (fallbackErr) {
+              console.warn("Failed to load cached voices:", fallbackErr);
+              voicesByProvider[provider.id] = [];
+            }
+          }
+        })
+      );
+      setProviderVoices(voicesByProvider);
+      setHasLoadedVoices(true);
+    } catch (err) {
+      console.error("Failed to load voices:", err);
+      setVoiceError("Failed to load voices");
+    } finally {
+      setLoadingVoices(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab !== "settings" || hasLoadedVoices) return;
+    void loadVoices();
+  }, [activeTab, hasLoadedVoices, loadVoices]);
 
   if (loading) {
     return (
@@ -719,6 +815,136 @@ export function EditCharacterPage() {
                 <p className="text-xs text-white/50">
                   Override the default system prompt for this character
                 </p>
+              </div>
+
+              {/* Voice Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
+                    <Volume2 className="h-4 w-4 text-emerald-300" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Voice</h3>
+                  <span className="ml-auto text-xs text-white/40">(Optional)</span>
+                </div>
+
+                {loadingVoices ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                    <span className="text-sm text-white/50">Loading voices...</span>
+                  </div>
+                ) : (
+                  <select
+                    value={voiceSelectionValue}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (!value) {
+                        setFields({ voiceConfig: null });
+                        return;
+                      }
+                      if (value.startsWith("user:")) {
+                        const id = value.replace("user:", "");
+                        const voice = userVoices.find((v) => v.id === id);
+                        setFields({
+                          voiceConfig: {
+                            source: "user",
+                            userVoiceId: id,
+                            providerId: voice?.providerId,
+                            modelId: voice?.modelId,
+                            voiceName: voice?.name,
+                          },
+                        });
+                        return;
+                      }
+                      if (value.startsWith("provider:")) {
+                        const [, providerId, voiceId] = value.split(":");
+                        const voice = providerVoices[providerId]?.find((v) => v.voiceId === voiceId);
+                        setFields({
+                          voiceConfig: {
+                            source: "provider",
+                            providerId,
+                            voiceId,
+                            voiceName: voice?.name,
+                          },
+                        });
+                      }
+                    }}
+                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
+                  >
+                    <option value="">No voice assigned</option>
+                    {isMissingVoiceSelection && (
+                      <option value={voiceSelectionValue}>
+                        Missing voice (keep)
+                      </option>
+                    )}
+                    {userVoices.length > 0 && (
+                      <optgroup label="My Voices">
+                        {userVoices.map((voice) => {
+                          const providerLabel = audioProviders.find((p) => p.id === voice.providerId)?.label ?? "Provider";
+                          return (
+                            <option key={voice.id} value={buildUserVoiceValue(voice.id)}>
+                              {voice.name} • {providerLabel}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                    {audioProviders.map((provider) => {
+                      const voices = providerVoices[provider.id] ?? [];
+                      if (voices.length === 0) return null;
+                      return (
+                        <optgroup key={provider.id} label={`${provider.label} Voices`}>
+                          {voices.map((voice) => (
+                            <option
+                              key={`${provider.id}:${voice.voiceId}`}
+                              value={buildProviderVoiceValue(provider.id, voice.voiceId)}
+                            >
+                              {voice.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                )}
+
+                {voiceError && (
+                  <p className="text-xs font-medium text-rose-300">{voiceError}</p>
+                )}
+                {!loadingVoices && audioProviders.length === 0 && userVoices.length === 0 && (
+                  <p className="text-xs text-white/40">Add voices in Settings → Voices</p>
+                )}
+                <p className="text-xs text-white/50">
+                  Assign a voice for future text-to-speech playback
+                </p>
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">Autoplay voice</p>
+                    <p className="mt-1 text-xs text-white/50">
+                      Play this character’s replies automatically
+                    </p>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      id="character-voice-autoplay"
+                      type="checkbox"
+                      checked={voiceAutoplay}
+                      onChange={() => setFields({ voiceAutoplay: !voiceAutoplay })}
+                      className="peer sr-only"
+                    />
+                    <label
+                      htmlFor="character-voice-autoplay"
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${voiceAutoplay
+                        ? 'bg-emerald-500'
+                        : 'bg-white/20'
+                        }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${voiceAutoplay ? 'translate-x-5' : 'translate-x-0.5'
+                          }`}
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Memory Mode */}

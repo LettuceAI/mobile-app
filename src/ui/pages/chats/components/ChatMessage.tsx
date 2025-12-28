@@ -1,6 +1,6 @@
 import { motion, type PanInfo, AnimatePresence } from "framer-motion";
-import React, { useMemo, useState } from "react";
-import { RefreshCw, Pin, User, Bot, ChevronDown } from "lucide-react";
+import React, { useCallback, useMemo, useState } from "react";
+import { RefreshCw, Pin, User, Bot, ChevronDown, Volume2, Loader2 } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage, Character, Persona } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
@@ -31,6 +31,7 @@ interface ChatMessageProps {
   persona: Persona | null;
   displayContent?: string;
   onImageClick?: (src: string, alt: string) => void;
+  onPlayAudio?: (message: StoredMessage, text: string) => Promise<void>;
   reasoning?: string;
 }
 
@@ -49,7 +50,7 @@ const MessageAvatar = React.memo(function MessageAvatar({
 
   if (role === "user") {
     return (
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
+      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {personaAvatar ? (
           <img src={personaAvatar} alt="User" className="h-full w-full object-cover" />
         ) : (
@@ -61,7 +62,7 @@ const MessageAvatar = React.memo(function MessageAvatar({
 
   if (role === "assistant" || role === "scene") {
     return (
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
+      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {characterAvatar ? (
           <img src={characterAvatar} alt="Assistant" className="h-full w-full object-cover" />
         ) : (
@@ -227,6 +228,7 @@ function ChatMessageInner({
   persona,
   displayContent,
   onImageClick,
+  onPlayAudio,
   reasoning,
 }: ChatMessageProps) {
   // Memoize all computed values
@@ -264,6 +266,34 @@ function ChatMessageInner({
       shouldAnimate,
     };
   }, [message.role, message.id, message.content, index, messagesLength, getVariantState, isStartingSceneMessage]);
+
+  const playText = displayContent ?? message.content;
+  const voiceConfig = character?.voiceConfig;
+  const hasVoiceAssignment = voiceConfig?.source === "user"
+    ? !!voiceConfig.userVoiceId
+    : voiceConfig?.source === "provider"
+      ? !!voiceConfig.providerId && !!voiceConfig.voiceId
+      : false;
+  const canPlayAudio =
+    (computed.isAssistant || computed.isScene) &&
+    !computed.isPlaceholder &&
+    hasVoiceAssignment &&
+    playText.trim().length > 0;
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  const handlePlayAudio = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!onPlayAudio || !canPlayAudio || isPlayingAudio) return;
+    setIsPlayingAudio(true);
+    try {
+      await onPlayAudio(message, playText);
+    } catch (error) {
+      console.error("Failed to play message audio:", error);
+    } finally {
+      setIsPlayingAudio(false);
+    }
+  }, [canPlayAudio, isPlayingAudio, message, onPlayAudio, playText]);
 
   const dragProps = useMemo(
     () =>
@@ -304,7 +334,35 @@ function ChatMessageInner({
     >
       {/* Avatar for assistant/scene messages (left side) */}
       {(message.role === "assistant" || message.role === "scene") && (
-        <MessageAvatar role={message.role} character={character} persona={persona} />
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <MessageAvatar
+            role={message.role}
+            character={character}
+            persona={persona}
+          />
+          {canPlayAudio && (
+            <button
+              type="button"
+              onClick={handlePlayAudio}
+              disabled={isPlayingAudio}
+              className={cn(
+                "audio-btn flex w-6 items-center justify-center rounded-full",
+                "border border-white/40 bg-white/10 text-white shadow-sm",
+                "transition hover:bg-white/20 active:scale-95",
+                "disabled:cursor-not-allowed disabled:opacity-70"
+              )}
+            >
+
+              {isPlayingAudio ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Volume2 size={16} />
+              )}
+            </button>
+          )}
+
+
+        </div>
       )}
 
       <motion.div
@@ -482,10 +540,25 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     prev.theme === next.theme &&
     prev.character?.id === next.character?.id &&
     prev.character?.avatarPath === next.character?.avatarPath &&
+    (() => {
+      const aVoice = prev.character?.voiceConfig;
+      const bVoice = next.character?.voiceConfig;
+      if (!aVoice && !bVoice) return true;
+      if (!aVoice || !bVoice) return false;
+      return (
+        aVoice.source === bVoice.source &&
+        aVoice.userVoiceId === bVoice.userVoiceId &&
+        aVoice.providerId === bVoice.providerId &&
+        aVoice.voiceId === bVoice.voiceId &&
+        aVoice.modelId === bVoice.modelId &&
+        aVoice.voiceName === bVoice.voiceName
+      );
+    })() &&
     prev.persona?.id === next.persona?.id &&
     prev.persona?.avatarPath === next.persona?.avatarPath &&
     a.reasoning === b.reasoning &&
-    prev.reasoning === next.reasoning
+    prev.reasoning === next.reasoning &&
+    prev.onPlayAudio === next.onPlayAudio
   );
 });
 

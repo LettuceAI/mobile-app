@@ -57,10 +57,10 @@ fn json_usage_summary(
 fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
         .query_row(
-            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
+            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<i64>>(7)?, r.get::<_, Option<f64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<i64>>(10)?, r.get::<_, String>(11)?, r.get::<_, String>(12)?, r.get::<_, Option<String>>(13)?, r.get::<_, i64>(14)?, r.get::<_, String>(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?
+                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<i64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<f64>>(7)?, r.get::<_, Option<i64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<f64>>(10)?, r.get::<_, Option<i64>>(11)?, r.get::<_, String>(12)?, r.get::<_, String>(13)?, r.get::<_, Option<String>>(14)?, r.get::<_, i64>(15)?, r.get::<_, String>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?, r.get::<_, i64>(19)?
             )),
         )
         .optional()
@@ -71,6 +71,7 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
         system_prompt,
         selected_scene_id,
         persona_id,
+        voice_autoplay,
         temperature,
         top_p,
         max_output_tokens,
@@ -123,6 +124,7 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
         "systemPrompt": system_prompt,
         "selectedSceneId": selected_scene_id,
         "personaId": persona_id,
+        "voiceAutoplay": voice_autoplay.map(|value| value != 0),
         "advancedModelSettings": advanced,
         "memories": memories,
         "memoryEmbeddings": memory_embeddings,
@@ -140,10 +142,10 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
 fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
         .query_row(
-            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
+            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<i64>>(7)?, r.get::<_, Option<f64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<i64>>(10)?, r.get::<_, String>(11)?, r.get::<_, String>(12)?, r.get::<_, Option<String>>(13)?, r.get::<_, i64>(14)?, r.get::<_, String>(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?
+                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<i64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<f64>>(7)?, r.get::<_, Option<i64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<f64>>(10)?, r.get::<_, Option<i64>>(11)?, r.get::<_, String>(12)?, r.get::<_, String>(13)?, r.get::<_, Option<String>>(14)?, r.get::<_, i64>(15)?, r.get::<_, String>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?, r.get::<_, i64>(19)?
             )),
         )
         .optional()
@@ -154,6 +156,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         system_prompt,
         selected_scene_id,
         persona_id,
+        voice_autoplay,
         temperature,
         top_p,
         max_output_tokens,
@@ -306,6 +309,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         "systemPrompt": system_prompt,
         "selectedSceneId": selected_scene_id,
         "personaId": persona_id,
+        "voiceAutoplay": voice_autoplay.map(|value| value != 0),
         "advancedModelSettings": advanced,
         "memories": memories,
         "memoryEmbeddings": memory_embeddings,
@@ -810,6 +814,10 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
         .get("personaId")
         .and_then(|v| v.as_str())
         .map(|x| x.to_string());
+    let voice_autoplay = s
+        .get("voiceAutoplay")
+        .and_then(|v| v.as_bool())
+        .map(|value| if value { 1 } else { 0 });
     let archived = s.get("archived").and_then(|v| v.as_bool()).unwrap_or(false) as i64;
     let created_at = s
         .get("createdAt")
@@ -855,14 +863,15 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
     let top_k = adv.and_then(|v| v.get("topK")).and_then(|v| v.as_i64());
 
     conn.execute(
-        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               character_id=excluded.character_id,
               title=excluded.title,
               system_prompt=excluded.system_prompt,
               selected_scene_id=excluded.selected_scene_id,
               persona_id=excluded.persona_id,
+              voice_autoplay=excluded.voice_autoplay,
               temperature=excluded.temperature,
               top_p=excluded.top_p,
               max_output_tokens=excluded.max_output_tokens,
@@ -883,6 +892,7 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
             system_prompt,
             selected_scene_id,
             persona_id,
+            voice_autoplay,
             temperature,
             top_p,
             max_output_tokens,
@@ -1130,6 +1140,10 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
         .get("personaId")
         .and_then(|v| v.as_str())
         .map(|x| x.to_string());
+    let voice_autoplay = s
+        .get("voiceAutoplay")
+        .and_then(|v| v.as_bool())
+        .map(|value| if value { 1 } else { 0 });
     let archived = s.get("archived").and_then(|v| v.as_bool()).unwrap_or(false) as i64;
     let created_at = s
         .get("createdAt")
@@ -1193,14 +1207,15 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
-        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               character_id=excluded.character_id,
               title=excluded.title,
               system_prompt=excluded.system_prompt,
               selected_scene_id=excluded.selected_scene_id,
               persona_id=excluded.persona_id,
+              voice_autoplay=excluded.voice_autoplay,
               temperature=excluded.temperature,
               top_p=excluded.top_p,
               max_output_tokens=excluded.max_output_tokens,
@@ -1214,7 +1229,7 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
               memory_tool_events=excluded.memory_tool_events,
               archived=excluded.archived,
               updated_at=excluded.updated_at"#,
-        params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, &memories_json, &memory_embeddings_json, memory_summary, memory_summary_token_count, &memory_tool_events_json, archived, created_at, updated_at],
+        params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, &memories_json, &memory_embeddings_json, memory_summary, memory_summary_token_count, &memory_tool_events_json, archived, created_at, updated_at],
     ).map_err(|e| e.to_string())?;
 
     if let Some(msgs) = s.get("messages").and_then(|v| v.as_array()) {

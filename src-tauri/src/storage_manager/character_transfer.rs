@@ -43,6 +43,8 @@ pub struct CharacterExportData {
     pub memory_type: Option<String>,
     pub prompt_template_id: Option<String>,
     pub system_prompt: Option<String>,
+    pub voice_config: Option<JsonValue>,
+    pub voice_autoplay: Option<bool>,
     pub disable_avatar_gradient: bool,
 }
 
@@ -89,13 +91,13 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     let conn = open_db(&app)?;
 
     // Read character data
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, _created_at, _updated_at): 
-        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
+    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, _created_at, _updated_at):
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, i64) =
         conn.query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![&character_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get::<_, i64>(8)?, r.get(9)?, r.get(10)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get::<_, i64>(10)?, r.get(11)?, r.get(12)?
             )),
         )
         .map_err(|e| format!("Character not found: {}", e))?;
@@ -195,6 +197,10 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
             memory_type: Some(memory_type.unwrap_or_else(|| "manual".to_string())),
             prompt_template_id,
             system_prompt,
+            voice_config: voice_config
+                .and_then(|vc| serde_json::from_str::<JsonValue>(&vc).ok())
+                .filter(|value| !value.is_null()),
+            voice_autoplay: voice_autoplay.map(|value| value != 0),
             disable_avatar_gradient: disable_avatar_gradient != 0,
         },
         avatar_data,
@@ -288,10 +294,17 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
         _ => "manual".to_string(),
     };
 
+    let voice_config = package
+        .character
+        .voice_config
+        .as_ref()
+        .and_then(|v| serde_json::to_string(v).ok());
+    let voice_autoplay = package.character.voice_autoplay.unwrap_or(false) as i64;
+
     // Insert character
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         params![
             &new_character_id,
             &package.character.name,
@@ -300,6 +313,8 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
             package.character.description,
             package.character.prompt_template_id,
             package.character.system_prompt,
+            voice_config,
+            voice_autoplay,
             memory_type,
             package.character.disable_avatar_gradient as i64,
             now,
@@ -543,13 +558,13 @@ fn read_imported_character(
     conn: &rusqlite::Connection,
     character_id: &str,
 ) -> Result<String, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at): 
-        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, i64) = 
+    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at):
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, i64) =
         conn.query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get::<_, i64>(8)?, r.get(9)?, r.get(10)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get::<_, i64>(10)?, r.get(11)?, r.get(12)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -645,6 +660,17 @@ fn read_imported_character(
     if let Some(sp) = system_prompt {
         root.insert("systemPrompt".into(), JsonValue::String(sp));
     }
+    if let Some(vc) = voice_config {
+        if let Ok(value) = serde_json::from_str::<JsonValue>(&vc) {
+            if !value.is_null() {
+                root.insert("voiceConfig".into(), value);
+            }
+        }
+    }
+    root.insert(
+        "voiceAutoplay".into(),
+        JsonValue::Bool(voice_autoplay.unwrap_or(0) != 0),
+    );
     root.insert(
         "disableAvatarGradient".into(),
         JsonValue::Bool(disable_avatar_gradient != 0),

@@ -249,6 +249,8 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           memory_type TEXT NOT NULL DEFAULT 'manual',
           prompt_template_id TEXT,
           system_prompt TEXT,
+          voice_config TEXT,
+          voice_autoplay INTEGER NOT NULL DEFAULT 0,
           disable_avatar_gradient INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
@@ -340,6 +342,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           system_prompt TEXT,
           selected_scene_id TEXT,
           persona_id TEXT,
+          voice_autoplay INTEGER,
           temperature REAL,
           top_p REAL,
           max_output_tokens INTEGER,
@@ -564,6 +567,22 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         let _ = conn.execute("ALTER TABLE message_variants ADD COLUMN reasoning TEXT", []);
     }
 
+    let mut stmt_sessions = conn
+        .prepare("PRAGMA table_info(sessions)")
+        .map_err(|e| e.to_string())?;
+    let mut has_session_voice_autoplay = false;
+    let mut rows_sessions = stmt_sessions.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows_sessions.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        if col_name == "voice_autoplay" {
+            has_session_voice_autoplay = true;
+            break;
+        }
+    }
+    if !has_session_voice_autoplay {
+        let _ = conn.execute("ALTER TABLE sessions ADD COLUMN voice_autoplay INTEGER", []);
+    }
+
     let mut stmt2 = conn
         .prepare("PRAGMA table_info(characters)")
         .map_err(|e| e.to_string())?;
@@ -571,6 +590,8 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut has_custom_gradient_colors = false;
     let mut has_custom_text_color = false;
     let mut has_custom_text_secondary = false;
+    let mut has_voice_config = false;
+    let mut has_voice_autoplay = false;
     let mut rows2 = stmt2.query([]).map_err(|e| e.to_string())?;
     while let Some(row) = rows2.next().map_err(|e| e.to_string())? {
         let col_name: String = row.get(1).map_err(|e| e.to_string())?;
@@ -579,6 +600,8 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             "custom_gradient_colors" => has_custom_gradient_colors = true,
             "custom_text_color" => has_custom_text_color = true,
             "custom_text_secondary" => has_custom_text_secondary = true,
+            "voice_config" => has_voice_config = true,
+            "voice_autoplay" => has_voice_autoplay = true,
             _ => {}
         }
     }
@@ -603,6 +626,15 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     if !has_custom_text_secondary {
         let _ = conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
+            [],
+        );
+    }
+    if !has_voice_config {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN voice_config TEXT", []);
+    }
+    if !has_voice_autoplay {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN voice_autoplay INTEGER DEFAULT 0",
             [],
         );
     }

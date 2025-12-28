@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { listCharacters, saveCharacter, readSettings } from "../../../../core/storage/repo";
-import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
+import type { CharacterVoiceConfig, Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { convertToImageRef } from "../../../../core/storage/images";
 import { saveAvatar, loadAvatar } from "../../../../core/storage/avatars";
@@ -23,6 +23,8 @@ type EditCharacterState = {
   newSceneContent: string;
   selectedModelId: string | null;
   systemPromptTemplateId: string | null;
+  voiceConfig: CharacterVoiceConfig | null;
+  voiceAutoplay: boolean;
 
   disableAvatarGradient: boolean;
   customGradientEnabled: boolean;
@@ -60,6 +62,8 @@ const initialState: EditCharacterState = {
   newSceneContent: "",
   selectedModelId: null,
   systemPromptTemplateId: null,
+  voiceConfig: null,
+  voiceAutoplay: false,
 
   disableAvatarGradient: false,
   customGradientEnabled: false,
@@ -112,6 +116,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
     customGradientEnabled: boolean;
     customGradientColors: string;
     memoryType: string;
+    voiceConfig: string;
+    voiceAutoplay: boolean;
   } | null>(null);
 
   const setError = useCallback((value: string | null) => dispatch({ type: "SET_ERROR", payload: value }), []);
@@ -182,6 +188,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         defaultSceneId: character.defaultSceneId || null,
         selectedModelId: character.defaultModelId || null,
         systemPromptTemplateId: character.promptTemplateId || null,
+        voiceConfig: character.voiceConfig ?? null,
+        voiceAutoplay: character.voiceAutoplay ?? false,
 
         disableAvatarGradient: character.disableAvatarGradient || false,
         customGradientEnabled: character.customGradientEnabled || false,
@@ -205,6 +213,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         customGradientEnabled: character.customGradientEnabled || false,
         customGradientColors: JSON.stringify(character.customGradientColors || []),
         memoryType: character.memoryType === "dynamic" ? "dynamic" : "manual",
+        voiceConfig: JSON.stringify(character.voiceConfig ?? null),
+        voiceAutoplay: character.voiceAutoplay ?? false,
       };
       setError(null);
     } catch (err) {
@@ -293,6 +303,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         defaultSceneId: state.defaultSceneId,
         defaultModelId: state.selectedModelId,
         promptTemplateId: state.systemPromptTemplateId,
+        voiceConfig: state.voiceConfig ?? undefined,
+        voiceAutoplay: state.voiceAutoplay,
 
         disableAvatarGradient: state.disableAvatarGradient,
         customGradientEnabled: state.customGradientEnabled,
@@ -322,6 +334,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         customGradientEnabled: state.customGradientEnabled,
         customGradientColors: JSON.stringify(state.customGradientColors),
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
+        voiceConfig: JSON.stringify(state.voiceConfig ?? null),
+        voiceAutoplay: state.voiceAutoplay,
       };
 
     } catch (err: any) {
@@ -470,7 +484,9 @@ export function useEditCharacterForm(characterId: string | undefined) {
           state.disableAvatarGradient !== initial.disableAvatarGradient ||
           state.customGradientEnabled !== initial.customGradientEnabled ||
           JSON.stringify(state.customGradientColors) !== initial.customGradientColors ||
-          state.memoryType !== initial.memoryType;
+          state.memoryType !== initial.memoryType ||
+          JSON.stringify(state.voiceConfig ?? null) !== initial.voiceConfig ||
+          state.voiceAutoplay !== initial.voiceAutoplay;
 
         return hasChanges;
       })(),
