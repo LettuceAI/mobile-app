@@ -1,29 +1,44 @@
-import sendSoundUrl from "../../assets/audio/send.mp3";
-import successSoundUrl from "../../assets/audio/success.mp3";
-import failSoundUrl from "../../assets/audio/fail.mp3";
+import { invoke } from "@tauri-apps/api/core";
 import type { AccessibilitySettings } from "../storage/schemas";
 
 export type AccessibilitySoundType = keyof AccessibilitySettings;
 
-const soundUrls: Record<AccessibilitySoundType, string> = {
-  send: sendSoundUrl,
-  success: successSoundUrl,
-  failure: failSoundUrl,
-};
+type AccessibilitySoundBase64 = Record<AccessibilitySoundType, string>;
+type AccessibilitySoundUrls = Record<AccessibilitySoundType, string>;
 
-function clampVolume(value: number): number {
-  if (Number.isNaN(value)) return 0;
-  return Math.min(1, Math.max(0, value));
+const SOUND_MIME_TYPE = "audio/mpeg";
+
+let soundUrls: AccessibilitySoundUrls | null = null;
+
+async function loadSoundUrls() {
+  if (soundUrls) return soundUrls;
+
+  const base64 = await invoke<AccessibilitySoundBase64>("accessibility_sound_base64");
+  soundUrls = {
+    send: `data:${SOUND_MIME_TYPE};base64,${base64.send}`,
+    success: `data:${SOUND_MIME_TYPE};base64,${base64.success}`,
+    failure: `data:${SOUND_MIME_TYPE};base64,${base64.failure}`,
+  };
+
+  return soundUrls;
 }
 
-export function playAccessibilitySound(
+function clampVolume(v: number) {
+  return Number.isNaN(v) ? 0 : Math.min(1, Math.max(0, v));
+}
+
+export async function playAccessibilitySound(
   type: AccessibilitySoundType,
-  settings: AccessibilitySettings | undefined
-): void {
-  const config = settings?.[type];
-  if (!config?.enabled) return;
-  const audio = new Audio(soundUrls[type]);
-  audio.volume = clampVolume(config.volume);
+  settings?: AccessibilitySettings
+) {
+  const cfg = settings?.[type];
+  if (!cfg?.enabled) return;
+
+  const urls = await loadSoundUrls();
+  const audio = new Audio(urls[type]);
+
+  audio.volume = clampVolume(cfg.volume);
   audio.preload = "auto";
-  void audio.play().catch(() => undefined);
+
+  await audio.play().catch(() => undefined);
 }

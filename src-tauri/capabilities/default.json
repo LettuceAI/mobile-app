@@ -32,6 +32,14 @@
         }
       ]
     },
+    "fs:allow-stat",
+    "fs:allow-read-text-file",
+    "fs:allow-resource-read-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$RESOURCE/**/*"],
+      "deny": ["$RESOURCE/secret.txt"]
+    },
     "os:default"
   ]
 }

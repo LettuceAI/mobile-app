@@ -205,6 +205,7 @@ pub fn run() {
             usage::usage_clear_before,
             usage::usage_export_csv,
             usage::usage_save_csv,
+            utils::accessibility_sound_base64,
             utils::get_app_version,
             embedding_model::check_embedding_model,
             embedding_model::get_embedding_model_info,

@@ -9,6 +9,7 @@
   ],
   "permissions": [
     "barcode-scanner:default",
-    "tts:default"
+    "tts:default",
+    "allow-read-file"
   ]
 }
