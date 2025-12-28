@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "sync-version": "node scripts/sync-version.mjs",
-    "tauri": "npm run sync-version && tauri",
+    "tauri": "npm run tauri",
     "check": "(tsc --noEmit && cd src-tauri && cargo check) && echo 'All checks successful.' || echo 'Check failed.'"
   },
   "dependencies": {
