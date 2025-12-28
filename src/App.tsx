@@ -152,6 +152,7 @@ function AppContent() {
     () => location.pathname.startsWith("/settings"),
     [location.pathname]
   );
+  const shouldAnimatePage = !location.pathname.startsWith("/settings/providers");
 
   const isLorebookEditorRoute = useMemo(
     () => location.pathname.startsWith("/library/lorebooks/"),
@@ -249,10 +250,10 @@ function AppContent() {
         >
           <motion.div
             key={location.pathname.startsWith("/settings") ? location.pathname : location.key}
-            initial={{ opacity: 0, y: 16 }}
+            initial={shouldAnimatePage ? { opacity: 0, y: 16 } : false}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            exit={shouldAnimatePage ? { opacity: 0, y: -16 } : { opacity: 1, y: 0 }}
+            transition={shouldAnimatePage ? { duration: 0.2, ease: "easeOut" } : { duration: 0 }}
             className="h-full"
           >
             <Routes>

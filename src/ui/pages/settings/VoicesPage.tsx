@@ -97,7 +97,7 @@ export function VoicesPage() {
         }
     };
 
-    const handleCreateProvider = () => {
+    const handleCreateProvider = useCallback(() => {
         setEditingProvider({
             id: "",
             providerType: "elevenlabs",
@@ -105,7 +105,7 @@ export function VoicesPage() {
             apiKey: "",
         });
         setIsProviderEditorOpen(true);
-    };
+    }, []);
 
     const handleEditProvider = (provider: AudioProvider) => {
         if (provider.providerType === "device_tts") {
@@ -128,6 +128,14 @@ export function VoicesPage() {
             console.error("Failed to delete provider:", e);
         }
     };
+
+    useEffect(() => {
+        const listener = () => handleCreateProvider();
+        window.addEventListener("audioProviders:add", listener);
+        return () => {
+            window.removeEventListener("audioProviders:add", listener);
+        };
+    }, [handleCreateProvider]);
 
     if (isLoading) {
         return (

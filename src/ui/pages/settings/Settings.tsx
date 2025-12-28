@@ -145,7 +145,7 @@ export function SettingsPage() {
       icon: <Volume2 />,
       title: 'Voices',
       subtitle: 'TTS audio providers & voices',
-      onClick: () => navigate('/settings/voices')
+      onClick: () => navigate('/settings/providers?tab=audio')
     },
     {
       key: 'prompts',
