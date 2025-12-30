@@ -49,7 +49,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let client = match transport::build_client(req.timeout_ms) {
         Ok(c) => c,
         Err(e) => {
-            log_error(&app, "api_request", &format!("client build error: {}", e));
+            log_error(&app, "api_request", format!("client build error: {}", e));
             return Err(e.to_string());
         }
     };
@@ -62,7 +62,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             log_error(
                 &app,
                 "api_request",
-                &format!("[api_request] invalid method: {}", method_str),
+                format!("[api_request] invalid method: {}", method_str),
             );
             return Err(e.to_string());
         }
@@ -85,7 +85,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     log_info(
         &app,
         "api_request",
-        &format!("[api_request] method={} url={}", method_str, url_for_log),
+        format!("[api_request] method={} url={}", method_str, url_for_log),
     );
 
     request_builder = apply_query_params(&app, request_builder, &req);
@@ -117,7 +117,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     log_info(
         &app,
         "api_request",
-        &format!(
+        format!(
             "[api_request] method={} full_url={} api_key={} stream={} request_id={:?} timeout_ms={:?}",
             method_str, url_for_log, api_key_for_log, stream, request_id, req.timeout_ms
         ),
@@ -128,7 +128,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             log_info(
                 &app,
                 "api_request",
-                &format!("[api_request] headers: {}", headers.join(", ")),
+                format!("[api_request] headers: {}", headers.join(", ")),
             );
         }
     } else {
@@ -140,7 +140,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             log_info(
                 &app,
                 "api_request",
-                &format!("[api_request] query params: {:?}", keys),
+                format!("[api_request] query params: {:?}", keys),
             );
         }
     }
@@ -149,7 +149,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         log_info(
             &app,
             "api_request",
-            &format!("[api_request] body preview: {}", body),
+            format!("[api_request] body preview: {}", body),
         );
     }
 
@@ -168,7 +168,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             log_info(
                 &app,
                 "api_request",
-                &format!(
+                format!(
                     "[api_request] request error for {} (api_key={}): {}",
                     url_for_log, api_key_for_log, err
                 ),
@@ -182,7 +182,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     log_info(
         &app,
         "api_request",
-        &format!("[api_request] response status: {} ok: {}", status, ok),
+        format!("[api_request] response status: {} ok: {}", status, ok),
     );
 
     let mut headers = HashMap::new();
@@ -192,7 +192,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             log_info(
                 &app,
                 "api_request",
-                &format!(
+                format!(
                     "[api_request] response header: {}={}",
                     key,
                     truncate_for_log(text, 512)
@@ -220,7 +220,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     log_info(
         &app,
         "api_request",
-        &format!(
+        format!(
             "[api_request] completed {} {} (api_key={}) status={} ok={} stream={} request_id={:?}",
             method_str, url_for_log, api_key_for_log, status, ok, stream, request_id
         ),
@@ -241,7 +241,7 @@ pub async fn abort_request(app: tauri::AppHandle, request_id: String) -> Result<
     log_info(
         &app,
         "abort_request",
-        &format!(
+        format!(
             "[abort_request] attempting to abort request_id={}",
             request_id
         ),
@@ -253,7 +253,7 @@ pub async fn abort_request(app: tauri::AppHandle, request_id: String) -> Result<
     log_info(
         &app,
         "abort_request",
-        &format!(
+        format!(
             "[abort_request] successfully aborted request_id={}",
             request_id
         ),

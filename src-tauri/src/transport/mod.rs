@@ -149,6 +149,5 @@ pub async fn send_with_retries(
 
 fn backoff_delay_ms(attempt: u32) -> u64 {
     // 200ms, 400ms, 800ms (cap at 1.6s)
-    let base = 200u64 * (1u64 << (attempt.saturating_sub(1).min(3)));
-    base
+    200u64 * (1u64 << (attempt.saturating_sub(1).min(3)))
 }

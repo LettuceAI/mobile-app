@@ -9,11 +9,9 @@ use crate::utils::log_info;
 /// Current migration version
 pub const CURRENT_MIGRATION_VERSION: u32 = 21;
 
-/// Migration system for updating data structures across app versions
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
-    log_info(app, "migrations", "Starting migration check".to_string());
+    log_info(app, "migrations", "Starting migration check");
 
-    // Get current migration version from settings
     let current_version = get_migration_version(app)?;
 
     if current_version >= CURRENT_MIGRATION_VERSION {
@@ -44,7 +42,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v0 -> v1: Add custom prompt fields".to_string(),
+            "Running migration v0 -> v1: Add custom prompt fields",
         );
         migrate_v0_to_v1(app)?;
         version = 1;
@@ -54,7 +52,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v1 -> v2: Convert prompts to template system".to_string(),
+            "Running migration v1 -> v2: Convert prompts to template system",
         );
         migrate_v1_to_v2(app)?;
         version = 2;
@@ -64,8 +62,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)"
-                .to_string(),
+            "Running migration v2 -> v3: Normalize templates to global prompts (no scopes)",
         );
         migrate_v2_to_v3(app)?;
         version = 3;
@@ -76,7 +73,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v3 -> v4: Move secrets to SQLite (from secrets.json)".to_string(),
+            "Running migration v3 -> v4: Move secrets to SQLite (from secrets.json)",
         );
         migrate_v3_to_v4(app)?;
         version = 4;
@@ -86,7 +83,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v4 -> v5: Move prompt templates to SQLite (from prompt_templates.json)".to_string(),
+            "Running migration v4 -> v5: Move prompt templates to SQLite (from prompt_templates.json)",
         );
         migrate_v4_to_v5(app)?;
         version = 5;
@@ -96,7 +93,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v5 -> v6: Move model pricing cache to SQLite (from models_cache.json)".to_string(),
+            "Running migration v5 -> v6: Move model pricing cache to SQLite (from models_cache.json)",
         );
         migrate_v5_to_v6(app)?;
         version = 6;
@@ -106,8 +103,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v6 -> v7: Add api_key column to provider_credentials and backfill"
-                .to_string(),
+            "Running migration v6 -> v7: Add api_key column to provider_credentials and backfill",
         );
         migrate_v6_to_v7(app)?;
         version = 7;
@@ -117,7 +113,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v7 -> v8: Add memories column to sessions table".to_string(),
+            "Running migration v7 -> v8: Add memories column to sessions table",
         );
         migrate_v7_to_v8(app)?;
         version = 8;
@@ -127,8 +123,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v8 -> v9: Add advanced_settings column to settings table"
-                .to_string(),
+            "Running migration v8 -> v9: Add advanced_settings column to settings table",
         );
         migrate_v8_to_v9(app)?;
         version = 9;
@@ -138,7 +133,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v9 -> v10: Add memory_type to characters".to_string(),
+            "Running migration v9 -> v10: Add memory_type to characters",
         );
         migrate_v9_to_v10(app)?;
         version = 10;
@@ -148,7 +143,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v10 -> v11: Add memory_embeddings to sessions".to_string(),
+            "Running migration v10 -> v11: Add memory_embeddings to sessions",
         );
         migrate_v10_to_v11(app)?;
         version = 11;
@@ -158,8 +153,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v11 -> v12: Add memory summary and tool events to sessions"
-                .to_string(),
+            "Running migration v11 -> v12: Add memory summary and tool events to sessions",
         );
         migrate_v11_to_v12(app)?;
         version = 12;
@@ -169,7 +163,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v12 -> v13: Add operation_type to usage_records".to_string(),
+            "Running migration v12 -> v13: Add operation_type to usage_records",
         );
         migrate_v12_to_v13(app)?;
         version = 13;
@@ -179,7 +173,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v13 -> v14: Add model_type to models".to_string(),
+            "Running migration v13 -> v14: Add model_type to models",
         );
         migrate_v13_to_v14(app)?;
         version = 14;
@@ -189,7 +183,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v14 -> v15: Add attachments column to messages".to_string(),
+            "Running migration v14 -> v15: Add attachments column to messages",
         );
         migrate_v14_to_v15(app)?;
         version = 15;
@@ -199,7 +193,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v15 -> v16: Backfill token_count for existing memory embeddings and add usage token breakdown".to_string(),
+            "Running migration v15 -> v16: Backfill token_count for existing memory embeddings and add usage token breakdown",
         );
         migrate_v15_to_v16(app)?;
         version = 16;
@@ -209,8 +203,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v16 -> v17: Add memory_tokens and summary_tokens to usage_records"
-                .to_string(),
+            "Running migration v16 -> v17: Add memory_tokens and summary_tokens to usage_records",
         );
         migrate_v16_to_v17(app)?;
         version = 17;
@@ -220,7 +213,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v17 -> v18: Add custom gradient columns to characters".to_string(),
+            "Running migration v17 -> v18: Add custom gradient columns to characters",
         );
         migrate_v17_to_v18(app)?;
         version = 18;
@@ -230,7 +223,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v18 -> v19: Add model input/output scopes".to_string(),
+            "Running migration v18 -> v19: Add model input/output scopes",
         );
         migrate_v18_to_v19(app)?;
         version = 19;
@@ -240,7 +233,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v19 -> v20: Convert lorebooks to app-level".to_string(),
+            "Running migration v19 -> v20: Convert lorebooks to app-level",
         );
         migrate_v19_to_v20(app)?;
         version = 20;
@@ -250,13 +243,11 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Running migration v20 -> v21: Add config column to provider_credentials".to_string(),
+            "Running migration v20 -> v21: Add config column to provider_credentials",
         );
         migrate_v20_to_v21(app)?;
         version = 21;
     }
-
-    // v6 -> v7 (model list cache) removed; feature dropped
 
     // Update migration version
     set_migration_version(app, version)?;
@@ -270,13 +261,11 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         ),
     );
 
-    // Best-effort cleanup of residual legacy files that should no longer exist
     cleanup_legacy_files(app);
 
     Ok(())
 }
 
-/// Remove legacy JSON files if they still exist (post-migration safety)
 fn cleanup_legacy_files(app: &AppHandle) {
     use std::fs;
     if let Ok(dir) = crate::utils::ensure_lettuce_dir(app) {
@@ -357,11 +346,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
             if !obj.contains_key("systemPrompt") {
                 obj.insert("systemPrompt".to_string(), Value::Null);
                 changed = true;
-                log_info(
-                    app,
-                    "migrations",
-                    "Added systemPrompt to settings".to_string(),
-                );
+                log_info(app, "migrations", "Added systemPrompt to settings");
             }
 
             // Add systemPrompt to all models if not present
@@ -389,11 +374,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
                 app.clone(),
                 serde_json::to_string(&settings).map_err(|e| e.to_string())?,
             )?;
-            log_info(
-                app,
-                "migrations",
-                "Settings migration completed".to_string(),
-            );
+            log_info(app, "migrations", "Settings migration completed");
         }
     }
 
@@ -404,8 +385,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        "Character systemPrompt fields will be added on next save (handled by serde defaults)"
-            .to_string(),
+        "Character systemPrompt fields will be added on next save (handled by serde defaults)",
     );
 
     Ok(())
@@ -654,7 +634,7 @@ fn migrate_v9_to_v10(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(characters)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -693,7 +673,7 @@ fn migrate_v10_to_v11(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(sessions)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -732,7 +712,7 @@ fn migrate_v11_to_v12(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(sessions)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -766,7 +746,6 @@ fn migrate_v11_to_v12(app: &AppHandle) -> Result<(), String> {
 
 /// Migration v6 -> v7: move per-credential model list cache from models-cache.json to SQLite table
 // migrate_v6_to_v7 removed (feature dropped)
-
 // We keep the same storage file/format (no new file), but update all templates so they no longer
 // carry meaningful scope assignments:
 // - Set `scope` to AppWide for all non-default templates
@@ -972,7 +951,7 @@ fn migrate_v12_to_v13(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(usage_records)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1011,7 +990,7 @@ fn migrate_v13_to_v14(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(models)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1050,7 +1029,7 @@ fn migrate_v14_to_v15(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(messages)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1084,7 +1063,7 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(sessions)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1114,8 +1093,6 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
     };
 
     if !tokenizer_available {
-        // Skip backfill - token counts will be 0 for existing memories
-        // They'll get proper counts when edited or when new memories are added
         return Ok(());
     }
 
@@ -1221,7 +1198,7 @@ fn migrate_v16_to_v17(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(usage_records)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1256,7 +1233,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
     use crate::storage_manager::db::open_db;
     use crate::utils::log_info;
 
-    log_info(app, "migrations", "Starting v17->v18 migration".to_string());
+    log_info(app, "migrations", "Starting v17->v18 migration");
 
     let conn = open_db(app)?;
 
@@ -1268,7 +1245,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(characters)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1294,7 +1271,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Adding custom_gradient_colors column".to_string(),
+            "Adding custom_gradient_colors column",
         );
         conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_gradient_colors TEXT",
@@ -1307,7 +1284,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Adding custom_text_color column".to_string(),
+            "Adding custom_text_color column",
         );
         conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_text_color TEXT",
@@ -1320,7 +1297,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
         log_info(
             app,
             "migrations",
-            "Adding custom_text_secondary column".to_string(),
+            "Adding custom_text_secondary column",
         );
         conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
@@ -1332,7 +1309,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        "v17->v18 migration completed".to_string(),
+        "v17->v18 migration completed",
     );
     Ok(())
 }
@@ -1342,7 +1319,7 @@ fn migrate_v18_to_v19(app: &AppHandle) -> Result<(), String> {
     use crate::storage_manager::db::open_db;
     use crate::utils::log_info;
 
-    log_info(app, "migrations", "Starting v18->v19 migration".to_string());
+    log_info(app, "migrations", "Starting v18->v19 migration");
 
     let conn = open_db(app)?;
 
@@ -1353,7 +1330,7 @@ fn migrate_v18_to_v19(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(models)")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
 
     for col in rows {
@@ -1408,7 +1385,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
     use rusqlite::{params, OptionalExtension};
     use uuid::Uuid;
 
-    log_info(app, "migrations", "Starting v19->v20 migration".to_string());
+    log_info(app, "migrations", "Starting v19->v20 migration");
 
     let conn = open_db(app)?;
 
@@ -1482,7 +1459,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         .prepare("PRAGMA table_info(lorebook_entries)")
         .map_err(|e| format!("Failed to read lorebook_entries schema: {}", e))?;
     let cols = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| format!("Failed to query lorebook_entries schema: {}", e))?;
     for col in cols {
         let name = col.map_err(|e| e.to_string())?;
@@ -1547,7 +1524,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         .prepare("SELECT DISTINCT character_id FROM lorebook_entries_v1")
         .map_err(|e| format!("Failed to read legacy lorebook entries: {}", e))?;
     let character_ids = stmt
-        .query_map([], |row| Ok(row.get::<_, String>(0)?))
+        .query_map([], |row| row.get::<_, String>(0))
         .map_err(|e| format!("Failed to query legacy character ids: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to collect legacy character ids: {}", e))?;
@@ -1604,7 +1581,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
     log_info(
         app,
         "migrations",
-        "v19->v20 migration completed".to_string(),
+        "v19->v20 migration completed",
     );
     Ok(())
 }

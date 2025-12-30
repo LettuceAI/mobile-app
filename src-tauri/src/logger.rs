@@ -132,13 +132,10 @@ impl LogManager {
         let entries = fs::read_dir(&self.log_dir)
             .map_err(|e| format!("Failed to read log directory: {}", e))?;
 
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("txt") {
-                    fs::remove_file(path)
-                        .map_err(|e| format!("Failed to delete log file: {}", e))?;
-                }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && path.extension() == Some("txt".as_ref()) {
+                fs::remove_file(path).map_err(|e| format!("Failed to delete log file: {}", e))?;
             }
         }
 

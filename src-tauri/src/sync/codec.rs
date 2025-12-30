@@ -14,13 +14,14 @@ use tokio_util::codec::{Decoder, Encoder};
 // Max message size: 100 MB
 const MAX_FRAME_SIZE: usize = 100 * 1024 * 1024;
 
+#[derive(Default)]
 pub struct P2PCodec {
     cipher: Option<ChaCha20Poly1305>,
 }
 
 impl P2PCodec {
     pub fn new() -> Self {
-        Self { cipher: None }
+        Self::default()
     }
 
     pub fn set_key(&mut self, key_bytes: &[u8; 32]) {

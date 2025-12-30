@@ -34,7 +34,7 @@ pub(crate) fn apply_query_params(
             log_info(
                 app,
                 "api_request",
-                &format!("[api_request] adding query params: {:?}", params),
+                format!("[api_request] adding query params: {:?}", params),
             );
             return builder.query(&params);
         }
@@ -53,7 +53,7 @@ pub(crate) fn apply_headers(
             log_info(
                 app,
                 "api_request",
-                &format!(
+                format!(
                     "[api_request] adding header: {}={}",
                     key,
                     sanitize_header_value(key, value)
@@ -68,7 +68,7 @@ pub(crate) fn apply_headers(
                 log_warn(
                     app,
                     "api_request",
-                    &format!("[api_request] invalid header: {}={}", key, value),
+                    format!("[api_request] invalid header: {}={}", key, value),
                 );
             }
         }
@@ -108,7 +108,7 @@ pub(crate) fn apply_body(
             log_info(
                 app,
                 "api_request",
-                &format!(
+                format!(
                     "[api_request] setting body as text: {}",
                     crate::serde_utils::truncate_for_log(text, 512)
                 ),
@@ -118,7 +118,7 @@ pub(crate) fn apply_body(
             log_info(
                 app,
                 "api_request",
-                &format!(
+                format!(
                     "[api_request] setting body as JSON: {}",
                     summarize_json(&body)
                 ),
@@ -147,7 +147,7 @@ pub(crate) async fn handle_streaming_response(
     log_info(
         app,
         "api_request",
-        &format!(
+        format!(
             "[api_request] streaming response for {} (provider={:?}, event={})",
             url_for_log, req.provider_id, event_name
         ),
@@ -172,7 +172,7 @@ pub(crate) async fn handle_streaming_response(
                 log_warn(
                     app,
                     "api_request",
-                    &format!("[api_request] request aborted by user: {}", url_for_log),
+                    format!("[api_request] request aborted by user: {}", url_for_log),
                 );
                 aborted = true;
                 break;
@@ -195,7 +195,7 @@ pub(crate) async fn handle_streaming_response(
                         log_error(
                             app,
                             "api_request",
-                            &format!("[api_request] stream error: {}", e),
+                            format!("[api_request] stream error: {}", e),
                         );
                         // Unregister before returning error
                         use tauri::Manager;
@@ -236,7 +236,7 @@ pub(crate) async fn handle_streaming_response(
     log_info(
         app,
         "api_request",
-        &format!(
+        format!(
             "[api_request] stream completed, total bytes: {}",
             collected.len()
         ),
@@ -300,13 +300,13 @@ pub(crate) async fn handle_non_streaming_response(
             log_info(
                 app,
                 "api_request",
-                &format!("[api_request] response body bytes: {}", bytes.len()),
+                format!("[api_request] response body bytes: {}", bytes.len()),
             );
             let text = String::from_utf8_lossy(&bytes).to_string();
             log_info(
                 app,
                 "api_request",
-                &format!(
+                format!(
                     "[api_request] response body preview: {}",
                     crate::serde_utils::truncate_for_log(&text, 512)
                 ),
@@ -340,7 +340,7 @@ pub(crate) async fn handle_non_streaming_response(
             log_error(
                 app,
                 "api_request",
-                &format!("[api_request] error reading response body: {}", e),
+                format!("[api_request] error reading response body: {}", e),
             );
             Err(e.to_string())
         }

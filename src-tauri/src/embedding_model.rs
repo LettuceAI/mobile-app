@@ -1,5 +1,4 @@
 use futures_util::StreamExt;
-use reqwest;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,6 +17,7 @@ const MODEL_FILES_V1: [&str; 3] = [
 ];
 
 const MODEL_FILES_V2_REMOTE: [&str; 3] = ["model.onnx", "model.onnx.data", "tokenizer.json"];
+
 const MODEL_FILES_V2_LOCAL: [&str; 3] = ["v2-model.onnx", "v2-model.onnx.data", "tokenizer.json"];
 
 const HUGGINGFACE_BASE_V1: &str = "https://huggingface.co/Zeolit/lettuce-emb-512d-v1/resolve/main";
@@ -26,16 +26,11 @@ const HUGGINGFACE_BASE_V2: &str = "https://huggingface.co/Zeolit/lettuce-emb-512
 const MAX_SEQ_LENGTH_V1: usize = 512;
 const MAX_SEQ_LENGTH_V2: usize = 4096;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub enum EmbeddingModelVersion {
     V1,
+    #[default]
     V2,
-}
-
-impl Default for EmbeddingModelVersion {
-    fn default() -> Self {
-        EmbeddingModelVersion::V2
-    }
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -165,7 +160,7 @@ pub async fn reset_download_state() {
 }
 
 fn cleanup_partial_files(
-    model_dir: &PathBuf,
+    model_dir: &std::path::Path,
     version: Option<&EmbeddingModelVersion>,
 ) -> Result<(), String> {
     let files = match version {
@@ -426,7 +421,9 @@ use tokenizers::Tokenizer;
 const EMBEDDING_DIM: usize = 512;
 
 async fn ensure_ort_init() -> Result<(), String> {
-    if ort::init().with_name("lettuce-embedding").commit().is_err() {}
+    if ort::init().with_name("lettuce-embedding").commit().is_err() {
+        return Err("Failed to initialize ONNX Runtime".to_string());
+    }
     Ok(())
 }
 
@@ -445,17 +442,17 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
             let user_max_tokens = crate::storage_manager::settings::internal_read_settings(&app)
                 .ok()
                 .flatten()
-                .and_then(|json_str| serde_json::from_str::<serde_json::Value>(&json_str).ok())
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
                 .and_then(|json| {
-                    json.get("advancedSettings")
-                        .and_then(|adv| adv.get("embeddingMaxTokens"))
-                        .and_then(|v| v.as_u64())
-                        .map(|t| t as usize)
+                    json.pointer("/advancedSettings/embeddingMaxTokens")?
+                        .as_u64()
                 })
+                .map(|t| t as usize)
                 .unwrap_or(MAX_SEQ_LENGTH_V2);
 
             // Clamp to valid range [512, 4096]
-            let clamped = user_max_tokens.max(512).min(MAX_SEQ_LENGTH_V2);
+            let clamped = user_max_tokens.clamp(512, MAX_SEQ_LENGTH_V2);
+
             (model_dir.join("v2-model.onnx"), clamped)
         }
         Some(EmbeddingModelVersion::V1) => (
@@ -524,16 +521,15 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
 
     let embedding_vec: Vec<f32> = embedding_slice.to_vec();
 
-    if embedding_vec.len() == EMBEDDING_DIM {
-        Ok(embedding_vec)
-    } else if embedding_vec.len() > EMBEDDING_DIM && embedding_vec.len() % EMBEDDING_DIM == 0 {
-        Ok(embedding_vec[..EMBEDDING_DIM].to_vec())
-    } else {
-        Err(format!(
+    match embedding_vec.len() {
+        len if len == EMBEDDING_DIM => Ok(embedding_vec),
+        len if len > EMBEDDING_DIM && len % EMBEDDING_DIM == 0 => {
+            Ok(embedding_vec[..EMBEDDING_DIM].to_vec())
+        }
+        len => Err(format!(
             "Unexpected embedding dimension: {} (expected {} or multiple thereof)",
-            embedding_vec.len(),
-            EMBEDDING_DIM
-        ))
+            len, EMBEDDING_DIM
+        )),
     }
 }
 
@@ -626,7 +622,7 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
 
     let message = if passed {
         format!(
-            "Test PASSED: Model correctly identified similarity. (Positive: {:.4} > Negative: {:.4})", 
+            "Test PASSED: Model correctly identified similarity. (Positive: {:.4} > Negative: {:.4})",
             pos_score, neg_score
         )
     } else {

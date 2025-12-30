@@ -515,16 +515,19 @@ pub fn apply_layer_data(
     }
 }
 
+type GlobalsData = (
+    Vec<Settings>,
+    Vec<Persona>,
+    Vec<Model>,
+    Vec<Secret>,
+    Vec<ProviderCredential>,
+    Vec<PromptTemplate>,
+    Vec<ModelPricingCache>,
+);
+
 fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
-    let (settings, personas, models, secrets, creds, templates, pricing): (
-        Vec<Settings>,
-        Vec<Persona>,
-        Vec<Model>,
-        Vec<Secret>,
-        Vec<ProviderCredential>,
-        Vec<PromptTemplate>,
-        Vec<ModelPricingCache>,
-    ) = bincode::deserialize(data).map_err(|e| e.to_string())?;
+    let (settings, personas, models, secrets, creds, templates, pricing): GlobalsData =
+        bincode::deserialize(data).map_err(|e| e.to_string())?;
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
@@ -597,14 +600,17 @@ fn apply_lorebooks(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+type CharactersData = (
+    Vec<Character>,
+    Vec<CharacterRule>,
+    Vec<Scene>,
+    Vec<SceneVariant>,
+    Vec<CharacterLorebookLink>,
+);
+
 fn apply_characters(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
-    let (chars, rules, scenes, variants, links): (
-        Vec<Character>,
-        Vec<CharacterRule>,
-        Vec<Scene>,
-        Vec<SceneVariant>,
-        Vec<CharacterLorebookLink>,
-    ) = bincode::deserialize(data).map_err(|e| e.to_string())?;
+    let (chars, rules, scenes, variants, links): CharactersData =
+        bincode::deserialize(data).map_err(|e| e.to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for c in chars {
@@ -648,14 +654,17 @@ fn apply_characters(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> 
     Ok(())
 }
 
+type SessionsData = (
+    Vec<Session>,
+    Vec<Message>,
+    Vec<MessageVariant>,
+    Vec<UsageRecord>,
+    Vec<UsageMetadata>,
+);
+
 fn apply_sessions(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
-    let (sessions, messages, variants, usages, metadata): (
-        Vec<Session>,
-        Vec<Message>,
-        Vec<MessageVariant>,
-        Vec<UsageRecord>,
-        Vec<UsageMetadata>,
-    ) = bincode::deserialize(data).map_err(|e| e.to_string())?;
+    let (sessions, messages, variants, usages, metadata): SessionsData =
+        bincode::deserialize(data).map_err(|e| e.to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for s in sessions {
@@ -724,7 +733,7 @@ pub fn scan_for_missing_files(conn: &DbConnection, app_handle: &tauri::AppHandle
     }
 
     let mut stmt = conn.prepare("SELECT avatar_path FROM personas").unwrap();
-    let rows = stmt.query_map([], |r| Ok(r.get(0)?)).unwrap();
+    let rows = stmt.query_map([], |r| r.get(0)).unwrap();
     for r in rows {
         let a: Option<String> = r.unwrap();
         check(a);
@@ -738,7 +747,7 @@ pub fn scan_for_missing_files(conn: &DbConnection, app_handle: &tauri::AppHandle
     let mut stmt = conn
         .prepare("SELECT attachments FROM messages WHERE attachments != '[]'")
         .unwrap();
-    let rows = stmt.query_map([], |r| Ok(r.get::<_, String>(0)?)).unwrap();
+    let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
     for r in rows {
         let json = r.unwrap();
         if let Ok(atts) = serde_json::from_str::<Vec<AttachmentStub>>(&json) {

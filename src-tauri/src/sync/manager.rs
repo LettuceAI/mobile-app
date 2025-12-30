@@ -67,8 +67,8 @@ pub struct SyncManagerState {
     pub pin: RwLock<Option<String>>, // Added PIN storage
 }
 
-impl SyncManagerState {
-    pub fn new() -> Self {
+impl Default for SyncManagerState {
+    fn default() -> Self {
         Self {
             status: RwLock::new(SyncStatus::Idle),
             shutdown_tx: Mutex::new(None),
@@ -76,6 +76,12 @@ impl SyncManagerState {
             pending_starts: RwLock::new(std::collections::HashMap::new()),
             pin: RwLock::new(None),
         }
+    }
+}
+
+impl SyncManagerState {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub async fn set_status(&self, app: &AppHandle, status: SyncStatus) {
@@ -188,7 +194,7 @@ async fn handle_driver_connection(
     framed
         .send(P2PMessage::Handshake {
             protocol_version: 1,
-            device_name: "Driver".to_string(), // TODO: Get actual device name
+            device_name: whoami::devicename(),
             salt,
             challenge,
         })
@@ -367,7 +373,7 @@ async fn handle_driver_connection(
         )
         .await;
 
-    if let Err(_) = start_rx.await {
+    if (start_rx.await).is_err() {
         let my_ip = crate::utils::get_local_ip().unwrap_or_else(|_| "0.0.0.0".to_string());
         let pin = state.pin.read().await.clone().unwrap_or_default();
         state
@@ -422,19 +428,19 @@ async fn handle_sync_request(
 
     // Check Lorebooks
     let mut lb_ids_to_send = Vec::new();
-    for (id, _updated) in &local_manifest.lorebooks {
+    for id in local_manifest.lorebooks.keys() {
         lb_ids_to_send.push(id.clone());
     }
 
     // Check Characters
     let mut char_ids_to_send = Vec::new();
-    for (id, _updated) in &local_manifest.characters {
+    for id in local_manifest.characters.keys() {
         char_ids_to_send.push(id.clone());
     }
 
     // Check Sessions
     let mut session_ids_to_send = Vec::new();
-    for (id, _updated) in &local_manifest.sessions {
+    for id in local_manifest.sessions.keys() {
         session_ids_to_send.push(id.clone());
     }
 
@@ -693,9 +699,9 @@ async fn run_passenger_session(
     framed
         .send(P2PMessage::Handshake {
             protocol_version: 1,
-            device_name: "Passenger".to_string(), // TODO: Configurable name
-            salt: [0u8; 16],                      // Not used post-auth
-            challenge: [0u8; 16],                 // Not used post-auth
+            device_name: whoami::devicename(),
+            salt: [0u8; 16],      // Not used post-auth
+            challenge: [0u8; 16], // Not used post-auth
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -1041,11 +1047,7 @@ async fn send_global_assets(
     app: &AppHandle,
     framed: &mut Framed<TcpStream, P2PCodec>,
 ) -> Result<(), String> {
-    log_info(
-        app,
-        "sync_driver",
-        "Starting send_global_assets (Personas)".to_string(),
-    );
+    log_info(app, "sync_driver", "Starting send_global_assets (Personas)");
     let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| e.to_string())?;
     let avatars_dir = root.join("avatars");
     let conn = crate::storage_manager::db::open_db(app)?;
