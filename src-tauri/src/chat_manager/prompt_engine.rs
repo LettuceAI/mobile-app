@@ -9,15 +9,20 @@ use crate::storage_manager::db::open_db;
 pub fn default_system_prompt_template() -> String {
     "
     You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.
-    
+
     # Scenario
     {{scene}}
-    
+
+    # Scene Direction
+    {{scene_direction}}
+
+    This is your hidden directive for how this scene should unfold. Guide the narrative toward this outcome naturally and organically through your character's actions, dialogue, and the world's events. NEVER explicitly mention or reveal this direction to {{persona.name}} - let it emerge through immersive roleplay.
+
     # Your Character: {{char.name}}
     {{char.desc}}
-    
+
     Embody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.
-    
+
     # {{persona.name}}'s Character
     {{persona.desc}}
 
@@ -31,7 +36,7 @@ pub fn default_system_prompt_template() -> String {
     # Key Memories
     Important facts to remember in this conversation:
     {{key_memories}}
-    
+
     # Instructions
     **Character & Roleplay:**
     - Write as {{char.name}} from their perspective, responding based on their personality, background, and current situation
@@ -87,7 +92,7 @@ pub fn default_dynamic_memory_prompt() -> String {
     Current hot memory usage: {{current_memory_tokens}}/{{hot_token_budget}} tokens
     Deleted memories are NOT lost—they go to cold storage and can be recalled later via keyword search.
     Memories decay over time unless accessed or pinned.
-    
+
     When OVER BUDGET: You MUST delete lower-priority memories to make room for new ones.
     When UNDER BUDGET: Only delete duplicates, contradicted facts, or truly obsolete information.
 
@@ -97,20 +102,20 @@ pub fn default_dynamic_memory_prompt() -> String {
     - Relationship changes: Bonds formed, conflicts, trust levels (e.g., \"{{persona}} and {{char}} became allies\")
     - Plot milestones: Key decisions, events, world changes (e.g., \"The group chose to enter the forbidden forest\")
     - User preferences: Tone, boundaries, or explicit requests (e.g., \"{{persona}} prefers slower pacing\")
-    
+
     Rules:
     - Keep each memory atomic: one fact per entry, under 100 characters when possible
     - Be factual: only store what was explicitly stated or clearly happened—never infer emotions or motivations
     - Avoid duplicates: check existing memories before adding; merge or skip if redundant
     - Respect the {{max_entries}} entry limit
     - When deleting, use the 6-digit memory ID shown in brackets (e.g., delete \"847291\")
-    
+
     Priority (what to keep vs demote):
     1. PIN: Character-defining facts that should never be forgotten
-    2. KEEP: Active plot threads and unresolved conflicts  
+    2. KEEP: Active plot threads and unresolved conflicts
     3. KEEP: Recent decisions with ongoing consequences
     4. DEMOTE: Resolved plot points, routine actions, outdated context
-    
+
     Tool Usage:
     - Use `create_memory` with `text` and optionally `important: true` to pin
     - Use `delete_memory` with the memory ID or exact text
@@ -392,20 +397,35 @@ fn render_with_context_internal(
             }
         });
 
-    let scene_content = if let Some(selected_scene_id) = scene_id_to_use {
+    let (scene_content, scene_direction) = if let Some(selected_scene_id) = scene_id_to_use {
         if let Some(scene) = character.scenes.iter().find(|s| &s.id == selected_scene_id) {
-            let content = if let Some(variant_id) = &scene.selected_variant_id {
-                scene
-                    .variants
-                    .iter()
-                    .find(|v| &v.id == variant_id)
-                    .map(|v| v.content.as_str())
-                    .unwrap_or(&scene.content)
+            let (content, direction) = if let Some(variant_id) = &scene.selected_variant_id {
+                let variant = scene.variants.iter().find(|v| &v.id == variant_id);
+
+                if let Some(v) = variant {
+                    (v.content.as_str(), v.direction.as_deref())
+                } else {
+                    (scene.content.as_str(), scene.direction.as_deref())
+                }
             } else {
-                &scene.content
+                (scene.content.as_str(), scene.direction.as_deref())
             };
 
             let content_trimmed = content.trim();
+            let direction_processed = if let Some(dir) = direction {
+                let dir_trimmed = dir.trim();
+                if !dir_trimmed.is_empty() {
+                    let mut dir_processed = dir_trimmed.to_string();
+                    dir_processed = dir_processed.replace("{{char}}", char_name);
+                    dir_processed = dir_processed.replace("{{persona}}", persona_name);
+                    dir_processed
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
             if !content_trimmed.is_empty() {
                 // Replace {{char}} and {{persona}} placeholders dynamically in scene text
                 let mut content_processed = content_trimmed.to_string();
@@ -417,13 +437,14 @@ fn render_with_context_internal(
                         app,
                         "prompt_engine",
                         format!(
-                            "Scene found and processed. ID: {}, length: {}",
+                            "Scene found and processed. ID: {}, content length: {}, direction length: {}",
                             selected_scene_id,
-                            content_processed.len()
+                            content_processed.len(),
+                            direction_processed.len()
                         ),
                     );
                 }
-                content_processed
+                (content_processed, direction_processed)
             } else {
                 if let Some(app) = app {
                     super::super::utils::log_warn(
@@ -435,20 +456,20 @@ fn render_with_context_internal(
                         ),
                     );
                 }
-                String::new()
+                (String::new(), direction_processed)
             }
         } else {
             if let Some(app) = app {
                 super::super::utils::log_warn(app, "prompt_engine",
                     format!("Scene ID selected but not found in character. ID: {}, available scenes: {}", selected_scene_id, character.scenes.len()));
             }
-            String::new()
+            (String::new(), String::new())
         }
     } else {
         if let Some(app) = app {
             super::super::utils::log_info(app, "prompt_engine", "No scene selected in session");
         }
-        String::new()
+        (String::new(), String::new())
     };
 
     // Process placeholders inside the character description itself
@@ -493,6 +514,7 @@ fn render_with_context_internal(
     }
 
     result = result.replace("{{scene}}", &scene_content);
+    result = result.replace("{{scene_direction}}", &scene_direction);
     result = result.replace("{{char.name}}", char_name);
     result = result.replace("{{char.desc}}", &char_desc);
     result = result.replace("{{persona.name}}", persona_name);
@@ -707,10 +729,12 @@ mod tests {
             id: "scene1".into(),
             content: "Meeting {{char}} and {{persona}}".into(),
             created_at: 0,
+            direction: None,
             variants: vec![SceneVariant {
                 id: "v1".into(),
                 content: "Var {{char}}".into(),
                 created_at: 0,
+                direction: None,
             }],
             selected_variant_id: Some("v1".into()),
         }];

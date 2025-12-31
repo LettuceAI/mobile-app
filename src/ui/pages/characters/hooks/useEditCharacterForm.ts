@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useReducer, useRef, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { listCharacters, saveCharacter, readSettings } from "../../../../core/storage/repo";
-import type { CharacterVoiceConfig, Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
+import type {
+  CharacterVoiceConfig,
+  Model,
+  Scene,
+  SystemPromptTemplate,
+} from "../../../../core/storage/schemas";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { convertToImageRef } from "../../../../core/storage/images";
 import { saveAvatar, loadAvatar } from "../../../../core/storage/avatars";
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
-import { exportCharacter, downloadJson, generateExportFilename } from "../../../../core/storage/characterTransfer";
+import {
+  exportCharacter,
+  downloadJson,
+  generateExportFilename,
+} from "../../../../core/storage/characterTransfer";
 
 type EditCharacterState = {
   loading: boolean;
@@ -39,6 +48,7 @@ type EditCharacterState = {
   loadingTemplates: boolean;
   editingSceneId: string | null;
   editingSceneContent: string;
+  editingSceneDirection: string;
 };
 
 type EditCharacterAction =
@@ -78,6 +88,7 @@ const initialState: EditCharacterState = {
   loadingTemplates: false,
   editingSceneId: null,
   editingSceneContent: "",
+  editingSceneDirection: "",
 };
 
 function reducer(state: EditCharacterState, action: EditCharacterAction): EditCharacterState {
@@ -120,13 +131,25 @@ export function useEditCharacterForm(characterId: string | undefined) {
     voiceAutoplay: boolean;
   } | null>(null);
 
-  const setError = useCallback((value: string | null) => dispatch({ type: "SET_ERROR", payload: value }), []);
-  const setSaving = useCallback((value: boolean) => dispatch({ type: "SET_SAVING", payload: value }), []);
-  const setExporting = useCallback((value: boolean) => dispatch({ type: "SET_EXPORTING", payload: value }), []);
-  const setLoading = useCallback((value: boolean) => dispatch({ type: "SET_LOADING", payload: value }), []);
+  const setError = useCallback(
+    (value: string | null) => dispatch({ type: "SET_ERROR", payload: value }),
+    [],
+  );
+  const setSaving = useCallback(
+    (value: boolean) => dispatch({ type: "SET_SAVING", payload: value }),
+    [],
+  );
+  const setExporting = useCallback(
+    (value: boolean) => dispatch({ type: "SET_EXPORTING", payload: value }),
+    [],
+  );
+  const setLoading = useCallback(
+    (value: boolean) => dispatch({ type: "SET_LOADING", payload: value }),
+    [],
+  );
   const setFields = useCallback(
     (payload: Partial<EditCharacterState>) => dispatch({ type: "SET_FIELDS", payload }),
-    []
+    [],
   );
 
   // Auto-set default scene if there's only one scene
@@ -148,7 +171,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
     try {
       setLoading(true);
       const allCharacters = await listCharacters();
-      const character = allCharacters.find(c => c.id === characterId);
+      const character = allCharacters.find((c) => c.id === characterId);
       if (!character) {
         navigate("/chat");
         return;
@@ -169,7 +192,11 @@ export function useEditCharacterForm(characterId: string | undefined) {
         loadedAvatarPath = "";
       }
 
-      if (backgroundImage && !backgroundImage.startsWith("data:") && backgroundImage.length === 36) {
+      if (
+        backgroundImage &&
+        !backgroundImage.startsWith("data:") &&
+        backgroundImage.length === 36
+      ) {
         try {
           const { convertToImageUrl } = await import("../../../../core/storage/images");
           const assetUrl = await convertToImageUrl(backgroundImage);
@@ -290,7 +317,9 @@ export function useEditCharacterForm(characterId: string | undefined) {
       }
 
       const backgroundImageId = state.backgroundImagePath
-        ? (state.backgroundImagePath.startsWith("data:") ? await convertToImageRef(state.backgroundImagePath) : state.backgroundImagePath)
+        ? state.backgroundImagePath.startsWith("data:")
+          ? await convertToImageRef(state.backgroundImagePath)
+          : state.backgroundImagePath
         : undefined;
 
       await saveCharacter({
@@ -308,7 +337,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
 
         disableAvatarGradient: state.disableAvatarGradient,
         customGradientEnabled: state.customGradientEnabled,
-        customGradientColors: state.customGradientColors.length > 0 ? state.customGradientColors : undefined,
+        customGradientColors:
+          state.customGradientColors.length > 0 ? state.customGradientColors : undefined,
         customTextColor: state.customTextColor || undefined,
         customTextSecondary: state.customTextSecondary || undefined,
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
@@ -337,7 +367,6 @@ export function useEditCharacterForm(characterId: string | undefined) {
         voiceConfig: JSON.stringify(state.voiceConfig ?? null),
         voiceAutoplay: state.voiceAutoplay,
       };
-
     } catch (err: any) {
       console.error("Failed to save character:", err);
       setError(err?.message || "Failed to save character");
@@ -370,11 +399,14 @@ export function useEditCharacterForm(characterId: string | undefined) {
     const sceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const timestamp = Date.now();
 
-    const newScenes = [...state.scenes, {
-      id: sceneId,
-      content: state.newSceneContent.trim(),
-      createdAt: timestamp,
-    }];
+    const newScenes = [
+      ...state.scenes,
+      {
+        id: sceneId,
+        content: state.newSceneContent.trim(),
+        createdAt: timestamp,
+      },
+    ];
 
     setFields({
       scenes: newScenes,
@@ -383,69 +415,102 @@ export function useEditCharacterForm(characterId: string | undefined) {
     });
   }, [setFields, state.defaultSceneId, state.newSceneContent, state.scenes]);
 
-  const deleteScene = useCallback((sceneId: string) => {
-    const newScenes = state.scenes.filter(s => s.id !== sceneId);
-    const nextDefaultSceneId = state.defaultSceneId === sceneId
-      ? (newScenes.length === 1 ? newScenes[0].id : null)
-      : state.defaultSceneId;
+  const deleteScene = useCallback(
+    (sceneId: string) => {
+      const newScenes = state.scenes.filter((s) => s.id !== sceneId);
+      const nextDefaultSceneId =
+        state.defaultSceneId === sceneId
+          ? newScenes.length === 1
+            ? newScenes[0].id
+            : null
+          : state.defaultSceneId;
 
-    setFields({ scenes: newScenes, defaultSceneId: nextDefaultSceneId });
-  }, [setFields, state.defaultSceneId, state.scenes]);
+      setFields({ scenes: newScenes, defaultSceneId: nextDefaultSceneId });
+    },
+    [setFields, state.defaultSceneId, state.scenes],
+  );
 
-  const startEditingScene = useCallback((scene: Scene) => {
-    setFields({ editingSceneId: scene.id, editingSceneContent: scene.content });
-  }, [setFields]);
+  const startEditingScene = useCallback(
+    (scene: Scene) => {
+      setFields({
+        editingSceneId: scene.id,
+        editingSceneContent: scene.content,
+        editingSceneDirection: scene.direction || "",
+      });
+    },
+    [setFields],
+  );
 
   const saveEditedScene = useCallback(() => {
     if (!state.editingSceneId || !state.editingSceneContent.trim()) return;
 
-    const updatedScenes = state.scenes.map(scene =>
+    const updatedScenes = state.scenes.map((scene) =>
       scene.id === state.editingSceneId
-        ? { ...scene, content: state.editingSceneContent.trim() }
-        : scene
+        ? {
+            ...scene,
+            content: state.editingSceneContent.trim(),
+            direction: state.editingSceneDirection.trim() || undefined,
+          }
+        : scene,
     );
 
     setFields({
       scenes: updatedScenes,
       editingSceneId: null,
       editingSceneContent: "",
+      editingSceneDirection: "",
     });
-  }, [setFields, state.editingSceneContent, state.editingSceneId, state.scenes]);
+  }, [
+    setFields,
+    state.editingSceneContent,
+    state.editingSceneDirection,
+    state.editingSceneId,
+    state.scenes,
+  ]);
 
   const cancelEditingScene = useCallback(() => {
-    setFields({ editingSceneId: null, editingSceneContent: "" });
+    setFields({
+      editingSceneId: null,
+      editingSceneContent: "",
+      editingSceneDirection: "",
+    });
   }, [setFields]);
 
-  const handleBackgroundImageUpload = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleBackgroundImageUpload = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    const input = event.target;
-    void processBackgroundImage(file)
-      .then((dataUrl: string) => {
-        setFields({ backgroundImagePath: dataUrl });
-      })
-      .catch((error: any) => {
-        console.warn("EditCharacter: failed to process background image", error);
-      })
-      .finally(() => {
-        input.value = "";
-      });
-  }, [setFields]);
+      const input = event.target;
+      void processBackgroundImage(file)
+        .then((dataUrl: string) => {
+          setFields({ backgroundImagePath: dataUrl });
+        })
+        .catch((error: any) => {
+          console.warn("EditCharacter: failed to process background image", error);
+        })
+        .finally(() => {
+          input.value = "";
+        });
+    },
+    [setFields],
+  );
 
-  const handleAvatarUpload = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleAvatarUpload = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFields({ avatarPath: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setFields({ avatarPath: reader.result as string });
+      };
+      reader.readAsDataURL(file);
 
-    // Clear input so same file can be selected again
-    event.target.value = "";
-  }, [setFields]);
+      event.target.value = "";
+    },
+    [setFields],
+  );
 
   return {
     state,

@@ -53,6 +53,8 @@ pub struct CharacterExportData {
 pub struct SceneExport {
     pub id: String,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
     pub selected_variant_id: Option<String>,
     pub variants: Vec<SceneVariantExport>,
 }
@@ -62,6 +64,8 @@ pub struct SceneExport {
 pub struct SceneVariantExport {
     pub id: String,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -117,49 +121,53 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     // Read scenes
     let mut scenes: Vec<SceneExport> = Vec::new();
     let mut scenes_stmt = conn
-        .prepare("SELECT id, content, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
+        .prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
     let scene_rows = scenes_stmt
         .query_map(params![&character_id], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, Option<String>>(4)?,
             ))
         })
         .map_err(|e| e.to_string())?;
 
     for row in scene_rows {
-        let (scene_id, content, _scene_created_at, selected_variant_id) =
+        let (scene_id, content, direction, _scene_created_at, selected_variant_id) =
             row.map_err(|e| e.to_string())?;
 
         // Read scene variants
         let mut variants: Vec<SceneVariantExport> = Vec::new();
         let mut var_stmt = conn
-            .prepare("SELECT id, content, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
+            .prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
         let var_rows = var_stmt
             .query_map(params![&scene_id], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
                     r.get::<_, String>(1)?,
-                    r.get::<_, i64>(2)?,
+                    r.get::<_, Option<String>>(2)?,
+                    r.get::<_, i64>(3)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
 
         for v in var_rows {
-            let (vid, vcontent, _vcreated) = v.map_err(|e| e.to_string())?;
+            let (vid, vcontent, vdirection, _vcreated) = v.map_err(|e| e.to_string())?;
             variants.push(SceneVariantExport {
                 id: vid,
                 content: vcontent,
+                direction: vdirection,
             });
         }
 
         scenes.push(SceneExport {
             id: scene_id,
             content,
+            direction,
             selected_variant_id,
             variants,
         });
@@ -352,8 +360,8 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
             variant_id_map.insert(variant.id.clone(), new_variant_id.clone());
 
             tx.execute(
-                "INSERT INTO scene_variants (id, scene_id, content, created_at) VALUES (?, ?, ?, ?)",
-                params![new_variant_id, &new_scene_id, &variant.content, now],
+                "INSERT INTO scene_variants (id, scene_id, content, direction, created_at) VALUES (?, ?, ?, ?, ?)",
+                params![new_variant_id, &new_scene_id, &variant.content, &variant.direction, now],
             )
             .map_err(|e| e.to_string())?;
         }
@@ -365,11 +373,12 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
             .and_then(|old_id| variant_id_map.get(old_id).cloned());
 
         tx.execute(
-            "INSERT INTO scenes (id, character_id, content, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, ?)",
             params![
                 &new_scene_id,
                 &new_character_id,
                 &scene.content,
+                &scene.direction,
                 now,
                 new_selected_variant_id
             ],
@@ -584,48 +593,57 @@ fn read_imported_character(
     // Read scenes
     let mut scenes: Vec<JsonValue> = Vec::new();
     let mut scenes_stmt = conn
-        .prepare("SELECT id, content, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
+        .prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
-    let scene_rows = scenes_stmt
+    let scenes_rows = scenes_stmt
         .query_map(params![character_id], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, Option<String>>(4)?,
             ))
         })
         .map_err(|e| e.to_string())?;
 
-    for row in scene_rows {
-        let (scene_id, content, scene_created_at, selected_variant_id) =
+    for row in scenes_rows {
+        let (scene_id, content, direction, _scene_created_at, selected_variant_id) =
             row.map_err(|e| e.to_string())?;
 
         // Read scene variants
         let mut variants: Vec<JsonValue> = Vec::new();
         let mut var_stmt = conn
-            .prepare("SELECT id, content, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
+            .prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
         let var_rows = var_stmt
             .query_map(params![&scene_id], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
                     r.get::<_, String>(1)?,
-                    r.get::<_, i64>(2)?,
+                    r.get::<_, Option<String>>(2)?,
+                    r.get::<_, i64>(3)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
 
         for v in var_rows {
-            let (vid, vcontent, vcreated) = v.map_err(|e| e.to_string())?;
-            variants
-                .push(serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated}));
+            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| e.to_string())?;
+            let mut variant_obj =
+                serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated});
+            if let Some(dir) = vdirection {
+                variant_obj["direction"] = serde_json::json!(dir);
+            }
+            variants.push(variant_obj);
         }
 
         let mut scene_obj = JsonMap::new();
         scene_obj.insert("id".into(), JsonValue::String(scene_id));
         scene_obj.insert("content".into(), JsonValue::String(content));
-        scene_obj.insert("createdAt".into(), JsonValue::from(scene_created_at));
+        if let Some(dir) = direction {
+            scene_obj.insert("direction".into(), JsonValue::String(dir));
+        }
+        scene_obj.insert("createdAt".into(), JsonValue::from(_scene_created_at));
         if !variants.is_empty() {
             scene_obj.insert("variants".into(), JsonValue::Array(variants));
         }
@@ -805,8 +823,8 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
 
 /// Helper: Read imported persona and return as JSON
 fn read_imported_persona(conn: &rusqlite::Connection, persona_id: &str) -> Result<String, String> {
-    let (title, description, avatar_path, is_default, created_at, updated_at): 
-        (String, String, Option<String>, i64, i64, i64) = 
+    let (title, description, avatar_path, is_default, created_at, updated_at):
+        (String, String, Option<String>, i64, i64, i64) =
         conn.query_row(
             "SELECT title, description, avatar_path, is_default, created_at, updated_at FROM personas WHERE id = ?",
             params![persona_id],

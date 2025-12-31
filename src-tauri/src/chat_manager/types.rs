@@ -305,6 +305,8 @@ fn default_importance_score() -> f32 {
 pub struct SceneVariant {
     pub id: String,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
     pub created_at: u64,
 }
 
@@ -313,6 +315,8 @@ pub struct SceneVariant {
 pub struct Scene {
     pub id: String,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
     pub created_at: u64,
     #[serde(default)]
     pub variants: Vec<SceneVariant>,

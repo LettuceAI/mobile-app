@@ -43,17 +43,17 @@ export type AdvancedModelSettings = z.infer<typeof AdvancedModelSettingsSchema>;
 
 /**
  * Reasoning capability metadata for providers
- * 
+ *
  * This system handles provider-specific reasoning/thinking capabilities:
- * 
- * - **'effort'**: Providers that use `reasoning_effort` parameter with values like 
+ *
+ * - **'effort'**: Providers that use `reasoning_effort` parameter with values like
  *   "low", "medium", "high". Includes:
  *   - OpenAI (o1 series): none/minimal/low/medium/high/xhigh
  *   - Groq: none/default/low/medium/high (model-specific)
  *   - Google Gemini 3: minimal/low/medium/high (thinkingLevel)
  *   - OpenAI-compatible: Chutes, OpenRouter, NanoGPT, xAI, Anannas, ZAI
  *   - DeepSeek R1: Outputs reasoning automatically (no effort control)
- * 
+ *
  * - **'budget-only'**: Uses thinking/reasoning with budget tokens only, no effort levels.
  *   Includes:
  *   - Anthropic Claude: uses `thinking.budget` parameter (min 1024 tokens)
@@ -61,162 +61,161 @@ export type AdvancedModelSettings = z.infer<typeof AdvancedModelSettingsSchema>;
  *   - Mistral Magistral: uses thinking chunks with budget
  *   - Moonshot Kimi K2: uses `enable_thinking` + `thinking_budget`
  *   - Qwen3/QwQ: uses `enable_thinking` + `thinking_budget`
- * 
+ *
  * - **'none'**: Providers that don't support reasoning/thinking at all (Featherless)
- * 
+ *
  * **Special case - OpenRouter**: This provider proxies many models with varying capabilities.
  * We show effort controls by default, but applications should fetch model metadata from
- * OpenRouter's API to check if a specific model supports reasoning via the 
+ * OpenRouter's API to check if a specific model supports reasoning via the
  * `supported_parameters` field (look for "reasoning" and "include_reasoning").
- * 
+ *
  * The UI will:
  * - Show reasoning effort dropdown only for 'effort' providers
  * - Show reasoning budget for both 'effort' and 'budget-only' providers
  * - Hide entire reasoning section for 'none' providers
  */
 // Reasoning Support Types
-export type ReasoningSupport = 'none' | 'effort' | 'budget-only' | 'auto' | 'dynamic';
+export type ReasoningSupport = "none" | "effort" | "budget-only" | "auto" | "dynamic";
 
 export type ReasoningCapability =
-  | { type: 'none' } // Provider doesn't support reasoning
-  | { type: 'effort', options: Array<{ value: string; label: string; description: string }> } // OpenAI-style effort levels
-  | { type: 'budget-only' }; // Budget-based only (like Anthropic)
-
+  | { type: "none" } // Provider doesn't support reasoning
+  | { type: "effort"; options: Array<{ value: string; label: string; description: string }> } // OpenAI-style effort levels
+  | { type: "budget-only" }; // Budget-based only (like Anthropic)
 
 export const PROVIDER_REASONING_CAPABILITIES: Record<string, ReasoningCapability> = {
   openai: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses with less reasoning' },
-      { value: 'medium', label: 'Medium', description: 'Balanced reasoning depth' },
-      { value: 'high', label: 'High', description: 'Maximum reasoning depth' },
+      { value: "low", label: "Low", description: "Quick responses with less reasoning" },
+      { value: "medium", label: "Medium", description: "Balanced reasoning depth" },
+      { value: "high", label: "High", description: "Maximum reasoning depth" },
     ],
   },
   chutes: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   openrouter: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   groq: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   deepseek: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   nanogpt: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   xai: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   anannas: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   zai: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
-  moonshot: { type: 'budget-only' }, 
-  anthropic: { type: 'budget-only' },
-  mistral: { type: 'none' }, 
+  moonshot: { type: "budget-only" },
+  anthropic: { type: "budget-only" },
+  mistral: { type: "none" },
   gemini: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Minimizes latency' },
-      { value: 'medium', label: 'Medium', description: 'Balanced thinking' },
-      { value: 'high', label: 'High', description: 'Maximum reasoning' },
+      { value: "low", label: "Low", description: "Minimizes latency" },
+      { value: "medium", label: "Medium", description: "Balanced thinking" },
+      { value: "high", label: "High", description: "Maximum reasoning" },
     ],
   },
   google: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Minimizes latency' },
-      { value: 'medium', label: 'Medium', description: 'Balanced thinking' },
-      { value: 'high', label: 'High', description: 'Maximum reasoning' },
+      { value: "low", label: "Low", description: "Minimizes latency" },
+      { value: "medium", label: "Medium", description: "Balanced thinking" },
+      { value: "high", label: "High", description: "Maximum reasoning" },
     ],
   },
-  qwen: { type: 'budget-only' },
+  qwen: { type: "budget-only" },
   ollama: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   lmstudio: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
   custom: {
-    type: 'effort',
+    type: "effort",
     options: [
-      { value: 'low', label: 'Low', description: 'Quick responses' },
-      { value: 'medium', label: 'Medium', description: 'Balanced' },
-      { value: 'high', label: 'High', description: 'Deep reasoning' },
+      { value: "low", label: "Low", description: "Quick responses" },
+      { value: "medium", label: "Medium", description: "Balanced" },
+      { value: "high", label: "High", description: "Deep reasoning" },
     ],
   },
-  'custom-anthropic': { type: 'budget-only' },
-  featherless: { type: 'none' },
+  "custom-anthropic": { type: "budget-only" },
+  featherless: { type: "none" },
 };
 
 /**
  * Get reasoning capability for a provider
  */
 export function getProviderReasoningCapability(providerId: string): ReasoningCapability {
-  return PROVIDER_REASONING_CAPABILITIES[providerId] ?? { type: 'none' };
+  return PROVIDER_REASONING_CAPABILITIES[providerId] ?? { type: "none" };
 }
 
 /**
  * Check if an OpenRouter model supports reasoning based on its supported_parameters
- * 
+ *
  * @param supportedParameters - Array from OpenRouter API's model.supported_parameters
  * @returns true if the model supports reasoning
- * 
+ *
  * Usage example:
  * ```typescript
  * const models = await invoke('get_openrouter_models');
@@ -225,7 +224,9 @@ export function getProviderReasoningCapability(providerId: string): ReasoningCap
  * ```
  */
 export function checkOpenRouterModelReasoning(supportedParameters: string[]): boolean {
-  return supportedParameters.includes('reasoning') || supportedParameters.includes('include_reasoning');
+  return (
+    supportedParameters.includes("reasoning") || supportedParameters.includes("include_reasoning")
+  );
 }
 
 /**
@@ -233,22 +234,22 @@ export function checkOpenRouterModelReasoning(supportedParameters: string[]): bo
  * This should be called with fresh model data from the OpenRouter API
  */
 export function getOpenRouterModelReasoningCapability(
-  supportedParameters: string[]
+  supportedParameters: string[],
 ): ReasoningCapability {
   const supportsReasoning = checkOpenRouterModelReasoning(supportedParameters);
 
   if (supportsReasoning) {
     return {
-      type: 'effort',
+      type: "effort",
       options: [
-        { value: 'low', label: 'Low', description: 'Quick responses' },
-        { value: 'medium', label: 'Medium', description: 'Balanced' },
-        { value: 'high', label: 'High', description: 'Deep reasoning' },
+        { value: "low", label: "Low", description: "Quick responses" },
+        { value: "medium", label: "Medium", description: "Balanced" },
+        { value: "high", label: "High", description: "Deep reasoning" },
       ],
     };
   }
 
-  return { type: 'none' };
+  return { type: "none" };
 }
 
 /**
@@ -257,11 +258,10 @@ export function getOpenRouterModelReasoningCapability(
  */
 export const PROVIDER_PARAMETER_SUPPORT = {
   chutes: {
-    providerId: 'chutes',
-    displayName: 'Chutes',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "chutes",
+    displayName: "Chutes",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -274,11 +274,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   openai: {
-    providerId: 'openai',
-    displayName: 'OpenAI',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "openai",
+    displayName: "OpenAI",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -291,11 +290,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   openrouter: {
-    providerId: 'openrouter',
-    displayName: 'OpenRouter',
-    reasoningSupport: 'dynamic' as ReasoningSupport,
+    providerId: "openrouter",
+    displayName: "OpenRouter",
+    reasoningSupport: "dynamic" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -308,11 +306,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   anthropic: {
-    providerId: 'anthropic',
-    displayName: 'Anthropic',
-    reasoningSupport: 'budget-only' as ReasoningSupport,
+    providerId: "anthropic",
+    displayName: "Anthropic",
+    reasoningSupport: "budget-only" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -325,11 +322,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   groq: {
-    providerId: 'groq',
-    displayName: 'Groq',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "groq",
+    displayName: "Groq",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -342,11 +338,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   mistral: {
-    providerId: 'mistral',
-    displayName: 'Mistral',
-    reasoningSupport: 'none' as ReasoningSupport,
+    providerId: "mistral",
+    displayName: "Mistral",
+    reasoningSupport: "none" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -359,11 +354,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   google: {
-    providerId: 'google',
-    displayName: 'Google',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "google",
+    displayName: "Google",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -376,11 +370,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   deepseek: {
-    providerId: 'deepseek',
-    displayName: 'DeepSeek',
-    reasoningSupport: 'none' as ReasoningSupport,
+    providerId: "deepseek",
+    displayName: "DeepSeek",
+    reasoningSupport: "none" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -393,11 +386,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   nanogpt: {
-    providerId: 'nanogpt',
-    displayName: 'NanoGPT',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "nanogpt",
+    displayName: "NanoGPT",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -410,11 +402,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   xai: {
-    providerId: 'xai',
-    displayName: 'xAI (Grok)',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "xai",
+    displayName: "xAI (Grok)",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -427,11 +418,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   anannas: {
-    providerId: 'anannas',
-    displayName: 'Anannas AI',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "anannas",
+    displayName: "Anannas AI",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -444,11 +434,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   zai: {
-    providerId: 'zai',
-    displayName: 'ZAI (Zhipu / GLM)',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "zai",
+    displayName: "ZAI (Zhipu / GLM)",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -461,11 +450,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   moonshot: {
-    providerId: 'moonshot',
-    displayName: 'Moonshot AI (Kimi)',
-    reasoningSupport: 'budget-only' as ReasoningSupport,
+    providerId: "moonshot",
+    displayName: "Moonshot AI (Kimi)",
+    reasoningSupport: "budget-only" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -478,11 +466,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   qwen: {
-    providerId: 'qwen',
-    displayName: 'Qwen',
-    reasoningSupport: 'budget-only' as ReasoningSupport,
+    providerId: "qwen",
+    displayName: "Qwen",
+    reasoningSupport: "budget-only" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -495,11 +482,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   featherless: {
-    providerId: 'featherless',
-    displayName: 'Featherless AI',
-    reasoningSupport: 'none' as ReasoningSupport,
+    providerId: "featherless",
+    displayName: "Featherless AI",
+    reasoningSupport: "none" as ReasoningSupport,
     supportedParameters: {
-
       temperature: true,
       topP: true,
       maxOutputTokens: true,
@@ -512,9 +498,9 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   ollama: {
-    providerId: 'ollama',
-    displayName: 'Ollama',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "ollama",
+    displayName: "Ollama",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
       temperature: true,
       topP: true,
@@ -528,9 +514,9 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   lmstudio: {
-    providerId: 'lmstudio',
-    displayName: 'LM Studio',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "lmstudio",
+    displayName: "LM Studio",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
       temperature: true,
       topP: true,
@@ -544,9 +530,9 @@ export const PROVIDER_PARAMETER_SUPPORT = {
     },
   },
   custom: {
-    providerId: 'custom',
-    displayName: 'Custom (OpenAI)',
-    reasoningSupport: 'effort' as ReasoningSupport,
+    providerId: "custom",
+    displayName: "Custom (OpenAI)",
+    reasoningSupport: "effort" as ReasoningSupport,
     supportedParameters: {
       temperature: true,
       topP: true,
@@ -559,10 +545,10 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       reasoningBudgetTokens: true,
     },
   },
-  'custom-anthropic': {
-    providerId: 'custom-anthropic',
-    displayName: 'Custom (Anthropic)',
-    reasoningSupport: 'budget-only' as ReasoningSupport,
+  "custom-anthropic": {
+    providerId: "custom-anthropic",
+    displayName: "Custom (Anthropic)",
+    reasoningSupport: "budget-only" as ReasoningSupport,
     supportedParameters: {
       temperature: true,
       topP: true,
@@ -577,16 +563,15 @@ export const PROVIDER_PARAMETER_SUPPORT = {
   },
 } as const;
 
-
 export type ProviderId = keyof typeof PROVIDER_PARAMETER_SUPPORT;
-export type ProviderParameterSupport = typeof PROVIDER_PARAMETER_SUPPORT[ProviderId];
+export type ProviderParameterSupport = (typeof PROVIDER_PARAMETER_SUPPORT)[ProviderId];
 
 /**
  * Helper function to check if a provider supports a specific parameter
  */
 export function providerSupportsParameter(
   providerId: string,
-  parameter: keyof AdvancedModelSettings
+  parameter: keyof AdvancedModelSettings,
 ): boolean {
   const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
   if (!provider) return false;
@@ -598,7 +583,7 @@ export function providerSupportsParameter(
  */
 export function getProviderReasoningSupport(providerId: string): ReasoningSupport {
   const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
-  if (!provider) return 'none';
+  if (!provider) return "none";
   return provider.reasoningSupport;
 }
 
@@ -608,7 +593,7 @@ export function getProviderReasoningSupport(providerId: string): ReasoningSuppor
 
 export function getSupportedParameters(providerId: string): (keyof AdvancedModelSettings)[] {
   const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
-  if (!provider) return ['temperature', 'topP', 'maxOutputTokens'];
+  if (!provider) return ["temperature", "topP", "maxOutputTokens"];
 
   return Object.entries(provider.supportedParameters)
     .filter(([_, supported]) => supported)
@@ -663,6 +648,7 @@ export type StoredMessage = z.infer<typeof MessageSchema>;
 export const SceneVariantSchema = z.object({
   id: z.string().uuid(),
   content: z.string(),
+  direction: z.string().optional(),
   createdAt: z.number().int(),
 });
 export type SceneVariant = z.infer<typeof SceneVariantSchema>;
@@ -670,12 +656,12 @@ export type SceneVariant = z.infer<typeof SceneVariantSchema>;
 export const SceneSchema = z.object({
   id: z.string().uuid(),
   content: z.string(),
+  direction: z.string().optional(),
   createdAt: z.number().int(),
   variants: z.array(SceneVariantSchema).optional(),
   selectedVariantId: z.string().uuid().nullish(),
 });
 export type Scene = z.infer<typeof SceneSchema>;
-
 
 export const ProviderCredentialSchema = z.object({
   id: z.string().uuid(),
@@ -789,24 +775,28 @@ export const SettingsSchema = z.object({
   models: z.array(ModelSchema),
   appState: AppStateSchema,
   advancedModelSettings: AdvancedModelSettingsSchema.optional(),
-  advancedSettings: z.object({
-    summarisationModelId: z.string().optional(),
-    creationHelperEnabled: z.boolean().default(false),
-    creationHelperModelId: z.string().optional(),
-    manualModeContextWindow: z.number().optional(),
-    embeddingMaxTokens: z.number().optional(), // 1024, 2048, or 4096
-    dynamicMemory: z.object({
-      enabled: z.boolean().default(false),
-      summaryMessageInterval: z.number().min(1).default(20),
-      maxEntries: z.number().min(10).max(200).default(50),
-      minSimilarityThreshold: z.number().min(0).max(1).default(0.35),
-      hotMemoryTokenBudget: z.number().min(500).max(10000).default(2000),
-      decayRate: z.number().min(0.01).max(0.3).default(0.08),
-      coldThreshold: z.number().min(0.1).max(0.5).default(0.3),
-      contextEnrichmentEnabled: z.boolean().default(true), // v2 exclusive: use last 2 messages for retrieval
-    }).optional(),
-    accessibility: AccessibilitySettingsSchema.optional(),
-  }).optional(),
+  advancedSettings: z
+    .object({
+      summarisationModelId: z.string().optional(),
+      creationHelperEnabled: z.boolean().default(false),
+      creationHelperModelId: z.string().optional(),
+      manualModeContextWindow: z.number().optional(),
+      embeddingMaxTokens: z.number().optional(), // 1024, 2048, or 4096
+      dynamicMemory: z
+        .object({
+          enabled: z.boolean().default(false),
+          summaryMessageInterval: z.number().min(1).default(20),
+          maxEntries: z.number().min(10).max(200).default(50),
+          minSimilarityThreshold: z.number().min(0).max(1).default(0.35),
+          hotMemoryTokenBudget: z.number().min(500).max(10000).default(2000),
+          decayRate: z.number().min(0.01).max(0.3).default(0.08),
+          coldThreshold: z.number().min(0.1).max(0.5).default(0.3),
+          contextEnrichmentEnabled: z.boolean().default(true), // v2 exclusive: use last 2 messages for retrieval
+        })
+        .optional(),
+      accessibility: AccessibilitySettingsSchema.optional(),
+    })
+    .optional(),
   promptTemplateId: z.string().nullish().optional(),
   systemPrompt: z.string().nullish().optional(), // Deprecated
   migrationVersion: z.number().int().default(0),
@@ -897,41 +887,48 @@ export const SessionSchema = z.object({
   characterId: z.string().uuid(),
   title: z.string(),
   selectedSceneId: z.string().uuid().nullish(), // ID of the scene from character.scenes array
-  personaId: z.union([
-    z.string().uuid(),
-    z.literal(""),
-    z.null(),
-    z.undefined()
-  ]).optional(),
+  personaId: z.union([z.string().uuid(), z.literal(""), z.null(), z.undefined()]).optional(),
   voiceAutoplay: z.boolean().nullable().optional(),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   memories: z.array(z.string()).default([]),
-  memoryEmbeddings: z.array(z.object({
-    id: z.string(),
-    text: z.string(),
-    embedding: z.array(z.number()),
-    createdAt: z.number().int(),
-    tokenCount: z.number().int().nonnegative().default(0),
-    isCold: z.boolean().default(false),
-    importanceScore: z.number().default(1.0),
-    lastAccessedAt: z.number().int().default(0),
-    isPinned: z.boolean().default(false),
-  })).default([]).optional(),
+  memoryEmbeddings: z
+    .array(
+      z.object({
+        id: z.string(),
+        text: z.string(),
+        embedding: z.array(z.number()),
+        createdAt: z.number().int(),
+        tokenCount: z.number().int().nonnegative().default(0),
+        isCold: z.boolean().default(false),
+        importanceScore: z.number().default(1.0),
+        lastAccessedAt: z.number().int().default(0),
+        isPinned: z.boolean().default(false),
+      }),
+    )
+    .default([])
+    .optional(),
   memorySummary: z.string().default("").optional(),
   memorySummaryTokenCount: z.number().default(0),
-  memoryToolEvents: z.array(z.object({
-    id: z.string(),
-    windowStart: z.number().int(),
-    windowEnd: z.number().int(),
-    summary: z.string(),
-    actions: z.array(z.object({
-      name: z.string(),
-      arguments: z.any().optional(),
-      timestamp: z.number().int().optional(),
-      updatedMemories: z.array(z.string()).optional(),
-    })),
-    createdAt: z.number().int(),
-  })).default([]).optional(),
+  memoryToolEvents: z
+    .array(
+      z.object({
+        id: z.string(),
+        windowStart: z.number().int(),
+        windowEnd: z.number().int(),
+        summary: z.string(),
+        actions: z.array(
+          z.object({
+            name: z.string(),
+            arguments: z.any().optional(),
+            timestamp: z.number().int().optional(),
+            updatedMemories: z.array(z.string()).optional(),
+          }),
+        ),
+        createdAt: z.number().int(),
+      }),
+    )
+    .default([])
+    .optional(),
   messages: z.array(MessageSchema),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),

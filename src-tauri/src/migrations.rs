@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 21;
+pub const CURRENT_MIGRATION_VERSION: u32 = 22;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -249,7 +249,17 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         version = 21;
     }
 
-    // Update migration version
+    if version < 22 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v21 -> v22: Add direction column to scenes and scene_variants",
+        );
+        migrate_v21_to_v22(app)?;
+        version = 22;
+    }
+
+    // Finalize
     set_migration_version(app, version)?;
 
     log_info(
@@ -1268,11 +1278,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
     );
 
     if !has_custom_gradient_colors {
-        log_info(
-            app,
-            "migrations",
-            "Adding custom_gradient_colors column",
-        );
+        log_info(app, "migrations", "Adding custom_gradient_colors column");
         conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_gradient_colors TEXT",
             [],
@@ -1281,11 +1287,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
     }
 
     if !has_custom_text_color {
-        log_info(
-            app,
-            "migrations",
-            "Adding custom_text_color column",
-        );
+        log_info(app, "migrations", "Adding custom_text_color column");
         conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_text_color TEXT",
             [],
@@ -1294,11 +1296,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
     }
 
     if !has_custom_text_secondary {
-        log_info(
-            app,
-            "migrations",
-            "Adding custom_text_secondary column",
-        );
+        log_info(app, "migrations", "Adding custom_text_secondary column");
         conn.execute(
             "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
             [],
@@ -1306,11 +1304,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to add custom_text_secondary: {}", e))?;
     }
 
-    log_info(
-        app,
-        "migrations",
-        "v17->v18 migration completed",
-    );
+    log_info(app, "migrations", "v17->v18 migration completed");
     Ok(())
 }
 
@@ -1578,11 +1572,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to migrate lorebook entries: {}", e))?;
     }
 
-    log_info(
-        app,
-        "migrations",
-        "v19->v20 migration completed",
-    );
+    log_info(app, "migrations", "v19->v20 migration completed");
     Ok(())
 }
 
@@ -1591,12 +1581,26 @@ fn migrate_v20_to_v21(app: &AppHandle) -> Result<(), String> {
     use crate::storage_manager::db::open_db;
 
     let conn = open_db(app)?;
-    // Add column with default NULL if it doesn't exist
-    // We use TEXT to store JSON blob
+
+    // Add config column if it doesn't exist
     let _ = conn.execute(
         "ALTER TABLE provider_credentials ADD COLUMN config TEXT",
         [],
     );
+
+    Ok(())
+}
+
+fn migrate_v21_to_v22(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Add direction column to scenes if it doesn't exist
+    let _ = conn.execute("ALTER TABLE scenes ADD COLUMN direction TEXT", []);
+
+    // Add direction column to scene_variants if it doesn't exist
+    let _ = conn.execute("ALTER TABLE scene_variants ADD COLUMN direction TEXT", []);
 
     Ok(())
 }

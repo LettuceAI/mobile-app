@@ -35,6 +35,7 @@ export interface CharacterExportData {
 export interface SceneExport {
   id: string;
   content: string;
+  direction?: string;
   createdAt: number;
   selectedVariantId?: string;
   variants: SceneVariantExport[];
@@ -43,6 +44,7 @@ export interface SceneExport {
 export interface SceneVariantExport {
   id: string;
   content: string;
+  direction?: string;
   createdAt: number;
 }
 

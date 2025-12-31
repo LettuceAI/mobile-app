@@ -244,7 +244,7 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                 if s.is_string() {
                     let sid = uuid::Uuid::new_v4().to_string();
                     let content = s.as_str().unwrap_or("");
-                    tx.execute("INSERT INTO scenes (id, character_id, content, created_at, selected_variant_id) VALUES (?, ?, ?, ?, NULL)", params![&sid, &id, content, now]).map_err(|e| e.to_string())?;
+                    tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, NULL)", params![&sid, &id, content, None::<String>, now]).map_err(|e| e.to_string())?;
                 } else if let Some(obj) = s.as_object() {
                     let sid = obj
                         .get("id")
@@ -257,7 +257,8 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                         .get("selectedVariantId")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
-                    tx.execute("INSERT INTO scenes (id, character_id, content, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?)", params![&sid, &id, content, screated, sel]).map_err(|e| e.to_string())?;
+                    let direction = obj.get("direction").and_then(|v| v.as_str());
+                    tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, ?)", params![&sid, &id, content, direction, screated, sel]).map_err(|e| e.to_string())?;
                     if let Some(vars) = obj.get("variants").and_then(|v| v.as_array()) {
                         for v in vars {
                             let vid = v
@@ -266,9 +267,10 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                                 .map(|s| s.to_string())
                                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                             let vcontent = v.get("content").and_then(|x| x.as_str()).unwrap_or("");
+                            let vdirection = v.get("direction").and_then(|x| x.as_str());
                             let vcreated =
                                 v.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(now);
-                            tx.execute("INSERT INTO scene_variants (id, scene_id, content, created_at) VALUES (?, ?, ?, ?)", params![vid, &sid, vcontent, vcreated]).map_err(|e| e.to_string())?;
+                            tx.execute("INSERT INTO scene_variants (id, scene_id, content, direction, created_at) VALUES (?, ?, ?, ?, ?)", params![vid, &sid, vcontent, vdirection, vcreated]).map_err(|e| e.to_string())?;
                         }
                     }
                 }

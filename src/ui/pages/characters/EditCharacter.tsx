@@ -1,6 +1,24 @@
 import React from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, Plus, X, Sparkles, BookOpen, Cpu, Image, Download, Layers, Edit2, ChevronDown, Crop, Upload, User, Settings, Volume2 } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  X,
+  Sparkles,
+  BookOpen,
+  Cpu,
+  Image,
+  Download,
+  Layers,
+  Edit2,
+  ChevronDown,
+  Crop,
+  Upload,
+  User,
+  Settings,
+  Volume2,
+  EyeOff,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 import { AvatarPicker } from "../../components/AvatarPicker";
@@ -27,6 +45,7 @@ export function EditCharacterPage() {
   const { characterId } = useParams();
   const { state, actions, computed } = useEditCharacterForm(characterId);
   const [expandedSceneId, setExpandedSceneId] = React.useState<string | null>(null);
+  const [directionExpanded, setDirectionExpanded] = React.useState(false);
 
   // Background image positioning state
   const [pendingBackgroundSrc, setPendingBackgroundSrc] = React.useState<string | null>(null);
@@ -71,7 +90,11 @@ export function EditCharacterPage() {
 
     editingSceneId,
     editingSceneContent,
+    editingSceneDirection,
   } = state;
+
+  // Show direction input if scene has a direction or user expanded it
+  const showDirectionInput = Boolean(editingSceneDirection) || directionExpanded;
 
   const {
     setFields,
@@ -142,10 +165,7 @@ export function EditCharacterPage() {
     setLoadingVoices(true);
     setVoiceError(null);
     try {
-      const [providers, voices] = await Promise.all([
-        listAudioProviders(),
-        listUserVoices(),
-      ]);
+      const [providers, voices] = await Promise.all([listAudioProviders(), listUserVoices()]);
       setAudioProviders(providers);
       setUserVoices(voices);
 
@@ -167,7 +187,7 @@ export function EditCharacterPage() {
               voicesByProvider[provider.id] = [];
             }
           }
-        })
+        }),
       );
       setProviderVoices(voicesByProvider);
       setHasLoadedVoices(true);
@@ -207,7 +227,6 @@ export function EditCharacterPage() {
           transition={{ duration: 0.2, ease: "easeOut" }}
           className="space-y-5 pb-6 pt-4"
         >
-
           {/* Character Tab Content */}
           {activeTab === "character" && (
             <>
@@ -259,9 +278,7 @@ export function EditCharacterPage() {
                     </button>
                   )}
                 </div>
-                <p className="mt-3 text-xs text-white/40">
-                  Tap to add or generate avatar
-                </p>
+                <p className="mt-3 text-xs text-white/40">Tap to add or generate avatar</p>
               </div>
 
               {/* Name Input */}
@@ -330,10 +347,14 @@ export function EditCharacterPage() {
                           onChange={(e) => {
                             if (e.target.checked) {
                               // Enable - set default colors if none exist
-                              const colors = customGradientColors.length > 0
-                                ? customGradientColors
-                                : ["#4f46e5", "#7c3aed"];
-                              setFields({ customGradientEnabled: true, customGradientColors: colors });
+                              const colors =
+                                customGradientColors.length > 0
+                                  ? customGradientColors
+                                  : ["#4f46e5", "#7c3aed"];
+                              setFields({
+                                customGradientEnabled: true,
+                                customGradientColors: colors,
+                              });
                             } else {
                               // Disable but preserve colors
                               setFields({ customGradientEnabled: false });
@@ -353,11 +374,12 @@ export function EditCharacterPage() {
                         <div
                           className="h-16 w-full rounded-lg"
                           style={{
-                            background: customGradientColors.length >= 3
-                              ? `linear-gradient(135deg, ${customGradientColors[0]}, ${customGradientColors[2]}, ${customGradientColors[1]})`
-                              : customGradientColors.length >= 2
-                                ? `linear-gradient(135deg, ${customGradientColors[0]}, ${customGradientColors[1]})`
-                                : customGradientColors[0]
+                            background:
+                              customGradientColors.length >= 3
+                                ? `linear-gradient(135deg, ${customGradientColors[0]}, ${customGradientColors[2]}, ${customGradientColors[1]})`
+                                : customGradientColors.length >= 2
+                                  ? `linear-gradient(135deg, ${customGradientColors[0]}, ${customGradientColors[1]})`
+                                  : customGradientColors[0],
                           }}
                         />
 
@@ -422,7 +444,10 @@ export function EditCharacterPage() {
                               type="button"
                               onClick={() => {
                                 // Remove middle color - reorder so End stays at index 1
-                                const newColors = [customGradientColors[0], customGradientColors[1]];
+                                const newColors = [
+                                  customGradientColors[0],
+                                  customGradientColors[1],
+                                ];
                                 setFields({ customGradientColors: newColors });
                               }}
                               className="shrink-0 text-xs text-red-400 hover:text-red-300"
@@ -435,7 +460,11 @@ export function EditCharacterPage() {
                             type="button"
                             onClick={() => {
                               // Add middle color between Start and End
-                              const newColors = [customGradientColors[0], customGradientColors[1], "#a855f7"];
+                              const newColors = [
+                                customGradientColors[0],
+                                customGradientColors[1],
+                                "#a855f7",
+                              ];
                               setFields({ customGradientColors: newColors });
                             }}
                             className="text-xs text-purple-400 hover:text-purple-300 py-1"
@@ -572,14 +601,19 @@ export function EditCharacterPage() {
                 <div className="flex justify-end text-[11px] text-white/40">
                   {wordCount(description)} words
                 </div>
-                <p className="text-xs text-white/50">
-                  Be detailed to create a unique personality
-                </p>
+                <p className="text-xs text-white/50">Be detailed to create a unique personality</p>
                 <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-3.5 py-3">
-                  <div className="text-[11px] font-medium text-blue-200">Available Placeholders</div>
+                  <div className="text-[11px] font-medium text-blue-200">
+                    Available Placeholders
+                  </div>
                   <div className="mt-2 space-y-1 text-xs text-blue-200/70">
-                    <div><code className="text-emerald-300">{"{{char}}"}</code> - Character name</div>
-                    <div><code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (empty if none)</div>
+                    <div>
+                      <code className="text-emerald-300">{"{{char}}"}</code> - Character name
+                    </div>
+                    <div>
+                      <code className="text-emerald-300">{"{{persona}}"}</code> - Persona name
+                      (empty if none)
+                    </div>
                   </div>
                 </div>
               </div>
@@ -614,24 +648,29 @@ export function EditCharacterPage() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9, x: -20 }}
                             transition={{ duration: 0.15 }}
-                            className={`overflow-hidden rounded-xl border ${isDefault
-                              ? "border-emerald-400/30 bg-emerald-400/5"
-                              : "border-white/10 bg-white/5"
-                              }`}
+                            className={`overflow-hidden rounded-xl border ${
+                              isDefault
+                                ? "border-emerald-400/30 bg-emerald-400/5"
+                                : "border-white/10 bg-white/5"
+                            }`}
                           >
                             {/* Scene Header - clickable to expand/collapse */}
                             <button
                               onClick={() => setExpandedSceneId(isExpanded ? null : scene.id)}
-                              className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${isDefault
-                                ? "border-emerald-400/20 bg-emerald-400/10"
-                                : "border-white/10 bg-white/5"
-                                }`}
+                              className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${
+                                isDefault
+                                  ? "border-emerald-400/20 bg-emerald-400/10"
+                                  : "border-white/10 bg-white/5"
+                              }`}
                             >
                               {/* Scene number badge */}
-                              <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${isDefault
-                                ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
-                                : "border-white/10 bg-white/5 text-white/60"
-                                }`}>
+                              <div
+                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${
+                                  isDefault
+                                    ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
+                                    : "border-white/10 bg-white/5 text-white/60"
+                                }`}
+                              >
                                 {index + 1}
                               </div>
 
@@ -639,14 +678,27 @@ export function EditCharacterPage() {
                               {isDefault && (
                                 <div className="flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-2 py-0.5">
                                   <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                  <span className="text-[10px] font-medium text-emerald-200">Default</span>
+                                  <span className="text-[10px] font-medium text-emerald-200">
+                                    Default
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Direction indicator */}
+                              {scene.direction && (
+                                <div
+                                  className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5"
+                                  title="Has scene direction"
+                                >
+                                  <EyeOff className="h-3 w-3 text-white/40" />
                                 </div>
                               )}
 
                               {/* Preview text when collapsed */}
                               {!isExpanded && (
                                 <span className="flex-1 truncate text-sm text-white/50">
-                                  {scene.content.slice(0, 50)}{scene.content.length > 50 ? "..." : ""}
+                                  {scene.content.slice(0, 50)}
+                                  {scene.content.length > 50 ? "..." : ""}
                                 </span>
                               )}
 
@@ -654,7 +706,7 @@ export function EditCharacterPage() {
                               <ChevronDown
                                 className={cn(
                                   "h-4 w-4 text-white/40 transition-transform ml-auto",
-                                  isExpanded && "rotate-180"
+                                  isExpanded && "rotate-180",
                                 )}
                               />
                             </button>
@@ -671,7 +723,21 @@ export function EditCharacterPage() {
                                 >
                                   <div className="p-3.5">
                                     <div className="space-y-3">
-                                      <p className="text-sm leading-relaxed text-white/90">{scene.content}</p>
+                                      <p className="text-sm leading-relaxed text-white/90">
+                                        {scene.content}
+                                      </p>
+
+                                      {/* Scene Direction (if set) */}
+                                      {scene.direction && (
+                                        <div className="pt-2 border-t border-white/5">
+                                          <p className="text-[10px] font-medium text-white/40 mb-1">
+                                            Scene Direction
+                                          </p>
+                                          <p className="text-xs leading-relaxed text-white/50 italic">
+                                            {scene.direction}
+                                          </p>
+                                        </div>
+                                      )}
 
                                       {/* Actions when expanded */}
                                       <div className="flex items-center gap-2 pt-2 border-t border-white/5">
@@ -735,10 +801,11 @@ export function EditCharacterPage() {
                     onClick={addScene}
                     disabled={!newSceneContent.trim()}
                     whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${newSceneContent.trim()
-                      ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
-                      : "border border-white/10 bg-white/5 text-white/40"
-                      }`}
+                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+                      newSceneContent.trim()
+                        ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
+                        : "border border-white/10 bg-white/5 text-white/40"
+                    }`}
                   >
                     <Plus className="h-4 w-4" />
                     Add Scene
@@ -824,7 +891,9 @@ export function EditCharacterPage() {
                 ) : (
                   <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
                     <p className="text-sm text-white/50">No templates available</p>
-                    <p className="text-xs text-white/40 mt-1">Create templates in Settings → Prompts</p>
+                    <p className="text-xs text-white/40 mt-1">
+                      Create templates in Settings → Prompts
+                    </p>
                   </div>
                 )}
                 <p className="text-xs text-white/50">
@@ -872,7 +941,9 @@ export function EditCharacterPage() {
                       }
                       if (value.startsWith("provider:")) {
                         const [, providerId, voiceId] = value.split(":");
-                        const voice = providerVoices[providerId]?.find((v) => v.voiceId === voiceId);
+                        const voice = providerVoices[providerId]?.find(
+                          (v) => v.voiceId === voiceId,
+                        );
                         setFields({
                           voiceConfig: {
                             source: "provider",
@@ -887,14 +958,14 @@ export function EditCharacterPage() {
                   >
                     <option value="">No voice assigned</option>
                     {isMissingVoiceSelection && (
-                      <option value={voiceSelectionValue}>
-                        Missing voice (keep)
-                      </option>
+                      <option value={voiceSelectionValue}>Missing voice (keep)</option>
                     )}
                     {userVoices.length > 0 && (
                       <optgroup label="My Voices">
                         {userVoices.map((voice) => {
-                          const providerLabel = audioProviders.find((p) => p.id === voice.providerId)?.label ?? "Provider";
+                          const providerLabel =
+                            audioProviders.find((p) => p.id === voice.providerId)?.label ??
+                            "Provider";
                           return (
                             <option key={voice.id} value={buildUserVoiceValue(voice.id)}>
                               {voice.name} • {providerLabel}
@@ -922,9 +993,7 @@ export function EditCharacterPage() {
                   </select>
                 )}
 
-                {voiceError && (
-                  <p className="text-xs font-medium text-rose-300">{voiceError}</p>
-                )}
+                {voiceError && <p className="text-xs font-medium text-rose-300">{voiceError}</p>}
                 {!loadingVoices && audioProviders.length === 0 && userVoices.length === 0 && (
                   <p className="text-xs text-white/40">Add voices in Settings → Voices</p>
                 )}
@@ -948,14 +1017,14 @@ export function EditCharacterPage() {
                     />
                     <label
                       htmlFor="character-voice-autoplay"
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${voiceAutoplay
-                        ? 'bg-emerald-500'
-                        : 'bg-white/20'
-                        }`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${
+                        voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
+                      }`}
                     >
                       <span
-                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${voiceAutoplay ? 'translate-x-5' : 'translate-x-0.5'
-                          }`}
+                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${
+                          voiceAutoplay ? "translate-x-5" : "translate-x-0.5"
+                        }`}
                       />
                     </label>
                   </div>
@@ -970,36 +1039,45 @@ export function EditCharacterPage() {
                   </div>
                   <h3 className="text-sm font-semibold text-white">Memory Mode</h3>
                   {!dynamicMemoryEnabled && (
-                    <span className="ml-auto text-xs text-white/40">Enable Dynamic Memory to switch</span>
+                    <span className="ml-auto text-xs text-white/40">
+                      Enable Dynamic Memory to switch
+                    </span>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setFields({ memoryType: "manual" })}
-                    className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "manual"
-                      ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
-                      : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
-                      }`}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                      memoryType === "manual"
+                        ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                        : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
+                    }`}
                   >
                     <p className="text-sm font-semibold">Manual Memory</p>
-                    <p className="mt-1 text-xs text-white/60">Manage notes yourself (current system).</p>
+                    <p className="mt-1 text-xs text-white/60">
+                      Manage notes yourself (current system).
+                    </p>
                   </button>
                   <button
                     type="button"
                     disabled={!dynamicMemoryEnabled}
                     onClick={() => dynamicMemoryEnabled && setFields({ memoryType: "dynamic" })}
-                    className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "dynamic" && dynamicMemoryEnabled
-                      ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
-                      : "border-white/10 bg-black/15 text-white/60"
-                      } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                      memoryType === "dynamic" && dynamicMemoryEnabled
+                        ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                        : "border-white/10 bg-black/15 text-white/60"
+                    } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
                   >
                     <p className="text-sm font-semibold">Dynamic Memory</p>
-                    <p className="mt-1 text-xs text-white/60">Automatic summaries when enabled globally.</p>
+                    <p className="mt-1 text-xs text-white/60">
+                      Automatic summaries when enabled globally.
+                    </p>
                   </button>
                 </div>
                 <p className="text-xs text-white/50">
-                  Dynamic Memory must be turned on in Advanced settings; otherwise manual memory is used.
+                  Dynamic Memory must be turned on in Advanced settings; otherwise manual memory is
+                  used.
                 </p>
               </div>
             </>
@@ -1030,22 +1108,20 @@ export function EditCharacterPage() {
       </main>
 
       {/* Bottom Tab Bar */}
-      <div className={cn(
-        "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
-        colors.glass.strong
-      )}>
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
+          colors.glass.strong,
+        )}
+      >
         <div
           role="tablist"
           aria-label="Character editor tabs"
-          className={cn(
-            radius.lg,
-            "grid grid-cols-2 gap-2 p-1",
-            colors.surface.elevated
-          )}
+          className={cn(radius.lg, "grid grid-cols-2 gap-2 p-1", colors.surface.elevated)}
         >
           {[
             { id: "character" as const, icon: User, label: "Character" },
-            { id: "settings" as const, icon: Settings, label: "Settings" }
+            { id: "settings" as const, icon: Settings, label: "Settings" },
           ].map(({ id, icon: Icon, label }) => (
             <button
               key={id}
@@ -1061,7 +1137,7 @@ export function EditCharacterPage() {
                 interactive.active.scale,
                 activeTab === id
                   ? "bg-white/10 text-white"
-                  : cn(colors.text.tertiary, "hover:text-white")
+                  : cn(colors.text.tertiary, "hover:text-white"),
               )}
             >
               <Icon size={16} className="block" />
@@ -1074,22 +1150,72 @@ export function EditCharacterPage() {
       {/* Edit Scene Bottom Menu */}
       <BottomMenu
         isOpen={editingSceneId !== null}
-        onClose={cancelEditingScene}
+        onClose={() => {
+          cancelEditingScene();
+          setDirectionExpanded(false);
+        }}
         title="Edit Scene"
       >
         <div className="space-y-4">
-          <textarea
-            value={editingSceneContent}
-            onChange={(e) => setFields({ editingSceneContent: e.target.value })}
-            rows={12}
-            className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/20 focus:outline-none"
-            placeholder="Enter scene content..."
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-white/40">
+          {/* Scene Content */}
+          <div>
+            <textarea
+              value={editingSceneContent}
+              onChange={(e) => setFields({ editingSceneContent: e.target.value })}
+              rows={10}
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/20 focus:outline-none"
+              placeholder="Enter scene content..."
+            />
+            <div className="mt-1 flex justify-end text-[11px] text-white/40">
               {wordCount(editingSceneContent)} words
-            </span>
+            </div>
           </div>
+
+          {/* Scene Direction */}
+          <div className="border-t border-white/10 pt-3">
+            {!showDirectionInput ? (
+              <button
+                type="button"
+                onClick={() => setDirectionExpanded(true)}
+                className="flex w-full items-center justify-between py-1"
+              >
+                <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
+                  <EyeOff className="h-3 w-3" />
+                  Scene Direction
+                </span>
+                <span className="text-[11px] text-white/40">+ Add</span>
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
+                    <EyeOff className="h-3 w-3" />
+                    Scene Direction
+                  </span>
+                  {!editingSceneDirection && (
+                    <button
+                      type="button"
+                      onClick={() => setDirectionExpanded(false)}
+                      className="text-[11px] text-white/40 hover:text-white/60"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={editingSceneDirection}
+                  onChange={(e) => setFields({ editingSceneDirection: e.target.value })}
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-white/20 focus:outline-none"
+                  placeholder="e.g., 'The hostage will be rescued' or 'Build tension gradually'"
+                />
+                <p className="text-[10px] text-white/30">
+                  Hidden guidance for the AI on how this scene should unfold
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3">
             <button
               onClick={cancelEditingScene}
@@ -1098,7 +1224,7 @@ export function EditCharacterPage() {
                 "border border-white/10 bg-white/5",
                 "hover:bg-white/10 hover:text-white",
                 "active:scale-[0.98]",
-                radius.lg
+                radius.lg,
               )}
             >
               Cancel
@@ -1108,11 +1234,11 @@ export function EditCharacterPage() {
               disabled={!editingSceneContent.trim()}
               className={cn(
                 "flex-1 py-3 text-sm font-semibold text-white transition",
-                "bg-emerald-500",
-                "hover:bg-emerald-400",
+                "bg-gradient-to-r from-emerald-500 to-green-500",
+                "hover:from-emerald-400 hover:to-green-400",
                 "active:scale-[0.98]",
                 "disabled:cursor-not-allowed disabled:opacity-50",
-                radius.lg
+                radius.lg,
               )}
             >
               Save

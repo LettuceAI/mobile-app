@@ -19,6 +19,7 @@ pub fn get_required_variables(template_id: &str) -> Vec<String> {
     match template_id {
         APP_DEFAULT_TEMPLATE_ID => vec![
             "{{scene}}".to_string(),
+            "{{scene_direction}}".to_string(),
             "{{char.name}}".to_string(),
             "{{char.desc}}".to_string(),
             "{{context_summary}}".to_string(),

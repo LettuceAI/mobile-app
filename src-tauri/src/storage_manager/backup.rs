@@ -117,9 +117,9 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
         Option<String>,
     )> = conn
         .query_row(
-            "SELECT default_provider_credential_id, default_model_id, app_state, 
-                    advanced_model_settings, prompt_template_id, system_prompt, 
-                    migration_version, advanced_settings 
+            "SELECT default_provider_credential_id, default_model_id, app_state,
+                    advanced_model_settings, prompt_template_id, system_prompt,
+                    migration_version, advanced_settings
              FROM settings WHERE id = 1",
             [],
             |r| {
@@ -340,7 +340,7 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 
         // Get scenes with variants
         let mut scenes_stmt = conn
-            .prepare("SELECT id, content, created_at, selected_variant_id FROM scenes WHERE character_id = ?")
+            .prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ?")
             .map_err(|e| e.to_string())?;
         let scenes: Vec<JsonValue> = scenes_stmt
             .query_map([&char_id], |r| {
@@ -360,7 +360,7 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
         for mut scene in scenes {
             let scene_id = scene["id"].as_str().unwrap_or("");
             let mut variants_stmt = conn
-                .prepare("SELECT id, content, created_at FROM scene_variants WHERE scene_id = ?")
+                .prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ?")
                 .map_err(|e| e.to_string())?;
             let variants: Vec<JsonValue> = variants_stmt
                 .query_map([scene_id], |r| {
@@ -433,8 +433,8 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let mut result = Vec::new();
     for (session_id, mut session_json) in sessions {
         let mut messages_stmt = conn
-            .prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, 
-                             selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages 
+            .prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens,
+                             selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages
                       WHERE session_id = ? ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
 
@@ -465,7 +465,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
         let mut messages_with_variants = Vec::new();
         for (msg_id, mut msg_json) in messages {
             let mut variants_stmt = conn
-                .prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning 
+                .prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning
                           FROM message_variants WHERE message_id = ?")
                 .map_err(|e| e.to_string())?;
 
@@ -501,9 +501,9 @@ fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String
 
     // Get all usage records
     let mut stmt = conn
-        .prepare("SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, 
+        .prepare("SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name,
                   provider_id, provider_label, operation_type, prompt_tokens, completion_tokens, total_tokens,
-                  memory_tokens, summary_tokens, prompt_cost, completion_cost, total_cost, success, error_message 
+                  memory_tokens, summary_tokens, prompt_cost, completion_cost, total_cost, success, error_message
                   FROM usage_records")
         .map_err(|e| e.to_string())?;
 
@@ -961,8 +961,8 @@ fn import_settings(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
     conn.execute("DELETE FROM settings", [])
         .map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, 
-         advanced_model_settings, prompt_template_id, system_prompt, migration_version, 
+        "INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state,
+         advanced_model_settings, prompt_template_id, system_prompt, migration_version,
          advanced_settings, created_at, updated_at) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
         params![
             data.get("default_provider_credential_id").and_then(|v| v.as_str()),
@@ -988,7 +988,7 @@ fn import_provider_credentials(app: &tauri::AppHandle, data: &JsonValue) -> Resu
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
-                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers, config) 
+                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers, config)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     item.get("id").and_then(|v| v.as_str()),
@@ -1065,8 +1065,8 @@ fn import_models(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String>
             let output_scopes = normalize_scope_json_str(output_scopes_raw);
 
             conn.execute(
-                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, 
-                 model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt) 
+                "INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at,
+                 model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     item.get("id").and_then(|v| v.as_str()),
@@ -1096,7 +1096,7 @@ fn import_secrets(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
-                "INSERT INTO secrets (service, account, value, created_at, updated_at) 
+                "INSERT INTO secrets (service, account, value, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
                     item.get("service").and_then(|v| v.as_str()),
@@ -1124,7 +1124,7 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
             // We now actively restore all templates, including prompt_app_default if present
 
             conn.execute(
-                "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) 
+                "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     id,
@@ -1149,7 +1149,7 @@ fn import_personas(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
-                "INSERT INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at) 
+                "INSERT INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     item.get("id").and_then(|v| v.as_str()),
@@ -1252,12 +1252,13 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                     let scene_id = scene.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
                     conn.execute(
-                        "INSERT INTO scenes (id, character_id, content, created_at, selected_variant_id) 
-                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        "INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                         params![
                             scene_id,
                             char_id,
                             scene.get("content").and_then(|v| v.as_str()),
+                            scene.get("direction").and_then(|v| v.as_str()),
                             scene.get("created_at").and_then(|v| v.as_i64()),
                             scene.get("selected_variant_id").and_then(|v| v.as_str()),
                         ],
@@ -1267,12 +1268,13 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
                     if let Some(variants) = scene.get("variants").and_then(|v| v.as_array()) {
                         for variant in variants {
                             conn.execute(
-                                "INSERT INTO scene_variants (id, scene_id, content, created_at) 
-                                 VALUES (?1, ?2, ?3, ?4)",
+                                "INSERT INTO scene_variants (id, scene_id, content, direction, created_at)
+                                 VALUES (?1, ?2, ?3, ?4, ?5)",
                                 params![
                                     variant.get("id").and_then(|v| v.as_str()),
                                     scene_id,
                                     variant.get("content").and_then(|v| v.as_str()),
+                                    variant.get("direction").and_then(|v| v.as_str()),
                                     variant.get("created_at").and_then(|v| v.as_i64()),
                                 ],
                             )
@@ -1329,10 +1331,14 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                 .unwrap_or("");
 
             // Insert session
-            let voice_autoplay = item
-                .get("voice_autoplay")
-                .and_then(|v| v.as_i64())
-                .or_else(|| item.get("voice_autoplay").and_then(|v| v.as_bool()).map(|b| if b { 1 } else { 0 }));
+            let voice_autoplay =
+                item.get("voice_autoplay")
+                    .and_then(|v| v.as_i64())
+                    .or_else(|| {
+                        item.get("voice_autoplay")
+                            .and_then(|v| v.as_bool())
+                            .map(|b| if b { 1 } else { 0 })
+                    });
 
             conn.execute(
                 "INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay,
@@ -1372,8 +1378,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
                     conn.execute(
-                        "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, 
-                         completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning) 
+                        "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens,
+                         completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                         params![
                             msg_id,
@@ -1397,8 +1403,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     if let Some(variants) = msg.get("variants").and_then(|v| v.as_array()) {
                         for variant in variants {
                             conn.execute(
-                                "INSERT INTO message_variants (id, message_id, content, created_at, 
-                                 prompt_tokens, completion_tokens, total_tokens, reasoning) 
+                                "INSERT INTO message_variants (id, message_id, content, created_at,
+                                 prompt_tokens, completion_tokens, total_tokens, reasoning)
                                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                                 params![
                                     variant.get("id").and_then(|v| v.as_str()),
@@ -1410,7 +1416,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                                     variant.get("total_tokens").and_then(|v| v.as_i64()),
                                     variant.get("reasoning").and_then(|v| v.as_str()),
                                 ],
-                            ).map_err(|e| format!("Failed to insert message variant: {}", e))?;
+                            )
+                            .map_err(|e| format!("Failed to insert message variant: {}", e))?;
                             variant_count += 1;
                         }
                     }
@@ -1446,10 +1453,10 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
 
             // Insert usage record
             conn.execute(
-                "INSERT INTO usage_records (id, timestamp, session_id, character_id, character_name, 
-                 model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens, 
-                 completion_tokens, total_tokens, memory_tokens, summary_tokens, prompt_cost, 
-                 completion_cost, total_cost, success, error_message) 
+                "INSERT INTO usage_records (id, timestamp, session_id, character_id, character_name,
+                 model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens,
+                 completion_tokens, total_tokens, memory_tokens, summary_tokens, prompt_cost,
+                 completion_cost, total_cost, success, error_message)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
                 params![
                     record_id,
@@ -1508,7 +1515,7 @@ fn import_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Stri
             let lorebook_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
             conn.execute(
-                "INSERT INTO lorebooks (id, name, created_at, updated_at) 
+                "INSERT INTO lorebooks (id, name, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![
                     lorebook_id,
@@ -1523,7 +1530,7 @@ fn import_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Stri
             if let Some(entries) = item.get("entries").and_then(|v| v.as_array()) {
                 for entry in entries {
                     conn.execute(
-                        "INSERT INTO lorebook_entries (id, lorebook_id, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at) 
+                        "INSERT INTO lorebook_entries (id, lorebook_id, enabled, always_active, keywords, content, priority, display_order, created_at, updated_at)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                         params![
                             entry.get("id").and_then(|v| v.as_str()),
@@ -1555,7 +1562,7 @@ fn import_character_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Resul
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
-                "INSERT INTO character_lorebooks (character_id, lorebook_id, enabled, display_order, created_at, updated_at) 
+                "INSERT INTO character_lorebooks (character_id, lorebook_id, enabled, display_order, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     item.get("character_id").and_then(|v| v.as_str()),
