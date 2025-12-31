@@ -17,7 +17,7 @@ pub fn audio_provider_list(app: AppHandle) -> Result<Vec<AudioProvider>, String>
     let conn = open_db(&app)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, provider_type, label, api_key, project_id, location, created_at, updated_at 
+            "SELECT id, provider_type, label, api_key, project_id, location, created_at, updated_at
              FROM audio_providers ORDER BY created_at DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -118,6 +118,15 @@ pub fn audio_models_list(provider_type: String) -> Vec<AudioModel> {
     }
 }
 
+#[tauri::command]
+pub fn audio_voice_design_models_list(provider_type: String) -> Vec<AudioModel> {
+    match AudioProviderType::from_str(&provider_type) {
+        Some(AudioProviderType::GeminiTts) => gemini::get_models(), 
+        Some(AudioProviderType::Elevenlabs) => elevenlabs::get_voice_design_models(),
+        None => vec![],
+    }
+}
+
 /// Get cached voices for a provider
 #[tauri::command]
 pub fn audio_provider_voices(
@@ -155,7 +164,7 @@ pub fn audio_provider_voices(
     // For ElevenLabs, return cached voices
     let mut stmt = conn
         .prepare(
-            "SELECT id, provider_id, voice_id, name, preview_url, labels, cached_at 
+            "SELECT id, provider_id, voice_id, name, preview_url, labels, cached_at
              FROM audio_voice_cache WHERE provider_id = ?",
         )
         .map_err(|e| e.to_string())?;
@@ -250,7 +259,7 @@ pub fn user_voice_list(app: AppHandle) -> Result<Vec<UserVoice>, String> {
     let conn = open_db(&app)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, provider_id, name, model_id, voice_id, prompt, created_at, updated_at 
+            "SELECT id, provider_id, name, model_id, voice_id, prompt, created_at, updated_at
              FROM user_voices ORDER BY created_at DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -385,7 +394,8 @@ pub async fn tts_preview(
                 Ok((data, "audio/wav".to_string()))
             }
             "elevenlabs" => {
-                let data = elevenlabs::generate_speech(&text, &voice_id, &model_id, &api_key).await?;
+                let data =
+                    elevenlabs::generate_speech(&text, &voice_id, &model_id, &api_key).await?;
                 Ok((data, "audio/mpeg".to_string()))
             }
             _ => Err(format!("Unknown provider type: {}", provider_type)),

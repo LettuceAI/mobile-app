@@ -2,7 +2,6 @@ use super::types::{AudioModel, ProviderVoice};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Available ElevenLabs TTS models (complete list)
 pub fn get_models() -> Vec<AudioModel> {
     vec![
         AudioModel {
@@ -43,6 +42,21 @@ pub fn get_models() -> Vec<AudioModel> {
         AudioModel {
             id: "eleven_english_sts_v2".to_string(),
             name: "English STS v2 (10K chars)".to_string(),
+            provider_type: "elevenlabs".to_string(),
+        },
+    ]
+}
+
+pub fn get_voice_design_models() -> Vec<AudioModel> {
+    vec![
+        AudioModel {
+            id: "eleven_multilingual_ttv_v2".to_string(),
+            name: "Multilingual TTV v2 (Default)".to_string(),
+            provider_type: "elevenlabs".to_string(),
+        },
+        AudioModel {
+            id: "eleven_ttv_v3".to_string(),
+            name: "TTV v3 (Latest)".to_string(),
             provider_type: "elevenlabs".to_string(),
         },
     ]
@@ -266,7 +280,7 @@ pub async fn create_voice_from_preview(
     voice_description: Option<&str>,
     labels: Option<HashMap<String, String>>,
 ) -> Result<CreatedVoice, String> {
-    let url = "https://api.elevenlabs.io/v1/text-to-voice/create";
+    let url = "https://api.elevenlabs.io/v1/text-to-voice";
 
     let request = CreateVoiceRequest {
         voice_name: voice_name.to_string(),

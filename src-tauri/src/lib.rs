@@ -228,6 +228,7 @@ pub fn run() {
             tts_manager::commands::audio_provider_upsert,
             tts_manager::commands::audio_provider_delete,
             tts_manager::commands::audio_models_list,
+            tts_manager::commands::audio_voice_design_models_list,
             tts_manager::commands::audio_provider_voices,
             tts_manager::commands::audio_provider_refresh_voices,
             tts_manager::commands::user_voice_list,
