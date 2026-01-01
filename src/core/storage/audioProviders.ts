@@ -261,3 +261,110 @@ export async function createVoiceFromPreview(
     voiceDescription,
   });
 }
+
+// --- TTS Audio Cache Functions ---
+
+export interface TtsCacheStats {
+  sizeBytes: number;
+  count: number;
+}
+
+/**
+ * Generate a cache key for TTS audio based on generation parameters.
+ * This key is used to store and retrieve cached audio from disk.
+ */
+export async function getTtsCacheKey(
+  providerId: string,
+  modelId: string,
+  voiceId: string,
+  text: string,
+  prompt?: string,
+): Promise<string> {
+  return invoke<string>("tts_cache_key", {
+    providerId,
+    modelId,
+    voiceId,
+    text,
+    prompt: prompt ?? null,
+  });
+}
+
+/**
+ * Check if TTS audio exists in the disk cache.
+ */
+export async function ttsCacheExists(cacheKey: string): Promise<boolean> {
+  return invoke<boolean>("tts_cache_exists", { cacheKey });
+}
+
+/**
+ * Get cached TTS audio from disk.
+ * Returns null if not found.
+ */
+export async function getTtsCached(cacheKey: string): Promise<TtsPreviewResponse | null> {
+  return invoke<TtsPreviewResponse | null>("tts_cache_get", { cacheKey });
+}
+
+/**
+ * Save TTS audio to disk cache.
+ */
+export async function saveTtsToCache(
+  cacheKey: string,
+  audioBase64: string,
+  format: string,
+): Promise<void> {
+  return invoke("tts_cache_save", { cacheKey, audioBase64, format });
+}
+
+/**
+ * Delete a specific TTS audio from disk cache.
+ */
+export async function deleteTtsFromCache(cacheKey: string): Promise<void> {
+  return invoke("tts_cache_delete", { cacheKey });
+}
+
+/**
+ * Clear all TTS audio from disk cache.
+ * Returns the number of files deleted.
+ */
+export async function clearTtsCache(): Promise<number> {
+  return invoke<number>("tts_cache_clear");
+}
+
+/**
+ * Get statistics about the TTS audio cache.
+ */
+export async function getTtsCacheStats(): Promise<TtsCacheStats> {
+  return invoke<TtsCacheStats>("tts_cache_stats");
+}
+
+/**
+ * Generate TTS audio for a message, using disk cache if available.
+ * This is the preferred method for message playback (not previews).
+ */
+export async function generateTtsForMessage(
+  providerId: string,
+  modelId: string,
+  voiceId: string,
+  text: string,
+  prompt?: string,
+  requestId?: string,
+): Promise<TtsPreviewResponse> {
+  // Generate cache key
+  const cacheKey = await getTtsCacheKey(providerId, modelId, voiceId, text, prompt);
+
+  // Check disk cache first
+  const cached = await getTtsCached(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  // Generate new audio
+  const response = await generateTtsPreview(providerId, modelId, voiceId, text, prompt, requestId);
+
+  // Save to disk cache (fire and forget, don't block playback)
+  saveTtsToCache(cacheKey, response.audioBase64, response.format).catch((err) => {
+    console.warn("Failed to save TTS audio to cache:", err);
+  });
+
+  return response;
+}

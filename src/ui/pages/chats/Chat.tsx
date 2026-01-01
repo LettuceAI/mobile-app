@@ -1,12 +1,25 @@
-import { CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
-import type { AccessibilitySettings, Character, Model, StoredMessage } from "../../../core/storage/schemas";
+import type {
+  AccessibilitySettings,
+  Character,
+  Model,
+  StoredMessage,
+} from "../../../core/storage/schemas";
 import { createDefaultAccessibilitySettings } from "../../../core/storage/schemas";
 import {
   abortAudioPreview,
-  generateTtsPreview,
+  generateTtsForMessage,
   isDeviceTtsSpeaking,
   listAudioModels,
   listAudioProviders,
@@ -21,8 +34,17 @@ import {
   type UserVoice,
 } from "../../../core/storage/audioProviders";
 import { useImageData } from "../../hooks/useImageData";
-import { isImageLight, getThemeForBackground, type ThemeColors } from "../../../core/utils/imageAnalysis";
-import { getSessionMeta, listCharacters, readSettings, SETTINGS_UPDATED_EVENT } from "../../../core/storage";
+import {
+  isImageLight,
+  getThemeForBackground,
+  type ThemeColors,
+} from "../../../core/utils/imageAnalysis";
+import {
+  getSessionMeta,
+  listCharacters,
+  readSettings,
+  SETTINGS_UPDATED_EVENT,
+} from "../../../core/storage";
 import { playAccessibilitySound } from "../../../core/utils/accessibilityAudio";
 
 import { useChatController } from "./hooks/useChatController";
@@ -33,7 +55,7 @@ import {
   ChatMessage,
   MessageActionsBottomSheet,
   LoadingSpinner,
-  EmptyState
+  EmptyState,
 } from "./components";
 import { BottomMenu } from "../../components";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -56,7 +78,9 @@ export function ChatConversationPage() {
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
   const [sessionForHeader, setSessionForHeader] = useState(chatController.session);
-  const pendingScrollAdjustRef = useRef<{ prevScrollTop: number; prevScrollHeight: number } | null>(null);
+  const pendingScrollAdjustRef = useRef<{ prevScrollTop: number; prevScrollHeight: number } | null>(
+    null,
+  );
   const loadingOlderRef = useRef(false);
   const isAtBottomRef = useRef(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -76,10 +100,12 @@ export function ChatConversationPage() {
     modelsByProviderType: new Map(),
   });
   const [accessibilitySettings, setAccessibilitySettings] = useState<AccessibilitySettings>(
-    createDefaultAccessibilitySettings()
+    createDefaultAccessibilitySettings(),
   );
   const audioPreviewCacheRef = useRef<Map<string, TtsPreviewResponse>>(new Map());
-  const [audioStatusByMessage, setAudioStatusByMessage] = useState<Record<string, "loading" | "playing">>({});
+  const [audioStatusByMessage, setAudioStatusByMessage] = useState<
+    Record<string, "loading" | "playing">
+  >({});
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const audioPlayingMessageIdRef = useRef<string | null>(null);
   const deviceTtsMessageIdRef = useRef<string | null>(null);
@@ -111,7 +137,8 @@ export function ChatConversationPage() {
     const loadAccessibilitySettings = async () => {
       try {
         const settings = await readSettings();
-        const next = settings.advancedSettings?.accessibility ?? createDefaultAccessibilitySettings();
+        const next =
+          settings.advancedSettings?.accessibility ?? createDefaultAccessibilitySettings();
         if (mounted) {
           setAccessibilitySettings(next);
         }
@@ -130,7 +157,6 @@ export function ChatConversationPage() {
       window.removeEventListener(SETTINGS_UPDATED_EVENT, listener);
     };
   }, []);
-
 
   // Reload session data when memories change
   const handleSessionUpdate = useCallback(async () => {
@@ -217,7 +243,10 @@ export function ChatConversationPage() {
   useEffect(() => {
     if (character) {
       console.log("[Chat] Character backgroundImagePath:", character.backgroundImagePath || "none");
-      console.log("[Chat] Background image data loaded:", backgroundImageData ? "present" : "loading/failed");
+      console.log(
+        "[Chat] Background image data loaded:",
+        backgroundImageData ? "present" : "loading/failed",
+      );
     }
   }, [character, backgroundImageData]);
 
@@ -306,42 +335,48 @@ export function ChatConversationPage() {
     }
   }, [setAudioStatus]);
 
-  const cancelDeviceTtsRequest = useCallback(async (messageId?: string) => {
-    const pending = deviceTtsRequestRef.current;
-    if (!pending || (messageId && pending.messageId !== messageId)) {
-      return;
-    }
-    deviceTtsRequestRef.current = null;
-    setAudioStatus(pending.messageId, null);
-    try {
-      await stopDeviceTts();
-    } catch (error) {
-      console.warn("Failed to stop device TTS:", error);
-    }
-  }, [setAudioStatus]);
-
-  const startDeviceTtsMonitor = useCallback((messageId: string) => {
-    if (deviceTtsPollRef.current !== null) {
-      window.clearInterval(deviceTtsPollRef.current);
-    }
-    const poll = async () => {
-      try {
-        const speaking = await isDeviceTtsSpeaking();
-        if (!speaking) {
-          clearDeviceTtsState();
-          return;
-        }
-        setAudioStatus(messageId, "playing");
-      } catch (error) {
-        console.warn("Failed to poll device TTS status:", error);
-        clearDeviceTtsState();
+  const cancelDeviceTtsRequest = useCallback(
+    async (messageId?: string) => {
+      const pending = deviceTtsRequestRef.current;
+      if (!pending || (messageId && pending.messageId !== messageId)) {
+        return;
       }
-    };
-    deviceTtsPollRef.current = window.setInterval(() => {
+      deviceTtsRequestRef.current = null;
+      setAudioStatus(pending.messageId, null);
+      try {
+        await stopDeviceTts();
+      } catch (error) {
+        console.warn("Failed to stop device TTS:", error);
+      }
+    },
+    [setAudioStatus],
+  );
+
+  const startDeviceTtsMonitor = useCallback(
+    (messageId: string) => {
+      if (deviceTtsPollRef.current !== null) {
+        window.clearInterval(deviceTtsPollRef.current);
+      }
+      const poll = async () => {
+        try {
+          const speaking = await isDeviceTtsSpeaking();
+          if (!speaking) {
+            clearDeviceTtsState();
+            return;
+          }
+          setAudioStatus(messageId, "playing");
+        } catch (error) {
+          console.warn("Failed to poll device TTS status:", error);
+          clearDeviceTtsState();
+        }
+      };
+      deviceTtsPollRef.current = window.setInterval(() => {
+        void poll();
+      }, 500);
       void poll();
-    }, 500);
-    void poll();
-  }, [clearDeviceTtsState, setAudioStatus]);
+    },
+    [clearDeviceTtsState, setAudioStatus],
+  );
 
   const stopDeviceTtsPlayback = useCallback(async () => {
     const pending = deviceTtsRequestRef.current;
@@ -357,38 +392,44 @@ export function ChatConversationPage() {
     clearDeviceTtsState();
   }, [clearDeviceTtsState, setAudioStatus]);
 
-  const playDeviceTts = useCallback(async (messageId: string, text: string, voiceId?: string) => {
-    const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-    deviceTtsRequestRef.current = { requestId, messageId };
-    setAudioStatus(messageId, "loading");
-    try {
-      await speakDeviceTts({ text, voiceId });
-    } catch (error) {
-      if (deviceTtsRequestRef.current?.requestId === requestId) {
-        deviceTtsRequestRef.current = null;
+  const playDeviceTts = useCallback(
+    async (messageId: string, text: string, voiceId?: string) => {
+      const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      deviceTtsRequestRef.current = { requestId, messageId };
+      setAudioStatus(messageId, "loading");
+      try {
+        await speakDeviceTts({ text, voiceId });
+      } catch (error) {
+        if (deviceTtsRequestRef.current?.requestId === requestId) {
+          deviceTtsRequestRef.current = null;
+        }
+        setAudioStatus(messageId, null);
+        throw error;
       }
-      setAudioStatus(messageId, null);
-      throw error;
-    }
-    if (deviceTtsRequestRef.current?.requestId !== requestId) {
-      return;
-    }
-    deviceTtsRequestRef.current = null;
-    deviceTtsMessageIdRef.current = messageId;
-    setAudioStatus(messageId, "playing");
-    startDeviceTtsMonitor(messageId);
-  }, [setAudioStatus, startDeviceTtsMonitor]);
+      if (deviceTtsRequestRef.current?.requestId !== requestId) {
+        return;
+      }
+      deviceTtsRequestRef.current = null;
+      deviceTtsMessageIdRef.current = messageId;
+      setAudioStatus(messageId, "playing");
+      startDeviceTtsMonitor(messageId);
+    },
+    [setAudioStatus, startDeviceTtsMonitor],
+  );
 
-  const buildAudioCacheKey = useCallback((params: {
-    providerId: string;
-    modelId: string;
-    voiceId: string;
-    text: string;
-    prompt?: string | null;
-  }) => {
-    const promptKey = params.prompt?.trim() ?? "";
-    return [params.providerId, params.modelId, params.voiceId, promptKey, params.text].join("::");
-  }, []);
+  const buildAudioCacheKey = useCallback(
+    (params: {
+      providerId: string;
+      modelId: string;
+      voiceId: string;
+      text: string;
+      prompt?: string | null;
+    }) => {
+      const promptKey = params.prompt?.trim() ?? "";
+      return [params.providerId, params.modelId, params.voiceId, promptKey, params.text].join("::");
+    },
+    [],
+  );
 
   const cacheAudioPreview = useCallback((key: string, response: TtsPreviewResponse) => {
     const cache = audioPreviewCacheRef.current;
@@ -400,26 +441,29 @@ export function ChatConversationPage() {
     }
   }, []);
 
-  const startAudioPlayback = useCallback((messageId: string, response: TtsPreviewResponse) => {
-    setAudioStatus(messageId, "playing");
-    const audio = playAudioFromBase64(response.audioBase64, response.format);
-    audioPlaybackRef.current = audio;
-    audioPlayingMessageIdRef.current = messageId;
-    audio.onended = () => {
-      if (audioPlaybackRef.current === audio) {
-        audioPlaybackRef.current = null;
-        audioPlayingMessageIdRef.current = null;
-        setAudioStatus(messageId, null);
-      }
-    };
-    audio.onerror = () => {
-      if (audioPlaybackRef.current === audio) {
-        audioPlaybackRef.current = null;
-        audioPlayingMessageIdRef.current = null;
-        setAudioStatus(messageId, null);
-      }
-    };
-  }, [setAudioStatus]);
+  const startAudioPlayback = useCallback(
+    (messageId: string, response: TtsPreviewResponse) => {
+      setAudioStatus(messageId, "playing");
+      const audio = playAudioFromBase64(response.audioBase64, response.format);
+      audioPlaybackRef.current = audio;
+      audioPlayingMessageIdRef.current = messageId;
+      audio.onended = () => {
+        if (audioPlaybackRef.current === audio) {
+          audioPlaybackRef.current = null;
+          audioPlayingMessageIdRef.current = null;
+          setAudioStatus(messageId, null);
+        }
+      };
+      audio.onerror = () => {
+        if (audioPlaybackRef.current === audio) {
+          audioPlaybackRef.current = null;
+          audioPlayingMessageIdRef.current = null;
+          setAudioStatus(messageId, null);
+        }
+      };
+    },
+    [setAudioStatus],
+  );
 
   const stopAudioPlayback = useCallback(() => {
     const audio = audioPlaybackRef.current;
@@ -451,26 +495,32 @@ export function ChatConversationPage() {
     }
   }, [setAudioStatus]);
 
-  const handleStopAudio = useCallback((message: StoredMessage) => {
-    if (audioPlayingMessageIdRef.current && audioPlayingMessageIdRef.current !== message.id) {
-      return;
-    }
-    if (deviceTtsMessageIdRef.current && deviceTtsMessageIdRef.current !== message.id) {
-      return;
-    }
-    stopAudioPlayback();
-  }, [stopAudioPlayback]);
+  const handleStopAudio = useCallback(
+    (message: StoredMessage) => {
+      if (audioPlayingMessageIdRef.current && audioPlayingMessageIdRef.current !== message.id) {
+        return;
+      }
+      if (deviceTtsMessageIdRef.current && deviceTtsMessageIdRef.current !== message.id) {
+        return;
+      }
+      stopAudioPlayback();
+    },
+    [stopAudioPlayback],
+  );
 
-  const handleCancelAudio = useCallback((message: StoredMessage) => {
-    if (audioRequestRef.current && audioRequestRef.current.messageId !== message.id) {
-      return;
-    }
-    if (deviceTtsRequestRef.current && deviceTtsRequestRef.current.messageId === message.id) {
-      void cancelDeviceTtsRequest(message.id);
-      return;
-    }
-    void cancelAudioGeneration();
-  }, [cancelAudioGeneration, cancelDeviceTtsRequest]);
+  const handleCancelAudio = useCallback(
+    (message: StoredMessage) => {
+      if (audioRequestRef.current && audioRequestRef.current.messageId !== message.id) {
+        return;
+      }
+      if (deviceTtsRequestRef.current && deviceTtsRequestRef.current.messageId === message.id) {
+        void cancelDeviceTtsRequest(message.id);
+        return;
+      }
+      void cancelAudioGeneration();
+    },
+    [cancelAudioGeneration, cancelDeviceTtsRequest],
+  );
 
   useEffect(() => {
     const chatKey = `${characterId ?? ""}:${sessionId ?? ""}`;
@@ -534,7 +584,9 @@ export function ChatConversationPage() {
         }
         setAudioStatus(message.id, null);
         const messageText = error instanceof Error ? error.message : String(error);
-        const isAbort = messageText.toLowerCase().includes("aborted") || messageText.toLowerCase().includes("cancel");
+        const isAbort =
+          messageText.toLowerCase().includes("aborted") ||
+          messageText.toLowerCase().includes("cancel");
         if (isAbort) return;
         throw error;
       }
@@ -583,13 +635,13 @@ export function ChatConversationPage() {
         }
 
         try {
-          const response = await generateTtsPreview(
+          const response = await generateTtsForMessage(
             voice.providerId,
             voice.modelId,
             voice.voiceId,
             trimmedText,
             voice.prompt,
-            requestId
+            requestId,
           );
           if (audioRequestRef.current?.requestId !== requestId) {
             cancelledAudioRequestsRef.current.delete(requestId);
@@ -610,7 +662,9 @@ export function ChatConversationPage() {
           }
           setAudioStatus(message.id, null);
           const messageText = error instanceof Error ? error.message : String(error);
-          const isAbort = messageText.toLowerCase().includes("aborted") || messageText.toLowerCase().includes("cancel");
+          const isAbort =
+            messageText.toLowerCase().includes("aborted") ||
+            messageText.toLowerCase().includes("cancel");
           if (isAbort) return;
           throw error;
         }
@@ -666,13 +720,13 @@ export function ChatConversationPage() {
         }
 
         try {
-          const response = await generateTtsPreview(
+          const response = await generateTtsForMessage(
             providerId,
             modelId,
             voiceId,
             trimmedText,
             undefined,
-            requestId
+            requestId,
           );
           if (audioRequestRef.current?.requestId !== requestId) {
             cancelledAudioRequestsRef.current.delete(requestId);
@@ -692,7 +746,9 @@ export function ChatConversationPage() {
           }
           setAudioStatus(message.id, null);
           const messageText = error instanceof Error ? error.message : String(error);
-          const isAbort = messageText.toLowerCase().includes("aborted") || messageText.toLowerCase().includes("cancel");
+          const isAbort =
+            messageText.toLowerCase().includes("aborted") ||
+            messageText.toLowerCase().includes("cancel");
           if (isAbort) return;
           throw error;
         }
@@ -711,7 +767,7 @@ export function ChatConversationPage() {
       stopDeviceTtsPlayback,
       startAudioPlayback,
       stopAudioPlayback,
-    ]
+    ],
   );
 
   const effectiveVoiceAutoplay = useMemo(() => {
@@ -725,48 +781,60 @@ export function ChatConversationPage() {
     await handleAbort();
   }, [accessibilitySettings, handleAbort]);
 
-  const openMessageActions = useCallback((message: StoredMessage) => {
-    setMessageAction({ message, mode: "view" });
-    setEditDraft(message.content);
-    setActionError(null);
-    setActionStatus(null);
-    setActionBusy(false);
-  }, [setMessageAction, setEditDraft, setActionError, setActionStatus, setActionBusy]);
+  const openMessageActions = useCallback(
+    (message: StoredMessage) => {
+      setMessageAction({ message, mode: "view" });
+      setEditDraft(message.content);
+      setActionError(null);
+      setActionStatus(null);
+      setActionBusy(false);
+    },
+    [setMessageAction, setEditDraft, setActionError, setActionStatus, setActionBusy],
+  );
 
-  const scheduleLongPress = useCallback((message: StoredMessage) => {
-    const timer = window.setTimeout(() => {
-      initializeLongPressTimer(null);
-      openMessageActions(message);
-    }, LONG_PRESS_DELAY);
-    initializeLongPressTimer(timer);
-  }, [initializeLongPressTimer, openMessageActions]);
+  const scheduleLongPress = useCallback(
+    (message: StoredMessage) => {
+      const timer = window.setTimeout(() => {
+        initializeLongPressTimer(null);
+        openMessageActions(message);
+      }, LONG_PRESS_DELAY);
+      initializeLongPressTimer(timer);
+    },
+    [initializeLongPressTimer, openMessageActions],
+  );
 
-  const handlePressStart = useCallback((message: StoredMessage) => (event: React.MouseEvent | React.TouchEvent) => {
-    if (message.id.startsWith("placeholder")) return;
+  const handlePressStart = useCallback(
+    (message: StoredMessage) => (event: React.MouseEvent | React.TouchEvent) => {
+      if (message.id.startsWith("placeholder")) return;
 
-    const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-    const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-    pressStartPosition.current = { x: clientX, y: clientY };
+      const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+      const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
+      pressStartPosition.current = { x: clientX, y: clientY };
 
-    setHeldMessageId(message.id);
-    scheduleLongPress(message);
-  }, [scheduleLongPress, setHeldMessageId]);
+      setHeldMessageId(message.id);
+      scheduleLongPress(message);
+    },
+    [scheduleLongPress, setHeldMessageId],
+  );
 
-  const handlePressMove = useCallback((event: React.MouseEvent | React.TouchEvent) => {
-    if (!pressStartPosition.current) return;
+  const handlePressMove = useCallback(
+    (event: React.MouseEvent | React.TouchEvent) => {
+      if (!pressStartPosition.current) return;
 
-    const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-    const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+      const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+      const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
 
-    const deltaX = Math.abs(clientX - pressStartPosition.current.x);
-    const deltaY = Math.abs(clientY - pressStartPosition.current.y);
+      const deltaX = Math.abs(clientX - pressStartPosition.current.x);
+      const deltaY = Math.abs(clientY - pressStartPosition.current.y);
 
-    if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
-      initializeLongPressTimer(null);
-      setHeldMessageId(null);
-      pressStartPosition.current = null;
-    }
-  }, [initializeLongPressTimer, setHeldMessageId]);
+      if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
+        initializeLongPressTimer(null);
+        setHeldMessageId(null);
+        pressStartPosition.current = null;
+      }
+    },
+    [initializeLongPressTimer, setHeldMessageId],
+  );
 
   const handlePressEnd = useCallback(() => {
     initializeLongPressTimer(null);
@@ -820,20 +888,26 @@ export function ChatConversationPage() {
     container.scrollTo({ top: container.scrollHeight, behavior });
   }, []);
 
-  const handleContextMenu = useCallback((message: StoredMessage) => (event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    initializeLongPressTimer(null);
-    if (message.id.startsWith("placeholder")) return;
-    openMessageActions(message);
-    setHeldMessageId(null);
-  }, [initializeLongPressTimer, setHeldMessageId, openMessageActions]);
+  const handleContextMenu = useCallback(
+    (message: StoredMessage) => (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      initializeLongPressTimer(null);
+      if (message.id.startsWith("placeholder")) return;
+      openMessageActions(message);
+      setHeldMessageId(null);
+    },
+    [initializeLongPressTimer, setHeldMessageId, openMessageActions],
+  );
 
-  const closeMessageActions = useCallback((force = false) => {
-    if (!force && (actionBusy || messageAction?.mode === "edit")) {
-      return;
-    }
-    resetMessageActions();
-  }, [actionBusy, messageAction?.mode, resetMessageActions]);
+  const closeMessageActions = useCallback(
+    (force = false) => {
+      if (!force && (actionBusy || messageAction?.mode === "edit")) {
+        return;
+      }
+      resetMessageActions();
+    },
+    [actionBusy, messageAction?.mode, resetMessageActions],
+  );
 
   const handleSendMessage = useCallback(async () => {
     if (sending) return;
@@ -850,7 +924,16 @@ export function ChatConversationPage() {
       playAccessibilitySound("send", accessibilitySettings);
       await handleContinue();
     }
-  }, [sending, setError, draft, setDraft, handleSend, handleContinue, pendingAttachments, accessibilitySettings]);
+  }, [
+    sending,
+    setError,
+    draft,
+    setDraft,
+    handleSend,
+    handleContinue,
+    pendingAttachments,
+    accessibilitySettings,
+  ]);
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
@@ -873,14 +956,17 @@ export function ChatConversationPage() {
       abortRequestedRef.current = false;
       const lastPlayable = [...messages]
         .reverse()
-        .find((msg) => (msg.role === "assistant" || msg.role === "scene")
-          && !msg.id.startsWith("placeholder")
-          && msg.content.trim().length > 0);
+        .find(
+          (msg) =>
+            (msg.role === "assistant" || msg.role === "scene") &&
+            !msg.id.startsWith("placeholder") &&
+            msg.content.trim().length > 0,
+        );
       if (lastPlayable) {
         sendStartSignatureRef.current = `${lastPlayable.id}:${replacePlaceholders(
           lastPlayable.content,
           character?.name ?? "",
-          persona?.title ?? ""
+          persona?.title ?? "",
         )}`;
       } else {
         sendStartSignatureRef.current = null;
@@ -899,16 +985,19 @@ export function ChatConversationPage() {
 
     const lastPlayable = [...messages]
       .reverse()
-      .find((msg) => (msg.role === "assistant" || msg.role === "scene")
-        && !msg.id.startsWith("placeholder")
-        && msg.content.trim().length > 0);
+      .find(
+        (msg) =>
+          (msg.role === "assistant" || msg.role === "scene") &&
+          !msg.id.startsWith("placeholder") &&
+          msg.content.trim().length > 0,
+      );
 
     if (!lastPlayable) return;
 
     const displayText = replacePlaceholders(
       lastPlayable.content,
       character?.name ?? "",
-      persona?.title ?? ""
+      persona?.title ?? "",
     );
     const signature = `${lastPlayable.id}:${displayText}`;
     if (signature === sendStartSignatureRef.current) return;
@@ -923,7 +1012,14 @@ export function ChatConversationPage() {
       .finally(() => {
         autoPlayInFlightRef.current = false;
       });
-  }, [character?.name, effectiveVoiceAutoplay, handlePlayMessageAudio, messages, persona?.title, sending]);
+  }, [
+    character?.name,
+    effectiveVoiceAutoplay,
+    handlePlayMessageAudio,
+    messages,
+    persona?.title,
+    sending,
+  ]);
 
   useEffect(() => {
     const wasGenerating = wasGeneratingRef.current;
@@ -1011,13 +1107,13 @@ export function ChatConversationPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden" style={{ backgroundColor: backgroundImageData ? undefined : '#050505' }}>
+    <div
+      className="flex h-screen flex-col overflow-hidden"
+      style={{ backgroundColor: backgroundImageData ? undefined : "#050505" }}
+    >
       {/* Full-screen background image (behind all content) */}
       {backgroundImageData && (
-        <div
-          className="pointer-events-none fixed inset-0 z-0"
-          style={chatBackgroundStyle}
-        />
+        <div className="pointer-events-none fixed inset-0 z-0" style={chatBackgroundStyle} />
       )}
 
       {/* Header */}
@@ -1040,7 +1136,7 @@ export function ChatConversationPage() {
         <div
           className="space-y-6 px-3 pb-24 pt-4"
           style={{
-            backgroundColor: backgroundImageData ? theme.contentOverlay : 'transparent',
+            backgroundColor: backgroundImageData ? theme.contentOverlay : "transparent",
           }}
         >
           {hasMoreMessagesBefore && (
@@ -1050,7 +1146,7 @@ export function ChatConversationPage() {
                 onClick={() => void loadOlderFromDb()}
                 className={cn(
                   "px-3 py-1.5 text-xs text-white/70 border border-white/15 bg-white/5 hover:bg-white/10",
-                  radius.full
+                  radius.full,
                 )}
               >
                 Load earlier messages
@@ -1068,16 +1164,16 @@ export function ChatConversationPage() {
             const displayContent = replacePlaceholders(message.content, charName, personaName);
             const eventHandlers = actionable
               ? {
-                onMouseDown: handlePressStart(message),
-                onMouseMove: handlePressMove,
-                onMouseUp: handlePressEnd,
-                onMouseLeave: handlePressEnd,
-                onTouchStart: handlePressStart(message),
-                onTouchMove: handlePressMove,
-                onTouchEnd: handlePressEnd,
-                onTouchCancel: handlePressEnd,
-                onContextMenu: handleContextMenu(message),
-              }
+                  onMouseDown: handlePressStart(message),
+                  onMouseMove: handlePressMove,
+                  onMouseUp: handlePressEnd,
+                  onMouseLeave: handlePressEnd,
+                  onTouchStart: handlePressStart(message),
+                  onTouchMove: handlePressMove,
+                  onTouchEnd: handlePressEnd,
+                  onTouchCancel: handlePressEnd,
+                  onContextMenu: handleContextMenu(message),
+                }
               : {};
 
             return (
@@ -1201,14 +1297,17 @@ export function ChatConversationPage() {
             Choose a character to continue this conversation with:
           </p>
           {availableCharacters
-            .filter(c => c.id !== characterId)
+            .filter((c) => c.id !== characterId)
             .map((char) => (
               <CharacterOption
                 key={char.id}
                 character={char}
                 onClick={async () => {
                   if (!messageToBranch) return;
-                  const result = await chatController.handleBranchToCharacter(messageToBranch, char.id);
+                  const result = await chatController.handleBranchToCharacter(
+                    messageToBranch,
+                    char.id,
+                  );
                   if (result) {
                     setShowCharacterSelector(false);
                     setMessageToBranch(null);
@@ -1217,7 +1316,7 @@ export function ChatConversationPage() {
                 }}
               />
             ))}
-          {availableCharacters.filter(c => c.id !== characterId).length === 0 && (
+          {availableCharacters.filter((c) => c.id !== characterId).length === 0 && (
             <p className="text-center text-white/40 py-8">
               No other characters available. Create more characters first.
             </p>
@@ -1273,7 +1372,7 @@ function CharacterOption({ character, onClick }: { character: Character; onClick
         radius.lg,
         "border border-white/10 bg-white/5",
         "hover:border-white/20 hover:bg-white/10",
-        "active:scale-[0.99]"
+        "active:scale-[0.99]",
       )}
     >
       <div className={cn("h-10 w-10 overflow-hidden shrink-0", radius.full, "bg-white/10")}>

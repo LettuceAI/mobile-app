@@ -239,6 +239,13 @@ pub fn run() {
             tts_manager::commands::audio_provider_search_voices,
             tts_manager::commands::voice_design_preview,
             tts_manager::commands::voice_design_create,
+            tts_manager::audio_cache::tts_cache_key,
+            tts_manager::audio_cache::tts_cache_exists,
+            tts_manager::audio_cache::tts_cache_get,
+            tts_manager::audio_cache::tts_cache_save,
+            tts_manager::audio_cache::tts_cache_delete,
+            tts_manager::audio_cache::tts_cache_clear,
+            tts_manager::audio_cache::tts_cache_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

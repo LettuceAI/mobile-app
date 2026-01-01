@@ -9,6 +9,7 @@ import {
   Loader2,
   Edit3,
   RefreshCw,
+  HardDrive,
 } from "lucide-react";
 
 import {
@@ -27,12 +28,15 @@ import {
   playAudioFromBase64,
   designVoicePreview,
   createVoiceFromPreview,
+  getTtsCacheStats,
+  clearTtsCache,
   DEVICE_TTS_PROVIDER_ID,
   type AudioProvider,
   type AudioProviderType,
   type AudioModel,
   type UserVoice,
   type CachedVoice,
+  type TtsCacheStats,
 } from "../../../core/storage/audioProviders";
 
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
@@ -44,6 +48,8 @@ export function VoicesPage() {
   const [loadingVoicesFor, setLoadingVoicesFor] = useState<string | null>(null);
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [cacheStats, setCacheStats] = useState<TtsCacheStats | null>(null);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   // Voice editor state
   const [isVoiceEditorOpen, setIsVoiceEditorOpen] = useState(false);
@@ -86,10 +92,12 @@ export function VoicesPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [loadedProviders, loadedVoices] = await Promise.all([
+      const [loadedProviders, loadedVoices, stats] = await Promise.all([
         listAudioProviders(),
         listUserVoices(),
+        getTtsCacheStats(),
       ]);
+      setCacheStats(stats);
       setProviders(loadedProviders);
       setUserVoices(loadedVoices);
 
@@ -444,6 +452,66 @@ export function VoicesPage() {
         </section>
       )}
 
+      {/* TTS Audio Cache Section */}
+      <section>
+        <div className="mb-2 px-1">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
+            Audio Cache
+          </h2>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
+              <HardDrive className="h-4 w-4 text-white/70" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">TTS Audio Cache</p>
+              <p className="text-xs text-white/50 mt-0.5">
+                Generated voice audio is cached to reduce regenerations
+              </p>
+              {cacheStats && (
+                <div className="mt-2 flex items-center gap-3 text-xs text-white/60">
+                  <span>
+                    {cacheStats.count} file{cacheStats.count !== 1 ? "s" : ""}
+                  </span>
+                  <span>•</span>
+                  <span>{formatBytes(cacheStats.sizeBytes)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              if (isClearingCache) return;
+              setIsClearingCache(true);
+              try {
+                await clearTtsCache();
+                const stats = await getTtsCacheStats();
+                setCacheStats(stats);
+              } catch (err) {
+                console.error("Failed to clear TTS cache:", err);
+              } finally {
+                setIsClearingCache(false);
+              }
+            }}
+            disabled={isClearingCache || !cacheStats || cacheStats.count === 0}
+            className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 py-2 text-xs text-white/70 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isClearingCache ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Clearing...
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-3 w-3" />
+                Clear Cache
+              </>
+            )}
+          </button>
+        </div>
+      </section>
+
       {/* Voice Selection Menu */}
       <BottomMenu
         isOpen={!!selectedVoice}
@@ -577,6 +645,14 @@ export function VoicesPage() {
       />
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 interface VoiceEditorProps {
