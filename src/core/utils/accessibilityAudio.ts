@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AccessibilitySettings } from "../storage/schemas";
 
-export type AccessibilitySoundType = keyof AccessibilitySettings;
+export type AccessibilitySoundType = "send" | "success" | "failure";
 
 type AccessibilitySoundBase64 = Record<AccessibilitySoundType, string>;
 type AccessibilitySoundUrls = Record<AccessibilitySoundType, string>;
@@ -10,7 +10,7 @@ const SOUND_MIME_TYPE = "audio/mpeg";
 
 let soundUrls: AccessibilitySoundUrls | null = null;
 
-async function loadSoundUrls() {
+async function loadSoundUrls(): Promise<AccessibilitySoundUrls> {
   if (soundUrls) return soundUrls;
 
   const base64 = await invoke<AccessibilitySoundBase64>("accessibility_sound_base64");
@@ -29,7 +29,7 @@ function clampVolume(v: number) {
 
 export async function playAccessibilitySound(
   type: AccessibilitySoundType,
-  settings?: AccessibilitySettings
+  settings?: AccessibilitySettings,
 ) {
   const cfg = settings?.[type];
   if (!cfg?.enabled) return;
