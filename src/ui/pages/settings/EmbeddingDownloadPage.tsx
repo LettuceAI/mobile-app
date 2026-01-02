@@ -450,6 +450,34 @@ export function EmbeddingDownloadPage() {
                             Cancel Download
                         </button>
                     )}
+
+                    {/* Retry Button */}
+                    {!isDownloading && progress.status === "failed" && (
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => {
+                                    setError(null);
+                                    startDownload();
+                                }}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-blue-600"
+                            >
+                                <Download className="h-4 w-4" />
+                                Retry Download
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (returnTo) {
+                                        navigate(returnTo);
+                                    } else {
+                                        navigate("/settings/advanced");
+                                    }
+                                }}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white/60 transition hover:bg-white/10"
+                            >
+                                Go Back
+                            </button>
+                        </div>
+                    )}
                 </motion.div>
             </main>
         </div >
