@@ -1,8 +1,6 @@
-import { Loader2, Trash2, SlidersHorizontal, FileText, Info, Cpu, Settings, Brain } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
-import { formatAdvancedModelSettingsSummary, sanitizeAdvancedModelSettings, ADVANCED_REASONING_BUDGET_RANGE } from "../../components/AdvancedModelSettingsForm";
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
@@ -10,21 +8,26 @@ import {
   ADVANCED_FREQUENCY_PENALTY_RANGE,
   ADVANCED_PRESENCE_PENALTY_RANGE,
   ADVANCED_TOP_K_RANGE,
+  ADVANCED_REASONING_BUDGET_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
-import { BottomMenu } from "../../components/BottomMenu";
+import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
+import { Loader2, Trash2, FileText, Info, Cpu, Settings, Brain, RefreshCw, Bot, ChevronDown, Check, Search, ChevronRight } from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
 import { getProviderReasoningSupport } from "../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../core/prompts/service";
-import { cn, radius, colors, interactive } from "../../design-tokens";
+import { cn } from "../../design-tokens";
 
 export function EditModelPage() {
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<"basics" | "advanced">("basics");
+  const [isManualInput, setIsManualInput] = useState(false);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
   const {
     state: {
@@ -32,12 +35,13 @@ export function EditModelPage() {
       saving,
       deleting,
       verifying,
+      fetchingModels,
+      fetchedModels,
       error,
       providers,
       defaultModelId,
       editorModel,
       modelAdvancedDraft,
-      overrideEnabled,
     },
     isNew,
     canSave,
@@ -47,7 +51,6 @@ export function EditModelPage() {
     handleModelNameChange,
     handleProviderSelection,
     setModelAdvancedDraft,
-    toggleOverride,
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
@@ -60,7 +63,40 @@ export function EditModelPage() {
     handleSave,
     handleDelete,
     handleSetDefault,
+    fetchModels,
   } = useModelEditorController();
+
+  // Switch to select mode automatically if models are fetched
+  useEffect(() => {
+    if (fetchedModels.length > 0) {
+      setIsManualInput(false);
+    }
+  }, [fetchedModels.length]);
+
+  // Auto-fetch models when provider changes or initial load
+  useEffect(() => {
+    if (editorModel?.providerId) {
+      fetchModels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorModel?.providerId, editorModel?.providerLabel]);
+
+  // Reset search when selector closes
+  useEffect(() => {
+    if (!showModelSelector) {
+      setSearchQuery("");
+    }
+  }, [showModelSelector]);
+
+  const filteredModels = fetchedModels.filter(m => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      m.id.toLowerCase().includes(q) ||
+      (m.displayName && m.displayName.toLowerCase().includes(q)) ||
+      (m.description && m.description.toLowerCase().includes(q))
+    );
+  });
 
   // Get reasoning support for the current provider
   const reasoningSupport: ReasoningSupport = editorModel?.providerId
@@ -122,42 +158,21 @@ export function EditModelPage() {
     updateEditorModel({ [key]: next } as any);
   };
 
+  const handleSelectModel = (modelId: string, displayName?: string) => {
+    handleModelNameChange(modelId);
+    if (displayName) {
+      handleDisplayNameChange(displayName);
+    } else {
+      handleDisplayNameChange(modelId);
+    }
+    setShowModelSelector(false);
+  };
+
   if (loading || !editorModel) {
     return (
       <div className="flex h-full flex-col text-gray-200">
         <div className="flex flex-1 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
-        </div>
-
-        {/* Bottom Tab Bar - shown during loading too */}
-        <div className={cn(
-          "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
-          colors.glass.strong
-        )}>
-          <div className={cn(
-            radius.lg,
-            "grid grid-cols-2 gap-2 p-1",
-            colors.surface.elevated
-          )}>
-            {[
-              { id: "basics" as const, icon: Cpu, label: "Basics" },
-              { id: "advanced" as const, icon: Settings, label: "Advanced" }
-            ].map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                type="button"
-                disabled
-                className={cn(
-                  radius.md,
-                  "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
-                  id === "basics" ? "bg-white/10 text-white" : colors.text.tertiary
-                )}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     );
@@ -165,8 +180,10 @@ export function EditModelPage() {
 
   return (
     <div className="flex min-h-dvh flex-col text-gray-200">
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24">
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-32">
         <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
           {error && (
@@ -175,336 +192,271 @@ export function EditModelPage() {
             </div>
           )}
 
-          {/* ========== BASICS TAB ========== */}
-          {activeTab === "basics" && (
-            <>
-              <div className="space-y-2">
-                <label className="text-[11px] font-medium text-white/70">DISPLAY NAME</label>
-                <input
-                  type="text"
-                  value={editorModel.displayName}
-                  onChange={(e) => handleDisplayNameChange(e.target.value)}
-                  placeholder="GPT-4 Turbo"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                />
-                <p className="text-xs text-white/50">Friendly name shown in the UI</p>
+          {/* 1. PLATFORM (PROVIDER) */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model Platform</label>
+            {providers.length === 0 ? (
+              <div className="rounded-xl border border-orange-400/40 bg-orange-500/10 px-3 py-2 text-sm text-orange-200">
+                No providers configured. Add a provider first.
+              </div>
+            ) : (
+              <div className="relative">
+                <select
+                  value={`${editorModel.providerId}|${editorModel.providerLabel}`}
+                  onChange={(e) => {
+                    const [providerId, providerLabel] = e.target.value.split("|");
+                    const selectedProvider = providers.find((p) => p.providerId === providerId && p.label === providerLabel);
+                    handleProviderSelection(providerId, selectedProvider?.label ?? providerLabel);
+                  }}
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition focus:border-white/30 focus:outline-none"
+                >
+                  {providers.map((prov) => (
+                    <option key={prov.id} value={`${prov.providerId}|${prov.label}`} className="bg-[#16171d]">
+                      {prov.label || prov.providerId}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+              </div>
+            )}
+          </div>
+
+          <div className="h-px bg-white/5" />
+
+          {/* 2. MODEL NAME & ID */}
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Display Name</label>
+              <input
+                type="text"
+                value={editorModel.displayName}
+                onChange={(e) => handleDisplayNameChange(e.target.value)}
+                placeholder="e.g. My Favorite ChatGPT"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model ID</label>
+                <div className="flex items-center gap-3">
+                  {fetchedModels.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsManualInput(!isManualInput)}
+                      className="text-[10px] uppercase font-bold tracking-wider text-white/40 hover:text-white/80 transition"
+                    >
+                      {isManualInput ? "Show List" : "Manual Input"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={fetchModels}
+                    disabled={fetchingModels || !editorModel?.providerId}
+                    className="text-white/40 hover:text-white/80 transition disabled:opacity-30"
+                    title="Refresh model list"
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5", fetchingModels && "animate-spin")} />
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-medium text-white/70">MODEL NAME</label>
+              {!isManualInput && fetchedModels.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowModelSelector(true)}
+                    className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition hover:bg-black/30 active:scale-[0.99]"
+                  >
+                    <span className={cn("block truncate", !editorModel.name && "text-white/40")}>
+                      {fetchedModels.find(m => m.id === editorModel.name)?.displayName || editorModel.name || "Select a model..."}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
+
+                  <BottomMenu
+                    isOpen={showModelSelector}
+                    onClose={() => setShowModelSelector(false)}
+                    title="Select Model"
+                  >
+                    <div className="px-4 pb-2 sticky top-0 z-10 bg-[#0f1014]">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                        <input
+                          value={searchQuery}
+                          onChange={e => setSearchQuery(e.target.value)}
+                          placeholder="Search models..."
+                          className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    <MenuSection>
+                      {filteredModels.length > 0 ? (
+                        filteredModels.map(m => (
+                          <MenuButton
+                            key={m.id}
+                            icon={Bot}
+                            title={m.displayName || m.id}
+                            description={m.description || m.id}
+                            color="from-emerald-500 to-emerald-600"
+                            onClick={() => handleSelectModel(m.id, m.displayName)}
+                          />
+                        ))
+                      ) : (
+                        <div className="py-12 text-center text-sm text-white/40">
+                          No models found matching "{searchQuery}"
+                        </div>
+                      )}
+                    </MenuSection>
+                  </BottomMenu>
+                </>
+              ) : (
                 <input
                   type="text"
                   value={editorModel.name}
                   onChange={(e) => handleModelNameChange(e.target.value)}
-                  placeholder="gpt-4o-mini, claude-3-5-sonnet, ..."
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                  placeholder="e.g. gpt-4o"
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
                 />
-                <p className="text-xs text-white/50">Exact model id from your provider</p>
+              )}
+            </div>
+          </div>
+
+          <div className="h-px bg-white/5" />
+
+          {/* 3. COLLAPSIBLE ADVANCED SETTINGS */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+              className="flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/5 px-4 py-4 transition hover:bg-white/10"
+            >
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-white/5 p-2">
+                  <Settings className="h-4 w-4 text-white/60" />
+                </div>
+                <div className="text-left">
+                  <span className="block text-sm font-semibold text-white">Advanced Settings</span>
+                  <span className="block text-[11px] text-white/40 uppercase tracking-wider">Parameters, Prompt, & Capabilities</span>
+                </div>
               </div>
-
-              {/* Provider - only show dropdown if multiple providers */}
-              {providers.length === 0 ? (
-                <div className="rounded-xl border border-orange-400/40 bg-orange-500/10 px-3 py-2 text-sm text-orange-200">
-                  No providers configured. Add a provider first.
-                </div>
-              ) : providers.length === 1 ? (
-                <div className="space-y-2">
-                  <label className="text-[11px] font-medium text-white/70">PROVIDER</label>
-                  <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white">
-                    {providerDisplay(providers[0])}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <label className="text-[11px] font-medium text-white/70">PROVIDER</label>
-                  <select
-                    value={`${editorModel.providerId}|${editorModel.providerLabel}`}
-                    onChange={(e) => {
-                      const [providerId, providerLabel] = e.target.value.split("|");
-                      const selectedProvider =
-                        providers.find((p) => p.providerId === providerId && p.label === providerLabel) ||
-                        providers.find((p) => p.providerId === providerId);
-                      handleProviderSelection(providerId, selectedProvider?.label ?? providerLabel);
-                    }}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white transition focus:border-white/30 focus:outline-none"
-                  >
-                    {providers.map((prov) => (
-                      <option key={prov.id} value={`${prov.providerId}|${prov.label}`} className="bg-black">
-                        {providerDisplay(prov)}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-white/50">Choose provider credentials to use</p>
-                </div>
-              )}
-
-
-
-              {!isNew && (
-                <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-semibold text-white">Default Model</label>
-                    <p className="mt-1 text-xs text-gray-400">{defaultModelId === editorModel.id ? "This model is set as default." : "Use this model by default."}</p>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="use-as-default"
-                      type="checkbox"
-                      checked={defaultModelId === editorModel.id}
-                      onChange={handleSetDefault}
-                      disabled={defaultModelId === editorModel.id}
-                      className="peer sr-only"
-                    />
-                    <label
-                      htmlFor="use-as-default"
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${defaultModelId === editorModel.id
-                        ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                        : 'bg-white/20'
-                        }`}
-                    >
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${defaultModelId === editorModel.id ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {!isNew && (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleting}
-                  className="w-full rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-100 transition hover:border-rose-400/50 hover:bg-rose-500/20 active:scale-[0.99] disabled:opacity-50"
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    {deleting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                    {deleting ? "Deleting..." : "Delete Model"}
-                  </span>
-                </button>
-              )}
-            </>
-          )}
-
-          {/* ========== ADVANCED TAB ========== */}
-          {activeTab === "advanced" && (
-            <>
-              {/* System Prompt Template */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-medium text-white/70">SYSTEM PROMPT TEMPLATE</label>
-                {loadingTemplates ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                    <Loader2 className="h-4 w-4 animate-spin text-white/50" />
-                    <span className="text-sm text-white/50">Loading templates...</span>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-                    <select
-                      value={editorModel.promptTemplateId || ""}
-                      onChange={(e) => handlePromptTemplateChange(e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 pl-9 text-white transition focus:border-white/30 focus:outline-none"
-                    >
-                      <option value="">Use app default</option>
-                      {promptTemplates
-                        .filter(t => t.name !== "App Default")
-                        .map((template) => (
-                          <option key={template.id} value={template.id}>
-                            {template.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
+              <ChevronRight
+                className={cn(
+                  "h-5 w-5 text-white/20 transition-transform duration-300",
+                  isAdvancedOpen && "rotate-90"
                 )}
-                <p className="text-xs text-white/50">
-                  Override the default system prompt for this model
-                </p>
-              </div>
+              />
+            </button>
 
-              {/* Capabilities Section */}
-              <div className="space-y-2">
-                <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
+            {isAdvancedOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                className="overflow-hidden space-y-8 pt-2 px-1"
+              >
+                {/* System Prompt Template */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">System Prompt Template</label>
+                  {loadingTemplates ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                      <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                      <span className="text-sm text-white/50">Loading templates...</span>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                      <select
+                        value={editorModel.promptTemplateId || ""}
+                        onChange={(e) => handlePromptTemplateChange(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 pl-10 text-sm text-white transition focus:border-white/30 focus:outline-none"
+                      >
+                        <option value="" className="bg-[#16171d]">Use app default</option>
+                        {promptTemplates
+                          .filter(t => t.name !== "App Default")
+                          .map((template) => (
+                            <option key={template.id} value={template.id} className="bg-[#16171d]">
+                              {template.name}
+                            </option>
+                          ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Capabilities */}
+                <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5">
                   <div>
-                    <p className="text-[11px] font-medium text-white/70">CAPABILITIES</p>
-                    <p className="mt-1 text-xs text-white/50">Configure what this model can take as input and produce as output</p>
+                    <p className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Capabilities</p>
+                    <p className="mt-1 text-xs text-white/40">Supported input/output modalities</p>
                   </div>
 
-                  {/* Input Scopes */}
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-[11px] font-medium text-white/70">INPUT SCOPES</p>
-                      <p className="mt-0.5 text-xs text-white/50">What this model can accept as input</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-bold tracking-wider text-white/20 uppercase">Input</p>
+                      {["image", "audio"].map((scope) => (
+                        <button
+                          key={scope}
+                          type="button"
+                          onClick={() => toggleScope("inputScopes", scope as any, !editorModel.inputScopes?.includes(scope as any))}
+                          className={cn(
+                            "flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition",
+                            editorModel.inputScopes?.includes(scope as any)
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                              : "bg-black/20 text-white/40 border border-transparent"
+                          )}
+                        >
+                          <span className="capitalize">{scope}</span>
+                          {editorModel.inputScopes?.includes(scope as any) && <Check size={12} />}
+                        </button>
+                      ))}
                     </div>
 
-                    <div className="space-y-2">
-                      {/* Text - Always enabled */}
-                      <div className="flex items-center justify-between rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2.5">
-                        <span className="text-sm font-medium text-emerald-200">Text</span>
-                        <div className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
-                          <span className="absolute right-0.5 inline-block h-5 w-5 rounded-full bg-white shadow" />
-                        </div>
-                      </div>
-
-                      {/* Image Input */}
-                      <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                        <span className="text-sm font-medium text-white/80">Image</span>
-                        <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.inputScopes?.includes("image") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
-                          }`}>
-                          <input
-                            type="checkbox"
-                            checked={editorModel.inputScopes?.includes("image") ?? false}
-                            onChange={(e) => toggleScope("inputScopes", "image", e.target.checked)}
-                            className="sr-only"
-                          />
-                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.inputScopes?.includes("image") ? "translate-x-5" : "translate-x-0"
-                            }`} />
-                        </label>
-                      </div>
-
-                      {/* Audio Input */}
-                      <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                        <span className="text-sm font-medium text-white/80">Audio</span>
-                        <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.inputScopes?.includes("audio") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
-                          }`}>
-                          <input
-                            type="checkbox"
-                            checked={editorModel.inputScopes?.includes("audio") ?? false}
-                            onChange={(e) => toggleScope("inputScopes", "audio", e.target.checked)}
-                            className="sr-only"
-                          />
-                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.inputScopes?.includes("audio") ? "translate-x-5" : "translate-x-0"
-                            }`} />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Output Scopes */}
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-[11px] font-medium text-white/70">OUTPUT SCOPES</p>
-                      <p className="mt-0.5 text-xs text-white/50">What this model can produce as output</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      {/* Text - Always enabled */}
-                      <div className="flex items-center justify-between rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2.5">
-                        <span className="text-sm font-medium text-emerald-200">Text</span>
-                        <div className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
-                          <span className="absolute right-0.5 inline-block h-5 w-5 rounded-full bg-white shadow" />
-                        </div>
-                      </div>
-
-                      {/* Image Output */}
-                      <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                        <span className="text-sm font-medium text-white/80">Image</span>
-                        <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.outputScopes?.includes("image") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
-                          }`}>
-                          <input
-                            type="checkbox"
-                            checked={editorModel.outputScopes?.includes("image") ?? false}
-                            onChange={(e) => toggleScope("outputScopes", "image", e.target.checked)}
-                            className="sr-only"
-                          />
-                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.outputScopes?.includes("image") ? "translate-x-5" : "translate-x-0"
-                            }`} />
-                        </label>
-                      </div>
-
-                      {/* Audio Output */}
-                      <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                        <span className="text-sm font-medium text-white/80">Audio</span>
-                        <label className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${editorModel.outputScopes?.includes("audio") ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
-                          }`}>
-                          <input
-                            type="checkbox"
-                            checked={editorModel.outputScopes?.includes("audio") ?? false}
-                            onChange={(e) => toggleScope("outputScopes", "audio", e.target.checked)}
-                            className="sr-only"
-                          />
-                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${editorModel.outputScopes?.includes("audio") ? "translate-x-5" : "translate-x-0"
-                            }`} />
-                        </label>
-                      </div>
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-bold tracking-wider text-white/20 uppercase">Output</p>
+                      {["image", "audio"].map((scope) => (
+                        <button
+                          key={scope}
+                          type="button"
+                          onClick={() => toggleScope("outputScopes", scope as any, !editorModel.outputScopes?.includes(scope as any))}
+                          className={cn(
+                            "flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition",
+                            editorModel.outputScopes?.includes(scope as any)
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                              : "bg-black/20 text-white/40 border border-transparent"
+                          )}
+                        >
+                          <span className="capitalize">{scope}</span>
+                          {editorModel.outputScopes?.includes(scope as any) && <Check size={12} />}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Advanced Settings */}
-              <section className="space-y-3 mb-5">
-                {/* Header with Toggle */}
-                <button
-                  onClick={toggleOverride}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-left transition active:bg-white/10"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="rounded-lg border border-purple-400/30 bg-purple-400/10 p-2">
-                        <SlidersHorizontal className="h-4 w-4 text-purple-400" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-semibold text-white">Override Global Settings</h3>
-                        {!overrideEnabled ? (
-                          <p className="text-xs text-white/50 truncate">Using global defaults</p>
-                        ) : (
-                          <p className="text-xs text-white/50 truncate">
-                            {formatAdvancedModelSettingsSummary(
-                              sanitizeAdvancedModelSettings(modelAdvancedDraft),
-                              "Custom settings",
-                            )}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center shrink-0">
-                      <div
-                        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-all duration-200 ${overrideEnabled
-                          ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                          : 'bg-white/20'
-                          }`}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${overrideEnabled ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                        />
-                      </div>
-                    </div>
+                {/* Parameters */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model Parameters</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowParameterSupport(true)}
+                      className="text-white/40 hover:text-white/60 transition"
+                    >
+                      <Info size={14} />
+                    </button>
                   </div>
-                </button>
 
-                {/* Parameter Support Link */}
-                <button
-                  type="button"
-                  onClick={() => setShowParameterSupport(true)}
-                  className="flex items-center gap-1.5 text-[11px] text-blue-400 hover:text-blue-300 transition px-1"
-                >
-                  <Info className="h-3 w-3" />
-                  View parameter support for this provider
-                </button>
-
-                {/* Expanded Settings */}
-                {overrideEnabled && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="space-y-3"
-                  >
+                  <div className="space-y-8 rounded-2xl border border-white/5 bg-white/5 p-5">
                     {/* Temperature */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium text-white">Temperature</label>
-                          <p className="mt-0.5 text-xs text-white/50">Controls randomness and creativity</p>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="block text-xs font-medium text-white/70">Temperature</span>
+                          <span className="block text-[10px] text-white/40">Higher = more creative</span>
                         </div>
-                        <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
+                        <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                           {modelAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
                         </span>
                       </div>
@@ -514,26 +466,23 @@ export function EditModelPage() {
                         max={ADVANCED_TEMPERATURE_RANGE.max}
                         step={0.01}
                         value={modelAdvancedDraft.temperature ?? 0.7}
-                        onChange={(e) => handleTemperatureChange(Number(e.target.value))}
+                        onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
                         className="w-full"
-                        style={{
-                          background: `linear-gradient(to right, rgb(52, 211, 153) 0%, rgb(52, 211, 153) ${((modelAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
-                        }}
                       />
-                      <div className="mt-2 flex items-center justify-between text-xs">
-                        <span className="text-white/40">0 - Precise</span>
-                        <span className="text-white/40">2 - Creative</span>
+                      <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                        <span>{ADVANCED_TEMPERATURE_RANGE.min}</span>
+                        <span>{ADVANCED_TEMPERATURE_RANGE.max}</span>
                       </div>
                     </div>
 
                     {/* Top P */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium text-white">Top P</label>
-                          <p className="mt-0.5 text-xs text-white/50">Nucleus sampling threshold</p>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="block text-xs font-medium text-white/70">Top P</span>
+                          <span className="block text-[10px] text-white/40">Lower = more focused</span>
                         </div>
-                        <span className="rounded-lg border border-blue-400/30 bg-blue-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-blue-200">
+                        <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                           {modelAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
                         </span>
                       </div>
@@ -543,441 +492,292 @@ export function EditModelPage() {
                         max={ADVANCED_TOP_P_RANGE.max}
                         step={0.01}
                         value={modelAdvancedDraft.topP ?? 1}
-                        onChange={(e) => handleTopPChange(Number(e.target.value))}
+                        onChange={(e) => handleTopPChange(parseFloat(e.target.value))}
                         className="w-full"
-                        style={{
-                          background: `linear-gradient(to right, rgb(96, 165, 250) 0%, rgb(96, 165, 250) ${((modelAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
-                        }}
                       />
-                      <div className="mt-2 flex items-center justify-between text-xs">
-                        <span className="text-white/40">0 - Focused</span>
-                        <span className="text-white/40">1 - Diverse</span>
+                      <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                        <span>{ADVANCED_TOP_P_RANGE.min}</span>
+                        <span>{ADVANCED_TOP_P_RANGE.max}</span>
                       </div>
                     </div>
 
                     {/* Max Tokens */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-3">
-                        <label className="text-sm font-medium text-white">Max Output Tokens</label>
-                        <p className="mt-0.5 text-xs text-white/50">Maximum response length</p>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="block text-xs font-medium text-white/70">Max Output Tokens</span>
+                          <span className="block text-[10px] text-white/40">Limit response length</span>
+                        </div>
+                        <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
+                          {modelAdvancedDraft.maxOutputTokens?.toLocaleString() ?? "Auto"}
+                        </span>
                       </div>
-
-                      <div className="flex gap-2 mb-3">
-                        <button
-                          type="button"
-                          onClick={() => handleMaxTokensChange(null as any)}
-                          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!modelAdvancedDraft.maxOutputTokens
-                            ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                            : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
-                            }`}
-                        >
-                          Auto
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMaxTokensChange(1024)}
-                          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${modelAdvancedDraft.maxOutputTokens
-                            ? 'border border-purple-400/40 bg-purple-400/20 text-purple-200'
-                            : 'border border-white/10 bg-white/5 text-white/60 active:bg-white/10'
-                            }`}
-                        >
-                          Custom
-                        </button>
+                      <input
+                        type="range"
+                        min={0}
+                        max={ADVANCED_MAX_TOKENS_RANGE.max}
+                        step={1}
+                        value={modelAdvancedDraft.maxOutputTokens ?? 0}
+                        onChange={(e) => handleMaxTokensChange(e.target.value === "0" ? null : parseInt(e.target.value))}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                        <span>Auto (0)</span>
+                        <span>{ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}</span>
                       </div>
+                    </div>
 
-                      {modelAdvancedDraft.maxOutputTokens !== null && modelAdvancedDraft.maxOutputTokens !== undefined && (
+                    {/* Penalties */}
+                    <div className="space-y-8">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">Frequency Penalty</span>
+                            <span className="block text-[10px] text-white/40">Reduce word repetition</span>
+                          </div>
+                          <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
+                            {modelAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
+                          </span>
+                        </div>
                         <input
-                          type="number"
-                          inputMode="numeric"
-                          min={ADVANCED_MAX_TOKENS_RANGE.min}
-                          max={ADVANCED_MAX_TOKENS_RANGE.max}
-                          value={modelAdvancedDraft.maxOutputTokens ?? ''}
-                          onChange={(e) => handleMaxTokensChange(Number(e.target.value))}
-                          placeholder="1024"
-                          className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                          type="range"
+                          min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
+                          max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
+                          step={0.01}
+                          value={modelAdvancedDraft.frequencyPenalty ?? 0}
+                          onChange={(e) => handleFrequencyPenaltyChange(parseFloat(e.target.value))}
+                          className="w-full"
                         />
-                      )}
-
-                      <p className="mt-2 text-xs text-white/40">
-                        {!modelAdvancedDraft.maxOutputTokens
-                          ? 'Let the model decide the response length'
-                          : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
-                        }
-                      </p>
-                    </div>
-
-                    {/* Frequency Penalty */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium text-white">Frequency Penalty</label>
-                          <p className="mt-0.5 text-xs text-white/50">Reduce repetition of token sequences</p>
+                        <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                          <span>{ADVANCED_FREQUENCY_PENALTY_RANGE.min}</span>
+                          <span>{ADVANCED_FREQUENCY_PENALTY_RANGE.max}</span>
                         </div>
-                        <span className="rounded-lg border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-orange-200">
-                          {modelAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
-                        </span>
                       </div>
-                      <input
-                        type="range"
-                        min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
-                        max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
-                        step={0.01}
-                        value={modelAdvancedDraft.frequencyPenalty ?? 0}
-                        onChange={(e) => handleFrequencyPenaltyChange(Number(e.target.value))}
-                        className="w-full"
-                        style={{
-                          background: `linear-gradient(to right, rgb(251, 146, 60) 0%, rgb(251, 146, 60) ${((modelAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
-                        }}
-                      />
-                      <div className="mt-2 flex items-center justify-between text-xs">
-                        <span className="text-white/40">-2 - More Rep.</span>
-                        <span className="text-white/40">2 - Less Rep.</span>
-                      </div>
-                    </div>
 
-                    {/* Presence Penalty */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium text-white">Presence Penalty</label>
-                          <p className="mt-0.5 text-xs text-white/50">Encourage discussing new topics</p>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">Presence Penalty</span>
+                            <span className="block text-[10px] text-white/40">Encourage new topics</span>
+                          </div>
+                          <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
+                            {modelAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
+                          </span>
                         </div>
-                        <span className="rounded-lg border border-pink-400/30 bg-pink-400/10 px-2.5 py-1 text-sm font-mono font-semibold text-pink-200">
-                          {modelAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
-                        max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
-                        step={0.01}
-                        value={modelAdvancedDraft.presencePenalty ?? 0}
-                        onChange={(e) => handlePresencePenaltyChange(Number(e.target.value))}
-                        className="w-full"
-                        style={{
-                          background: `linear-gradient(to right, rgb(244, 114, 182) 0%, rgb(244, 114, 182) ${((modelAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((modelAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
-                        }}
-                      />
-                      <div className="mt-2 flex items-center justify-between text-xs">
-                        <span className="text-white/40">-2 - Repeat</span>
-                        <span className="text-white/40">2 - Explore</span>
+                        <input
+                          type="range"
+                          min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
+                          max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
+                          step={0.01}
+                          value={modelAdvancedDraft.presencePenalty ?? 0}
+                          onChange={(e) => handlePresencePenaltyChange(parseFloat(e.target.value))}
+                          className="w-full"
+                        />
+                        <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                          <span>{ADVANCED_PRESENCE_PENALTY_RANGE.min}</span>
+                          <span>{ADVANCED_PRESENCE_PENALTY_RANGE.max}</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Top K */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="mb-3">
-                        <label className="text-sm font-medium text-white">Top K</label>
-                        <p className="mt-0.5 text-xs text-white/50">Limit sampling to top K tokens</p>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="block text-xs font-medium text-white/70">Top K</span>
+                          <span className="block text-[10px] text-white/40">Sample from top K tokens</span>
+                        </div>
+                        <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
+                          {modelAdvancedDraft.topK ?? "Auto"}
+                        </span>
                       </div>
                       <input
-                        type="number"
-                        inputMode="numeric"
-                        min={ADVANCED_TOP_K_RANGE.min}
+                        type="range"
+                        min={0}
                         max={ADVANCED_TOP_K_RANGE.max}
-                        value={modelAdvancedDraft.topK ?? ''}
-                        onChange={(e) => handleTopKChange(e.target.value === '' ? null : Number(e.target.value))}
-                        placeholder="40"
-                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                        step={1}
+                        value={modelAdvancedDraft.topK ?? 0}
+                        onChange={(e) => handleTopKChange(e.target.value === "0" ? null : parseInt(e.target.value))}
+                        className="w-full"
                       />
-                      <p className="mt-2 text-xs text-white/40">
-                        Lower values = more focused, higher = more diverse
-                      </p>
+                      <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                        <span>Auto (0)</span>
+                        <span>{ADVANCED_TOP_K_RANGE.max}</span>
+                      </div>
                     </div>
 
-                    {/* Reasoning / Thinking Section */}
+                    {/* Reasoning Section (Thinking) */}
                     {showReasoningSection && (
-                      <div className="space-y-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
+                      <div className="space-y-4 border-t border-white/5 pt-6">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-white">
-                            <Brain className="h-4 w-4 text-amber-400" />
-                            <h3 className="text-sm font-semibold">Thinking / Reasoning</h3>
+                          <div className="flex items-center gap-2">
+                            <Brain size={14} className="text-amber-400" />
+                            <label className="text-xs font-medium text-white/70">Reasoning (Thinking)</label>
                           </div>
-
                           {!isAutoReasoning && (
-                            <div
-                              onClick={() => handleReasoningEnabledChange(!modelAdvancedDraft.reasoningEnabled)}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${modelAdvancedDraft.reasoningEnabled
-                                ? 'bg-amber-500 shadow-lg shadow-amber-500/30'
-                                : 'bg-white/20'
-                                }`}
-                            >
-                              <span
-                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${modelAdvancedDraft.reasoningEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                            <label className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200">
+                              <input
+                                type="checkbox"
+                                checked={modelAdvancedDraft.reasoningEnabled || false}
+                                onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
+                                className="sr-only"
                               />
-                            </div>
+                              <span className={cn(
+                                "inline-block h-full w-full rounded-full transition-colors duration-200",
+                                modelAdvancedDraft.reasoningEnabled ? "bg-amber-500" : "bg-white/10"
+                              )} />
+                              <span className={cn(
+                                "absolute h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-200",
+                                modelAdvancedDraft.reasoningEnabled ? "translate-x-4.5" : "translate-x-1"
+                              )} />
+                            </label>
                           )}
-
                         </div>
 
-                        <p className="text-[11px] text-white/50 leading-relaxed">
-                          {isAutoReasoning
-                            ? "This model always uses reasoning. No configuration needed."
-                            : "Enable advanced thinking capabilities for complex problem solving."
-                          }
-                        </p>
-
                         {(modelAdvancedDraft.reasoningEnabled || isAutoReasoning) && (
-                          <div className="space-y-3 pt-2">
-                            {/* Mode Toggle for Dynamic Support (OpenRouter) - exclusive choice */}
-                            {reasoningSupport === 'dynamic' && (() => {
-                              // Explicit mode detection: budget mode is active when budget has a truthy value AND effort is null/undefined
-                              const isBudgetMode = Boolean(modelAdvancedDraft.reasoningBudgetTokens) && !modelAdvancedDraft.reasoningEffort;
-
-                              return (
-                                <>
-                                  <div className="flex gap-2 p-1 rounded-xl bg-black/30 border border-white/5">
-                                    <button
-                                      type="button"
-                                      onClick={() => setModelAdvancedDraft({ ...modelAdvancedDraft, reasoningBudgetTokens: null })}
-                                      className={cn(
-                                        "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
-                                        !isBudgetMode
-                                          ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
-                                          : "text-white/40 hover:text-white/60"
-                                      )}
-                                    >
-                                      Effort Mode
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setModelAdvancedDraft({ ...modelAdvancedDraft, reasoningEffort: null, reasoningBudgetTokens: 8192 })}
-                                      className={cn(
-                                        "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all",
-                                        isBudgetMode
-                                          ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
-                                          : "text-white/40 hover:text-white/60"
-                                      )}
-                                    >
-                                      Budget Mode
-                                    </button>
-                                  </div>
-
-                                  {/* Effort controls - shown when NOT in budget mode */}
-                                  {!isBudgetMode && (
-                                    <div className="rounded-xl border border-amber-400/30 bg-black/20 p-3">
-                                      <div className="mb-2">
-                                        <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
-                                      </div>
-
-                                      <div className="grid grid-cols-4 gap-2">
-                                        {[
-                                          { value: null, label: 'Auto' },
-                                          { value: 'low' as const, label: 'Low' },
-                                          { value: 'medium' as const, label: 'Med' },
-                                          { value: 'high' as const, label: 'High' }
-                                        ].map(({ value, label }) => (
-                                          <button
-                                            key={label}
-                                            type="button"
-                                            onClick={() => handleReasoningEffortChange(value)}
-                                            className={cn(
-                                              "rounded-lg border px-2 py-2 text-xs font-medium transition active:scale-[0.98]",
-                                              modelAdvancedDraft.reasoningEffort === value
-                                                ? "border-amber-400/40 bg-amber-400/20 text-amber-100"
-                                                : "border-white/10 bg-white/5 text-white/60 active:bg-white/10"
-                                            )}
-                                          >
-                                            {label}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Budget controls - shown when IN budget mode */}
-                                  {isBudgetMode && (
-                                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                                      <div className="mb-2">
-                                        <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
-                                        <p className="mt-0.5 text-[10px] text-white/50">Added to output token limit</p>
-                                      </div>
-                                      <input
-                                        type="number"
-                                        inputMode="numeric"
-                                        min={ADVANCED_REASONING_BUDGET_RANGE.min}
-                                        max={ADVANCED_REASONING_BUDGET_RANGE.max}
-                                        value={modelAdvancedDraft.reasoningBudgetTokens ?? ''}
-                                        onChange={(e) => handleReasoningBudgetChange(e.target.value === '' ? null : Number(e.target.value))}
-                                        placeholder="8192"
-                                        className="w-full rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                                      />
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-
-                            {/* Non-dynamic providers: show effort options if supported */}
-                            {reasoningSupport !== 'dynamic' && showEffortOptions && (
-                              <div className="rounded-xl border border-amber-400/30 bg-black/20 p-3">
-                                <div className="mb-2">
-                                  <label className="text-xs font-medium uppercase tracking-wider text-amber-200/80">Reasoning Effort</label>
-                                </div>
-
+                          <div className="space-y-6 pl-2 border-l border-white/10">
+                            {showEffortOptions && (
+                              <div className="space-y-3">
+                                <span className="text-[10px] font-bold text-white/30 uppercase">Reasoning Effort</span>
                                 <div className="grid grid-cols-4 gap-2">
-                                  {[
-                                    { value: null, label: 'Auto' },
-                                    { value: 'low' as const, label: 'Low' },
-                                    { value: 'medium' as const, label: 'Medium' },
-                                    { value: 'high' as const, label: 'High' }
-                                  ].map(({ value, label }) => (
+                                  {([null, 'low', 'medium', 'high'] as const).map((level) => (
                                     <button
-                                      key={label}
+                                      key={level || 'auto'}
                                       type="button"
-                                      onClick={() => handleReasoningEffortChange(value)}
+                                      onClick={() => handleReasoningEffortChange(level)}
                                       className={cn(
-                                        "rounded-lg border px-2 py-2 text-xs font-medium transition active:scale-[0.98]",
-                                        modelAdvancedDraft.reasoningEffort === value
-                                          ? "border-amber-400/40 bg-amber-400/20 text-amber-100"
-                                          : "border-white/10 bg-white/5 text-white/60 active:bg-white/10"
+                                        "rounded-lg py-1.5 text-[10px] font-bold uppercase transition",
+                                        modelAdvancedDraft.reasoningEffort === level
+                                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                          : "bg-white/5 text-white/30 border border-transparent hover:text-white/50"
                                       )}
                                     >
-                                      {label}
+                                      {level || 'auto'}
                                     </button>
                                   ))}
                                 </div>
                               </div>
                             )}
 
-                            {/* Non-dynamic providers: show budget if budget-only */}
-                            {reasoningSupport === 'budget-only' && (
-                              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                                <div className="mb-2">
-                                  <label className="text-xs font-medium uppercase tracking-wider text-white/70">Reasoning Budget (tokens)</label>
-                                  <p className="mt-0.5 text-[10px] text-white/50">Added to output token limit</p>
+                            {(reasoningSupport === 'budget-only' || reasoningSupport === 'dynamic') && (
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold text-white/30 uppercase">Budget Tokens</span>
+                                  <span className="font-mono text-xs text-amber-400">
+                                    {modelAdvancedDraft.reasoningBudgetTokens?.toLocaleString() || "Auto"}
+                                  </span>
                                 </div>
                                 <input
-                                  type="number"
-                                  inputMode="numeric"
+                                  type="range"
                                   min={ADVANCED_REASONING_BUDGET_RANGE.min}
                                   max={ADVANCED_REASONING_BUDGET_RANGE.max}
-                                  value={modelAdvancedDraft.reasoningBudgetTokens ?? ''}
-                                  onChange={(e) => handleReasoningBudgetChange(e.target.value === '' ? null : Number(e.target.value))}
-                                  placeholder="8192"
-                                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                                  step={1024}
+                                  value={modelAdvancedDraft.reasoningBudgetTokens || 8192}
+                                  onChange={(e) => handleReasoningBudgetChange(parseInt(e.target.value))}
+                                  className="w-full"
                                 />
+                                <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                                  <span>{ADVANCED_REASONING_BUDGET_RANGE.min.toLocaleString()}</span>
+                                  <span>{ADVANCED_REASONING_BUDGET_RANGE.max.toLocaleString()}</span>
+                                </div>
                               </div>
                             )}
                           </div>
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
 
-                    {/* Presets */}
+          <div className="h-px bg-white/5" />
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium uppercase tracking-wider text-white/60">Quick Presets</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setModelAdvancedDraft({ temperature: 0.2, topP: 0.9, maxOutputTokens: 512 })}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center transition active:scale-95 active:bg-white/10"
-                        >
-                          <div className="text-xs font-semibold text-white">Precise</div>
-                          <div className="mt-0.5 text-[10px] text-white/50">Focused</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModelAdvancedDraft({ temperature: 0.7, topP: 1.0, maxOutputTokens: 1024 })}
-                          className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2.5 text-center transition active:scale-95 active:bg-emerald-400/20"
-                        >
-                          <div className="text-xs font-semibold text-emerald-200">Balanced</div>
-                          <div className="mt-0.5 text-[10px] text-emerald-300/60">Default</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModelAdvancedDraft({ temperature: 0.9, topP: 1.0, maxOutputTokens: 1024 })}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center transition active:scale-95 active:bg-white/10"
-                        >
-                          <div className="text-xs font-semibold text-white">Creative</div>
-                          <div className="mt-0.5 text-[10px] text-white/50">Random</div>
-                        </button>
-                      </div>
-                    </div>
+          {/* 4. ACTIONS */}
+          <div className="space-y-4 pb-12">
+            {!isNew && (
+              <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-4">
+                <div className="space-y-0.5">
+                  <span className="block text-sm font-semibold text-white">Default Model</span>
+                  <span className="block text-xs text-white/40">Launch this model by default</span>
+                </div>
+                <label className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none">
+                  <input
+                    type="checkbox"
+                    checked={defaultModelId === editorModel.id}
+                    onChange={handleSetDefault}
+                    disabled={defaultModelId === editorModel.id}
+                    className="sr-only"
+                  />
+                  <span className={cn(
+                    "inline-block h-full w-full rounded-full transition-colors duration-200",
+                    defaultModelId === editorModel.id ? "bg-emerald-500" : "bg-white/10"
+                  )} />
+                  <span className={cn(
+                    "absolute h-5 w-5 transform rounded-full bg-white transition-transform duration-200",
+                    defaultModelId === editorModel.id ? "translate-x-5" : "translate-x-1"
+                  )} />
+                </label>
+              </div>
+            )}
 
-                  </motion.div>
-                )}
-              </section>
-            </>
-          )}
+            {!isNew && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={deleting}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/5 px-4 py-4 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {deleting ? "Deleting..." : "Delete Model"}
+              </button>
+            )}
+          </div>
         </motion.div>
       </main>
 
-      {/* Bottom Tab Bar */}
-      <div className={cn(
-        "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
-        colors.glass.strong
-      )}>
-        <div className={cn(
-          radius.lg,
-          "grid grid-cols-2 gap-2 p-1",
-          colors.surface.elevated
-        )}>
-          {[
-            { id: "basics" as const, icon: Cpu, label: "Basics" },
-            { id: "advanced" as const, icon: Settings, label: "Advanced" }
-          ].map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                radius.md,
-                "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
-                interactive.active.scale,
-                activeTab === id
-                  ? "bg-white/10 text-white"
-                  : cn(colors.text.tertiary, "hover:text-white")
-              )}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Parameter Support Bottom Menu */}
+      {/* PARAMETER SUPPORT MODAL */}
       <BottomMenu
         isOpen={showParameterSupport}
         onClose={() => setShowParameterSupport(false)}
-        title={`Parameter Support - ${providerDisplay(providers.find(p => p.providerId === editorModel?.providerId) ?? providers[0]).split('(')[0]}`}
+        title="Parameter Support"
       >
-        <ProviderParameterSupportInfo providerId={editorModel?.providerId || 'openai'} />
-      </BottomMenu>
-
-      {/* Delete Confirmation Bottom Menu */}
-      <BottomMenu
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        title="Delete Model?"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-white/70">
-            Are you sure you want to delete "{editorModel?.displayName || editorModel?.name}"? This action cannot be undone.
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowDeleteConfirm(false)}
-              disabled={deleting}
-              className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                setShowDeleteConfirm(false);
-                handleDelete();
-              }}
-              disabled={deleting}
-              className="flex-1 rounded-xl border border-red-500/30 bg-red-500/20 py-3 text-sm font-medium text-red-300 transition hover:bg-red-500/30 disabled:opacity-50"
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </button>
-          </div>
+        <div className="px-4 pb-8">
+          <ProviderParameterSupportInfo providerId={editorModel?.providerId || 'openai'} />
         </div>
       </BottomMenu>
+
+      {/* DELETE CONFIRMATION */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            className="w-full max-w-sm rounded-3xl bg-[#16171d] p-6 shadow-2xl border border-white/10 mb-safe"
+          >
+            <h3 className="text-xl font-bold text-white text-center">Delete Model?</h3>
+            <p className="mt-4 text-center text-sm text-white/60 leading-relaxed">
+              Are you sure you want to remove <strong>{editorModel.displayName || editorModel.name}</strong>?<br />
+              This action cannot be undone.
+            </p>
+            <div className="mt-8 flex flex-col gap-3">
+              <button
+                onClick={handleDelete}
+                className="w-full rounded-2xl bg-rose-500 py-4 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition active:scale-[0.98]"
+              >
+                Delete Model
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="w-full rounded-2xl bg-white/5 py-4 text-sm font-semibold text-white/60 transition hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

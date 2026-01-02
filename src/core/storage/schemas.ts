@@ -589,7 +589,13 @@ export function providerSupportsParameter(
   providerId: string,
   parameter: keyof AdvancedModelSettings,
 ): boolean {
-  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
+  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId] ||
+    (providerId === 'google-gemini' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === 'google' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === 'chutes.ai' ? PROVIDER_PARAMETER_SUPPORT.chutes : null) ||
+    (providerId === 'moonshot-ai' ? PROVIDER_PARAMETER_SUPPORT.moonshot : null) ||
+    (providerId === 'z.ai' ? PROVIDER_PARAMETER_SUPPORT.zai : null);
+
   if (!provider) return false;
   return provider.supportedParameters[parameter] ?? false;
 }
@@ -598,7 +604,13 @@ export function providerSupportsParameter(
  * Gets the reasoning support type for a specific provider
  */
 export function getProviderReasoningSupport(providerId: string): ReasoningSupport {
-  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId];
+  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId] ||
+    (providerId === 'google-gemini' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === 'google' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === 'chutes.ai' ? PROVIDER_PARAMETER_SUPPORT.chutes : null) ||
+    (providerId === 'moonshot-ai' ? PROVIDER_PARAMETER_SUPPORT.moonshot : null) ||
+    (providerId === 'z.ai' ? PROVIDER_PARAMETER_SUPPORT.zai : null);
+
   if (!provider) return "none";
   return provider.reasoningSupport;
 }
@@ -790,7 +802,6 @@ export const SettingsSchema = z.object({
   providerCredentials: z.array(ProviderCredentialSchema),
   models: z.array(ModelSchema),
   appState: AppStateSchema,
-  advancedModelSettings: AdvancedModelSettingsSchema.optional(),
   advancedSettings: z
     .object({
       summarisationModelId: z.string().optional(),
@@ -827,7 +838,6 @@ export function createDefaultSettings(): Settings {
     providerCredentials: [],
     models: [],
     appState: createDefaultAppState(),
-    advancedModelSettings: createDefaultAdvancedModelSettings(),
     advancedSettings: {
       creationHelperEnabled: false,
       accessibility: createDefaultAccessibilitySettings(),

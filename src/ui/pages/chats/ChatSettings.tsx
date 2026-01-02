@@ -304,7 +304,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [showPersonaSelector, setShowPersonaSelector] = useState(false);
-  const [globalAdvancedSettings, setGlobalAdvancedSettings] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
   const [sessionAdvancedSettings, setSessionAdvancedSettings] = useState<AdvancedModelSettings | null>(null);
   const [showSessionAdvancedMenu, setShowSessionAdvancedMenu] = useState(false);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
@@ -319,12 +318,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
       const settings = await readSettings();
       setModels(settings.models);
       setGlobalDefaultModelId(settings.defaultModelId);
-      const advanced = settings.advancedModelSettings ?? createDefaultAdvancedModelSettings();
-      setGlobalAdvancedSettings(advanced);
     } catch (error) {
       console.error("Failed to load models/settings:", error);
-      const fallback = createDefaultAdvancedModelSettings();
-      setGlobalAdvancedSettings(fallback);
     }
   }, []);
 
@@ -372,6 +367,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
     setCurrentCharacter(character);
   }, [character]);
 
+  const getEffectiveModelId = useCallback(() => {
+    return currentCharacter?.defaultModelId || globalDefaultModelId || null;
+  }, [currentCharacter?.defaultModelId, globalDefaultModelId]);
+
+  const effectiveModelId = getEffectiveModelId();
+  const currentModel = useMemo(() => models.find(m => m.id === effectiveModelId), [models, effectiveModelId]);
+
+  const baseAdvancedSettings = useMemo(() => {
+    return currentModel?.advancedModelSettings ?? createDefaultAdvancedModelSettings();
+  }, [currentModel?.advancedModelSettings]);
+
   useEffect(() => {
     setSessionAdvancedSettings(currentSession?.advancedModelSettings ?? null);
   }, [currentSession]);
@@ -381,14 +387,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
       setSessionAdvancedDraft(sessionAdvancedSettings);
       setSessionOverrideEnabled(true);
     } else {
-      setSessionAdvancedDraft(globalAdvancedSettings);
+      setSessionAdvancedDraft(baseAdvancedSettings);
       setSessionOverrideEnabled(false);
     }
-  }, [sessionAdvancedSettings, globalAdvancedSettings]);
+  }, [sessionAdvancedSettings, baseAdvancedSettings]);
 
-  const getEffectiveModelId = () => {
-    return currentCharacter?.defaultModelId || globalDefaultModelId || null;
-  };
 
   const handleNewChat = async () => {
     if (!characterId || !currentCharacter) return;
@@ -528,7 +531,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
         />
       );
     }
-
     const initials = currentCharacter?.name ? currentCharacter.name.slice(0, 2).toUpperCase() : "?";
     return (
       <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 text-sm font-semibold text-white">
@@ -537,13 +539,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     );
   }, [currentCharacter, avatarUrl]);
 
-  const characterName = useMemo(() => currentCharacter?.name ?? "Unknown Character", [currentCharacter?.name]);
-  const effectiveModelId = getEffectiveModelId();
-  const currentModel = models.find(m => m.id === effectiveModelId);
 
-  const baseAdvancedSettings = useMemo(() => {
-    return currentModel?.advancedModelSettings ?? globalAdvancedSettings ?? createDefaultAdvancedModelSettings();
-  }, [currentModel?.advancedModelSettings, globalAdvancedSettings]);
 
   const advancedDefaultsLabel = useMemo(() => {
     return currentModel?.advancedModelSettings ? "Model defaults" : "App defaults";
@@ -707,7 +703,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
               {avatarDisplay}
               <div className="min-w-0 flex-1">
                 <h3 className={cn(typography.body.size, typography.h3.weight, "text-white")}>
-                  {characterName}
+                  {character.name}
                 </h3>
                 {currentSession ? (
                   <p className={cn(typography.caption.size, "text-gray-400 mt-1 truncate")}>

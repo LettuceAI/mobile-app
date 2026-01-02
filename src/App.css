@@ -177,3 +177,62 @@ button { padding: 0.6em 0.9em; }
 .scanning-active .app-main {
   background: transparent !important;
 }
+
+/* Premium Range Input Styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]:focus {
+  outline: none;
+}
+
+/* Track */
+input[type="range"]::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.1);
+  height: 6px;
+  border-radius: 999px;
+}
+
+input[type="range"]::-moz-range-track {
+  background: rgba(255, 255, 255, 0.1);
+  height: 6px;
+  border-radius: 999px;
+}
+
+/* Thumb */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px; /* Centers thumb on the 6px track */
+  background-color: #ffffff;
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  border: 2px solid #10b981; /* emerald-500 equivalent */
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+  background-color: #10b981;
+}
+
+input[type="range"]::-moz-range-thumb {
+  background-color: #ffffff;
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  border: 2px solid #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1.2);
+  background-color: #10b981;
+}

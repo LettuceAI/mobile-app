@@ -38,7 +38,6 @@ type ControllerReturn = {
   handleProviderSelection: (providerId: string, providerLabel: string) => Promise<void>;
   setModelAdvancedDraft: (settings: AdvancedModelSettings) => void;
   toggleOverride: () => void;
-  setOverrideEnabled: (enabled: boolean) => void;
   handleTemperatureChange: (value: number) => void;
   handleTopPChange: (value: number) => void;
   handleMaxTokensChange: (value: number | null) => void;
@@ -92,12 +91,12 @@ export function useModelEditorController(): ControllerReturn {
         const settings = await readSettings();
         const providers = settings.providerCredentials;
         const defaultModelId = settings.defaultModelId ?? null;
-        const globalAdvanced =
-          settings.advancedModelSettings ?? createDefaultAdvancedModelSettings();
+
+        // Use a standard default if no settings exist
+        const defaultAdvanced = createDefaultAdvancedModelSettings();
 
         let nextEditorModel: Model | null = null;
-        let nextDraft = sanitizeAdvancedModelSettings(globalAdvanced);
-        let overrideEnabled = false;
+        let nextDraft = sanitizeAdvancedModelSettings(defaultAdvanced);
 
         if (isNew) {
           const firstProvider = providers[0];
@@ -120,7 +119,6 @@ export function useModelEditorController(): ControllerReturn {
           }
           nextEditorModel = existing;
           if (existing.advancedModelSettings) {
-            overrideEnabled = true;
             nextDraft = sanitizeAdvancedModelSettings(
               existing.advancedModelSettings,
             );
@@ -150,9 +148,7 @@ export function useModelEditorController(): ControllerReturn {
               providers,
               defaultModelId,
               editorModel: nextEditorModel,
-              globalAdvanced,
               modelAdvancedDraft: nextDraft,
-              overrideEnabled,
             },
           });
         }
@@ -247,16 +243,9 @@ export function useModelEditorController(): ControllerReturn {
     [dispatch],
   );
 
-  const setOverrideEnabled = useCallback(
-    (enabled: boolean) => {
-      dispatch({ type: "set_override_enabled", payload: enabled });
-    },
-    [dispatch],
-  );
-
   const toggleOverride = useCallback(() => {
-    setOverrideEnabled(!state.overrideEnabled);
-  }, [setOverrideEnabled, state.overrideEnabled]);
+    // No-op for now, removing usage
+  }, []);
 
   const handleTemperatureChange = useCallback(
     (value: number) => {
@@ -416,7 +405,7 @@ export function useModelEditorController(): ControllerReturn {
   }, [dispatch]);
 
   const handleSave = useCallback(async () => {
-    const { editorModel, providers, overrideEnabled, modelAdvancedDraft } =
+    const { editorModel, providers, modelAdvancedDraft } =
       state;
     if (!editorModel) return;
 
@@ -496,9 +485,7 @@ export function useModelEditorController(): ControllerReturn {
         ...editorModel,
         providerId: providerCred.providerId,
         providerLabel: providerCred.label,
-        advancedModelSettings: overrideEnabled
-          ? sanitizeAdvancedModelSettings(modelAdvancedDraft)
-          : undefined,
+        advancedModelSettings: sanitizeAdvancedModelSettings(modelAdvancedDraft),
       });
       backOrReplace(Routes.settingsModels);
     } catch (error: any) {
@@ -541,8 +528,6 @@ export function useModelEditorController(): ControllerReturn {
       console.error("Failed to set default model", error);
     }
   }, [state]);
-
-
 
   const fetchModels = useCallback(async () => {
     const { editorModel, providers } = state;
@@ -593,7 +578,6 @@ export function useModelEditorController(): ControllerReturn {
     handleProviderSelection,
     setModelAdvancedDraft,
     toggleOverride,
-    setOverrideEnabled,
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
@@ -609,6 +593,4 @@ export function useModelEditorController(): ControllerReturn {
     clearError,
     fetchModels,
   };
-
-
 }

@@ -21,9 +21,7 @@ export type ModelEditorState = {
   providers: ProviderCredential[];
   defaultModelId: string | null;
   editorModel: Model | null;
-  globalAdvanced: AdvancedModelSettings;
   modelAdvancedDraft: AdvancedModelSettings;
-  overrideEnabled: boolean;
 };
 
 export type ModelEditorAction =
@@ -40,17 +38,13 @@ export type ModelEditorAction =
       providers: ProviderCredential[];
       defaultModelId: string | null;
       editorModel: Model | null;
-      globalAdvanced: AdvancedModelSettings;
       modelAdvancedDraft: AdvancedModelSettings;
-      overrideEnabled: boolean;
     };
   }
   | { type: "update_editor_model"; payload: Partial<Model> }
   | { type: "set_providers"; payload: ProviderCredential[] }
   | { type: "set_default_model_id"; payload: string | null }
-  | { type: "set_model_advanced_draft"; payload: AdvancedModelSettings }
-  | { type: "set_override_enabled"; payload: boolean }
-  | { type: "set_global_advanced"; payload: AdvancedModelSettings };
+  | { type: "set_model_advanced_draft"; payload: AdvancedModelSettings };
 
 export const initialModelEditorState: ModelEditorState = {
   loading: true,
@@ -63,9 +57,7 @@ export const initialModelEditorState: ModelEditorState = {
   providers: [],
   defaultModelId: null,
   editorModel: null,
-  globalAdvanced: {} as AdvancedModelSettings,
   modelAdvancedDraft: {} as AdvancedModelSettings,
-  overrideEnabled: false,
 };
 
 export function modelEditorReducer(
@@ -93,9 +85,7 @@ export function modelEditorReducer(
         providers: action.payload.providers,
         defaultModelId: action.payload.defaultModelId,
         editorModel: action.payload.editorModel,
-        globalAdvanced: action.payload.globalAdvanced,
         modelAdvancedDraft: action.payload.modelAdvancedDraft,
-        overrideEnabled: action.payload.overrideEnabled,
         loading: false,
       };
     case "update_editor_model":
@@ -122,16 +112,6 @@ export function modelEditorReducer(
       return {
         ...state,
         modelAdvancedDraft: action.payload,
-      };
-    case "set_override_enabled":
-      return {
-        ...state,
-        overrideEnabled: action.payload,
-      };
-    case "set_global_advanced":
-      return {
-        ...state,
-        globalAdvanced: action.payload,
       };
     default:
       return state;

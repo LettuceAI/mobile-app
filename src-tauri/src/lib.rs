@@ -91,7 +91,6 @@ pub fn run() {
             storage_manager::providers::provider_delete,
             storage_manager::models::model_upsert,
             storage_manager::models::model_delete,
-            storage_manager::settings::settings_set_advanced_model_settings,
             storage_manager::settings::settings_set_advanced,
             storage_manager::settings::settings_set_default_provider,
             storage_manager::settings::settings_set_default_model,

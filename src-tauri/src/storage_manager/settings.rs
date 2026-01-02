@@ -16,7 +16,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 
     let row = conn
         .query_row(
-            "SELECT default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version, advanced_settings FROM settings WHERE id = 1",
+            "SELECT default_provider_credential_id, default_model_id, app_state, prompt_template_id, system_prompt, migration_version, advanced_settings FROM settings WHERE id = 1",
             [],
             |r| {
                 Ok((
@@ -25,9 +25,8 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
                     r.get::<_, String>(2)?,
                     r.get::<_, Option<String>>(3)?,
                     r.get::<_, Option<String>>(4)?,
-                    r.get::<_, Option<String>>(5)?,
-                    r.get::<_, i64>(6)? as u32,
-                    r.get::<_, Option<String>>(7)?,
+                    r.get::<_, i64>(5)? as u32,
+                    r.get::<_, Option<String>>(6)?,
                 ))
             },
         )
@@ -37,7 +36,6 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         default_provider_credential_id,
         default_model_id,
         app_state_json,
-        advanced_model_settings_json,
         prompt_template_id,
         system_prompt,
         migration_version,
@@ -172,13 +170,6 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
     );
     root.insert("models".into(), JsonValue::Array(models));
     root.insert("appState".into(), app_state);
-    if let Some(s) = advanced_model_settings_json {
-        if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
-            if !v.is_null() {
-                root.insert("advancedModelSettings".into(), v);
-            }
-        }
-    }
     if let Some(id) = prompt_template_id {
         root.insert("promptTemplateId".into(), JsonValue::String(id));
     }
@@ -219,13 +210,6 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
         .get("appState")
         .map(|v| serde_json::to_string(v).unwrap_or("{}".into()))
         .unwrap_or("{}".into());
-    let adv_settings_str = json.get("advancedModelSettings").and_then(|v| {
-        if v.is_null() {
-            None
-        } else {
-            Some(serde_json::to_string(v).unwrap_or("null".into()))
-        }
-    });
     let prompt_template_id = json
         .get("promptTemplateId")
         .and_then(|v| v.as_str())
@@ -248,8 +232,8 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
-        r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, migration_version, advanced_settings, created_at, updated_at)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, prompt_template_id, system_prompt, migration_version, advanced_settings, created_at, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               default_provider_credential_id=excluded.default_provider_credential_id,
               default_model_id=excluded.default_model_id,
@@ -264,7 +248,6 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             default_provider_credential_id,
             default_model_id,
             app_state_str,
-            adv_settings_str,
             prompt_template_id,
             system_prompt,
             migration_version,
@@ -440,30 +423,6 @@ pub fn settings_set_defaults(
         "UPDATE settings SET default_provider_credential_id = ?, default_model_id = ?, updated_at = ? WHERE id = 1",
         params![default_provider_credential_id, default_model_id, now],
     ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn settings_set_advanced_model_settings(
-    app: tauri::AppHandle,
-    advanced_json: String,
-) -> Result<(), String> {
-    let conn = open_db(&app)?;
-    ensure_settings_row(&conn)?;
-    let now = now_ms() as i64;
-    let db_val: Option<String> = {
-        let s = advanced_json.trim();
-        if s.is_empty() || s == "null" {
-            None
-        } else {
-            Some(s.to_string())
-        }
-    };
-    conn.execute(
-        "UPDATE settings SET advanced_model_settings = ?, updated_at = ? WHERE id = 1",
-        params![db_val, now],
-    )
-    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

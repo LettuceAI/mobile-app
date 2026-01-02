@@ -6,7 +6,7 @@ import { cn } from "../design-tokens";
 
 export const ADVANCED_TEMPERATURE_RANGE = { min: 0, max: 2 };
 export const ADVANCED_TOP_P_RANGE = { min: 0, max: 1 };
-export const ADVANCED_MAX_TOKENS_RANGE = { min: 1, max: 32768 };
+export const ADVANCED_MAX_TOKENS_RANGE = { min: 0, max: 32768 };
 export const ADVANCED_FREQUENCY_PENALTY_RANGE = { min: -2, max: 2 };
 export const ADVANCED_PRESENCE_PENALTY_RANGE = { min: -2, max: 2 };
 export const ADVANCED_TOP_K_RANGE = { min: 1, max: 500 };

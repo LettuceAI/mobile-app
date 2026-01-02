@@ -16,12 +16,10 @@ import {
   type StoredMessage,
   type ProviderCredential,
   type Model,
-  type AdvancedModelSettings,
   type AppState,
   type Lorebook,
   type LorebookEntry,
   createDefaultSettings,
-  createDefaultAdvancedModelSettings,
   createDefaultAccessibilitySettings,
 } from "./schemas";
 
@@ -77,7 +75,6 @@ export async function readSettings(): Promise<Settings> {
     const settings = parsed.data;
 
     const modelsWithoutProviderLabel = settings.models.filter(m => !m.providerLabel);
-    const missingAdvancedSettings = !settings.advancedModelSettings;
     const missingAccessibility = !settings.advancedSettings?.accessibility;
 
     for (const model of modelsWithoutProviderLabel) {
@@ -87,11 +84,6 @@ export async function readSettings(): Promise<Settings> {
       }
     }
 
-    if (missingAdvancedSettings) {
-      settings.advancedModelSettings = createDefaultAdvancedModelSettings();
-      console.log("[repo] readSettings: Initializing default advanced model settings");
-      await saveAdvancedModelSettings(settings.advancedModelSettings);
-    }
 
     if (missingAccessibility) {
       settings.advancedSettings = {
@@ -327,10 +319,6 @@ export async function listSessionPreviews(characterId?: string, limit?: number):
   return z.array(SessionPreviewSchema).parse(data);
 }
 
-export async function saveAdvancedModelSettings(settings: AdvancedModelSettings): Promise<void> {
-  await storageBridge.settingsSetAdvancedModelSettings(settings);
-  broadcastSettingsUpdated();
-}
 
 export async function saveAdvancedSettings(settings: Settings["advancedSettings"]): Promise<void> {
   await storageBridge.settingsSetAdvanced(settings);
