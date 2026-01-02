@@ -127,6 +127,26 @@ pub fn build_verify_url(provider_id: &ProviderId, base_url: &str) -> String {
 }
 
 pub fn extract_error_message(payload: &Value) -> Option<String> {
+    if let Some(prompt_feedback) = payload.get("promptFeedback") {
+        if let Some(block_reason) = prompt_feedback.get("blockReason").and_then(|v| v.as_str()) {
+            let message = match block_reason {
+                "PROHIBITED_CONTENT" => {
+                    "Content was blocked by Gemini safety filters: prohibited content detected."
+                        .to_string()
+                }
+                "SAFETY" => "Content was blocked by Gemini safety filters.".to_string(),
+                "BLOCKLIST" => {
+                    "Content was blocked: input contains terms from the blocklist.".to_string()
+                }
+                "OTHER" => "Content was blocked by Gemini for an unspecified reason.".to_string(),
+                reason => format!(
+                    "Content was blocked by Gemini: {}",
+                    reason.replace('_', " ").to_lowercase()
+                ),
+            };
+            return Some(message);
+        }
+    }
     if let Some(error) = payload.get("error") {
         match error {
             Value::String(s) => Some(s.clone()),

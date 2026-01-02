@@ -188,7 +188,6 @@ fn join_text_fragments(value: &Value) -> Option<String> {
 fn collect_text_fragments(value: &Value, acc: &mut String) {
     match value {
         Value::String(s) => {
-            // Avoid accidentally treating image payloads (often data URLs / base64) as message text.
             if s.starts_with("data:image/") {
                 return;
             }
@@ -370,6 +369,24 @@ fn parse_token_value(value: &Value) -> Option<u64> {
 pub fn extract_error_message(data: &Value) -> Option<String> {
     match data {
         Value::Object(map) => {
+            if let Some(prompt_feedback) = map.get("promptFeedback") {
+                if let Some(block_reason) =
+                    prompt_feedback.get("blockReason").and_then(|v| v.as_str())
+                {
+                    return Some(format_gemini_block_reason(block_reason));
+                }
+            }
+            if let Some(candidates) = map.get("candidates").and_then(|c| c.as_array()) {
+                for candidate in candidates {
+                    if let Some(finish_reason) =
+                        candidate.get("finishReason").and_then(|v| v.as_str())
+                    {
+                        if let Some(msg) = format_gemini_finish_reason_error(finish_reason) {
+                            return Some(msg);
+                        }
+                    }
+                }
+            }
             if let Some(err) = map.get("error") {
                 if let Some(text) = join_text_fragments(err) {
                     let trimmed = text.trim();
@@ -396,6 +413,82 @@ pub fn extract_error_message(data: &Value) -> Option<String> {
     join_text_fragments(data)
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+}
+
+fn format_gemini_block_reason(reason: &str) -> String {
+    match reason {
+        "BLOCK_REASON_UNSPECIFIED" => {
+            "Content was blocked by Gemini for an unspecified reason.".to_string()
+        }
+        "SAFETY" => {
+            "Content was blocked by Gemini safety filters. Try adjusting your prompt or safety settings.".to_string()
+        }
+        "OTHER" => "Content was blocked by Gemini for an uncategorized reason.".to_string(),
+        "BLOCKLIST" => {
+            "Content was blocked: the prompt contains terms from the blocklist.".to_string()
+        }
+        "PROHIBITED_CONTENT" => {
+            "Content was blocked by Gemini: prohibited content detected (e.g., CSAM or policy violation).".to_string()
+        }
+        "IMAGE_SAFETY" => {
+            "Content was blocked by Gemini: the image failed safety checks.".to_string()
+        }
+        _ => format!(
+            "Content was blocked by Gemini: {}",
+            reason.replace('_', " ").to_lowercase()
+        ),
+    }
+}
+
+fn format_gemini_finish_reason_error(reason: &str) -> Option<String> {
+    match reason {
+        "STOP" | "MAX_TOKENS" | "FINISH_REASON_UNSPECIFIED" => None,
+        // Error finish reasons
+        "SAFETY" => Some("Response was blocked by Gemini safety filters.".to_string()),
+        "RECITATION" => Some(
+            "Response was blocked due to recitation concerns (potential copyright issues)."
+                .to_string(),
+        ),
+        "LANGUAGE" => Some("Response was blocked: unsupported language detected.".to_string()),
+        "OTHER" => Some("Response was blocked by Gemini for an uncategorized reason.".to_string()),
+        "BLOCKLIST" => {
+            Some("Response was blocked: output contains terms from the blocklist.".to_string())
+        }
+        "PROHIBITED_CONTENT" => {
+            Some("Response was blocked: prohibited content detected.".to_string())
+        }
+        "SPII" => Some(
+            "Response was blocked: sensitive personally identifiable information (SPII) detected."
+                .to_string(),
+        ),
+        "MALFORMED_FUNCTION_CALL" => {
+            Some("Response generation failed: malformed function call.".to_string())
+        }
+        "IMAGE_SAFETY" => Some("Image generation was blocked by safety filters.".to_string()),
+        "IMAGE_PROHIBITED_CONTENT" => {
+            Some("Image generation was blocked: prohibited content detected.".to_string())
+        }
+        "IMAGE_OTHER" => {
+            Some("Image generation was blocked for an uncategorized reason.".to_string())
+        }
+        "NO_IMAGE" => Some("Image generation failed: no image was produced.".to_string()),
+        "IMAGE_RECITATION" => {
+            Some("Image generation was blocked due to recitation concerns.".to_string())
+        }
+        "UNEXPECTED_TOOL_CALL" => {
+            Some("Response generation failed: unexpected tool call.".to_string())
+        }
+        "TOO_MANY_TOOL_CALLS" => {
+            Some("Response generation failed: too many tool calls.".to_string())
+        }
+        "MISSING_THOUGHT_SIGNATURE" => {
+            Some("Response generation failed: missing thought signature.".to_string())
+        }
+        _ => Some(format!(
+            "Response was blocked by Gemini: {}",
+            reason.replace('_', " ").to_lowercase()
+        )),
+    }
 }
 
 pub fn ensure_assistant_variant(message: &mut StoredMessage) {
