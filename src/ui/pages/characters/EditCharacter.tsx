@@ -18,13 +18,15 @@ import {
   Settings,
   Volume2,
   EyeOff,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 import { AvatarPicker } from "../../components/AvatarPicker";
-import { BottomMenu } from "../../components/BottomMenu";
+import { BottomMenu, MenuSection } from "../../components/BottomMenu";
 import { BackgroundPositionModal } from "../../components/BackgroundPositionModal";
 import { cn, radius, colors, interactive } from "../../design-tokens";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 import {
   listAudioProviders,
   listUserVoices,
@@ -54,6 +56,10 @@ export function EditCharacterPage() {
 
   // Tab state
   const [activeTab, setActiveTab] = React.useState<"character" | "settings">("character");
+  const [showModelMenu, setShowModelMenu] = React.useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = React.useState("");
+  const [showVoiceMenu, setShowVoiceMenu] = React.useState(false);
+  const [voiceSearchQuery, setVoiceSearchQuery] = React.useState("");
   const tabsId = React.useId();
   const tabPanelId = `${tabsId}-panel`;
   const characterTabId = `${tabsId}-tab-character`;
@@ -648,28 +654,25 @@ export function EditCharacterPage() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9, x: -20 }}
                             transition={{ duration: 0.15 }}
-                            className={`overflow-hidden rounded-xl border ${
-                              isDefault
-                                ? "border-emerald-400/30 bg-emerald-400/5"
-                                : "border-white/10 bg-white/5"
-                            }`}
+                            className={`overflow-hidden rounded-xl border ${isDefault
+                              ? "border-emerald-400/30 bg-emerald-400/5"
+                              : "border-white/10 bg-white/5"
+                              }`}
                           >
                             {/* Scene Header - clickable to expand/collapse */}
                             <button
                               onClick={() => setExpandedSceneId(isExpanded ? null : scene.id)}
-                              className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${
-                                isDefault
-                                  ? "border-emerald-400/20 bg-emerald-400/10"
-                                  : "border-white/10 bg-white/5"
-                              }`}
+                              className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${isDefault
+                                ? "border-emerald-400/20 bg-emerald-400/10"
+                                : "border-white/10 bg-white/5"
+                                }`}
                             >
                               {/* Scene number badge */}
                               <div
-                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${
-                                  isDefault
-                                    ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
-                                    : "border-white/10 bg-white/5 text-white/60"
-                                }`}
+                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${isDefault
+                                  ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
+                                  : "border-white/10 bg-white/5 text-white/60"
+                                  }`}
                               >
                                 {index + 1}
                               </div>
@@ -801,11 +804,10 @@ export function EditCharacterPage() {
                     onClick={addScene}
                     disabled={!newSceneContent.trim()}
                     whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-                      newSceneContent.trim()
-                        ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
-                        : "border border-white/10 bg-white/5 text-white/40"
-                    }`}
+                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${newSceneContent.trim()
+                      ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
+                      : "border border-white/10 bg-white/5 text-white/40"
+                      }`}
                   >
                     <Plus className="h-4 w-4" />
                     Add Scene
@@ -838,18 +840,21 @@ export function EditCharacterPage() {
                     <span className="text-sm text-white/50">Loading models...</span>
                   </div>
                 ) : models.length > 0 ? (
-                  <select
-                    value={selectedModelId || ""}
-                    onChange={(e) => setFields({ selectedModelId: e.target.value || null })}
-                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
+                  <button
+                    type="button"
+                    onClick={() => setShowModelMenu(true)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
                   >
-                    <option value="">Use global default model</option>
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.displayName}
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex items-center gap-2">
+                      {selectedModelId ? getProviderIcon(models.find(m => m.id === selectedModelId)?.providerId || '') : <Cpu className="h-5 w-5 text-white/40" />}
+                      <span className={`text-sm ${selectedModelId ? 'text-white' : 'text-white/50'}`}>
+                        {selectedModelId
+                          ? models.find(m => m.id === selectedModelId)?.displayName || 'Selected Model'
+                          : 'Use global default model'}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
                 ) : (
                   <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
                     <p className="text-sm text-white/50">No models available</p>
@@ -917,80 +922,31 @@ export function EditCharacterPage() {
                     <span className="text-sm text-white/50">Loading voices...</span>
                   </div>
                 ) : (
-                  <select
-                    value={voiceSelectionValue}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (!value) {
-                        setFields({ voiceConfig: null });
-                        return;
-                      }
-                      if (value.startsWith("user:")) {
-                        const id = value.replace("user:", "");
-                        const voice = userVoices.find((v) => v.id === id);
-                        setFields({
-                          voiceConfig: {
-                            source: "user",
-                            userVoiceId: id,
-                            providerId: voice?.providerId,
-                            modelId: voice?.modelId,
-                            voiceName: voice?.name,
-                          },
-                        });
-                        return;
-                      }
-                      if (value.startsWith("provider:")) {
-                        const [, providerId, voiceId] = value.split(":");
-                        const voice = providerVoices[providerId]?.find(
-                          (v) => v.voiceId === voiceId,
-                        );
-                        setFields({
-                          voiceConfig: {
-                            source: "provider",
-                            providerId,
-                            voiceId,
-                            voiceName: voice?.name,
-                          },
-                        });
-                      }
-                    }}
-                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm text-white transition focus:border-white/25 focus:outline-none"
+                  <button
+                    type="button"
+                    onClick={() => setShowVoiceMenu(true)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
                   >
-                    <option value="">No voice assigned</option>
-                    {isMissingVoiceSelection && (
-                      <option value={voiceSelectionValue}>Missing voice (keep)</option>
-                    )}
-                    {userVoices.length > 0 && (
-                      <optgroup label="My Voices">
-                        {userVoices.map((voice) => {
-                          const providerLabel =
-                            audioProviders.find((p) => p.id === voice.providerId)?.label ??
-                            "Provider";
-                          return (
-                            <option key={voice.id} value={buildUserVoiceValue(voice.id)}>
-                              {voice.name} • {providerLabel}
-                            </option>
-                          );
-                        })}
-                      </optgroup>
-                    )}
-                    {audioProviders.map((provider) => {
-                      const voices = providerVoices[provider.id] ?? [];
-                      if (voices.length === 0) return null;
-                      return (
-                        <optgroup key={provider.id} label={`${provider.label} Voices`}>
-                          {voices.map((voice) => (
-                            <option
-                              key={`${provider.id}:${voice.voiceId}`}
-                              value={buildProviderVoiceValue(provider.id, voice.voiceId)}
-                            >
-                              {voice.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="h-5 w-5 text-white/40" />
+                      <span className={`text-sm ${voiceSelectionValue ? 'text-white' : 'text-white/50'}`}>
+                        {voiceSelectionValue
+                          ? (() => {
+                            if (voiceConfig?.source === 'user') {
+                              const v = userVoices.find(uv => uv.id === voiceConfig.userVoiceId);
+                              return v?.name || 'Custom Voice';
+                            }
+                            if (voiceConfig?.source === 'provider') {
+                              const pv = providerVoices[voiceConfig.providerId || '']?.find(pv => pv.voiceId === voiceConfig.voiceId);
+                              return pv?.name || 'Provider Voice';
+                            }
+                            return 'Selected Voice';
+                          })()
+                          : 'No voice assigned'}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
                 )}
 
                 {voiceError && <p className="text-xs font-medium text-rose-300">{voiceError}</p>}
@@ -1017,14 +973,12 @@ export function EditCharacterPage() {
                     />
                     <label
                       htmlFor="character-voice-autoplay"
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${
-                        voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
-                      }`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
+                        }`}
                     >
                       <span
-                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${
-                          voiceAutoplay ? "translate-x-5" : "translate-x-0.5"
-                        }`}
+                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${voiceAutoplay ? "translate-x-5" : "translate-x-0.5"
+                          }`}
                       />
                     </label>
                   </div>
@@ -1048,11 +1002,10 @@ export function EditCharacterPage() {
                   <button
                     type="button"
                     onClick={() => setFields({ memoryType: "manual" })}
-                    className={`rounded-xl border px-3.5 py-3 text-left transition ${
-                      memoryType === "manual"
-                        ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
-                        : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
-                    }`}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "manual"
+                      ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                      : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
+                      }`}
                   >
                     <p className="text-sm font-semibold">Manual Memory</p>
                     <p className="mt-1 text-xs text-white/60">
@@ -1063,11 +1016,10 @@ export function EditCharacterPage() {
                     type="button"
                     disabled={!dynamicMemoryEnabled}
                     onClick={() => dynamicMemoryEnabled && setFields({ memoryType: "dynamic" })}
-                    className={`rounded-xl border px-3.5 py-3 text-left transition ${
-                      memoryType === "dynamic" && dynamicMemoryEnabled
-                        ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
-                        : "border-white/10 bg-black/15 text-white/60"
-                    } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "dynamic" && dynamicMemoryEnabled
+                      ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                      : "border-white/10 bg-black/15 text-white/60"
+                      } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
                   >
                     <p className="text-sm font-semibold">Dynamic Memory</p>
                     <p className="mt-1 text-xs text-white/60">
@@ -1318,6 +1270,214 @@ export function EditCharacterPage() {
           }}
         />
       )}
+
+      {/* Model Selection BottomMenu */}
+      <BottomMenu
+        isOpen={showModelMenu}
+        onClose={() => {
+          setShowModelMenu(false);
+          setModelSearchQuery("");
+        }}
+        title="Select Model"
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={modelSearchQuery}
+              onChange={(e) => setModelSearchQuery(e.target.value)}
+              placeholder="Search models..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+            />
+            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            <button
+              onClick={() => {
+                setFields({ selectedModelId: null });
+                setShowModelMenu(false);
+                setModelSearchQuery("");
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                !selectedModelId
+                  ? "border-emerald-400/40 bg-emerald-400/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10"
+              )}
+            >
+              <Cpu className="h-5 w-5 text-white/40" />
+              <span className="text-sm text-white">Use global default model</span>
+              {!selectedModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
+            </button>
+            {models
+              .filter(m => {
+                if (!modelSearchQuery) return true;
+                const q = modelSearchQuery.toLowerCase();
+                return m.displayName?.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q);
+              })
+              .map((model) => (
+                <button
+                  key={model.id}
+                  onClick={() => {
+                    setFields({ selectedModelId: model.id });
+                    setShowModelMenu(false);
+                    setModelSearchQuery("");
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                    selectedModelId === model.id
+                      ? "border-emerald-400/40 bg-emerald-400/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                  )}
+                >
+                  {getProviderIcon(model.providerId)}
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate text-sm text-white">{model.displayName || model.name}</span>
+                    <span className="block truncate text-xs text-white/40">{model.name}</span>
+                  </div>
+                  {selectedModelId === model.id && <Check className="h-4 w-4 shrink-0 text-emerald-400" />}
+                </button>
+              ))}
+          </div>
+        </div>
+      </BottomMenu>
+
+      {/* Voice Selection BottomMenu */}
+      <BottomMenu
+        isOpen={showVoiceMenu}
+        onClose={() => {
+          setShowVoiceMenu(false);
+          setVoiceSearchQuery("");
+        }}
+        title="Select Voice"
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={voiceSearchQuery}
+              onChange={(e) => setVoiceSearchQuery(e.target.value)}
+              placeholder="Search voices..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+            />
+            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            <button
+              onClick={() => {
+                setFields({ voiceConfig: null });
+                setShowVoiceMenu(false);
+                setVoiceSearchQuery("");
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                !voiceSelectionValue
+                  ? "border-emerald-400/40 bg-emerald-400/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10"
+              )}
+            >
+              <Volume2 className="h-5 w-5 text-white/40" />
+              <span className="text-sm text-white">No voice assigned</span>
+              {!voiceSelectionValue && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
+            </button>
+
+            {/* User Voices */}
+            {userVoices.length > 0 && (
+              <MenuSection label="My Voices">
+                {userVoices
+                  .filter(v => {
+                    if (!voiceSearchQuery) return true;
+                    return v.name.toLowerCase().includes(voiceSearchQuery.toLowerCase());
+                  })
+                  .map((voice) => {
+                    const value = buildUserVoiceValue(voice.id);
+                    const isSelected = voiceSelectionValue === value;
+                    const providerLabel = audioProviders.find(p => p.id === voice.providerId)?.label ?? "Provider";
+                    return (
+                      <button
+                        key={voice.id}
+                        onClick={() => {
+                          setFields({
+                            voiceConfig: {
+                              source: "user",
+                              userVoiceId: voice.id,
+                              providerId: voice.providerId,
+                              modelId: voice.modelId,
+                              voiceName: voice.name,
+                            },
+                          });
+                          setShowVoiceMenu(false);
+                          setVoiceSearchQuery("");
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                          isSelected
+                            ? "border-emerald-400/40 bg-emerald-400/10"
+                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                        )}
+                      >
+                        <User className="h-5 w-5 text-white/40" />
+                        <div className="flex-1 min-w-0">
+                          <span className="block truncate text-sm text-white">{voice.name}</span>
+                          <span className="block truncate text-xs text-white/40">{providerLabel}</span>
+                        </div>
+                        {isSelected && <Check className="h-4 w-4 shrink-0 text-emerald-400" />}
+                      </button>
+                    );
+                  })}
+              </MenuSection>
+            )}
+
+            {/* Provider Voices */}
+            {audioProviders.map((provider) => {
+              const voices = (providerVoices[provider.id] ?? []).filter(v => {
+                if (!voiceSearchQuery) return true;
+                return v.name.toLowerCase().includes(voiceSearchQuery.toLowerCase());
+              });
+              if (voices.length === 0) return null;
+              return (
+                <MenuSection key={provider.id} label={`${provider.label} Voices`}>
+                  {voices.map((voice) => {
+                    const value = buildProviderVoiceValue(provider.id, voice.voiceId);
+                    const isSelected = voiceSelectionValue === value;
+                    return (
+                      <button
+                        key={`${provider.id}:${voice.voiceId}`}
+                        onClick={() => {
+                          setFields({
+                            voiceConfig: {
+                              source: "provider",
+                              providerId: provider.id,
+                              voiceId: voice.voiceId,
+                              voiceName: voice.name,
+                            },
+                          });
+                          setShowVoiceMenu(false);
+                          setVoiceSearchQuery("");
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                          isSelected
+                            ? "border-emerald-400/40 bg-emerald-400/10"
+                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                        )}
+                      >
+                        <Volume2 className="h-5 w-5 text-white/40" />
+                        <span className="flex-1 truncate text-sm text-white">{voice.name}</span>
+                        {isSelected && <Check className="h-4 w-4 shrink-0 text-emerald-400" />}
+                      </button>
+                    );
+                  })}
+                </MenuSection>
+              );
+            })}
+          </div>
+        </div>
+      </BottomMenu>
     </div>
   );
 }
