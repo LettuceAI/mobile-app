@@ -1,6 +1,6 @@
 import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
 import { X, ChevronRight, LucideIcon, Loader2 } from "lucide-react";
-import { ReactNode, useCallback, useMemo, useEffect, useId } from "react";
+import { ReactNode, useCallback, useMemo, useEffect, useId, isValidElement } from "react";
 
 const ICON_ACCENT_MAP: Record<string, string> = {
   "from-blue-500 to-blue-600": "border-blue-400/40 bg-blue-500/15 text-blue-200 group-hover:border-blue-300/50 group-hover:text-blue-100",
@@ -11,13 +11,14 @@ const ICON_ACCENT_MAP: Record<string, string> = {
 };
 
 export interface MenuButtonProps {
-  icon: LucideIcon;
+  icon: LucideIcon | ReactNode;
   title: string;
   description?: string;
   color?: string;
   onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
+  rightElement?: ReactNode;
 }
 
 export interface MenuDividerProps {
@@ -184,6 +185,7 @@ export function MenuButton({
   onClick,
   disabled = false,
   loading = false,
+  rightElement,
 }: MenuButtonProps) {
   const handleClick = useCallback(() => {
     if (!disabled && !loading) onClick();
@@ -205,7 +207,14 @@ export function MenuButton({
           className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${disabled || loading ? "opacity-60" : ""
             }`}
         >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <Icon size={18} />}
+          {loading ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : isValidElement(Icon) ? (
+            Icon
+          ) : (
+            // @ts-ignore - Icon is a component
+            <Icon size={18} />
+          )}
         </div>
         <div className="flex flex-1 items-center gap-2">
           <div className="flex-1">
@@ -219,7 +228,7 @@ export function MenuButton({
             )}
           </div>
           {!disabled && !loading && (
-            <ChevronRight className="h-4 w-4 text-white/30 transition group-hover:text-white/60" />
+            rightElement || <ChevronRight className="h-4 w-4 text-white/30 transition group-hover:text-white/60" />
           )}
         </div>
       </div>

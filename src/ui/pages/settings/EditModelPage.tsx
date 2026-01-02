@@ -11,46 +11,42 @@ import {
   ADVANCED_REASONING_BUDGET_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
 import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
-import { Loader2, Trash2, FileText, Info, Cpu, Settings, Brain, RefreshCw, Bot, ChevronDown, Check, Search, ChevronRight } from "lucide-react";
+import { Loader2, FileText, Info, Settings, Brain, RefreshCw, ChevronDown, Check, Search, ChevronRight } from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
 import { getProviderReasoningSupport } from "../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../core/prompts/service";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { cn } from "../../design-tokens";
 
 export function EditModelPage() {
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [showPlatformSelector, setShowPlatformSelector] = useState(false);
 
   const {
     state: {
       loading,
       saving,
-      deleting,
       verifying,
       fetchingModels,
       fetchedModels,
       error,
       providers,
-      defaultModelId,
       editorModel,
       modelAdvancedDraft,
     },
-    isNew,
     canSave,
-    providerDisplay,
     updateEditorModel,
     handleDisplayNameChange,
     handleModelNameChange,
     handleProviderSelection,
-    setModelAdvancedDraft,
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
@@ -61,8 +57,6 @@ export function EditModelPage() {
     handleReasoningEffortChange,
     handleReasoningBudgetChange,
     handleSave,
-    handleDelete,
-    handleSetDefault,
     fetchModels,
   } = useModelEditorController();
 
@@ -192,7 +186,6 @@ export function EditModelPage() {
             </div>
           )}
 
-          {/* 1. PLATFORM (PROVIDER) */}
           <div className="space-y-2">
             <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model Platform</label>
             {providers.length === 0 ? (
@@ -200,24 +193,52 @@ export function EditModelPage() {
                 No providers configured. Add a provider first.
               </div>
             ) : (
-              <div className="relative">
-                <select
-                  value={`${editorModel.providerId}|${editorModel.providerLabel}`}
-                  onChange={(e) => {
-                    const [providerId, providerLabel] = e.target.value.split("|");
-                    const selectedProvider = providers.find((p) => p.providerId === providerId && p.label === providerLabel);
-                    handleProviderSelection(providerId, selectedProvider?.label ?? providerLabel);
-                  }}
-                  className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition focus:border-white/30 focus:outline-none"
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowPlatformSelector(true)}
+                  className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition hover:bg-black/30 active:scale-[0.99]"
                 >
-                  {providers.map((prov) => (
-                    <option key={prov.id} value={`${prov.providerId}|${prov.label}`} className="bg-[#16171d]">
-                      {prov.label || prov.providerId}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-              </div>
+                  <div className="flex items-center gap-3 truncate">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/5 text-white/60">
+                      {getProviderIcon(editorModel.providerId)}
+                    </div>
+                    <span className="truncate">
+                      {providers.find(p => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel)?.label
+                        || editorModel.providerLabel
+                        || editorModel.providerId
+                        || "Select Platform..."}
+                    </span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-white/40" />
+                </button>
+
+                <BottomMenu
+                  isOpen={showPlatformSelector}
+                  onClose={() => setShowPlatformSelector(false)}
+                  title="Select Platform"
+                >
+                  <MenuSection>
+                    {providers.map((prov) => {
+                      const isSelected = prov.providerId === editorModel.providerId && prov.label === editorModel.providerLabel;
+                      return (
+                        <MenuButton
+                          key={prov.id}
+                          icon={getProviderIcon(prov.providerId)}
+                          title={prov.label || prov.providerId}
+                          description={prov.providerId}
+                          color={isSelected ? "from-emerald-500 to-emerald-600" : "from-white/10 to-white/5"}
+                          rightElement={isSelected ? <Check className="h-4 w-4 text-emerald-400" /> : <ChevronRight className="h-4 w-4 text-white/20" />}
+                          onClick={() => {
+                            handleProviderSelection(prov.providerId, prov.label || prov.providerId);
+                            setShowPlatformSelector(false);
+                          }}
+                        />
+                      );
+                    })}
+                  </MenuSection>
+                </BottomMenu>
+              </>
             )}
           </div>
 
@@ -293,16 +314,20 @@ export function EditModelPage() {
                     </div>
                     <MenuSection>
                       {filteredModels.length > 0 ? (
-                        filteredModels.map(m => (
-                          <MenuButton
-                            key={m.id}
-                            icon={Bot}
-                            title={m.displayName || m.id}
-                            description={m.description || m.id}
-                            color="from-emerald-500 to-emerald-600"
-                            onClick={() => handleSelectModel(m.id, m.displayName)}
-                          />
-                        ))
+                        filteredModels.map(m => {
+                          const isSelected = m.id === editorModel.name;
+                          return (
+                            <MenuButton
+                              key={m.id}
+                              icon={getProviderIcon(editorModel.providerId)}
+                              title={m.displayName || m.id}
+                              description={m.description || m.id}
+                              color="from-emerald-500 to-emerald-600"
+                              rightElement={isSelected ? <Check className="h-4 w-4 text-emerald-400" /> : undefined}
+                              onClick={() => handleSelectModel(m.id, m.displayName)}
+                            />
+                          );
+                        })
                       ) : (
                         <div className="py-12 text-center text-sm text-white/40">
                           No models found matching "{searchQuery}"
@@ -694,46 +719,6 @@ export function EditModelPage() {
 
           <div className="h-px bg-white/5" />
 
-          {/* 4. ACTIONS */}
-          <div className="space-y-4 pb-12">
-            {!isNew && (
-              <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-4">
-                <div className="space-y-0.5">
-                  <span className="block text-sm font-semibold text-white">Default Model</span>
-                  <span className="block text-xs text-white/40">Launch this model by default</span>
-                </div>
-                <label className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none">
-                  <input
-                    type="checkbox"
-                    checked={defaultModelId === editorModel.id}
-                    onChange={handleSetDefault}
-                    disabled={defaultModelId === editorModel.id}
-                    className="sr-only"
-                  />
-                  <span className={cn(
-                    "inline-block h-full w-full rounded-full transition-colors duration-200",
-                    defaultModelId === editorModel.id ? "bg-emerald-500" : "bg-white/10"
-                  )} />
-                  <span className={cn(
-                    "absolute h-5 w-5 transform rounded-full bg-white transition-transform duration-200",
-                    defaultModelId === editorModel.id ? "translate-x-5" : "translate-x-1"
-                  )} />
-                </label>
-              </div>
-            )}
-
-            {!isNew && (
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={deleting}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/5 px-4 py-4 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/10 disabled:opacity-50"
-              >
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                {deleting ? "Deleting..." : "Delete Model"}
-              </button>
-            )}
-          </div>
         </motion.div>
       </main>
 
@@ -748,36 +733,6 @@ export function EditModelPage() {
         </div>
       </BottomMenu>
 
-      {/* DELETE CONFIRMATION */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            className="w-full max-w-sm rounded-3xl bg-[#16171d] p-6 shadow-2xl border border-white/10 mb-safe"
-          >
-            <h3 className="text-xl font-bold text-white text-center">Delete Model?</h3>
-            <p className="mt-4 text-center text-sm text-white/60 leading-relaxed">
-              Are you sure you want to remove <strong>{editorModel.displayName || editorModel.name}</strong>?<br />
-              This action cannot be undone.
-            </p>
-            <div className="mt-8 flex flex-col gap-3">
-              <button
-                onClick={handleDelete}
-                className="w-full rounded-2xl bg-rose-500 py-4 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition active:scale-[0.98]"
-              >
-                Delete Model
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="w-full rounded-2xl bg-white/5 py-4 text-sm font-semibold text-white/60 transition hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

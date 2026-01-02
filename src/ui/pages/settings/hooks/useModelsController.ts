@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useReducer } from "react";
 import {
   readSettings,
+  removeModel,
+  setDefaultModel,
   SETTINGS_UPDATED_EVENT,
 } from "../../../../core/storage/repo";
 import {
@@ -12,6 +14,8 @@ import {
 type ControllerReturn = {
   state: ModelsState;
   reload: () => Promise<void>;
+  handleSetDefault: (modelId: string) => Promise<void>;
+  handleDelete: (modelId: string) => Promise<void>;
 };
 
 export function useModelsController(): ControllerReturn {
@@ -37,6 +41,22 @@ export function useModelsController(): ControllerReturn {
     }
   }, []);
 
+  const handleSetDefault = useCallback(async (modelId: string) => {
+    try {
+      await setDefaultModel(modelId);
+    } catch (error) {
+      console.error("Failed to set default model", error);
+    }
+  }, []);
+
+  const handleDelete = useCallback(async (modelId: string) => {
+    try {
+      await removeModel(modelId);
+    } catch (error) {
+      console.error("Failed to remove model", error);
+    }
+  }, []);
+
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -52,5 +72,7 @@ export function useModelsController(): ControllerReturn {
   return {
     state,
     reload,
+    handleSetDefault,
+    handleDelete,
   };
 }
