@@ -21,6 +21,7 @@ import type { Character, Persona } from "../../../core/storage/schemas";
 
 const DYNAMIC_SUMMARY_TEMPLATE_ID = "prompt_app_dynamic_summary";
 const DYNAMIC_MEMORY_TEMPLATE_ID = "prompt_app_dynamic_memory";
+const HELP_ME_REPLY_TEMPLATE_ID = "prompt_app_help_me_reply";
 
 export function EditPromptTemplate() {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ export function EditPromptTemplate() {
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [isAppDefault, setIsAppDefault] = useState(false);
-  const [promptType, setPromptType] = useState<"system" | "summary" | "memory" | null>(null);
+  const [promptType, setPromptType] = useState<"system" | "summary" | "memory" | "reply" | null>(null);
   const [resetting, setResetting] = useState(false);
   const [requiredVariables, setRequiredVariables] = useState<string[]>([]);
   const [missingVariables, setMissingVariables] = useState<string[]>([]);
@@ -77,19 +78,20 @@ export function EditPromptTemplate() {
           setContent(template.content);
           const isProtected = template.id === appDefaultId ||
             template.id === DYNAMIC_SUMMARY_TEMPLATE_ID ||
-            template.id === DYNAMIC_MEMORY_TEMPLATE_ID;
+            template.id === DYNAMIC_MEMORY_TEMPLATE_ID ||
+            template.id === HELP_ME_REPLY_TEMPLATE_ID;
           setIsAppDefault(isProtected);
 
-          // Detect prompt type
           if (template.id === appDefaultId) {
             setPromptType("system");
           } else if (template.id === DYNAMIC_SUMMARY_TEMPLATE_ID) {
             setPromptType("summary");
           } else if (template.id === DYNAMIC_MEMORY_TEMPLATE_ID) {
             setPromptType("memory");
+          } else if (template.id === HELP_ME_REPLY_TEMPLATE_ID) {
+            setPromptType("reply");
           }
 
-          // Load required variables for protected templates
           if (isProtected) {
             const required = await getRequiredTemplateVariables(template.id);
             setRequiredVariables(required);
@@ -142,7 +144,8 @@ export function EditPromptTemplate() {
     const promptTypeName =
       promptType === "system" ? "main system prompt" :
         promptType === "summary" ? "dynamic summary prompt" :
-          "dynamic memory prompt";
+          promptType === "memory" ? "dynamic memory prompt" :
+            "reply helper prompt";
 
     if (!confirm(`Reset to the original default ${promptTypeName}? This cannot be undone.`)) {
       return;
@@ -155,8 +158,11 @@ export function EditPromptTemplate() {
         updated = await resetAppDefaultTemplate();
       } else if (promptType === "summary") {
         updated = await resetDynamicSummaryTemplate();
-      } else {
+      } else if (promptType === "memory") {
         updated = await resetDynamicMemoryTemplate();
+      } else {
+        const { resetHelpMeReplyTemplate } = await import("../../../core/prompts/service");
+        updated = await resetHelpMeReplyTemplate();
       }
       setContent(updated.content);
       alert("Reset to default successfully!");
@@ -212,6 +218,12 @@ export function EditPromptTemplate() {
     { var: "{{persona}}", label: "Persona", desc: "Persona placeholder" },
   ] : promptType === "memory" ? [
     { var: "{{max_entries}}", label: "Max Entries", desc: "Maximum memory entries allowed" },
+  ] : promptType === "reply" ? [
+    { var: "{{char.name}}", label: "Character Name", desc: "Character's name" },
+    { var: "{{char.desc}}", label: "Character Desc", desc: "Character description" },
+    { var: "{{persona.name}}", label: "User Name", desc: "User persona name" },
+    { var: "{{persona.desc}}", label: "User Desc", desc: "User persona description" },
+    { var: "{{current_draft}}", label: "Current Draft", desc: "Content user already started writing" },
   ] : [
     { var: "{{char.name}}", label: "Character Name", desc: "Character's name" },
     { var: "{{char.desc}}", label: "Character Desc", desc: "Character description" },

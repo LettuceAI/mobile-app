@@ -607,3 +607,7 @@ export async function checkEmbeddingModel(): Promise<boolean> {
 export async function getEmbeddingModelInfo(): Promise<{ installed: boolean; version: string | null; maxTokens: number }> {
   return storageBridge.getEmbeddingModelInfo();
 }
+
+export async function generateUserReply(sessionId: string, currentDraft?: string): Promise<string> {
+  return storageBridge.chatGenerateUserReply(sessionId, currentDraft);
+}

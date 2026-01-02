@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ChevronsRight, Plus, SendHorizonal, Square, X } from "lucide-react";
 import type { Character, ImageAttachment } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, shadows, cn } from "../../../design-tokens";
@@ -16,6 +16,9 @@ interface ChatFooterProps {
   pendingAttachments?: ImageAttachment[];
   onAddAttachment?: (attachment: ImageAttachment) => void;
   onRemoveAttachment?: (attachmentId: string) => void;
+  onOpenPlusMenu?: () => void;
+  triggerFileInput?: boolean;
+  onFileInputTriggered?: () => void;
 }
 
 export function ChatFooter({
@@ -29,6 +32,9 @@ export function ChatFooter({
   pendingAttachments = [],
   onAddAttachment,
   onRemoveAttachment,
+  onOpenPlusMenu,
+  triggerFileInput,
+  onFileInputTriggered,
 }: ChatFooterProps) {
   const hasDraft = draft.trim().length > 0;
   const hasAttachments = pendingAttachments.length > 0;
@@ -80,8 +86,19 @@ export function ChatFooter({
   };
 
   const handlePlusClick = () => {
-    fileInputRef.current?.click();
+    if (onOpenPlusMenu) {
+      onOpenPlusMenu();
+    } else {
+      fileInputRef.current?.click();
+    }
   };
+
+  useEffect(() => {
+    if (triggerFileInput) {
+      fileInputRef.current?.click();
+      onFileInputTriggered?.();
+    }
+  }, [triggerFileInput, onFileInputTriggered]);
 
   return (
     <footer className={`z-20 shrink-0 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
@@ -148,8 +165,8 @@ export function ChatFooter({
         "border border-white/15 bg-white/5 backdrop-blur-md",
         shadows.md
       )}>
-        {/* Plus button for attachments */}
-        {onAddAttachment && (
+        {/* Plus button */}
+        {(onOpenPlusMenu || onAddAttachment) && (
           <button
             onClick={handlePlusClick}
             disabled={sending}
@@ -162,8 +179,8 @@ export function ChatFooter({
               "hover:border-white/25 hover:bg-white/15",
               "disabled:cursor-not-allowed disabled:opacity-40"
             )}
-            title="Add image"
-            aria-label="Add image attachment"
+            title={onOpenPlusMenu ? "More options" : "Add image"}
+            aria-label={onOpenPlusMenu ? "More options" : "Add image attachment"}
           >
             <Plus size={20} />
           </button>
@@ -188,7 +205,7 @@ export function ChatFooter({
           <span
             className={cn(
               "pointer-events-none absolute",
-              onAddAttachment ? "left-16" : "left-5",
+              (onOpenPlusMenu || onAddAttachment) ? "left-16" : "left-5",
               "top-1/2 -translate-y-1/2",
               "text-white/40",
               "transition-opacity duration-150",

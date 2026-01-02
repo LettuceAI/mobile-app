@@ -64,6 +64,10 @@ pub fn run() {
                 eprintln!("Failed to ensure app default template: {}", e);
             }
 
+            if let Err(e) = chat_manager::prompts::ensure_help_me_reply_template(app.handle()) {
+                eprintln!("Failed to ensure help me reply template: {}", e);
+            }
+
             // Initialize Sync Manager
             app.manage(sync::manager::SyncManagerState::new());
 
@@ -185,6 +189,7 @@ pub fn run() {
             chat_manager::get_default_character_rules,
             chat_manager::get_default_system_prompt_template,
             chat_manager::search_messages,
+            chat_manager::chat_generate_user_reply,
             chat_manager::retry_dynamic_memory,
             chat_manager::list_prompt_templates,
             chat_manager::create_prompt_template,
@@ -196,6 +201,7 @@ pub fn run() {
             chat_manager::reset_app_default_template,
             chat_manager::reset_dynamic_summary_template,
             chat_manager::reset_dynamic_memory_template,
+            chat_manager::reset_help_me_reply_template,
             chat_manager::get_required_template_variables,
             chat_manager::validate_template_variables,
             chat_manager::render_prompt_preview,

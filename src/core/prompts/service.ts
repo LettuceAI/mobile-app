@@ -14,6 +14,7 @@ export {
   resetAppDefaultTemplate,
   resetDynamicSummaryTemplate,
   resetDynamicMemoryTemplate,
+  resetHelpMeReplyTemplate,
   getRequiredTemplateVariables,
   validateTemplateVariables,
 } from "./index";

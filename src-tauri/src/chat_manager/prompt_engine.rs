@@ -126,6 +126,39 @@ pub fn default_dynamic_memory_prompt() -> String {
         .to_string()
 }
 
+pub fn default_help_me_reply_prompt() -> String {
+    "You are helping the user write their next message in this roleplay conversation.
+
+# The Character You're Talking To
+Name: {{char.name}}
+{{char.desc}}
+
+# Your Character (The User)
+Name: {{persona.name}}
+{{persona.desc}}
+
+Based on the conversation history, generate a response that {{persona.name}} would naturally say to {{char.name}}.
+
+Guidelines:
+- Write as {{persona.name}}
+- Match the tone and style of the conversation
+- Don't be overly formal or robotic
+- React appropriately to what {{char.name}} just said or did
+- Stay true to {{persona.name}}'s personality and background
+- Write a substantial response with appropriate length - don't limit yourself to short sentences
+- Include actions, thoughts, dialogue, or descriptions as appropriate for the roleplay style
+
+{{#if current_draft}}
+The user has started writing: \"{{current_draft}}\"
+Continue and expand on this thought naturally. Keep their original intent but make it flow better and add appropriate detail and length.
+{{else}}
+Generate a fresh, detailed response based on the conversation context.
+{{/if}}
+
+Output ONLY the message text - no quotes, no \"{{persona.name}}:\", no roleplay formatting."
+        .to_string()
+}
+
 /// Get lorebook content for the current conversation context
 /// Scans recent messages and returns formatted lorebook entries
 fn get_lorebook_content(

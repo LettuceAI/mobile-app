@@ -349,7 +349,7 @@ fn extract_image_data_urls_from_value(v: &Value, out: &mut Vec<String>) {
     }
 }
 
-fn usage_from_value(v: &Value) -> Option<UsageSummary> {
+pub fn usage_from_value(v: &Value) -> Option<UsageSummary> {
     // Support both snake_case "usage" (OpenAI) and camelCase "usageMetadata" (Gemini)
     let u = v.get("usage").or_else(|| v.get("usageMetadata"))?;
 

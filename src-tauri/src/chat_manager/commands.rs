@@ -2524,6 +2524,11 @@ pub fn reset_dynamic_memory_template(app: AppHandle) -> Result<SystemPromptTempl
 }
 
 #[tauri::command]
+pub fn reset_help_me_reply_template(app: AppHandle) -> Result<SystemPromptTemplate, String> {
+    prompts::reset_help_me_reply_template(&app)
+}
+
+#[tauri::command]
 pub fn get_required_template_variables(template_id: String) -> Vec<String> {
     prompts::get_required_variables(&template_id)
 }
@@ -3521,4 +3526,202 @@ pub async fn search_messages(
         .collect();
 
     Ok(results)
+}
+
+#[tauri::command]
+pub async fn chat_generate_user_reply(
+    app: AppHandle,
+    session_id: String,
+    current_draft: Option<String>,
+) -> Result<String, String> {
+    log_info(
+        &app,
+        "help_me_reply",
+        format!(
+            "Generating user reply for session={}, has_draft={}",
+            &session_id,
+            current_draft.is_some()
+        ),
+    );
+
+    let context = ChatContext::initialize(app.clone())?;
+    let settings = &context.settings;
+
+    let session = match context.load_session(&session_id)? {
+        Some(s) => s,
+        None => return Err("Session not found".to_string()),
+    };
+
+    let character = context.find_character(&session.character_id)?;
+
+    let persona = context.choose_persona(session.persona_id.as_ref().map(|id| id.as_str()));
+
+    let recent_msgs = recent_messages(&session, 10);
+
+    if recent_msgs.is_empty() {
+        return Err("No conversation history to base reply on".to_string());
+    }
+
+    let model_id = settings
+        .default_model_id
+        .as_ref()
+        .ok_or_else(|| "No default model configured".to_string())?;
+
+    let model = settings
+        .models
+        .iter()
+        .find(|m| &m.id == model_id)
+        .ok_or_else(|| "Default model not found".to_string())?;
+
+    let provider_cred = settings
+        .provider_credentials
+        .iter()
+        .find(|cred| cred.provider_id == model.provider_id)
+        .ok_or_else(|| "Provider credential not found".to_string())?;
+
+    let api_key = resolve_api_key(&app, provider_cred, "help_me_reply")?;
+
+    let base_prompt = prompts::get_help_me_reply_prompt(&app);
+
+    let char_name = &character.name;
+    let char_desc = character.description.as_deref().unwrap_or("");
+    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("User");
+    let persona_desc = persona.map(|p| p.description.as_str()).unwrap_or("");
+
+    let mut system_prompt = base_prompt;
+    system_prompt = system_prompt.replace("{{char.name}}", char_name);
+    system_prompt = system_prompt.replace("{{char.desc}}", char_desc);
+    system_prompt = system_prompt.replace("{{persona.name}}", persona_name);
+    system_prompt = system_prompt.replace("{{persona.desc}}", persona_desc);
+    let draft_str = current_draft.as_deref().unwrap_or("");
+    system_prompt = system_prompt.replace("{{current_draft}}", draft_str);
+    // Legacy placeholders
+    system_prompt = system_prompt.replace("{{char}}", char_name);
+    system_prompt = system_prompt.replace("{{persona}}", persona_name);
+
+    if let Some(ref draft) = current_draft {
+        if !draft.trim().is_empty() {
+            system_prompt = system_prompt.replace("{{#if current_draft}}", "");
+            system_prompt = system_prompt.replace("{{current_draft}}", draft);
+            if let Some(else_start) = system_prompt.find("{{else}}") {
+                if let Some(endif_start) = system_prompt[else_start..].find("{{/if}}") {
+                    system_prompt.replace_range(else_start..(else_start + endif_start + 7), "");
+                }
+            }
+            system_prompt = system_prompt.replace("{{/if}}", "");
+        } else {
+            remove_if_block(&mut system_prompt);
+        }
+    } else {
+        remove_if_block(&mut system_prompt);
+    }
+
+    let conversation_context = recent_msgs
+        .iter()
+        .map(|msg| {
+            let role_label = if msg.role == "user" {
+                persona_name
+            } else {
+                char_name
+            };
+            format!("{}: {}", role_label, msg.content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    let user_prompt = format!(
+        "Here is the recent conversation:\n\n{}\n\nGenerate a reply for {} to say next.",
+        conversation_context, persona_name
+    );
+
+    let messages_for_api: Vec<Value> = vec![
+        json!({ "role": "system", "content": system_prompt }),
+        json!({ "role": "user", "content": user_prompt }),
+    ];
+
+    let built = super::request_builder::build_chat_request(
+        provider_cred,
+        &api_key,
+        &model.name,
+        &messages_for_api,
+        None, // system_prompt already in messages
+        0.8,  // temperature
+        1.0,  // top_p
+        20480,  // max_tokens
+        false, // no streaming
+        None,  // request_id
+        None,  // frequency_penalty
+        None,  // presence_penalty
+        None,  // top_k
+        None,  // tool_config
+        false, // reasoning_enabled
+        None,  // reasoning_effort
+        None,  // reasoning_budget
+    );
+
+    log_info(&app, "help_me_reply", format!("Sending request to {}", built.url));
+
+    let api_request_payload = ApiRequest {
+        url: built.url,
+        method: Some("POST".into()),
+        headers: Some(built.headers),
+        query: None,
+        body: Some(built.body),
+        timeout_ms: Some(60_000),
+        stream: Some(false),
+        request_id: None,
+        provider_id: Some(provider_cred.provider_id.clone()),
+    };
+
+    let api_response = api_request(app.clone(), api_request_payload).await?;
+
+    if !api_response.ok {
+        return Err(format!(
+            "API request failed with status {}",
+            api_response.status
+        ));
+    }
+
+    let generated_text = extract_text(&api_response.data)
+        .ok_or_else(|| "Failed to extract text from response".to_string())?;
+
+    let cleaned = generated_text
+        .trim()
+        .trim_matches('"')
+        .trim_start_matches(&format!("{}:", persona_name))
+        .trim()
+        .to_string();
+
+    log_info(
+        &app,
+        "help_me_reply",
+        format!("Generated reply: {} chars", cleaned.len()),
+    );
+
+    let usage = super::sse::usage_from_value(&api_response.data);
+    super::service::record_usage_if_available(
+        &context,
+        &usage,
+        &session,
+        &character,
+        &model,
+        &provider_cred,
+        &api_key,
+        now_millis().unwrap_or(0),
+        "reply_helper",
+        "help_me_reply",
+    )
+    .await;
+
+    Ok(cleaned)
+}
+
+/// Helper to remove {{#if current_draft}}...{{else}}...{{/if}} and keep else content
+fn remove_if_block(prompt: &mut String) {
+    if let Some(if_start) = prompt.find("{{#if current_draft}}") {
+        if let Some(else_pos) = prompt.find("{{else}}") {
+            prompt.replace_range(if_start..(else_pos + 8), "");
+        }
+    }
+    *prompt = prompt.replace("{{/if}}", "");
 }

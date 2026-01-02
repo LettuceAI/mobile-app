@@ -137,24 +137,6 @@ export function EditCharacterPage() {
     return "";
   })();
 
-  const availableVoiceValues = React.useMemo(() => {
-    const values = new Set<string>();
-    for (const voice of userVoices) {
-      values.add(buildUserVoiceValue(voice.id));
-    }
-    for (const provider of audioProviders) {
-      const voices = providerVoices[provider.id] ?? [];
-      for (const voice of voices) {
-        values.add(buildProviderVoiceValue(provider.id, voice.voiceId));
-      }
-    }
-    return values;
-  }, [audioProviders, providerVoices, userVoices]);
-
-  const isMissingVoiceSelection =
-    Boolean(voiceSelectionValue) && !availableVoiceValues.has(voiceSelectionValue);
-
-  // Register window global for header save button (BEFORE any early returns - Rules of Hooks)
   React.useEffect(() => {
     const globalWindow = window as any;
     globalWindow.__saveCharacter = handleSave;
@@ -1186,7 +1168,7 @@ export function EditCharacterPage() {
               disabled={!editingSceneContent.trim()}
               className={cn(
                 "flex-1 py-3 text-sm font-semibold text-white transition",
-                "bg-gradient-to-r from-emerald-500 to-green-500",
+                "bg-linear-to-r from-emerald-500 to-green-500",
                 "hover:from-emerald-400 hover:to-green-400",
                 "active:scale-[0.98]",
                 "disabled:cursor-not-allowed disabled:opacity-50",

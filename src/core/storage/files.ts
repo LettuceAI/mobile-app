@@ -148,6 +148,12 @@ export const storageBridge = {
         role: string;
     }[]>("search_messages", { sessionId, query }),
 
+    chatGenerateUserReply: (sessionId: string, currentDraft?: string) =>
+        invoke<string>("chat_generate_user_reply", {
+            sessionId,
+            currentDraft: currentDraft ?? null,
+        }),
+
     dbCheckpoint: () => invoke("db_checkpoint") as Promise<void>,
     dbOptimize: () => invoke("db_optimize") as Promise<void>,
 

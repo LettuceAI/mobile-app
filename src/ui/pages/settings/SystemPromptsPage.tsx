@@ -8,6 +8,7 @@ import type { SystemPromptTemplate } from "../../../core/storage/schemas";
 
 const DYNAMIC_SUMMARY_TEMPLATE_ID = "prompt_app_dynamic_summary";
 const DYNAMIC_MEMORY_TEMPLATE_ID = "prompt_app_dynamic_memory";
+const HELP_ME_REPLY_TEMPLATE_ID = "prompt_app_help_me_reply";
 
 export function SystemPromptsPage() {
   const navigate = useNavigate();
@@ -20,15 +21,15 @@ export function SystemPromptsPage() {
 
   useEffect(() => {
     loadData();
-    
+
     const globalWindow = window as any;
     globalWindow.__openAddPromptTemplate = () => {
       navigate("/settings/prompts/new");
     };
-    
+
     const handleAdd = () => navigate("/settings/prompts/new");
     window.addEventListener("prompts:add", handleAdd);
-    
+
     return () => {
       delete globalWindow.__openAddPromptTemplate;
       window.removeEventListener("prompts:add", handleAdd);
@@ -41,13 +42,13 @@ export function SystemPromptsPage() {
         listPromptTemplates(),
         getAppDefaultTemplateId(),
       ]);
-      
+
       const sorted = data.sort((a, b) => {
         if (a.id === defaultId) return -1;
         if (b.id === defaultId) return 1;
         return b.createdAt - a.createdAt;
       });
-      
+
       setTemplates(sorted);
       setAppDefaultId(defaultId);
     } catch (error) {
@@ -63,9 +64,9 @@ export function SystemPromptsPage() {
       alert("Cannot delete this protected template");
       return;
     }
-    
+
     if (!confirm(`Delete "${template.name}"?`)) return;
-    
+
     try {
       await deletePromptTemplate(template.id);
       setTemplates(prev => prev.filter(t => t.id !== template.id));
@@ -155,54 +156,57 @@ export function SystemPromptsPage() {
                   transition={{ duration: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
                   className="overflow-hidden rounded-xl border border-white/10 bg-white/5"
                 >
-                    <div className="p-3.5">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          {/* Title Row */}
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-sm font-semibold text-white truncate">{template.name}</h3>
-                            {template.id === appDefaultId && (
-                              <div className="flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-200 shrink-0">
-                                Default
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Content Preview */}
-                          <button
-                            onClick={() => setExpandedId(expandedId === template.id ? null : template.id)}
-                            className="w-full text-left text-xs leading-relaxed text-white/60 transition"
-                          >
-                            {expandedId === template.id ? (
-                              <div className="whitespace-pre-wrap font-mono">{template.content}</div>
-                            ) : (
-                              <div className="line-clamp-2">{template.content}</div>
-                            )}
-                          </button>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => navigate(`/settings/prompts/${template.id}`)}
-                            className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 transition active:scale-95 active:bg-white/10"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          
-                          {template.id === appDefaultId || template.id === DYNAMIC_SUMMARY_TEMPLATE_ID || template.id === DYNAMIC_MEMORY_TEMPLATE_ID ? (
-                            <div className="flex items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1.5">
-                              <Lock className="h-3.5 w-3.5 text-amber-400" />
+                  <div className="p-3.5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        {/* Title Row */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-sm font-semibold text-white truncate">{template.name}</h3>
+                          {template.id === appDefaultId && (
+                            <div className="flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-200 shrink-0">
+                              Default
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => handleDelete(template)}
-                              className="rounded-lg border border-red-400/20 bg-red-400/5 p-2 text-red-400/70 transition active:scale-95 active:bg-red-400/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           )}
                         </div>
+
+                        {/* Content Preview */}
+                        <button
+                          onClick={() => setExpandedId(expandedId === template.id ? null : template.id)}
+                          className="w-full text-left text-xs leading-relaxed text-white/60 transition"
+                        >
+                          {expandedId === template.id ? (
+                            <div className="whitespace-pre-wrap font-mono">{template.content}</div>
+                          ) : (
+                            <div className="line-clamp-2">{template.content}</div>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => navigate(`/settings/prompts/${template.id}`)}
+                          className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 transition active:scale-95 active:bg-white/10"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+
+                        {template.id === appDefaultId ||
+                          template.id === DYNAMIC_SUMMARY_TEMPLATE_ID ||
+                          template.id === DYNAMIC_MEMORY_TEMPLATE_ID ||
+                          template.id === HELP_ME_REPLY_TEMPLATE_ID ? (
+                          <div className="flex items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1.5">
+                            <Lock className="h-3.5 w-3.5 text-amber-400" />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleDelete(template)}
+                            className="rounded-lg border border-red-400/20 bg-red-400/5 p-2 text-red-400/70 transition active:scale-95 active:bg-red-400/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>

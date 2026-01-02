@@ -21,6 +21,7 @@ pub enum PromptType {
     SystemPrompt,
     DynamicMemoryPrompt,
     DynamicSummaryPrompt,
+    HelpMeReplyPrompt,
 }
 
 pub fn get_base_prompt(prompt_type: PromptType) -> String {
@@ -28,6 +29,7 @@ pub fn get_base_prompt(prompt_type: PromptType) -> String {
         PromptType::SystemPrompt => prompt_engine::default_system_prompt_template(),
         PromptType::DynamicMemoryPrompt => prompt_engine::default_dynamic_memory_prompt(),
         PromptType::DynamicSummaryPrompt => prompt_engine::default_dynamic_summary_prompt(),
+        PromptType::HelpMeReplyPrompt => prompt_engine::default_help_me_reply_prompt(),
     }
 }
 

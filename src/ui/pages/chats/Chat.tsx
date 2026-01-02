@@ -40,6 +40,7 @@ import {
   type ThemeColors,
 } from "../../../core/utils/imageAnalysis";
 import {
+  generateUserReply,
   getSessionMeta,
   listCharacters,
   readSettings,
@@ -57,8 +58,9 @@ import {
   LoadingSpinner,
   EmptyState,
 } from "./components";
-import { BottomMenu } from "../../components";
+import { BottomMenu, MenuButton } from "../../components";
 import { useAvatar } from "../../hooks/useAvatar";
+import { Image, RefreshCw, Sparkles, Check, PenLine } from "lucide-react";
 import { radius, cn } from "../../design-tokens";
 
 const LONG_PRESS_DELAY = 450;
@@ -121,6 +123,15 @@ export function ChatConversationPage() {
   const sendStartSignatureRef = useRef<string | null>(null);
   const sendingPrevRef = useRef(false);
   const previousChatKeyRef = useRef<string | null>(null);
+
+  // Help Me Reply states
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showChoiceMenu, setShowChoiceMenu] = useState(false);
+  const [showResultMenu, setShowResultMenu] = useState(false);
+  const [generatedReply, setGeneratedReply] = useState<string | null>(null);
+  const [generatingReply, setGeneratingReply] = useState(false);
+  const [helpMeReplyError, setHelpMeReplyError] = useState<string | null>(null);
+  const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
     setSelectedImage({ src, alt });
@@ -842,6 +853,59 @@ export function ChatConversationPage() {
     pressStartPosition.current = null;
   }, [initializeLongPressTimer, setHeldMessageId]);
 
+  // Help Me Reply handlers
+  const handleOpenPlusMenu = useCallback(() => {
+    setShowPlusMenu(true);
+  }, []);
+
+  const handleHelpMeReply = useCallback(async (mode: 'new' | 'enrich') => {
+    if (!session?.id) return;
+
+    // Close other menus and show result menu with loading state immediately
+    setShowChoiceMenu(false);
+    setShowPlusMenu(false);
+    setGeneratedReply(null);
+    setHelpMeReplyError(null);
+    setGeneratingReply(true);
+    setShowResultMenu(true);
+
+    try {
+      const currentDraft = mode === 'enrich' && draft.trim() ? draft : undefined;
+      const result = await generateUserReply(session.id, currentDraft);
+      setGeneratedReply(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setHelpMeReplyError(message);
+    } finally {
+      setGeneratingReply(false);
+    }
+  }, [session?.id, draft]);
+
+  const handleUseReply = useCallback(() => {
+    if (generatedReply) {
+      setDraft(generatedReply);
+    }
+    setShowResultMenu(false);
+    setGeneratedReply(null);
+    setHelpMeReplyError(null);
+  }, [generatedReply, setDraft]);
+
+  const handlePlusMenuImageUpload = useCallback(() => {
+    setShowPlusMenu(false);
+    setShouldTriggerFileInput(true);
+  }, []);
+
+  const handlePlusMenuHelpMeReply = useCallback(() => {
+    setShowPlusMenu(false);
+    if (draft.trim()) {
+      // Has draft - show choice menu
+      setShowChoiceMenu(true);
+    } else {
+      // No draft - generate directly
+      void handleHelpMeReply('new');
+    }
+  }, [draft, handleHelpMeReply]);
+
   const loadOlderFromDb = useCallback(async () => {
     if (!hasMoreMessagesBefore) return;
     if (loadingOlderRef.current) return;
@@ -1164,16 +1228,16 @@ export function ChatConversationPage() {
             const displayContent = replacePlaceholders(message.content, charName, personaName);
             const eventHandlers = actionable
               ? {
-                  onMouseDown: handlePressStart(message),
-                  onMouseMove: handlePressMove,
-                  onMouseUp: handlePressEnd,
-                  onMouseLeave: handlePressEnd,
-                  onTouchStart: handlePressStart(message),
-                  onTouchMove: handlePressMove,
-                  onTouchEnd: handlePressEnd,
-                  onTouchCancel: handlePressEnd,
-                  onContextMenu: handleContextMenu(message),
-                }
+                onMouseDown: handlePressStart(message),
+                onMouseMove: handlePressMove,
+                onMouseUp: handlePressEnd,
+                onMouseLeave: handlePressEnd,
+                onTouchStart: handlePressStart(message),
+                onTouchMove: handlePressMove,
+                onTouchEnd: handlePressEnd,
+                onTouchCancel: handlePressEnd,
+                onContextMenu: handleContextMenu(message),
+              }
               : {};
 
             return (
@@ -1249,6 +1313,9 @@ export function ChatConversationPage() {
           pendingAttachments={pendingAttachments}
           onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}
           onRemoveAttachment={supportsImageInput ? removePendingAttachment : undefined}
+          onOpenPlusMenu={handleOpenPlusMenu}
+          triggerFileInput={shouldTriggerFileInput}
+          onFileInputTriggered={() => setShouldTriggerFileInput(false)}
         />
       </div>
 
@@ -1324,6 +1391,116 @@ export function ChatConversationPage() {
         </div>
       </BottomMenu>
 
+      {/* Plus Menu - Upload Image | Help Me Reply */}
+      <BottomMenu
+        isOpen={showPlusMenu}
+        onClose={() => setShowPlusMenu(false)}
+        title="Add Content"
+      >
+        <div className="space-y-2">
+          {supportsImageInput && (
+            <MenuButton
+              icon={Image}
+              title="Upload Image"
+              onClick={handlePlusMenuImageUpload}
+            />
+          )}
+          <MenuButton
+            icon={Sparkles}
+            title="Help Me Reply"
+            description="Let AI suggest what to say"
+            onClick={handlePlusMenuHelpMeReply}
+          />
+        </div>
+      </BottomMenu>
+
+      {/* Choice Menu - Use existing draft or generate new */}
+      <BottomMenu
+        isOpen={showChoiceMenu}
+        onClose={() => setShowChoiceMenu(false)}
+        title="Help Me Reply"
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-white/60 mb-4">
+            You have a draft message. How would you like to proceed?
+          </p>
+          <MenuButton
+            icon={PenLine}
+            title="Use my text as base"
+            description="Expand and improve your draft"
+            onClick={() => handleHelpMeReply('enrich')}
+          />
+          <MenuButton
+            icon={Sparkles}
+            title="Write something new"
+            description="Generate a fresh reply"
+            onClick={() => handleHelpMeReply('new')}
+          />
+        </div>
+      </BottomMenu>
+
+      {/* Result Menu - Show generated reply with Regenerate/Use options */}
+      <BottomMenu
+        isOpen={showResultMenu}
+        onClose={() => {
+          setShowResultMenu(false);
+          setGeneratedReply(null);
+          setHelpMeReplyError(null);
+        }}
+        title="Suggested Reply"
+      >
+        <div className="space-y-4">
+          {generatingReply ? (
+            <div className="flex items-center justify-center py-8">
+              <LoadingSpinner />
+            </div>
+          ) : helpMeReplyError ? (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400 text-sm">{helpMeReplyError}</p>
+            </div>
+          ) : generatedReply ? (
+            <div className={cn(
+              "bg-white/5 border border-white/10 p-4",
+              radius.lg,
+              "max-h-[40vh] overflow-y-auto"
+            )}>
+              <p className="text-white/90 text-sm whitespace-pre-wrap">
+                {generatedReply}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleHelpMeReply(draft.trim() ? 'enrich' : 'new')}
+              disabled={generatingReply}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-3 px-4",
+                radius.lg,
+                "bg-white/10 text-white/80 hover:bg-white/15",
+                "disabled:opacity-50 transition-all",
+              )}
+            >
+              <RefreshCw size={18} />
+              <span>Regenerate</span>
+            </button>
+            <button
+              onClick={handleUseReply}
+              disabled={generatingReply || !generatedReply}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-3 px-4",
+                radius.lg,
+                "bg-emerald-500 text-white hover:bg-emerald-600",
+                "disabled:opacity-50 transition-all",
+              )}
+            >
+              <Check size={18} />
+              <span>Use This</span>
+            </button>
+          </div>
+        </div>
+      </BottomMenu>
+
       {/* Full-screen Image Modal */}
       <AnimatePresence>
         {selectedImage && (
@@ -1357,7 +1534,7 @@ export function ChatConversationPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </div >
   );
 }
 
