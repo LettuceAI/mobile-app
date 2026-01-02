@@ -95,31 +95,12 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
     let stream = req.stream.unwrap_or(false);
     let request_id = req.request_id.clone();
 
-    // Extract API key for logging
-    let api_key_for_log = req
-        .headers
-        .as_ref()
-        .and_then(|headers| {
-            headers.iter().find_map(|(key, value)| {
-                let lowered = key.to_ascii_lowercase();
-                if lowered.contains("authorization")
-                    || lowered.contains("api-key")
-                    || lowered.contains("apikey")
-                {
-                    Some(value.clone())
-                } else {
-                    None
-                }
-            })
-        })
-        .unwrap_or_else(|| "<none>".to_string());
-
     log_info(
         &app,
         "api_request",
         format!(
-            "[api_request] method={} full_url={} api_key={} stream={} request_id={:?} timeout_ms={:?}",
-            method_str, url_for_log, api_key_for_log, stream, request_id, req.timeout_ms
+            "[api_request] method={} full_url={} stream={} request_id={:?} timeout_ms={:?}",
+            method_str, url_for_log, stream, request_id, req.timeout_ms
         ),
     );
 
@@ -169,8 +150,8 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
                 &app,
                 "api_request",
                 format!(
-                    "[api_request] request error for {} (api_key={}): {}",
-                    url_for_log, api_key_for_log, err
+                    "[api_request] request error for {}: {}",
+                    url_for_log, err
                 ),
             );
             return Err(err.to_string());
@@ -221,8 +202,8 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
         &app,
         "api_request",
         format!(
-            "[api_request] completed {} {} (api_key={}) status={} ok={} stream={} request_id={:?}",
-            method_str, url_for_log, api_key_for_log, status, ok, stream, request_id
+            "[api_request] completed {} {} status={} ok={} stream={} request_id={:?}",
+            method_str, url_for_log, status, ok, stream, request_id
         ),
     );
 

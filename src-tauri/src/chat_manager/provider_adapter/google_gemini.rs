@@ -25,6 +25,16 @@ struct GeminiSystemInstruction {
 }
 
 #[derive(Serialize)]
+struct GeminiThinkingConfig {
+    #[serde(rename = "includeThoughts")]
+    include_thoughts: bool,
+    #[serde(rename = "thinkingBudget", skip_serializing_if = "Option::is_none")]
+    thinking_budget: Option<i32>,
+    #[serde(rename = "thinkingLevel", skip_serializing_if = "Option::is_none")]
+    thinking_level: Option<String>,
+}
+
+#[derive(Serialize)]
 struct GeminiGenerationConfig {
     temperature: f64,
     #[serde(rename = "topP")]
@@ -33,14 +43,8 @@ struct GeminiGenerationConfig {
     max_output_tokens: u32,
     #[serde(rename = "topK", skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
-}
-
-#[derive(Serialize)]
-struct GeminiThinkingConfig {
-    #[serde(rename = "includeThoughts")]
-    include_thoughts: bool,
-    #[serde(rename = "thinkingBudget")]
-    thinking_budget: u32,
+    #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
+    thinking_config: Option<GeminiThinkingConfig>,
 }
 
 #[derive(Serialize)]
@@ -54,9 +58,6 @@ struct GeminiChatRequest {
     tools: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_config: Option<Value>,
-
-    #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
-    thinking_config: Option<GeminiThinkingConfig>,
 }
 
 impl ProviderAdapter for GoogleGeminiAdapter {
@@ -64,13 +65,25 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         base_url.trim_end_matches('/').to_string()
     }
 
-    fn build_url(&self, base_url: &str, model_name: &str, api_key: &str) -> String {
-        // v1beta/models/{model}:generateContent?key={api_key}
+    fn build_url(
+        &self,
+        base_url: &str,
+        model_name: &str,
+        api_key: &str,
+        should_stream: bool,
+    ) -> String {
         let base = base_url.trim_end_matches('/').replace("/v1", "/v1beta");
-        format!(
-            "{}/models/{}:generateContent?key={}",
-            base, model_name, api_key
-        )
+        if should_stream {
+            format!(
+                "{}/models/{}:streamGenerateContent?alt=sse&key={}",
+                base, model_name, api_key
+            )
+        } else {
+            format!(
+                "{}/models/{}:generateContent?key={}",
+                base, model_name, api_key
+            )
+        }
     }
 
     fn system_role(&self) -> std::borrow::Cow<'static, str> {
@@ -78,7 +91,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
     }
 
     fn supports_stream(&self) -> bool {
-        false
+        true
     }
 
     fn required_auth_headers(&self) -> &'static [&'static str] {
@@ -93,7 +106,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
 
     fn headers(
         &self,
-        _api_key: &str, 
+        _api_key: &str,
         extra: Option<&HashMap<String, String>>,
     ) -> HashMap<String, String> {
         let mut out: HashMap<String, String> = HashMap::new();
@@ -156,11 +169,29 @@ impl ProviderAdapter for GoogleGeminiAdapter {
             parts: vec![GeminiPart { text: sp }],
         });
 
+        let thinking_config = if reasoning_enabled {
+            let thinking_level = _reasoning_effort.as_ref().map(|s| s.to_uppercase());
+            let thinking_budget = if thinking_level.is_some() {
+                None
+            } else {
+                Some(reasoning_budget.map(|b| b as i32).unwrap_or(-1))
+            };
+
+            Some(GeminiThinkingConfig {
+                include_thoughts: true,
+                thinking_budget,
+                thinking_level,
+            })
+        } else {
+            None
+        };
+
         let generation_config = GeminiGenerationConfig {
             temperature,
             top_p,
             max_output_tokens: max_tokens,
             top_k,
+            thinking_config,
         };
 
         let tools = tool_config.and_then(gemini_tools);
@@ -176,17 +207,15 @@ impl ProviderAdapter for GoogleGeminiAdapter {
             generation_config,
             tools,
             tool_config,
-
-            thinking_config: if reasoning_enabled {
-                Some(GeminiThinkingConfig {
-                    include_thoughts: true,
-                    thinking_budget: reasoning_budget.unwrap_or(0),
-                })
-            } else {
-                None
-            },
         };
 
-        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
+        let json_body = serde_json::to_value(&body).unwrap_or_else(|_| json!({}));
+
+        // Log the Gemini request body for debugging
+        if let Some(gen_config) = json_body.get("generationConfig") {
+            eprintln!("[DEBUG] Gemini generationConfig: {:?}", gen_config);
+        }
+
+        json_body
     }
 }

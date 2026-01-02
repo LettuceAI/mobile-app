@@ -369,6 +369,22 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       reasoningBudgetTokens: true,
     },
   },
+  gemini: {
+    providerId: "gemini",
+    displayName: "Google Gemini",
+    reasoningSupport: "effort" as ReasoningSupport,
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: false,
+      presencePenalty: false,
+      topK: true,
+      reasoningEnabled: true,
+      reasoningEffort: true,
+      reasoningBudgetTokens: true,
+    },
+  },
   deepseek: {
     providerId: "deepseek",
     displayName: "DeepSeek",

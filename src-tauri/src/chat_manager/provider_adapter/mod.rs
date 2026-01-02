@@ -12,7 +12,14 @@ pub trait ProviderAdapter {
 
     /// Build the complete URL including model name and any query parameters.
     /// Default implementation just returns endpoint(), but providers like Gemini can override.
-    fn build_url(&self, base_url: &str, _model_name: &str, _api_key: &str) -> String {
+    /// The `should_stream` flag indicates if streaming is requested (for Gemini, use streamGenerateContent).
+    fn build_url(
+        &self,
+        base_url: &str,
+        _model_name: &str,
+        _api_key: &str,
+        _should_stream: bool,
+    ) -> String {
         self.endpoint(base_url)
     }
 

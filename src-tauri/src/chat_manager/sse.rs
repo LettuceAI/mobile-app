@@ -109,7 +109,6 @@ impl SseDecoder {
         self.buffer.push_str(chunk);
         let mut events: Vec<NormalizedEvent> = Vec::new();
 
-        // Process complete lines; keep the trailing partial line in buffer
         let mut last_newline = 0usize;
         for (idx, ch) in self.buffer.char_indices() {
             if ch == '\n' {
@@ -119,7 +118,7 @@ impl SseDecoder {
                 if l.is_empty() {
                     continue;
                 }
-                // Common SSE format: data: <payload>
+                // data: <payload>
                 if let Some(rest) = l.strip_prefix("data:") {
                     let payload = rest.trim();
                     if payload.is_empty() {
@@ -130,6 +129,19 @@ impl SseDecoder {
                         continue;
                     }
                     if let Ok(v) = serde_json::from_str::<Value>(payload) {
+                        if let Some(err) = extract_gemini_error(&v) {
+                            events.push(NormalizedEvent::Error {
+                                envelope: super::types::ErrorEnvelope {
+                                    code: Some("CONTENT_BLOCKED".to_string()),
+                                    message: err,
+                                    provider_id: Some("gemini".to_string()),
+                                    request_id: None,
+                                    retryable: Some(false),
+                                    status: Some(400),
+                                },
+                            });
+                            continue;
+                        }
                         if let Some(piece) = extract_text_from_value(&v) {
                             if !piece.is_empty() {
                                 events.push(NormalizedEvent::Delta { text: piece });
@@ -153,7 +165,6 @@ impl SseDecoder {
                 }
             }
         }
-        // retain leftover tail (after the last processed newline)
         if last_newline > 0 {
             self.buffer.drain(..last_newline);
         }
@@ -162,7 +173,6 @@ impl SseDecoder {
 }
 
 fn extract_text_from_value(v: &Value) -> Option<String> {
-    // Common streaming shapes: OpenAI delta, Mistral content, generic content/text
     if let Some(s) = v
         .get("choices")
         .and_then(|c| c.get(0))
@@ -192,6 +202,7 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
         }
     }
 
+    // Gemini-style: candidates[].content.parts[].text (skip thought=true parts)
     if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
         let mut combined = String::new();
         for candidate in candidates {
@@ -201,6 +212,13 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
                 .and_then(|p| p.as_array())
             {
                 for part in parts {
+                    let is_thought = part
+                        .get("thought")
+                        .and_then(|t| t.as_bool())
+                        .unwrap_or(false);
+                    if is_thought {
+                        continue;
+                    }
                     if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
                         combined.push_str(text);
                     }
@@ -227,7 +245,7 @@ fn extract_text_from_value(v: &Value) -> Option<String> {
     None
 }
 
-/// Extract reasoning tokens from thinking models (e.g., Gemini 2.5 Pro via OpenRouter)
+/// Extract reasoning tokens from thinking models
 /// The reasoning content is found in choices[0].delta.reasoning or choices[0].delta.reasoning_content
 fn extract_reasoning_from_value(v: &Value) -> Option<String> {
     // OpenAI/OpenRouter style: choices[0].delta.reasoning
@@ -270,6 +288,32 @@ fn extract_reasoning_from_value(v: &Value) -> Option<String> {
     {
         return Some(s.to_string());
     }
+    // Gemini-style: candidates[].content.parts[] with thought=true
+    if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
+        let mut combined = String::new();
+        for candidate in candidates {
+            if let Some(parts) = candidate
+                .get("content")
+                .and_then(|c| c.get("parts"))
+                .and_then(|p| p.as_array())
+            {
+                for part in parts {
+                    let is_thought = part
+                        .get("thought")
+                        .and_then(|t| t.as_bool())
+                        .unwrap_or(false);
+                    if is_thought {
+                        if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                            combined.push_str(text);
+                        }
+                    }
+                }
+            }
+        }
+        if !combined.is_empty() {
+            return Some(combined);
+        }
+    }
     None
 }
 
@@ -306,7 +350,12 @@ fn extract_image_data_urls_from_value(v: &Value, out: &mut Vec<String>) {
 }
 
 fn usage_from_value(v: &Value) -> Option<UsageSummary> {
-    let u = v.get("usage")?;
+    // Support both snake_case "usage" (OpenAI) and camelCase "usageMetadata" (Gemini)
+    let u = v.get("usage").or_else(|| v.get("usageMetadata"))?;
+
+    // Log the usage metadata for debugging
+    eprintln!("[DEBUG] Usage metadata received: {:?}", u);
+
     let prompt_tokens = take_first(
         u,
         &[
@@ -314,6 +363,7 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             "input_tokens",
             "promptTokens",
             "inputTokens",
+            "promptTokenCount", // Gemini-specific
         ],
     );
     let completion_tokens = take_first(
@@ -323,6 +373,7 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             "output_tokens",
             "completionTokens",
             "outputTokens",
+            "candidatesTokenCount", // Gemini-specific
         ],
     );
     let reasoning_tokens = take_first(
@@ -332,24 +383,29 @@ fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             "reasoningTokens",
             "thinking_tokens",
             "thinkingTokens",
+            "thoughtsTokenCount", // Gemini-specific
         ],
     )
     .or_else(|| {
-        // Check nested completion_tokens_details
         u.get("completion_tokens_details")
             .and_then(|d| take_first(d, &["reasoning_tokens", "reasoningTokens"]))
     });
     let image_tokens = take_first(u, &["image_tokens", "imageTokens"]).or_else(|| {
-        // Check nested details
         u.get("prompt_tokens_details")
             .and_then(|d| take_first(d, &["image_tokens", "imageTokens", "cached_tokens"]))
     });
-    let total_tokens = take_first(u, &["total_tokens", "totalTokens"]).or_else(|| {
-        match (prompt_tokens, completion_tokens) {
-            (Some(p), Some(c)) => Some(p + c),
-            _ => None,
-        }
-    });
+    let total_tokens =
+        take_first(u, &["total_tokens", "totalTokens", "totalTokenCount"]).or_else(|| {
+            match (prompt_tokens, completion_tokens) {
+                (Some(p), Some(c)) => Some(p + c),
+                _ => None,
+            }
+        });
+
+    eprintln!(
+        "[DEBUG] Parsed usage: prompt={:?}, completion={:?}, total={:?}, reasoning={:?}",
+        prompt_tokens, completion_tokens, total_tokens, reasoning_tokens
+    );
 
     if prompt_tokens.is_none() && completion_tokens.is_none() && total_tokens.is_none() {
         None
@@ -378,4 +434,99 @@ fn take_first(map: &Value, keys: &[&str]) -> Option<u64> {
         }
     }
     None
+}
+
+fn extract_gemini_error(v: &Value) -> Option<String> {
+    if let Some(prompt_feedback) = v.get("promptFeedback") {
+        if let Some(block_reason) = prompt_feedback.get("blockReason").and_then(|r| r.as_str()) {
+            return Some(format_gemini_block_reason(block_reason));
+        }
+    }
+
+    if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
+        for candidate in candidates {
+            if let Some(finish_reason) = candidate.get("finishReason").and_then(|r| r.as_str()) {
+                if let Some(err) = format_gemini_finish_reason_error(finish_reason) {
+                    return Some(err);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn format_gemini_block_reason(reason: &str) -> String {
+    match reason {
+        "BLOCK_REASON_UNSPECIFIED" => {
+            "Content was blocked by Gemini for an unspecified reason.".to_string()
+        }
+        "SAFETY" => {
+            "Content was blocked by Gemini safety filters. Try adjusting your prompt or safety settings.".to_string()
+        }
+        "OTHER" => "Content was blocked by Gemini for an uncategorized reason.".to_string(),
+        "BLOCKLIST" => {
+            "Content was blocked: the prompt contains terms from the blocklist.".to_string()
+        }
+        "PROHIBITED_CONTENT" => {
+            "Content was blocked by Gemini: prohibited content detected (e.g., CSAM or policy violation).".to_string()
+        }
+        "IMAGE_SAFETY" => {
+            "Content was blocked by Gemini: the image failed safety checks.".to_string()
+        }
+        _ => format!(
+            "Content was blocked by Gemini: {}",
+            reason.replace('_', " ").to_lowercase()
+        ),
+    }
+}
+
+fn format_gemini_finish_reason_error(reason: &str) -> Option<String> {
+    match reason {
+        "STOP" | "MAX_TOKENS" | "FINISH_REASON_UNSPECIFIED" => None,
+        "SAFETY" => Some("Response was blocked by Gemini safety filters.".to_string()),
+        "RECITATION" => Some(
+            "Response was blocked due to recitation concerns (potential copyright issues)."
+                .to_string(),
+        ),
+        "LANGUAGE" => Some("Response was blocked: unsupported language detected.".to_string()),
+        "OTHER" => Some("Response was blocked by Gemini for an uncategorized reason.".to_string()),
+        "BLOCKLIST" => {
+            Some("Response was blocked: output contains terms from the blocklist.".to_string())
+        }
+        "PROHIBITED_CONTENT" => {
+            Some("Response was blocked: prohibited content detected.".to_string())
+        }
+        "SPII" => Some(
+            "Response was blocked: sensitive personally identifiable information (SPII) detected."
+                .to_string(),
+        ),
+        "MALFORMED_FUNCTION_CALL" => {
+            Some("Response generation failed: malformed function call.".to_string())
+        }
+        "IMAGE_SAFETY" => Some("Image generation was blocked by safety filters.".to_string()),
+        "IMAGE_PROHIBITED_CONTENT" => {
+            Some("Image generation was blocked: prohibited content detected.".to_string())
+        }
+        "IMAGE_OTHER" => {
+            Some("Image generation was blocked for an uncategorized reason.".to_string())
+        }
+        "NO_IMAGE" => Some("Image generation failed: no image was produced.".to_string()),
+        "IMAGE_RECITATION" => {
+            Some("Image generation was blocked due to recitation concerns.".to_string())
+        }
+        "UNEXPECTED_TOOL_CALL" => {
+            Some("Response generation failed: unexpected tool call.".to_string())
+        }
+        "TOO_MANY_TOOL_CALLS" => {
+            Some("Response generation failed: too many tool calls.".to_string())
+        }
+        "MISSING_THOUGHT_SIGNATURE" => {
+            Some("Response generation failed: missing thought signature.".to_string())
+        }
+        _ => Some(format!(
+            "Response was blocked by Gemini: {}",
+            reason.replace('_', " ").to_lowercase()
+        )),
+    }
 }
