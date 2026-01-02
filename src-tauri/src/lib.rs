@@ -30,6 +30,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init());
 
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = builder.plugin(tauri_plugin_haptics::init());
+
     #[cfg(target_os = "android")]
     let builder = builder
         .plugin(tauri_plugin_android_fs::init())

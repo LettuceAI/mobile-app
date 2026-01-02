@@ -27,6 +27,8 @@ import { logManager } from "../../../../core/utils/logger";
 import { generateImage, type ImageGenerationRequest } from "../../../../core/image-generation";
 import type { GeneratedImage } from "../../../../core/image-generation";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { type as getPlatform } from "@tauri-apps/plugin-os";
+import { impactFeedback } from "@tauri-apps/plugin-haptics";
 
 const INITIAL_MESSAGE_LIMIT = 50;
 const OLDER_MESSAGE_PAGE = 50;
@@ -212,6 +214,44 @@ export function useChatController(
     providerId: string;
     credentialId: string;
   } | null>(null);
+  const hapticsEnabledRef = useRef<boolean>(false);
+  const hapticIntensityRef = useRef<any>("light");
+  const lastHapticTimeRef = useRef<number>(0);
+  const platformRef = useRef<string>("");
+
+  useEffect(() => {
+    platformRef.current = getPlatform();
+    const updateHapticsState = async () => {
+      try {
+        const settings = await readSettings();
+        const acc = settings.advancedSettings?.accessibility;
+        hapticsEnabledRef.current = acc?.haptics ?? false;
+        hapticIntensityRef.current = acc?.hapticIntensity ?? "light";
+      } catch (e) {
+        // silence errors
+      }
+    };
+    void updateHapticsState();
+    window.addEventListener(SETTINGS_UPDATED_EVENT, updateHapticsState);
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, updateHapticsState);
+  }, []);
+
+  const triggerTypingHaptic = useCallback(async () => {
+    if (!hapticsEnabledRef.current) return;
+    const isMobile = platformRef.current === "android" || platformRef.current === "ios";
+    if (!isMobile) return;
+
+    const now = Date.now();
+    // Throttle haptics to at most once every 60ms to keep pulses distinct
+    if (now - lastHapticTimeRef.current < 60) return;
+
+    lastHapticTimeRef.current = now;
+    try {
+      await impactFeedback(hapticIntensityRef.current);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   const resolveDefaultImageGenConfig = useCallback(async () => {
     if (imageGenConfigRef.current) return imageGenConfigRef.current;
@@ -835,6 +875,7 @@ export function useChatController(
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+              void triggerTypingHaptic();
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
@@ -925,6 +966,7 @@ export function useChatController(
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+              void triggerTypingHaptic();
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
@@ -1033,6 +1075,7 @@ export function useChatController(
             const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(message.id, String(payload.data.text));
+              void triggerTypingHaptic();
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",

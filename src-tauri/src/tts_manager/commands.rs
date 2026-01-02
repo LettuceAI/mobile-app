@@ -121,7 +121,7 @@ pub fn audio_models_list(provider_type: String) -> Vec<AudioModel> {
 #[tauri::command]
 pub fn audio_voice_design_models_list(provider_type: String) -> Vec<AudioModel> {
     match AudioProviderType::from_str(&provider_type) {
-        Some(AudioProviderType::GeminiTts) => gemini::get_models(), 
+        Some(AudioProviderType::GeminiTts) => gemini::get_models(),
         Some(AudioProviderType::Elevenlabs) => elevenlabs::get_voice_design_models(),
         None => vec![],
     }

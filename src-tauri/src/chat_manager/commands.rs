@@ -3644,10 +3644,10 @@ pub async fn chat_generate_user_reply(
         &api_key,
         &model.name,
         &messages_for_api,
-        None, // system_prompt already in messages
-        0.8,  // temperature
-        1.0,  // top_p
-        20480,  // max_tokens
+        None,  // system_prompt already in messages
+        0.8,   // temperature
+        1.0,   // top_p
+        20480, // max_tokens
         false, // no streaming
         None,  // request_id
         None,  // frequency_penalty
@@ -3659,7 +3659,11 @@ pub async fn chat_generate_user_reply(
         None,  // reasoning_budget
     );
 
-    log_info(&app, "help_me_reply", format!("Sending request to {}", built.url));
+    log_info(
+        &app,
+        "help_me_reply",
+        format!("Sending request to {}", built.url),
+    );
 
     let api_request_payload = ApiRequest {
         url: built.url,

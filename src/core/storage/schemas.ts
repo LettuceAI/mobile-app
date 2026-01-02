@@ -775,6 +775,8 @@ export const AccessibilitySettingsSchema = z.object({
   send: AccessibilitySoundSchema.default({ enabled: false, volume: 0.5 }),
   success: AccessibilitySoundSchema.default({ enabled: false, volume: 0.6 }),
   failure: AccessibilitySoundSchema.default({ enabled: false, volume: 0.6 }),
+  haptics: z.boolean().default(false), 
+  hapticIntensity: z.enum(["light", "medium", "heavy", "soft", "rigid"]).default("light"),
 });
 export type AccessibilitySettings = z.infer<typeof AccessibilitySettingsSchema>;
 
@@ -783,6 +785,8 @@ export function createDefaultAccessibilitySettings(): AccessibilitySettings {
     send: { enabled: false, volume: 0.5 },
     success: { enabled: false, volume: 0.6 },
     failure: { enabled: false, volume: 0.6 },
+    haptics: false,
+    hapticIntensity: "light",
   };
 }
 

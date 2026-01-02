@@ -181,7 +181,6 @@ pub fn get_cache_count(app: &tauri::AppHandle) -> Result<u64, String> {
     Ok(count)
 }
 
-
 #[tauri::command]
 pub fn tts_cache_key(
     provider_id: String,

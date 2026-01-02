@@ -149,10 +149,7 @@ pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiRe
             log_info(
                 &app,
                 "api_request",
-                format!(
-                    "[api_request] request error for {}: {}",
-                    url_for_log, err
-                ),
+                format!("[api_request] request error for {}: {}", url_for_log, err),
             );
             return Err(err.to_string());
         }

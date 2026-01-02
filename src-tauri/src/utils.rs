@@ -1,5 +1,5 @@
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use crate::logger::{LogEntry, LogManager};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use if_addrs::get_if_addrs;
 use serde::Serialize;
 use serde_json::{json, Value};
