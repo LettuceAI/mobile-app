@@ -52,6 +52,7 @@ type ControllerReturn = {
   handleDelete: () => Promise<void>;
   handleSetDefault: () => Promise<void>;
   clearError: () => void;
+  fetchModels: () => Promise<void>;
 };
 
 function useModelEditorState() {
@@ -541,6 +542,46 @@ export function useModelEditorController(): ControllerReturn {
     }
   }, [state]);
 
+
+
+  const fetchModels = useCallback(async () => {
+    const { editorModel, providers } = state;
+    if (!editorModel) return;
+
+    const providerCred =
+      providers.find(
+        (p) =>
+          p.providerId === editorModel.providerId &&
+          p.label === editorModel.providerLabel,
+      ) || providers.find((p) => p.providerId === editorModel.providerId);
+
+    if (!providerCred) {
+      dispatch({
+        type: "set_error",
+        payload: "Select a provider with valid credentials to fetch models",
+      });
+      return;
+    }
+
+    dispatch({ type: "set_fetching_models", payload: true });
+    dispatch({ type: "set_error", payload: null });
+
+    try {
+      const models = await invoke<any[]>("get_remote_models", {
+        credentialId: providerCred.id,
+      });
+      dispatch({ type: "set_fetched_models", payload: models });
+    } catch (error: any) {
+      console.error("Failed to fetch models", error);
+      dispatch({
+        type: "set_error",
+        payload: error?.message || "Failed to fetch models",
+      });
+    } finally {
+      dispatch({ type: "set_fetching_models", payload: false });
+    }
+  }, [state]);
+
   return {
     state,
     isNew,
@@ -566,6 +607,8 @@ export function useModelEditorController(): ControllerReturn {
     handleDelete,
     handleSetDefault,
     clearError,
+    fetchModels,
   };
+
 
 }

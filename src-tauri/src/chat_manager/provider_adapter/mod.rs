@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::types::ProviderCredential;
@@ -57,6 +57,51 @@ pub trait ProviderAdapter {
         reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value;
+
+    /// Endpoint to list models. Default implements OpenAI standard conventions.
+    fn list_models_endpoint(&self, base_url: &str) -> String {
+        let base = base_url.trim_end_matches('/');
+        if base.ends_with("/v1") {
+            format!("{}/models", base)
+        } else {
+            format!("{}/v1/models", base)
+        }
+    }
+
+    /// Parse the response from list_models_endpoint. Default implements OpenAI standard.
+    fn parse_models_list(&self, response: Value) -> Vec<ModelInfo> {
+        let mut models = Vec::new();
+        if let Some(data) = response.get("data").and_then(|d| d.as_array()) {
+            for item in data {
+                if let Some(id) = item.get("id").and_then(|id| id.as_str()) {
+                    models.push(ModelInfo {
+                        id: id.to_string(),
+                        display_name: item
+                            .get("name") // Some providers use name as display name
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string()),
+                        description: None,
+                        context_length: item.get("context_length").and_then(|c| c.as_u64()),
+                        input_price: None,
+                        output_price: None,
+                    });
+                }
+            }
+        }
+        models
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInfo {
+    pub id: String,
+    pub display_name: Option<String>,
+    pub description: Option<String>,
+    pub context_length: Option<u64>,
+    // Pricing per 1M tokens or similar, strictly for display/estimation if available
+    pub input_price: Option<f64>,
+    pub output_price: Option<f64>,
 }
 
 // Shared OpenAI-style request used by multiple providers.

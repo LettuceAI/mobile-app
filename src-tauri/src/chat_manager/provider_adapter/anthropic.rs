@@ -180,4 +180,37 @@ impl ProviderAdapter for AnthropicAdapter {
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
+    fn list_models_endpoint(&self, base_url: &str) -> String {
+        let trimmed = base_url.trim_end_matches('/');
+        if trimmed.ends_with("/v1") {
+            format!("{}/models", trimmed)
+        } else {
+            format!("{}/v1/models", trimmed)
+        }
+    }
+
+    fn parse_models_list(
+        &self,
+        response: Value,
+    ) -> Vec<crate::chat_manager::provider_adapter::ModelInfo> {
+        let mut models = Vec::new();
+        if let Some(data) = response.get("data").and_then(|d| d.as_array()) {
+            for item in data {
+                if let Some(id) = item.get("id").and_then(|id| id.as_str()) {
+                    models.push(crate::chat_manager::provider_adapter::ModelInfo {
+                        id: id.to_string(),
+                        display_name: item
+                            .get("display_name") // Anthropic uses display_name
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string()),
+                        description: None,
+                        context_length: None, // Anthropic doesn't explicitly send context_length in this list usually
+                        input_price: None,
+                        output_price: None,
+                    });
+                }
+            }
+        }
+        models
+    }
 }

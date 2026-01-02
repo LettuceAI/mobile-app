@@ -106,11 +106,12 @@ impl ProviderAdapter for GoogleGeminiAdapter {
 
     fn headers(
         &self,
-        _api_key: &str,
+        api_key: &str,
         extra: Option<&HashMap<String, String>>,
     ) -> HashMap<String, String> {
         let mut out: HashMap<String, String> = HashMap::new();
         out.insert("Content-Type".into(), "application/json".into());
+        out.insert("x-goog-api-key".into(), api_key.to_string());
         out.entry("User-Agent".into())
             .or_insert_with(|| "LettuceAI/0.1".into());
         if let Some(extra) = extra {
@@ -217,5 +218,39 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         }
 
         json_body
+    }
+
+    fn list_models_endpoint(&self, base_url: &str) -> String {
+        let base = base_url.trim_end_matches('/').replace("/v1", "/v1beta");
+        format!("{}/models", base)
+    }
+
+    fn parse_models_list(
+        &self,
+        response: Value,
+    ) -> Vec<crate::chat_manager::provider_adapter::ModelInfo> {
+        let mut models = Vec::new();
+        if let Some(list) = response.get("models").and_then(|d| d.as_array()) {
+            for item in list {
+                if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                    let id = name.strip_prefix("models/").unwrap_or(name).to_string();
+                    models.push(crate::chat_manager::provider_adapter::ModelInfo {
+                        id,
+                        display_name: item
+                            .get("displayName")
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string()),
+                        description: item
+                            .get("description")
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string()),
+                        context_length: item.get("inputTokenLimit").and_then(|c| c.as_u64()),
+                        input_price: None,
+                        output_price: None,
+                    });
+                }
+            }
+        }
+        models
     }
 }

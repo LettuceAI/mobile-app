@@ -82,6 +82,7 @@ pub fn run() {
             models::verify_model_exists,
             providers::verify_provider_api_key,
             providers::get_provider_configs,
+            providers::commands::get_remote_models,
             providers::openrouter::get_openrouter_models,
             storage_manager::settings::storage_read_settings,
             storage_manager::settings::storage_write_settings,

@@ -121,4 +121,40 @@ impl ProviderAdapter for OllamaAdapter {
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
+    fn list_models_endpoint(&self, base_url: &str) -> String {
+        let mut base = base_url.trim_end_matches('/').to_string();
+        if base.ends_with("/v1") {
+            base = base
+                .trim_end_matches("/v1")
+                .trim_end_matches('/')
+                .to_string();
+        }
+        format!("{}/api/tags", base)
+    }
+
+    fn parse_models_list(
+        &self,
+        response: Value,
+    ) -> Vec<crate::chat_manager::provider_adapter::ModelInfo> {
+        let mut models = Vec::new();
+        if let Some(list) = response.get("models").and_then(|d| d.as_array()) {
+            for item in list {
+                if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                    models.push(crate::chat_manager::provider_adapter::ModelInfo {
+                        id: name.to_string(),
+                        display_name: Some(name.to_string()),
+                        description: item
+                            .get("details")
+                            .and_then(|d| d.get("parameter_size"))
+                            .and_then(|s| s.as_str())
+                            .map(|s| format!("{} parameters", s)),
+                        context_length: None,
+                        input_price: None,
+                        output_price: None,
+                    });
+                }
+            }
+        }
+        models
+    }
 }
