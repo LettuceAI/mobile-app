@@ -39,8 +39,16 @@ export function ChatFooter({
   const hasDraft = draft.trim().length > 0;
   const hasAttachments = pendingAttachments.length > 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isDesktop = useMemo(() => getPlatform().type === "desktop", []);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [draft]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!isDesktop) return;
@@ -101,15 +109,17 @@ export function ChatFooter({
   }, [triggerFileInput, onFileInputTriggered]);
 
   return (
-    <footer className={`z-20 shrink-0 px-4 pb-6 pt-3 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
+    <footer className={`z-20 shrink-0 px-4 pb-6 pt-3 ${!hasBackgroundImage ? "bg-[#050505]" : ""}`}>
       {error && (
-        <div className={cn(
-          "mb-3 px-4 py-2.5",
-          radius.md,
-          "border border-red-400/30 bg-red-400/10",
-          typography.bodySmall.size,
-          "text-red-200"
-        )}>
+        <div
+          className={cn(
+            "mb-3 px-4 py-2.5",
+            radius.md,
+            "border border-red-400/30 bg-red-400/10",
+            typography.bodySmall.size,
+            "text-red-200",
+          )}
+        >
           {error}
         </div>
       )}
@@ -120,11 +130,7 @@ export function ChatFooter({
           {pendingAttachments.map((attachment) => (
             <div
               key={attachment.id}
-              className={cn(
-                "relative",
-                radius.md,
-                "border border-white/20 bg-white/10"
-              )}
+              className={cn("relative", radius.md, "border border-white/20 bg-white/10")}
             >
               <img
                 src={attachment.data}
@@ -137,7 +143,7 @@ export function ChatFooter({
                   className={cn(
                     "absolute -right-1 -top-1 z-50",
                     interactive.transition.fast,
-                    interactive.active.scale
+                    interactive.active.scale,
                   )}
                   aria-label="Remove attachment"
                 >
@@ -159,25 +165,27 @@ export function ChatFooter({
         onChange={handleFileSelect}
       />
 
-      <div className={cn(
-        "flex items-end gap-2.5 p-2.5",
-        radius.full,
-        "border border-white/15 bg-white/5 backdrop-blur-md",
-        shadows.md
-      )}>
+      <div
+        className={cn(
+          "relative flex items-end gap-2.5 p-2",
+          "rounded-[32px]",
+          "border border-white/15 bg-white/5 backdrop-blur-md",
+          shadows.md,
+        )}
+      >
         {/* Plus button */}
         {(onOpenPlusMenu || onAddAttachment) && (
           <button
             onClick={handlePlusClick}
             disabled={sending}
             className={cn(
-              "flex h-10 w-11 shrink-0 items-center justify-center",
+              "mb-0.5 flex h-10 w-11 shrink-0 items-center justify-center self-end",
               radius.full,
               "border border-white/15 bg-white/10 text-white/70",
               interactive.transition.fast,
               interactive.active.scale,
               "hover:border-white/25 hover:bg-white/15",
-              "disabled:cursor-not-allowed disabled:opacity-40"
+              "disabled:cursor-not-allowed disabled:opacity-40",
             )}
             title={onOpenPlusMenu ? "More options" : "Add image"}
             aria-label={onOpenPlusMenu ? "More options" : "Add image attachment"}
@@ -187,16 +195,17 @@ export function ChatFooter({
         )}
 
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={" "}
           rows={1}
           className={cn(
-            "max-h-32 flex-1 resize-none bg-transparent py-3",
+            "max-h-32 flex-1 resize-none bg-transparent py-2.5",
             typography.body.size,
             "text-white placeholder:text-transparent",
-            "focus:outline-none"
+            "focus:outline-none",
           )}
           disabled={sending}
         />
@@ -205,12 +214,12 @@ export function ChatFooter({
           <span
             className={cn(
               "pointer-events-none absolute",
-              (onOpenPlusMenu || onAddAttachment) ? "left-16" : "left-5",
+              onOpenPlusMenu || onAddAttachment ? "left-16" : "left-5",
               "top-1/2 -translate-y-1/2",
               "text-white/40",
               "transition-opacity duration-150",
               "peer-not-placeholder-shown:opacity-0",
-              "peer-focus:opacity-70"
+              "peer-focus:opacity-70",
             )}
           >
             Send a message...
@@ -220,28 +229,42 @@ export function ChatFooter({
           onClick={sending && onAbort ? onAbort : onSendMessage}
           disabled={sending && !onAbort}
           className={cn(
-            "flex h-10 w-11 shrink-0 items-center justify-center",
+            "mb-0.5 flex h-10 w-11 shrink-0 items-center justify-center self-end",
             radius.full,
             sending && onAbort
               ? "border border-red-400/40 bg-red-400/20 text-red-100"
-              : (hasDraft || hasAttachments)
+              : hasDraft || hasAttachments
                 ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
                 : "border border-white/15 bg-white/10 text-white/70",
             interactive.transition.fast,
             interactive.active.scale,
             sending && onAbort && "hover:border-red-400/60 hover:bg-red-400/30",
-            !sending && (hasDraft || hasAttachments) && "hover:border-emerald-400/60 hover:bg-emerald-400/30",
+            !sending &&
+            (hasDraft || hasAttachments) &&
+            "hover:border-emerald-400/60 hover:bg-emerald-400/30",
             !sending && !hasDraft && !hasAttachments && "hover:border-white/25 hover:bg-white/15",
-            "disabled:cursor-not-allowed disabled:opacity-40"
+            "disabled:cursor-not-allowed disabled:opacity-40",
           )}
-          title={sending && onAbort ? "Stop generation" : (hasDraft || hasAttachments) ? "Send message" : "Continue conversation"}
-          aria-label={sending && onAbort ? "Stop generation" : (hasDraft || hasAttachments) ? "Send message" : "Continue conversation"}
+          title={
+            sending && onAbort
+              ? "Stop generation"
+              : hasDraft || hasAttachments
+                ? "Send message"
+                : "Continue conversation"
+          }
+          aria-label={
+            sending && onAbort
+              ? "Stop generation"
+              : hasDraft || hasAttachments
+                ? "Send message"
+                : "Continue conversation"
+          }
         >
           {sending && onAbort ? (
             <Square size={18} fill="currentColor" />
           ) : sending ? (
             <span className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (hasDraft || hasAttachments) ? (
+          ) : hasDraft || hasAttachments ? (
             <SendHorizonal size={18} />
           ) : (
             <ChevronsRight size={18} />
