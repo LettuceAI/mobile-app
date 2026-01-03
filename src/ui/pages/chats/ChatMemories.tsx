@@ -2,13 +2,15 @@ import { useEffect, useMemo, useReducer, useState, useCallback } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame } from "lucide-react";
-import type { Character, Session, StoredMessage } from "../../../core/storage/schemas";
-import { addMemory, removeMemory, updateMemory, getSessionMeta, listPinnedMessages, listSessionPreviews, listCharacters, saveSession, setMemoryColdState, toggleMessagePin, toggleMemoryPin } from "../../../core/storage/repo";
+import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame, Cpu } from "lucide-react";
+import type { Character, Session, StoredMessage, Model } from "../../../core/storage/schemas";
+import { addMemory, removeMemory, updateMemory, getSessionMeta, listPinnedMessages, listSessionPreviews, listCharacters, saveSession, setMemoryColdState, toggleMessagePin, toggleMemoryPin, readSettings } from "../../../core/storage/repo";
 
 import { storageBridge } from "../../../core/storage/files";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
+import { BottomMenu, MenuSection } from "../../components/BottomMenu";
 
 type MemoryToolEvent = NonNullable<Session["memoryToolEvents"]>[number];
 
@@ -28,7 +30,7 @@ type UiState = {
   isSavingSummary: boolean;
   retryStatus: RetryStatus;
   actionError: string | null;
-  memoryStatus: MemoryStatus;
+  memoryStatus: MemoryStatus; // This is now for local UI transitions, but session.memoryStatus is source of truth
   expandedMemories: Set<number>;
   memoryTempBusy: number | null;
   pendingRefresh: boolean;
@@ -438,6 +440,10 @@ export function ChatMemoriesPage() {
   const { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload } = useSessionData(characterId, sessionId);
   const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } = useMemoryActions(session, (s) => setSession(s));
   const [ui, dispatch] = useReducer(uiReducer, searchParams.get("error"), initUi);
+  const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [allModels, setAllModels] = useState<Model[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+
 
   const handleSetColdState = useCallback(async (memoryIndex: number, isCold: boolean) => {
     if (!session?.id) return;
@@ -462,21 +468,18 @@ export function ChatMemoriesPage() {
       try {
         const u1 = await listen("dynamic-memory:processing", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            dispatch({ type: "SET_MEMORY_STATUS", value: "processing" });
-            dispatch({ type: "SET_ACTION_ERROR", value: null });
-            dispatch({ type: "SET_PENDING_REFRESH", value: false });
+            void reload();
           }
         });
         const u2 = await listen("dynamic-memory:success", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            dispatch({ type: "SET_MEMORY_STATUS", value: "idle" });
             dispatch({ type: "SET_PENDING_REFRESH", value: true });
+            void reload();
           }
         });
         const u3 = await listen("dynamic-memory:error", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            dispatch({ type: "SET_MEMORY_STATUS", value: "failed" });
-            dispatch({ type: "SET_ACTION_ERROR", value: e.payload?.error || "Memory processing failed" });
+            void reload();
           }
         });
         unlisteners.push(u1, u2, u3);
@@ -489,7 +492,7 @@ export function ChatMemoriesPage() {
     return () => {
       unlisteners.forEach(u => u());
     };
-  }, [session?.id]);
+  }, [session?.id, reload]);
 
   useEffect(() => {
     dispatch({ type: "SYNC_SUMMARY_FROM_SESSION", value: session?.memorySummary ?? "" });
@@ -647,21 +650,75 @@ export function ChatMemoriesPage() {
     }
   }, [handleSaveSummary, session?.memorySummary, ui.summaryDraft]);
 
-  const handleRetry = useCallback(async () => {
+
+
+  // Model selection for retry
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [retryingWithModel, setRetryingWithModel] = useState(false);
+
+  useEffect(() => {
+    // Load available models when component mounts or menu opens
+    const loadModels = async () => {
+      setLoadingModels(true);
+      try {
+        const settings = await readSettings();
+        setAllModels(settings.models);
+      } catch (err) {
+        console.error("Failed to load models:", err);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    void loadModels();
+  }, []);
+
+  const filteredModels = useMemo(() => {
+    if (!modelSearchQuery) return allModels;
+    const query = modelSearchQuery.toLowerCase();
+    return allModels.filter(
+      (m) => m.name.toLowerCase().includes(query) || m.displayName.toLowerCase().includes(query)
+    );
+  }, [allModels, modelSearchQuery]);
+
+  const handleRetryWithModel = useCallback(async (modelId?: string) => {
     if (!session?.id) return;
+    setRetryingWithModel(true);
+    setShowModelSelector(false);
     dispatch({ type: "SET_RETRY_STATUS", value: "retrying" });
     try {
-      await storageBridge.retryDynamicMemory(session.id);
+      // If modelId is provided, we use it and update default
+      // If not, it's a simple retry with existing settings
+      await storageBridge.retryDynamicMemory(session.id, modelId, modelId ? true : undefined);
       dispatch({ type: "SET_RETRY_STATUS", value: "success" });
-      dispatch({ type: "SET_ACTION_ERROR", value: null });
       dispatch({ type: "SET_PENDING_REFRESH", value: true });
-      window.setTimeout(() => dispatch({ type: "SET_RETRY_STATUS", value: "idle" }), 3000);
+      window.setTimeout(() => {
+        dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
+        void reload();
+      }, 3000);
     } catch (err: any) {
       console.error("Failed to retry memory processing:", err);
-      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to retry memory processing" });
       dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
+      void reload();
+    } finally {
+      setRetryingWithModel(false);
     }
-  }, [session?.id]);
+  }, [session?.id, reload]);
+
+  const handleDismissError = useCallback(async () => {
+    if (!session?.id || !session) return;
+    try {
+      await saveSession({ ...session, memoryStatus: "idle", memoryError: null });
+      void reload();
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
+    } catch (err) {
+      console.error("Failed to dismiss error:", err);
+    }
+  }, [session, reload]);
+
+  const handleRetry = useCallback(async () => {
+    await handleRetryWithModel();
+  }, [handleRetryWithModel]);
+
 
   const handleRefresh = useCallback(async () => {
     if (!session?.id) return;
@@ -673,6 +730,16 @@ export function ChatMemoriesPage() {
       dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to refresh" });
     }
   }, [reload, session?.id]);
+
+  const handleTriggerManual = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      await storageBridge.triggerDynamicMemory(sessionId);
+      dispatch({ type: "SET_ACTION_ERROR", value: null });
+    } catch (err: any) {
+      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to trigger memory processing" });
+    }
+  }, [sessionId]);
 
   if (loading) {
     return (
@@ -719,7 +786,7 @@ export function ChatMemoriesPage() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 ml-auto">
-            {ui.memoryStatus === "processing" && (
+            {session.memoryStatus === "processing" && (
               <div className={cn(
                 radius.full,
                 "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
@@ -730,45 +797,13 @@ export function ChatMemoriesPage() {
             )}
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className={cn(
-            radius.full,
-            "border px-2 py-1",
-            colors.border.subtle,
-            "bg-white/5",
-            typography.caption.size,
-            colors.text.secondary
-          )}>
-            {stats.total} {stats.total === 1 ? "memory" : "memories"}
-          </span>
-          <span className={cn(
-            radius.full,
-            "border px-2 py-1",
-            colors.border.subtle,
-            "bg-white/5",
-            typography.caption.size,
-            colors.text.secondary
-          )}>
-            {stats.totalTokens.toLocaleString()} tokens
-          </span>
-          {isDynamic && (
-            <span className={cn(
-              radius.full,
-              "border px-2 py-1",
-              "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
-              typography.caption.size
-            )}>
-              Dynamic
-            </span>
-          )}
-        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* Error Banner */}
-        {(ui.actionError || ui.retryStatus !== "idle" || ui.memoryStatus === "processing") && (
+        {(ui.actionError || session.memoryError || ui.retryStatus !== "idle" || session.memoryStatus === "processing") && (
           <div className="px-3 pt-3">
-            {(ui.retryStatus === "retrying" || ui.memoryStatus === "processing") ? (
+            {(ui.retryStatus === "retrying" || session.memoryStatus === "processing") ? (
               <div className={cn(
                 radius.md,
                 "bg-blue-500/10 border border-blue-500/20 p-3 flex items-center gap-3 animate-pulse"
@@ -776,7 +811,7 @@ export function ChatMemoriesPage() {
                 <RefreshCw className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
                 <div className="flex-1 text-sm text-blue-200">
                   <p className="font-semibold">
-                    {ui.memoryStatus === "processing" ? "AI is organizing memories..." : "Retrying Memory Cycle..."}
+                    {session.memoryStatus === "processing" ? "AI is organizing memories..." : "Retrying Memory Cycle..."}
                   </p>
                 </div>
               </div>
@@ -796,23 +831,41 @@ export function ChatMemoriesPage() {
                   <X size={16} />
                 </button>
               </div>
-            ) : ui.actionError ? (
+            ) : (ui.actionError || session.memoryError) ? (
               <div className={cn(
                 radius.md,
                 "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3"
               )}>
                 <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
                 <div className="flex-1 text-sm text-red-200">
-                  <p className="font-semibold mb-1">Memory System Error</p>
-                  <p className="opacity-90">{ui.actionError}</p>
-                  {(ui.actionError.toLowerCase().includes("status") || ui.actionError.toLowerCase().includes("limit") || true) && (
+                  <div className="flex items-start justify-between">
+                    <p className="font-semibold mb-1">Memory System Error</p>
                     <button
-                      onClick={handleRetry}
-                      className="mt-2 flex items-center gap-1.5 rounded-md bg-red-500/20 px-2.5 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95"
+                      onClick={handleDismissError}
+                      className="text-red-400/60 hover:text-red-400 transition-colors"
+                      title="Dismiss error"
                     >
-                      <RefreshCw size={12} />
-                      Try Again
+                      <X size={16} />
                     </button>
+                  </div>
+                  <p className="opacity-90">{ui.actionError || session.memoryError}</p>
+                  {(ui.actionError || session.memoryError) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        onClick={handleRetry}
+                        className="flex items-center gap-1.5 rounded-md bg-red-500/20 px-2.5 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95"
+                      >
+                        <RefreshCw size={12} />
+                        Try Again
+                      </button>
+                      <button
+                        onClick={() => setShowModelSelector(true)}
+                        className="flex items-center gap-1.5 rounded-md bg-blue-500/20 px-2.5 py-1.5 text-xs font-semibold text-blue-200 transition hover:bg-blue-500/30 active:scale-95"
+                      >
+                        <Cpu size={12} />
+                        Try Different Model
+                      </button>
+                    </div>
                   )}
                 </div>
                 <button
@@ -1355,16 +1408,31 @@ export function ChatMemoriesPage() {
               title="Activity"
               subtitle="History of AI memory operations"
               right={
-                <span className={cn(
-                  typography.caption.size,
-                  "inline-flex items-center gap-1 px-2 py-0.5",
-                  radius.full,
-                  "border bg-white/5",
-                  colors.border.subtle,
-                  colors.text.secondary
-                )}>
-                  {(session.memoryToolEvents?.length ?? 0).toLocaleString()}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleTriggerManual}
+                    disabled={session?.memoryStatus === "processing"}
+                    className={cn(
+                      radius.md,
+                      "border px-2 py-1 flex items-center gap-1.5 transition-all active:scale-95",
+                      "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50",
+                      typography.caption.size
+                    )}
+                  >
+                    <Cpu size={12} className={cn(session?.memoryStatus === "processing" && "animate-pulse")} />
+                    Run Process
+                  </button>
+                  <span className={cn(
+                    typography.caption.size,
+                    "inline-flex items-center gap-1 px-2 py-0.5",
+                    radius.full,
+                    "border bg-white/5",
+                    colors.border.subtle,
+                    colors.text.secondary
+                  )}>
+                    {(session.memoryToolEvents?.length ?? 0).toLocaleString()}
+                  </span>
+                </div>
               }
             />
             <ToolLog events={(session.memoryToolEvents as MemoryToolEvent[]) || []} />
@@ -1528,6 +1596,94 @@ export function ChatMemoriesPage() {
           ))}
         </div>
       </div>
+
+      {/* Model Selection BottomMenu */}
+      <BottomMenu
+        isOpen={showModelSelector}
+        onClose={() => {
+          setShowModelSelector(false);
+          setModelSearchQuery("");
+        }}
+        title="Select Model for Retry"
+      >
+        <MenuSection className="pb-0">
+          <div className="px-4 py-3">
+            <div className={cn("relative flex items-center", radius.md, "bg-white/5 border", colors.border.subtle)}>
+              <Search className="absolute left-3 h-4 w-4 text-white/30" />
+              <input
+                type="text"
+                placeholder="Search models..."
+                value={modelSearchQuery}
+                onChange={(e) => setModelSearchQuery(e.target.value)}
+                className="w-full bg-transparent py-2.5 pl-9 pr-4 text-sm text-white placeholder:text-white/20 focus:outline-none"
+              />
+              {modelSearchQuery && (
+                <button
+                  onClick={() => setModelSearchQuery("")}
+                  className="absolute right-3 text-white/30 hover:text-white/50"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        </MenuSection>
+
+        <div className="max-h-[60vh] overflow-y-auto pb-6">
+          {loadingModels ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <RefreshCw className="h-6 w-6 animate-spin text-white/20" />
+              <p className={cn(typography.bodySmall.size, colors.text.tertiary, "mt-3")}>
+                Loading available models...
+              </p>
+            </div>
+          ) : filteredModels.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <p className={cn(typography.body.size, colors.text.secondary)}>
+                No models found matching "{modelSearchQuery}"
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {filteredModels.map((model) => {
+                const isSelected = model.id === character.defaultModelId;
+                return (
+                  <button
+                    key={model.id}
+                    onClick={() => handleRetryWithModel(model.id)}
+                    disabled={retryingWithModel}
+                    className={cn(
+                      "group relative flex w-full flex-col gap-1 px-4 py-3 transition",
+                      isSelected ? "bg-white/5" : "hover:bg-white/5"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5">
+                        {getProviderIcon(model.providerId)}
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(typography.body.size, "font-semibold text-white truncate")}>
+                            {model.displayName}
+                          </span>
+                          {isSelected && (
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
+                              <Check size={10} className="text-emerald-400" />
+                            </span>
+                          )}
+                        </div>
+                        <p className={cn(typography.caption.size, colors.text.tertiary, "truncate")}>
+                          {model.providerLabel} • {model.name}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </BottomMenu>
     </div>
   );
 }

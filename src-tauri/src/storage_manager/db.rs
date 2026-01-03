@@ -353,6 +353,8 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           memory_summary TEXT,
           memory_summary_token_count INTEGER NOT NULL DEFAULT 0,
           memory_tool_events TEXT NOT NULL DEFAULT '[]',
+          memory_status TEXT,
+          memory_error TEXT,
           archived INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,
@@ -580,6 +582,27 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     }
     if !has_session_voice_autoplay {
         let _ = conn.execute("ALTER TABLE sessions ADD COLUMN voice_autoplay INTEGER", []);
+    }
+
+    let mut stmt_sessions_mem = conn
+        .prepare("PRAGMA table_info(sessions)")
+        .map_err(|e| e.to_string())?;
+    let mut has_memory_status = false;
+    let mut has_memory_error = false;
+    let mut rows_sessions_mem = stmt_sessions_mem.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows_sessions_mem.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        if col_name == "memory_status" {
+            has_memory_status = true;
+        } else if col_name == "memory_error" {
+            has_memory_error = true;
+        }
+    }
+    if !has_memory_status {
+        let _ = conn.execute("ALTER TABLE sessions ADD COLUMN memory_status TEXT", []);
+    }
+    if !has_memory_error {
+        let _ = conn.execute("ALTER TABLE sessions ADD COLUMN memory_error TEXT", []);
     }
 
     let mut stmt2 = conn

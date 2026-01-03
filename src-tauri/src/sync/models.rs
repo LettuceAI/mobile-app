@@ -195,6 +195,8 @@ pub struct Session {
     pub archived: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    pub memory_status: Option<String>,
+    pub memory_error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -194,6 +194,7 @@ pub fn run() {
             chat_manager::search_messages,
             chat_manager::chat_generate_user_reply,
             chat_manager::retry_dynamic_memory,
+            chat_manager::trigger_dynamic_memory,
             chat_manager::list_prompt_templates,
             chat_manager::create_prompt_template,
             chat_manager::update_prompt_template,

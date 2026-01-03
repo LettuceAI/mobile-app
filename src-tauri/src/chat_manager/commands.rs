@@ -2577,6 +2577,8 @@ pub fn render_prompt_preview(
             archived: false,
             created_at: now,
             updated_at: now,
+            memory_status: None,
+            memory_error: None,
             memories: vec![
                 "Memory 1 (Preview): The user prefers direct communication.".to_string(),
                 "Memory 2 (Preview): We met in the tavern last night.".to_string(),
@@ -2596,11 +2598,19 @@ pub fn render_prompt_preview(
 }
 
 #[tauri::command]
-pub async fn retry_dynamic_memory(app: AppHandle, session_id: String) -> Result<(), String> {
+pub async fn retry_dynamic_memory(
+    app: AppHandle,
+    session_id: String,
+    model_id: Option<String>,
+    update_default: Option<bool>,
+) -> Result<(), String> {
     log_info(
         &app,
         "dynamic_memory",
-        format!("retry requested for session {}", session_id),
+        format!(
+            "retry requested for session {} with model_id={:?} update_default={:?}",
+            session_id, model_id, update_default
+        ),
     );
     let context = ChatContext::initialize(app.clone())?;
     let mut session = context
@@ -2608,7 +2618,48 @@ pub async fn retry_dynamic_memory(app: AppHandle, session_id: String) -> Result<
         .ok_or_else(|| "Session not found".to_string())?;
 
     let character = context.find_character(&session.character_id)?;
-    process_dynamic_memory_cycle(&app, &mut session, &context.settings, &character).await
+    
+    // Run the memory cycle with optional model override
+    process_dynamic_memory_cycle_with_model(
+        &app,
+        &mut session,
+        &context.settings,
+        &character,
+        model_id.as_deref(),
+        update_default.unwrap_or(false),
+        true, // force = true for retry
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn trigger_dynamic_memory(
+    app: AppHandle,
+    session_id: String,
+) -> Result<(), String> {
+    log_info(
+        &app,
+        "dynamic_memory",
+        format!("trigger requested for session {}", session_id),
+    );
+    let context = ChatContext::initialize(app.clone())?;
+    let mut session = context
+        .load_session(&session_id)?
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let character = context.find_character(&session.character_id)?;
+    
+    // Run the memory cycle with default settings, but force=true
+    process_dynamic_memory_cycle_with_model(
+        &app,
+        &mut session,
+        &context.settings,
+        &character,
+        None,
+        false,
+        true,
+    )
+    .await
 }
 
 async fn process_dynamic_memory_cycle(
@@ -2616,6 +2667,22 @@ async fn process_dynamic_memory_cycle(
     session: &mut Session,
     settings: &Settings,
     character: &super::types::Character,
+) -> Result<(), String> {
+    // Delegate to the version with model override, using None for defaults, and force=false
+    process_dynamic_memory_cycle_with_model(app, session, settings, character, None, false, false).await
+}
+
+/// Process dynamic memory cycle with optional model override.
+/// If `model_id_override` is Some, use that model instead of the configured one.
+/// If `update_default_on_success` is true and the cycle succeeds, update the summarisation model in settings.
+async fn process_dynamic_memory_cycle_with_model(
+    app: &AppHandle,
+    session: &mut Session,
+    settings: &Settings,
+    character: &super::types::Character,
+    model_id_override: Option<&str>,
+    update_default_on_success: bool,
+    force: bool,
 ) -> Result<(), String> {
     let Some(advanced) = settings.advanced_settings.as_ref() else {
         log_info(
@@ -2663,40 +2730,43 @@ async fn process_dynamic_memory_cycle(
         return Ok(());
     }
 
-    let last_window_end = session
-        .memory_tool_events
-        .last()
-        .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
-        .unwrap_or(0) as usize;
-    log_info(
-        app,
-        "dynamic_memory",
-        format!(
-            "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={}",
-            total_convo_at_start, window_size, last_window_end
-        ),
-    );
-
-    if total_convo_at_start <= last_window_end {
-        log_info(
-            app,
-            "dynamic_memory",
-            "no new messages since last run; skipping",
-        );
-        return Ok(());
-    }
-
-    if total_convo_at_start - last_window_end < window_size {
+    // For retry or manual trigger, skip the window end check or minimum size check
+    if model_id_override.is_none() && !force {
+        let last_window_end = session
+            .memory_tool_events
+            .last()
+            .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
+            .unwrap_or(0) as usize;
         log_info(
             app,
             "dynamic_memory",
             format!(
-                "not enough new messages since last run (needed {}, got {})",
-                window_size,
-                total_convo_at_start - last_window_end
+                "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={}",
+                total_convo_at_start, window_size, last_window_end
             ),
         );
-        return Ok(());
+
+        if total_convo_at_start <= last_window_end {
+            log_info(
+                app,
+                "dynamic_memory",
+                "no new messages since last run; skipping",
+            );
+            return Ok(());
+        }
+
+        if total_convo_at_start - last_window_end < window_size {
+            log_info(
+                app,
+                "dynamic_memory",
+                format!(
+                    "not enough new messages since last run (needed {}, got {})",
+                    window_size,
+                    total_convo_at_start - last_window_end
+                ),
+            );
+            return Ok(());
+        }
     }
 
     // Apply importance decay to all hot, unpinned memories
@@ -2714,22 +2784,41 @@ async fn process_dynamic_memory_cycle(
         );
     }
 
-    let summarisation_model_id = match advanced.summarisation_model_id.as_ref() {
-        Some(id) => id,
+    let summarisation_model_id: String = match model_id_override {
+        Some(id) => {
+            log_info(
+                app,
+                "dynamic_memory",
+                format!("using override model: {}", id),
+            );
+            id.to_string()
+        }
         None => {
-            log_warn(app, "dynamic_memory", "summarisation model not configured");
-            return Err("Summarisation model not configured".to_string());
+            match advanced.summarisation_model_id.as_ref() {
+                Some(id) => id.clone(),
+                None => {
+                    log_warn(app, "dynamic_memory", "summarisation model not configured");
+                    return Err("Summarisation model not configured".to_string());
+                }
+            }
         }
     };
 
     let (summary_model, summary_provider) =
-        find_model_and_credential(settings, summarisation_model_id).ok_or_else(|| {
+        find_model_and_credential(settings, &summarisation_model_id).ok_or_else(|| {
             log_error(app, "dynamic_memory", "summarisation model unavailable");
             "Summarisation model unavailable".to_string()
         })?;
 
     let api_key = resolve_api_key(app, summary_provider, "dynamic_memory")?;
     let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
+
+    // Set processing state
+    session.memory_status = Some("processing".to_string());
+    session.memory_error = None;
+    if let Err(e) = save_session(app, session) {
+        log_warn(app, "dynamic_memory", format!("failed to save session state: {}", e));
+    }
 
     log_info(
         app,
@@ -2744,7 +2833,7 @@ async fn process_dynamic_memory_cycle(
         json!({ "sessionId": session.id }),
     );
 
-    let summary = summarize_messages(
+    let summary = match summarize_messages(
         app,
         summary_provider,
         summary_model,
@@ -2756,7 +2845,25 @@ async fn process_dynamic_memory_cycle(
         settings,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            log_error(
+                app,
+                "dynamic_memory",
+                format!("summarization failed: {}", err),
+            );
+            session.memory_status = Some("failed".to_string());
+            session.memory_error = Some(err.clone());
+            let _ = save_session(app, session);
+            let _ = app.emit(
+                "dynamic-memory:error",
+                json!({ "sessionId": session.id, "error": err }),
+            );
+            return Err(err);
+        }
+    };
 
     log_info(
         app,
@@ -2806,6 +2913,8 @@ async fn process_dynamic_memory_cycle(
                 let excess = session.memory_tool_events.len() - 50;
                 session.memory_tool_events.drain(0..excess);
             }
+            session.memory_status = Some("failed".to_string());
+            session.memory_error = Some(err.clone());
             session.updated_at = now_millis()?;
             save_session(app, session)?;
             let _ = app.emit(
@@ -2833,8 +2942,26 @@ async fn process_dynamic_memory_cycle(
         session.memory_tool_events.drain(0..excess);
     }
 
+    session.memory_status = Some("idle".to_string());
+    session.memory_error = None;
     session.updated_at = now_millis()?;
     save_session(app, session)?;
+    
+    if update_default_on_success && model_id_override.is_some() {
+        log_info(
+            app,
+            "dynamic_memory",
+            format!("updating default summarisation model to: {}", summarisation_model_id),
+        );
+        if let Err(err) = update_summarisation_model_setting(app, &summarisation_model_id) {
+            log_warn(
+                app,
+                "dynamic_memory",
+                format!("failed to update default model: {}", err),
+            );
+        }
+    }
+    
     let _ = app.emit("dynamic-memory:success", json!({ "sessionId": session.id }));
     log_info(
         app,
@@ -2847,6 +2974,34 @@ async fn process_dynamic_memory_cycle(
         ),
     );
 
+    Ok(())
+}
+
+fn update_summarisation_model_setting(app: &AppHandle, model_id: &str) -> Result<(), String> {
+    use crate::storage_manager::settings::{internal_read_settings, settings_set_advanced};
+    
+    let settings_json = internal_read_settings(app)?
+        .ok_or_else(|| "Settings not found".to_string())?;
+    
+    let settings_value: serde_json::Value = serde_json::from_str(&settings_json)
+        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+    
+    let mut advanced = settings_value
+        .get("advancedSettings")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    
+    if let Some(obj) = advanced.as_object_mut() {
+        obj.insert(
+            "summarisationModelId".to_string(),
+            serde_json::Value::String(model_id.to_string()),
+        );
+    }
+    
+    let advanced_json = serde_json::to_string(&advanced)
+        .map_err(|e| format!("Failed to serialize advanced settings: {}", e))?;
+    
+    settings_set_advanced(app.clone(), advanced_json)?;
     Ok(())
 }
 

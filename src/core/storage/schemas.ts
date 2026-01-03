@@ -775,7 +775,7 @@ export const AccessibilitySettingsSchema = z.object({
   send: AccessibilitySoundSchema.default({ enabled: false, volume: 0.5 }),
   success: AccessibilitySoundSchema.default({ enabled: false, volume: 0.6 }),
   failure: AccessibilitySoundSchema.default({ enabled: false, volume: 0.6 }),
-  haptics: z.boolean().default(false), 
+  haptics: z.boolean().default(false),
   hapticIntensity: z.enum(["light", "medium", "heavy", "soft", "rigid"]).default("light"),
 });
 export type AccessibilitySettings = z.infer<typeof AccessibilitySettingsSchema>;
@@ -960,6 +960,8 @@ export const SessionSchema = z.object({
     .default([])
     .optional(),
   messages: z.array(MessageSchema),
+  memoryStatus: z.string().nullish().optional().default("idle"),
+  memoryError: z.string().nullish().optional(),
   archived: z.boolean().default(false),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),

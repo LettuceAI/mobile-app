@@ -45,6 +45,7 @@ import {
   listCharacters,
   readSettings,
   SETTINGS_UPDATED_EVENT,
+  SESSION_UPDATED_EVENT,
 } from "../../../core/storage";
 import { playAccessibilitySound } from "../../../core/utils/accessibilityAudio";
 
@@ -143,6 +144,14 @@ export function ChatConversationPage() {
     }
   }, [showCharacterSelector]);
 
+  // Reload session data when memories change
+  const handleSessionUpdate = useCallback(async () => {
+    if (sessionId) {
+      const updatedSession = await getSessionMeta(sessionId);
+      setSessionForHeader(updatedSession);
+    }
+  }, [sessionId]);
+
   useEffect(() => {
     let mounted = true;
     const loadAccessibilitySettings = async () => {
@@ -163,19 +172,15 @@ export function ChatConversationPage() {
       void loadAccessibilitySettings();
     };
     window.addEventListener(SETTINGS_UPDATED_EVENT, listener);
+    window.addEventListener(SESSION_UPDATED_EVENT, handleSessionUpdate);
     return () => {
       mounted = false;
       window.removeEventListener(SETTINGS_UPDATED_EVENT, listener);
+      window.removeEventListener(SESSION_UPDATED_EVENT, handleSessionUpdate);
     };
-  }, []);
+  }, [handleSessionUpdate]);
 
-  // Reload session data when memories change
-  const handleSessionUpdate = useCallback(async () => {
-    if (sessionId) {
-      const updatedSession = await getSessionMeta(sessionId);
-      setSessionForHeader(updatedSession);
-    }
-  }, [sessionId]);
+
 
   useEffect(() => {
     setSessionForHeader(chatController.session);

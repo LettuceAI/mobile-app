@@ -36,10 +36,17 @@ const SessionPreviewSchema = z.object({
 export type SessionPreview = z.infer<typeof SessionPreviewSchema>;
 
 export const SETTINGS_UPDATED_EVENT = "lettuceai:settings-updated";
+export const SESSION_UPDATED_EVENT = "lettuceai:session-updated";
 
 function broadcastSettingsUpdated() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(SETTINGS_UPDATED_EVENT));
+  }
+}
+
+function broadcastSessionUpdated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(SESSION_UPDATED_EVENT));
   }
 }
 
@@ -365,15 +372,18 @@ export async function deleteMessagesAfter(sessionId: string, messageId: string):
 export async function saveSession(s: Session): Promise<void> {
   SessionSchema.parse(s);
   await storageBridge.sessionUpsert(s);
+  broadcastSessionUpdated();
 }
 
 export async function archiveSession(id: string, archived = true): Promise<Session | null> {
   await storageBridge.sessionArchive(id, archived);
+  broadcastSessionUpdated();
   return getSession(id);
 }
 
 export async function updateSessionTitle(id: string, title: string): Promise<Session | null> {
   await storageBridge.sessionUpdateTitle(id, title.trim());
+  broadcastSessionUpdated();
   return getSession(id);
 }
 
@@ -424,8 +434,10 @@ export async function createSession(characterId: string, title: string, selected
     archived: false,
     createdAt: timestamp,
     updatedAt: timestamp,
+    memoryStatus: "idle",
   };
   await saveSession(s);
+  broadcastSessionUpdated();
   return s;
 }
 
@@ -473,6 +485,8 @@ export async function createBranchedSession(
     archived: false,
     createdAt: timestamp,
     updatedAt: timestamp,
+    memoryStatus: sourceSession.memoryStatus || "idle",
+    memoryError: sourceSession.memoryError,
   };
 
   await saveSession(s);
@@ -529,6 +543,7 @@ export async function createBranchedSessionToCharacter(
     archived: false,
     createdAt: timestamp,
     updatedAt: timestamp,
+    memoryStatus: "idle",
   };
 
   await saveSession(s);
@@ -539,29 +554,34 @@ export async function toggleMessagePin(sessionId: string, messageId: string): Pr
   return storageBridge.messageTogglePin(sessionId, messageId);
 }
 
-// Memory management functions
+export async function setMemoryColdState(sessionId: string, memoryIndex: number, isCold: boolean): Promise<Session | null> {
+  const updated = await storageBridge.sessionSetMemoryColdState(sessionId, memoryIndex, isCold);
+  broadcastSessionUpdated();
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
+// Helper for memory updates
 export async function addMemory(sessionId: string, memory: string): Promise<Session | null> {
   const updated = await storageBridge.sessionAddMemory(sessionId, memory);
+  broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
 
 export async function removeMemory(sessionId: string, memoryIndex: number): Promise<Session | null> {
   const updated = await storageBridge.sessionRemoveMemory(sessionId, memoryIndex);
+  broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
 
 export async function updateMemory(sessionId: string, memoryIndex: number, newMemory: string): Promise<Session | null> {
   const updated = await storageBridge.sessionUpdateMemory(sessionId, memoryIndex, newMemory);
+  broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
 
 export async function toggleMemoryPin(sessionId: string, memoryIndex: number): Promise<Session | null> {
   const updated = await storageBridge.sessionToggleMemoryPin(sessionId, memoryIndex);
-  return updated ? SessionSchema.parse(updated) : null;
-}
-
-export async function setMemoryColdState(sessionId: string, memoryIndex: number, isCold: boolean): Promise<Session | null> {
-  const updated = await storageBridge.sessionSetMemoryColdState(sessionId, memoryIndex, isCold);
+  broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
 

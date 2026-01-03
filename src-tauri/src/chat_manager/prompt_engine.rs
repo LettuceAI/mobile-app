@@ -724,6 +724,8 @@ mod tests {
             created_at: 0,
             updated_at: 0,
             memory_embeddings: vec![],
+            memory_status: None,
+            memory_error: None,
         }
     }
 

@@ -373,7 +373,7 @@ fn fetch_sessions(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, String
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
     // Sessions
-    let sql = format!("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id IN ({})", placeholders);
+    let sql = format!("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at, memory_status, memory_error FROM sessions WHERE id IN ({})", placeholders);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let sessions: Vec<Session> = stmt
         .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
@@ -399,6 +399,8 @@ fn fetch_sessions(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, String
                 archived: r.get(18)?,
                 created_at: r.get(19)?,
                 updated_at: r.get(20)?,
+                memory_status: r.get(21)?,
+                memory_error: r.get(22)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -668,9 +670,9 @@ fn apply_sessions(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for s in sessions {
-        tx.execute(r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)"#,
-                    params![s.id, s.character_id, s.title, s.system_prompt, s.selected_scene_id, s.persona_id, s.voice_autoplay, s.temperature, s.top_p, s.max_output_tokens, s.frequency_penalty, s.presence_penalty, s.top_k, s.memories, s.memory_embeddings, s.memory_summary, s.memory_summary_token_count, s.memory_tool_events, s.archived, s.created_at, s.updated_at]).map_err(|e| e.to_string())?;
+        tx.execute(r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at, memory_status, memory_error)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)"#,
+                    params![s.id, s.character_id, s.title, s.system_prompt, s.selected_scene_id, s.persona_id, s.voice_autoplay, s.temperature, s.top_p, s.max_output_tokens, s.frequency_penalty, s.presence_penalty, s.top_k, s.memories, s.memory_embeddings, s.memory_summary, s.memory_summary_token_count, s.memory_tool_events, s.archived, s.created_at, s.updated_at, s.memory_status, s.memory_error]).map_err(|e| e.to_string())?;
     }
 
     for m in messages {

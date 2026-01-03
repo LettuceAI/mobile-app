@@ -110,29 +110,39 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
 
           <div className="flex shrink-0 items-center gap-1">
             {/* Memory Button */}
-            {session && (
-              <button
-                onClick={() => {
-                  if (!characterId || !sessionId) return;
-                  navigate(Routes.chatMemories(characterId, sessionId, memoryError ? { error: memoryError } : undefined));
-                }}
-                className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
-                aria-label="Manage memories"
-              >
-                {memoryBusy ? (
-                  <Loader2 size={14} strokeWidth={2.5} className="animate-spin text-emerald-400" />
-                ) : memoryError ? (
-                  <AlertTriangle size={14} strokeWidth={2.5} className="text-red-400" />
-                ) : (
-                  <Brain size={14} strokeWidth={2.5} />
-                )}
-                {!memoryBusy && !memoryError && session.memories && session.memories.length > 0 && (
-                  <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-[3px] font-semibold leading-none text-[#050505]">
-                    {session.memories.length}
-                  </span>
-                )}
-              </button>
-            )}
+            {session && (() => {
+              const isBusy = memoryBusy || session.memoryStatus === "processing";
+              const isError = !!memoryError || session.memoryStatus === "failed";
+              const effectiveError = memoryError || session.memoryError;
+
+              return (
+                <button
+                  onClick={() => {
+                    if (!characterId || !sessionId) return;
+                    navigate(Routes.chatMemories(
+                      characterId,
+                      sessionId,
+                      effectiveError ? { error: effectiveError } : undefined
+                    ));
+                  }}
+                  className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
+                  aria-label="Manage memories"
+                >
+                  {isBusy ? (
+                    <Loader2 size={14} strokeWidth={2.5} className="animate-spin text-emerald-400" />
+                  ) : isError ? (
+                    <AlertTriangle size={14} strokeWidth={2.5} className="text-red-400" />
+                  ) : (
+                    <Brain size={14} strokeWidth={2.5} />
+                  )}
+                  {!isBusy && !isError && session.memories && session.memories.length > 0 && (
+                    <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-[3px] font-semibold leading-none text-[#050505]">
+                      {session.memories.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })()}
 
             {/* Search Button */}
             {session && (

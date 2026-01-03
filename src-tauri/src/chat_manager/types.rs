@@ -353,6 +353,10 @@ pub struct Session {
     #[serde(default)]
     pub memory_tool_events: Vec<serde_json::Value>,
     #[serde(default)]
+    pub memory_status: Option<String>,
+    #[serde(default)]
+    pub memory_error: Option<String>,
+    #[serde(default)]
     pub messages: Vec<StoredMessage>,
     #[serde(default)]
     pub archived: bool,

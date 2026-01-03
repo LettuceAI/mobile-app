@@ -57,10 +57,10 @@ fn json_usage_summary(
 fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
         .query_row(
-            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
+            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, memory_status, memory_error, archived, created_at, updated_at FROM sessions WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<i64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<f64>>(7)?, r.get::<_, Option<i64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<f64>>(10)?, r.get::<_, Option<i64>>(11)?, r.get::<_, String>(12)?, r.get::<_, String>(13)?, r.get::<_, Option<String>>(14)?, r.get::<_, i64>(15)?, r.get::<_, String>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?, r.get::<_, i64>(19)?
+                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<i64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<f64>>(7)?, r.get::<_, Option<i64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<f64>>(10)?, r.get::<_, Option<i64>>(11)?, r.get::<_, String>(12)?, r.get::<_, String>(13)?, r.get::<_, Option<String>>(14)?, r.get::<_, i64>(15)?, r.get::<_, String>(16)?, r.get::<_, Option<String>>(17)?, r.get::<_, Option<String>>(18)?, r.get::<_, i64>(19)?, r.get::<_, i64>(20)?, r.get::<_, i64>(21)?
             )),
         )
         .optional()
@@ -83,6 +83,8 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
         memory_summary,
         memory_summary_token_count,
         memory_tool_events_json,
+        memory_status,
+        memory_error,
         archived,
         created_at,
         updated_at,
@@ -131,6 +133,8 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
         "memorySummary": memory_summary.unwrap_or_default(),
         "memorySummaryTokenCount": memory_summary_token_count,
         "memoryToolEvents": memory_tool_events,
+        "memoryStatus": memory_status,
+        "memoryError": memory_error,
         "messages": [],
         "archived": archived != 0,
         "createdAt": created_at,
@@ -142,10 +146,10 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
 fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValue>, String> {
     let row = conn
         .query_row(
-            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at FROM sessions WHERE id = ?",
+            "SELECT character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, memory_status, memory_error, archived, created_at, updated_at FROM sessions WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<i64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<f64>>(7)?, r.get::<_, Option<i64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<f64>>(10)?, r.get::<_, Option<i64>>(11)?, r.get::<_, String>(12)?, r.get::<_, String>(13)?, r.get::<_, Option<String>>(14)?, r.get::<_, i64>(15)?, r.get::<_, String>(16)?, r.get::<_, i64>(17)?, r.get::<_, i64>(18)?, r.get::<_, i64>(19)?
+                r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<i64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, Option<f64>>(7)?, r.get::<_, Option<i64>>(8)?, r.get::<_, Option<f64>>(9)?, r.get::<_, Option<f64>>(10)?, r.get::<_, Option<i64>>(11)?, r.get::<_, String>(12)?, r.get::<_, String>(13)?, r.get::<_, Option<String>>(14)?, r.get::<_, i64>(15)?, r.get::<_, String>(16)?, r.get::<_, Option<String>>(17)?, r.get::<_, Option<String>>(18)?, r.get::<_, i64>(19)?, r.get::<_, i64>(20)?, r.get::<_, i64>(21)?
             )),
         )
         .optional()
@@ -168,6 +172,8 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         memory_summary,
         memory_summary_token_count,
         memory_tool_events_json,
+        memory_status,
+        memory_error,
         archived,
         created_at,
         updated_at,
@@ -316,6 +322,8 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         "memorySummary": memory_summary.unwrap_or_default(),
         "memorySummaryTokenCount": memory_summary_token_count,
         "memoryToolEvents": memory_tool_events,
+        "memoryStatus": memory_status,
+        "memoryError": memory_error,
         "messages": messages,
         "archived": archived != 0,
         "createdAt": created_at,
@@ -845,6 +853,14 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
         Some(v) => serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string()),
         None => "[]".to_string(),
     };
+    let memory_status = s
+        .get("memoryStatus")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let memory_error = s
+        .get("memoryError")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     let adv = s.get("advancedModelSettings");
     let temperature = adv
@@ -863,8 +879,8 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
     let top_k = adv.and_then(|v| v.get("topK")).and_then(|v| v.as_i64());
 
     conn.execute(
-        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, memory_status, memory_error, archived, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               character_id=excluded.character_id,
               title=excluded.title,
@@ -883,6 +899,8 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
               memory_summary=excluded.memory_summary,
               memory_summary_token_count=excluded.memory_summary_token_count,
               memory_tool_events=excluded.memory_tool_events,
+              memory_status=excluded.memory_status,
+              memory_error=excluded.memory_error,
               archived=excluded.archived,
               updated_at=excluded.updated_at"#,
         params![
@@ -904,6 +922,8 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
             memory_summary,
             memory_summary_token_count,
             &memory_tool_events_json,
+            memory_status,
+            memory_error,
             archived,
             created_at,
             updated_at
