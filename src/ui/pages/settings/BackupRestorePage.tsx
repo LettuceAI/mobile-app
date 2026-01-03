@@ -41,25 +41,21 @@ export function BackupRestorePage() {
   const handleDownloadModel = () => {
     setShowEmbeddingPrompt(false);
     actions.closeModal();
-    navigate("/settings/embedding-download");
+    navigate("/settings/embedding-download?returnTo=/");
   };
 
   const handleDisableAndContinue = async () => {
     setShowEmbeddingPrompt(false);
-    // Pass true to skip the dynamic memory check and import the backup
-    const result = await actions.handleImport(true);
-    
-    // If import was successful, disable dynamic memory for all characters using backend command
-    if (result?.success) {
-      try {
-        await storageBridge.backupDisableDynamicMemory();
-      } catch (error) {
-        console.error("Failed to disable dynamic memory:", error);
-        // Don't show error to user - the import was successful
-      }
-      // Navigate to chat after successful import
-      navigate("/");
+
+    // Import is already done, just disable dynamic memory
+    try {
+      await storageBridge.backupDisableDynamicMemory();
+    } catch (error) {
+      console.error("Failed to disable dynamic memory:", error);
+      // Don't show error to user - the import was successful
     }
+    // Navigate to chat after successful import
+    navigate("/");
   };
 
   return (
@@ -95,7 +91,7 @@ export function BackupRestorePage() {
               interactive.transition.default,
               "hover:border-white/20 hover:bg-white/[0.08]",
               "active:scale-[0.99]",
-              "disabled:opacity-50"
+              "disabled:opacity-50",
             )}
           >
             <div className="flex items-center gap-3">
@@ -136,7 +132,9 @@ export function BackupRestorePage() {
             <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
               <FileArchive className="mx-auto h-8 w-8 text-white/20" />
               <p className="mt-3 text-sm text-white/40">No backups found</p>
-              <p className="mt-1 text-xs text-white/30">Create a backup or tap "Browse Files" to find one</p>
+              <p className="mt-1 text-xs text-white/30">
+                Create a backup or tap "Browse Files" to find one
+              </p>
               <button
                 onClick={actions.handleBrowseForBackup}
                 className={cn(
@@ -144,7 +142,7 @@ export function BackupRestorePage() {
                   "border border-blue-400/30 bg-blue-400/10",
                   "text-sm text-blue-300 font-medium",
                   "hover:bg-blue-400/20 active:scale-[0.98]",
-                  interactive.transition.default
+                  interactive.transition.default,
                 )}
               >
                 <Upload className="h-4 w-4" />
@@ -166,13 +164,18 @@ export function BackupRestorePage() {
         </div>
 
         <p className="px-1 text-[11px] text-white/30">
-          Backups are saved as encrypted <code className="text-white/40">.lettuce</code> files in your Downloads folder.
-          {" "}If a backup isn't showing, tap "Browse Files" to select it manually.
+          Backups are saved as encrypted <code className="text-white/40">.lettuce</code> files in
+          your Downloads folder. If a backup isn't showing, tap "Browse Files" to select it
+          manually.
         </p>
       </section>
 
       {/* Export Modal */}
-      <BottomMenu isOpen={state.activeModal === "export"} onClose={actions.closeModal} title="Create Backup">
+      <BottomMenu
+        isOpen={state.activeModal === "export"}
+        onClose={actions.closeModal}
+        title="Create Backup"
+      >
         <div className="space-y-4">
           <p className="text-sm text-white/50">
             Choose a password to encrypt your backup. You'll need this to restore.
@@ -197,7 +200,7 @@ export function BackupRestorePage() {
                   className={cn(
                     "w-full border border-white/10 bg-white/5 px-4 py-3 pr-12 text-white placeholder-white/30",
                     radius.lg,
-                    "focus:border-white/20 focus:outline-none"
+                    "focus:border-white/20 focus:outline-none",
                   )}
                 />
                 <button
@@ -205,13 +208,19 @@ export function BackupRestorePage() {
                   onClick={actions.toggleShowExportPassword}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
                 >
-                  {state.showExportPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {state.showExportPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-white/50">Confirm Password</label>
+              <label className="mb-1.5 block text-xs font-medium text-white/50">
+                Confirm Password
+              </label>
               <input
                 type={state.showExportPassword ? "text" : "password"}
                 value={state.confirmPassword}
@@ -220,7 +229,7 @@ export function BackupRestorePage() {
                 className={cn(
                   "w-full border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30",
                   radius.lg,
-                  "focus:border-white/20 focus:outline-none"
+                  "focus:border-white/20 focus:outline-none",
                 )}
               />
             </div>
@@ -232,19 +241,23 @@ export function BackupRestorePage() {
               className={cn(
                 "flex-1 border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/70",
                 radius.lg,
-                "hover:bg-white/10"
+                "hover:bg-white/10",
               )}
             >
               Cancel
             </button>
             <button
               onClick={actions.handleExport}
-              disabled={state.exporting || state.exportPassword.length < 6 || state.exportPassword !== state.confirmPassword}
+              disabled={
+                state.exporting ||
+                state.exportPassword.length < 6 ||
+                state.exportPassword !== state.confirmPassword
+              }
               className={cn(
                 "flex flex-1 items-center justify-center gap-2 bg-emerald-500 px-4 py-3 text-sm font-medium text-white",
                 radius.lg,
                 "hover:bg-emerald-600",
-                "disabled:opacity-50"
+                "disabled:opacity-50",
               )}
             >
               {state.exporting ? (
@@ -264,7 +277,11 @@ export function BackupRestorePage() {
       </BottomMenu>
 
       {/* Import Modal */}
-      <BottomMenu isOpen={state.activeModal === "import"} onClose={actions.closeModal} title="Restore Backup">
+      <BottomMenu
+        isOpen={state.activeModal === "import"}
+        onClose={actions.closeModal}
+        title="Restore Backup"
+      >
         <div className="space-y-4">
           {state.selectedBackup && (
             <>
@@ -272,9 +289,12 @@ export function BackupRestorePage() {
                 <div className="flex items-center gap-3">
                   <FileArchive className="h-6 w-6 text-white/40" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">{state.selectedBackup.filename}</p>
+                    <p className="truncate text-sm font-medium text-white">
+                      {state.selectedBackup.filename}
+                    </p>
                     <p className="text-xs text-white/40">
-                      {formatDate(state.selectedBackup.createdAt)} · v{state.selectedBackup.appVersion}
+                      {formatDate(state.selectedBackup.createdAt)} · v
+                      {state.selectedBackup.appVersion}
                     </p>
                   </div>
                 </div>
@@ -294,7 +314,9 @@ export function BackupRestorePage() {
 
               {state.selectedBackup.encrypted && (
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-white/50">Backup Password</label>
+                  <label className="mb-1.5 block text-xs font-medium text-white/50">
+                    Backup Password
+                  </label>
                   <div className="relative">
                     <input
                       type={state.showImportPassword ? "text" : "password"}
@@ -304,7 +326,7 @@ export function BackupRestorePage() {
                       className={cn(
                         "w-full border border-white/10 bg-white/5 px-4 py-3 pr-12 text-white placeholder-white/30",
                         radius.lg,
-                        "focus:border-white/20 focus:outline-none"
+                        "focus:border-white/20 focus:outline-none",
                       )}
                     />
                     <button
@@ -312,7 +334,11 @@ export function BackupRestorePage() {
                       onClick={actions.toggleShowImportPassword}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
                     >
-                      {state.showImportPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      {state.showImportPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -324,19 +350,22 @@ export function BackupRestorePage() {
                   className={cn(
                     "flex-1 border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/70",
                     radius.lg,
-                    "hover:bg-white/10"
+                    "hover:bg-white/10",
                   )}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleRestoreClick}
-                  disabled={state.importing || (state.selectedBackup.encrypted && state.importPassword.length < 1)}
+                  disabled={
+                    state.importing ||
+                    (state.selectedBackup.encrypted && state.importPassword.length < 1)
+                  }
                   className={cn(
                     "flex flex-1 items-center justify-center gap-2 bg-blue-500 px-4 py-3 text-sm font-medium text-white",
                     radius.lg,
                     "hover:bg-blue-600",
-                    "disabled:opacity-50"
+                    "disabled:opacity-50",
                   )}
                 >
                   {state.importing ? (
@@ -358,15 +387,23 @@ export function BackupRestorePage() {
       </BottomMenu>
 
       {/* Delete Modal */}
-      <BottomMenu isOpen={state.activeModal === "delete"} onClose={actions.closeModal} title="Delete Backup">
+      <BottomMenu
+        isOpen={state.activeModal === "delete"}
+        onClose={actions.closeModal}
+        title="Delete Backup"
+      >
         <div className="space-y-4">
           {state.selectedBackup && (
             <>
               <p className="text-sm text-white/50">Delete this backup permanently?</p>
 
               <div className={cn("border border-white/10 bg-white/5 p-3", radius.lg)}>
-                <p className="truncate text-sm font-medium text-white">{state.selectedBackup.filename}</p>
-                <p className="text-xs text-white/40">{formatDate(state.selectedBackup.createdAt)}</p>
+                <p className="truncate text-sm font-medium text-white">
+                  {state.selectedBackup.filename}
+                </p>
+                <p className="text-xs text-white/40">
+                  {formatDate(state.selectedBackup.createdAt)}
+                </p>
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -375,7 +412,7 @@ export function BackupRestorePage() {
                   className={cn(
                     "flex-1 border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/70",
                     radius.lg,
-                    "hover:bg-white/10"
+                    "hover:bg-white/10",
                   )}
                 >
                   Cancel
@@ -385,7 +422,7 @@ export function BackupRestorePage() {
                   className={cn(
                     "flex flex-1 items-center justify-center gap-2 bg-red-500 px-4 py-3 text-sm font-medium text-white",
                     radius.lg,
-                    "hover:bg-red-600"
+                    "hover:bg-red-600",
                   )}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -398,9 +435,9 @@ export function BackupRestorePage() {
       </BottomMenu>
 
       {/* Dynamic Memory Model Required Modal */}
-      <BottomMenu 
-        isOpen={showEmbeddingPrompt} 
-        onClose={() => setShowEmbeddingPrompt(false)} 
+      <BottomMenu
+        isOpen={showEmbeddingPrompt}
+        onClose={() => setShowEmbeddingPrompt(false)}
         title="Embedding Model Required"
       >
         <div className="space-y-4">
@@ -409,13 +446,15 @@ export function BackupRestorePage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-amber-200">Dynamic Memory Detected</p>
               <p className="mt-1 text-xs text-amber-200/70">
-                This backup contains characters with dynamic memory enabled, which requires the embedding model (~260MB).
+                This backup contains characters with dynamic memory enabled, which requires the
+                embedding model (~260MB).
               </p>
             </div>
           </div>
 
           <p className="text-sm text-white/60">
-            You can download the model now to enable dynamic memory, or continue without it (dynamic memory will be disabled for affected characters).
+            You can download the model now to enable dynamic memory, or continue without it (dynamic
+            memory will be disabled for affected characters).
           </p>
 
           <div className="flex flex-col gap-2 pt-2">
@@ -424,7 +463,7 @@ export function BackupRestorePage() {
               className={cn(
                 "flex items-center justify-center gap-2 bg-blue-500 px-4 py-3 text-sm font-medium text-white",
                 radius.lg,
-                "hover:bg-blue-600"
+                "hover:bg-blue-600",
               )}
             >
               <Download className="h-4 w-4" />
@@ -435,7 +474,7 @@ export function BackupRestorePage() {
               className={cn(
                 "border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/70",
                 radius.lg,
-                "hover:bg-white/10"
+                "hover:bg-white/10",
               )}
             >
               Continue Without Dynamic Memory
@@ -443,7 +482,8 @@ export function BackupRestorePage() {
           </div>
 
           <p className="text-xs text-white/40 text-center">
-            You can re-enable dynamic memory later in character settings after downloading the model.
+            You can re-enable dynamic memory later in character settings after downloading the
+            model.
           </p>
         </div>
       </BottomMenu>
@@ -468,7 +508,7 @@ function BackupItem({
         "group w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left",
         interactive.transition.default,
         "hover:border-white/20 hover:bg-white/[0.08]",
-        "active:scale-[0.99]"
+        "active:scale-[0.99]",
       )}
     >
       <div className="flex items-center gap-3">
@@ -490,7 +530,11 @@ function BackupItem({
             e.stopPropagation();
             onDelete();
           }}
-          className={cn("shrink-0 rounded-lg p-2 text-white/20", "opacity-100", "hover:bg-red-400/20 hover:text-red-400")}
+          className={cn(
+            "shrink-0 rounded-lg p-2 text-white/20",
+            "opacity-100",
+            "hover:bg-red-400/20 hover:text-red-400",
+          )}
         >
           <Trash2 className="h-4 w-4" />
         </button>

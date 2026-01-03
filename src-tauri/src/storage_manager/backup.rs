@@ -112,13 +112,12 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
         String,
         Option<String>,
         Option<String>,
-        Option<String>,
         i64,
         Option<String>,
     )> = conn
         .query_row(
             "SELECT default_provider_credential_id, default_model_id, app_state,
-                    advanced_model_settings, prompt_template_id, system_prompt,
+                    prompt_template_id, system_prompt,
                     migration_version, advanced_settings
              FROM settings WHERE id = 1",
             [],
@@ -131,7 +130,6 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
                     r.get(4)?,
                     r.get(5)?,
                     r.get(6)?,
-                    r.get(7)?,
                 ))
             },
         )
@@ -142,7 +140,6 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
         default_provider,
         default_model,
         app_state,
-        advanced_model,
         prompt_template,
         system_prompt,
         migration_version,
@@ -153,7 +150,6 @@ fn export_settings(app: &tauri::AppHandle) -> Result<JsonValue, String> {
             "default_provider_credential_id": default_provider,
             "default_model_id": default_model,
             "app_state": serde_json::from_str::<JsonValue>(&app_state).unwrap_or(serde_json::json!({})),
-            "advanced_model_settings": advanced_model.and_then(|s| serde_json::from_str::<JsonValue>(&s).ok()),
             "prompt_template_id": prompt_template,
             "system_prompt": system_prompt,
             "migration_version": migration_version,
@@ -941,14 +937,6 @@ fn import_settings(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
         .map(|v| serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string()))
         .unwrap_or_else(|| "{}".to_string());
 
-    let advanced_model = data.get("advanced_model_settings").and_then(|v| {
-        if v.is_null() {
-            None
-        } else {
-            Some(serde_json::to_string(v).ok()?)
-        }
-    });
-
     let advanced_settings = data.get("advanced_settings").and_then(|v| {
         if v.is_null() {
             None
@@ -962,20 +950,23 @@ fn import_settings(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
         .map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state,
-         advanced_model_settings, prompt_template_id, system_prompt, migration_version,
-         advanced_settings, created_at, updated_at) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+         prompt_template_id, system_prompt, migration_version,
+         advanced_settings, created_at, updated_at) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
         params![
-            data.get("default_provider_credential_id").and_then(|v| v.as_str()),
+            data.get("default_provider_credential_id")
+                .and_then(|v| v.as_str()),
             data.get("default_model_id").and_then(|v| v.as_str()),
             app_state,
-            advanced_model,
             data.get("prompt_template_id").and_then(|v| v.as_str()),
             data.get("system_prompt").and_then(|v| v.as_str()),
-            data.get("migration_version").and_then(|v| v.as_i64()).unwrap_or(0),
+            data.get("migration_version")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0),
             advanced_settings,
             now,
         ],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -1884,101 +1875,134 @@ pub async fn backup_import(
     // Import data in correct order (respecting foreign key constraints)
     // Settings first (no dependencies)
     if let Some(data) = settings_data {
+        log_info(&app, "backup", "Found settings data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse settings JSON: {}", e))?;
         import_settings(&app, &json_value)?;
         log_info(&app, "backup", "Settings imported");
+    } else {
+        log_info(&app, "backup", "No settings data found");
     }
 
     // Provider credentials (no dependencies)
     if let Some(data) = provider_credentials_data {
+        log_info(&app, "backup", "Found provider_credentials data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse provider_credentials JSON: {}", e))?;
         import_provider_credentials(&app, &json_value)?;
         log_info(&app, "backup", "Provider credentials imported");
+    } else {
+        log_info(&app, "backup", "No provider_credentials data found");
     }
 
     // Models (depends on provider_credentials)
     if let Some(data) = models_data {
+        log_info(&app, "backup", "Found models data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse models JSON: {}", e))?;
         import_models(&app, &json_value)?;
         log_info(&app, "backup", "Models imported");
+    } else {
+        log_info(&app, "backup", "No models data found");
     }
 
     // Secrets (no dependencies)
     if let Some(data) = secrets_data {
+        log_info(&app, "backup", "Found secrets data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse secrets JSON: {}", e))?;
         import_secrets(&app, &json_value)?;
         log_info(&app, "backup", "Secrets imported");
+    } else {
+        log_info(&app, "backup", "No secrets data found");
     }
 
     // Prompt templates (no dependencies)
     if let Some(data) = prompt_templates_data {
+        log_info(&app, "backup", "Found prompt_templates data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse prompt_templates JSON: {}", e))?;
         import_prompt_templates(&app, &json_value)?;
         log_info(&app, "backup", "Prompt templates imported");
+    } else {
+        log_info(&app, "backup", "No prompt_templates data found");
     }
 
     // Personas (no dependencies)
     if let Some(data) = personas_data {
+        log_info(&app, "backup", "Found personas data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse personas JSON: {}", e))?;
         import_personas(&app, &json_value)?;
         log_info(&app, "backup", "Personas imported");
+    } else {
+        log_info(&app, "backup", "No personas data found");
     }
 
     // Characters (no dependencies)
     if let Some(data) = characters_data {
+        log_info(&app, "backup", "Found characters data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse characters JSON: {}", e))?;
         import_characters(&app, &json_value)?;
         log_info(&app, "backup", "Characters imported");
+    } else {
+        log_info(&app, "backup", "No characters data found");
     }
 
     // Sessions (depends on personas and characters)
     if let Some(data) = sessions_data {
+        log_info(&app, "backup", "Found sessions data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse sessions JSON: {}", e))?;
         import_sessions(&app, &json_value)?;
         log_info(&app, "backup", "Sessions imported");
+    } else {
+        log_info(&app, "backup", "No sessions data found");
     }
 
     // Usage records (depends on sessions)
     if let Some(data) = usage_records_data {
+        log_info(&app, "backup", "Found usage_records data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse usage_records JSON: {}", e))?;
         import_usage_records(&app, &json_value)?;
         log_info(&app, "backup", "Usage records imported");
+    } else {
+        log_info(&app, "backup", "No usage_records data found");
     }
 
     // Lorebooks (no dependencies, import before character_lorebooks)
     if let Some(data) = lorebooks_data {
+        log_info(&app, "backup", "Found lorebooks data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse lorebooks JSON: {}", e))?;
         import_lorebooks(&app, &json_value)?;
         log_info(&app, "backup", "Lorebooks imported");
+    } else {
+        log_info(&app, "backup", "No lorebooks data found");
     }
 
     // Character-lorebook links (depends on characters and lorebooks)
     if let Some(data) = character_lorebooks_data {
+        log_info(&app, "backup", "Found character_lorebooks data");
         let json_str = String::from_utf8(data).map_err(|e| e.to_string())?;
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse character_lorebooks JSON: {}", e))?;
         import_character_lorebooks(&app, &json_value)?;
         log_info(&app, "backup", "Character-lorebook links imported");
+    } else {
+        log_info(&app, "backup", "No character_lorebooks data found");
     }
 
     log_info(&app, "backup", "Extracting media files...");

@@ -202,64 +202,71 @@ export function useBackupRestore() {
     }
   }, [state.exportPassword, state.confirmPassword, loadBackups]);
 
-  const handleImport = useCallback(async (skipDynamicMemoryCheck = false) => {
-    const { selectedBackup, importPassword } = state;
-    if (!selectedBackup) return;
+  const handleImport = useCallback(
+    async (skipDynamicMemoryCheck = false) => {
+      const { selectedBackup, importPassword } = state;
+      if (!selectedBackup) return;
 
-    if (selectedBackup.encrypted && importPassword.length < 1) {
-      dispatch({ type: "SET_ERROR", payload: "Password is required for this backup" });
-      return;
-    }
-
-    try {
-      dispatch({ type: "SET_ERROR", payload: null });
-
-      if (selectedBackup.encrypted) {
-        const valid = await storageBridge.backupVerifyPassword(selectedBackup.path, importPassword);
-        if (!valid) {
-          dispatch({ type: "SET_ERROR", payload: "Incorrect password" });
-          return;
-        }
+      if (selectedBackup.encrypted && importPassword.length < 1) {
+        dispatch({ type: "SET_ERROR", payload: "Password is required for this backup" });
+        return;
       }
 
-      // Check for dynamic memory if not skipping
-      if (!skipDynamicMemoryCheck) {
-        console.log('[useBackupRestore] Checking for dynamic memory in backup...');
-        const hasDynamicMemory = await storageBridge.backupCheckDynamicMemory(
-          selectedBackup.path,
-          selectedBackup.encrypted ? importPassword : undefined
-        );
+      try {
+        dispatch({ type: "SET_ERROR", payload: null });
 
-        console.log('[useBackupRestore] hasDynamicMemory:', hasDynamicMemory);
-
-        if (hasDynamicMemory) {
-          console.log('[useBackupRestore] Checking if embedding model exists...');
-          const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
-          console.log('[useBackupRestore] hasEmbeddingModel:', hasEmbeddingModel);
-
-          if (!hasEmbeddingModel) {
-            console.log('[useBackupRestore] Returning needsEmbeddingModel=true');
-            return { needsEmbeddingModel: true };
+        if (selectedBackup.encrypted) {
+          const valid = await storageBridge.backupVerifyPassword(
+            selectedBackup.path,
+            importPassword,
+          );
+          if (!valid) {
+            dispatch({ type: "SET_ERROR", payload: "Incorrect password" });
+            return;
           }
         }
+
+        dispatch({ type: "SET_IMPORTING", payload: true });
+
+        // Import first
+        await storageBridge.backupImport(
+          selectedBackup.path,
+          selectedBackup.encrypted ? importPassword : undefined,
+        );
+
+        dispatch({ type: "IMPORT_COMPLETE" });
+
+        // Then check for dynamic memory if not skipping
+        if (!skipDynamicMemoryCheck) {
+          console.log("[useBackupRestore] Checking for dynamic memory in backup...");
+          const hasDynamicMemory = await storageBridge.backupCheckDynamicMemory(
+            selectedBackup.path,
+            selectedBackup.encrypted ? importPassword : undefined,
+          );
+
+          console.log("[useBackupRestore] hasDynamicMemory:", hasDynamicMemory);
+
+          if (hasDynamicMemory) {
+            console.log("[useBackupRestore] Checking if embedding model exists...");
+            const hasEmbeddingModel = await storageBridge.checkEmbeddingModel();
+            console.log("[useBackupRestore] hasEmbeddingModel:", hasEmbeddingModel);
+
+            if (!hasEmbeddingModel) {
+              console.log("[useBackupRestore] Returning needsEmbeddingModel=true");
+              return { success: true, needsEmbeddingModel: true };
+            }
+          }
+        }
+
+        return { success: true };
+      } catch (e) {
+        dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "Import failed" });
+        dispatch({ type: "SET_IMPORTING", payload: false });
+        return { error: true };
       }
-
-      dispatch({ type: "SET_IMPORTING", payload: true });
-
-      await storageBridge.backupImport(
-        selectedBackup.path,
-        selectedBackup.encrypted ? importPassword : undefined
-      );
-
-      dispatch({ type: "IMPORT_COMPLETE" });
-
-      return { success: true };
-    } catch (e) {
-      dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "Import failed" });
-      dispatch({ type: "SET_IMPORTING", payload: false });
-      return { error: true };
-    }
-  }, [state]);
+    },
+    [state],
+  );
 
   const handleDelete = useCallback(async () => {
     if (!state.selectedBackup) return;
@@ -292,19 +299,25 @@ export function useBackupRestore() {
       dispatch({ type: "OPEN_IMPORT_MODAL", payload: backupInfo });
     } catch (e) {
       console.error("Failed to browse for backup:", e);
-      dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "Failed to open file" });
+      dispatch({
+        type: "SET_ERROR",
+        payload: e instanceof Error ? e.message : "Failed to open file",
+      });
     }
   }, []);
 
   const actions = {
     openExportModal: () => dispatch({ type: "OPEN_EXPORT_MODAL" }),
-    openImportModal: (backup: BackupInfo) => dispatch({ type: "OPEN_IMPORT_MODAL", payload: backup }),
-    openDeleteModal: (backup: BackupInfo) => dispatch({ type: "OPEN_DELETE_MODAL", payload: backup }),
+    openImportModal: (backup: BackupInfo) =>
+      dispatch({ type: "OPEN_IMPORT_MODAL", payload: backup }),
+    openDeleteModal: (backup: BackupInfo) =>
+      dispatch({ type: "OPEN_DELETE_MODAL", payload: backup }),
     closeModal: () => {
       dispatch({ type: "CLOSE_MODAL" });
     },
     setExportPassword: (value: string) => dispatch({ type: "SET_EXPORT_PASSWORD", payload: value }),
-    setConfirmPassword: (value: string) => dispatch({ type: "SET_CONFIRM_PASSWORD", payload: value }),
+    setConfirmPassword: (value: string) =>
+      dispatch({ type: "SET_CONFIRM_PASSWORD", payload: value }),
     setImportPassword: (value: string) => dispatch({ type: "SET_IMPORT_PASSWORD", payload: value }),
     toggleShowExportPassword: () => dispatch({ type: "TOGGLE_SHOW_EXPORT_PASSWORD" }),
     toggleShowImportPassword: () => dispatch({ type: "TOGGLE_SHOW_IMPORT_PASSWORD" }),
