@@ -248,7 +248,7 @@ export function AdvancedPage() {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center justify-between gap-3">
-                                        <div className="flex-1">
+                                        <div className="flex-1 text-left">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium text-white">Dynamic Memory</span>
                                                 <span className={cn(
@@ -260,7 +260,7 @@ export function AdvancedPage() {
                                                     {dynamicMemoryEnabled ? 'On' : 'Off'}
                                                 </span>
                                             </div>
-                                            <div className="mt-0.5 text-[11px] text-white/50">
+                                            <div className="text-[11px] text-white/50">
                                                 {dynamicMemoryEnabled ? 'AI manages conversation memory' : 'Manual memory management'}
                                             </div>
                                         </div>
@@ -297,7 +297,7 @@ export function AdvancedPage() {
                                             )} />
                                         </div>
                                     </div>
-                                    <div className="mt-2 text-[11px] text-white/45 leading-relaxed">
+                                    <div className="text-[11px] text-white/45 leading-relaxed text-left">
                                         Auto-summarize and manage conversation context
                                     </div>
                                 </div>

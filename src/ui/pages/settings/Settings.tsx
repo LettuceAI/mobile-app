@@ -14,14 +14,19 @@ interface RowProps {
   subtitle?: string;
   onClick: () => void;
   count?: number | null;
-  tone?: 'default' | 'danger' | 'guide';
+  tone?: 'default' | 'danger' | 'intelligence' | 'experience' | 'connectivity' | 'security' | 'support' | 'developer';
 }
 
 function Row({ icon, title, subtitle, onClick, count, tone = 'default' }: RowProps) {
   const toneStyles = {
-    danger: 'border-red-400/30 bg-red-400/10 group-hover:border-red-400/50',
-    guide: 'border-blue-400/30 bg-blue-400/10 group-hover:border-blue-400/50',
-    default: 'border-white/10 bg-white/10 group-hover:border-white/20'
+    intelligence: 'border-rose-400/30 bg-rose-400/15 text-rose-300 group-hover:border-rose-400/50',
+    experience: 'border-amber-400/30 bg-amber-400/15 text-amber-300 group-hover:border-amber-400/50',
+    connectivity: 'border-cyan-400/30 bg-cyan-400/15 text-cyan-300 group-hover:border-cyan-400/50',
+    security: 'border-emerald-400/30 bg-emerald-400/15 text-emerald-300 group-hover:border-emerald-400/50',
+    support: 'border-sky-400/30 bg-sky-400/15 text-sky-300 group-hover:border-sky-400/50',
+    danger: 'border-red-400/30 bg-red-400/15 text-red-300 group-hover:border-red-400/50',
+    developer: 'border-orange-400/30 bg-orange-400/15 text-orange-300 group-hover:border-orange-400/50',
+    default: 'border-white/10 bg-white/10 text-white/70 group-hover:border-white/20'
   };
 
   return (
@@ -128,94 +133,106 @@ export function SettingsPage() {
       key: 'providers',
       icon: <EthernetPort />,
       title: 'Providers',
-      subtitle: 'API credentials & endpoints',
+      subtitle: 'Connect to AI services',
       count: providerCount,
+      tone: 'intelligence' as const,
       onClick: () => navigate('/settings/providers')
     },
     {
       key: 'models',
       icon: <Cpu />,
       title: 'Models',
-      subtitle: 'Manage AI model catalog',
+      subtitle: 'Configure AI models',
       count: modelCount,
+      tone: 'intelligence' as const,
       onClick: () => toModelsList()
     },
     {
       key: 'voices',
       icon: <Volume2 />,
       title: 'Voices',
-      subtitle: 'TTS audio providers & voices',
+      subtitle: 'Text-to-speech voices',
+      tone: 'experience' as const,
       onClick: () => navigate('/settings/providers?tab=audio')
     },
     {
       key: 'accessibility',
       icon: <Accessibility />,
       title: 'Accessibility',
-      subtitle: 'Sound cues and feedback',
+      subtitle: 'Sound cues & haptics',
+      tone: 'experience' as const,
       onClick: () => navigate('/settings/accessibility')
     },
     {
       key: 'prompts',
       icon: <FileText />,
       title: 'System Prompts',
-      subtitle: 'Customize AI behavior',
+      subtitle: 'Shape AI personality',
+      tone: 'intelligence' as const,
       onClick: () => navigate('/settings/prompts')
     },
     {
       key: 'security',
       icon: <Shield />,
       title: 'Security',
-      subtitle: 'Privacy & data protection',
+      subtitle: 'Encryption & privacy',
+      tone: 'security' as const,
       onClick: () => navigate('/settings/security')
     },
     {
       key: 'backup',
       icon: <HardDrive />,
       title: 'Backup & Restore',
-      subtitle: 'Export or import app data',
+      subtitle: 'Export or import data',
+      tone: 'connectivity' as const,
       onClick: () => navigate('/settings/backup')
     },
     {
       key: 'sync',
       icon: <RefreshCw />,
       title: 'Local Sync',
-      subtitle: 'Sync with other devices on LAN',
+      subtitle: 'Sync across devices',
+      tone: 'connectivity' as const,
       onClick: () => navigate('/settings/sync')
     },
     {
       key: 'usage',
       icon: <BarChart3 />,
       title: 'Usage Analytics',
-      subtitle: 'Track costs and token usage',
+      subtitle: 'Costs & token stats',
+      tone: 'security' as const,
       onClick: () => navigate('/settings/usage')
     },
     {
       key: 'advanced',
       icon: <Sliders />,
       title: 'Advanced',
-      subtitle: 'AI features & memory settings',
+      subtitle: 'Memory & features',
+      tone: 'intelligence' as const,
       onClick: () => navigate('/settings/advanced')
     },
     {
       key: 'logs',
       icon: <FileCode />,
       title: 'Logs',
-      subtitle: 'View and download application logs',
+      subtitle: 'Debug & diagnostics',
+      tone: 'support' as const,
       onClick: () => navigate('/settings/logs')
     },
     {
       key: 'guide',
       icon: <BookOpen />,
       title: 'Setup Guide',
-      subtitle: 'Rerun onboarding flow',
-      tone: 'guide' as const,
+      subtitle: 'Rerun onboarding',
+      tone: 'support' as const,
       onClick: () => navigate('/welcome')
     },
     {
       key: 'github',
       icon: <Github />,
       title: 'Report Issues',
-      subtitle: `GitHub repository & feedback • v${version}`,
+      subtitle: `Bugs & feedback • v${version}`,
+      tone: 'support' as const,
       onClick: async () => {
         try {
           const { openUrl } = await import('@tauri-apps/plugin-opener');
@@ -234,7 +251,8 @@ export function SettingsPage() {
         </svg>
       ),
       title: 'Join Discord',
-      subtitle: 'Community support & discussions',
+      subtitle: 'Community & help',
+      tone: 'support' as const,
       onClick: async () => {
         try {
           const { openUrl } = await import('@tauri-apps/plugin-opener');
@@ -249,14 +267,15 @@ export function SettingsPage() {
       key: 'changelog',
       icon: <ScrollText />,
       title: 'Changelog',
-      subtitle: `Release notes & version history`,
+      subtitle: `What's new`,
+      tone: 'support' as const,
       onClick: () => navigate('/settings/changelog')
     },
     {
       key: 'reset',
       icon: <RotateCcw />,
       title: 'Reset',
-      subtitle: 'Clear all app data',
+      subtitle: 'Erase everything',
       tone: 'danger' as const,
       onClick: () => navigate('/settings/reset')
     },
@@ -264,8 +283,8 @@ export function SettingsPage() {
       key: 'developer',
       icon: <Wrench />,
       title: 'Developer Tools',
-      subtitle: 'Test data generators & debug info',
-      tone: 'default' as const,
+      subtitle: 'Debug & testing',
+      tone: 'developer' as const,
       onClick: () => navigate('/settings/developer')
     }] : [])
   ]), [providerCount, modelCount, characterCount, navigate, version]);
@@ -273,7 +292,7 @@ export function SettingsPage() {
   return (
     <div className="flex h-full flex-col pb-16 text-gray-200">
       <section className={cn("flex-1 overflow-y-auto px-1 pt-4", spacing.section)}>
-        {/* Section: Core */}
+        {/* Section: Intelligence */}
         <div>
           <h2 className={cn(
             "mb-2 px-1",
@@ -283,28 +302,21 @@ export function SettingsPage() {
             typography.overline.transform,
             "text-white/35"
           )}>
-            Core
+            Intelligence
           </h2>
           <div className={spacing.field}>
             {items.filter(i => [
               'providers',
               'models',
-              'voices',
               'prompts',
-              'security',
-              'backup',
-              'sync',
-              'usage',
               'advanced',
-              'logs',
-              'accessibility',            
             ].includes(i.key)).map(item => (
-                <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} />
-              ))}
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} tone={item.tone} />
+            ))}
           </div>
         </div>
 
-        {/* Section: Assistance */}
+        {/* Section: Experience */}
         <div>
           <h2 className={cn(
             "mb-2 px-1",
@@ -314,41 +326,88 @@ export function SettingsPage() {
             typography.overline.transform,
             "text-white/35"
           )}>
-            Assistance
+            Experience
           </h2>
           <div className={spacing.field}>
             {items.filter(i => [
-              'guide'
+              'voices',
+              'accessibility',
+            ].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} tone={item.tone} />
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Connectivity */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Connectivity
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => [
+              'sync',
+              'backup',
+            ].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} tone={item.tone} />
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Security & Privacy */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Security & Privacy
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => [
+              'security',
+              'usage',
+            ].includes(i.key)).map(item => (
+              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} count={item.count as number | undefined} onClick={item.onClick} tone={item.tone} />
+            ))}
+          </div>
+        </div>
+
+        {/* Section: Support & Info */}
+        <div>
+          <h2 className={cn(
+            "mb-2 px-1",
+            typography.overline.size,
+            typography.overline.weight,
+            typography.overline.tracking,
+            typography.overline.transform,
+            "text-white/35"
+          )}>
+            Support & Info
+          </h2>
+          <div className={spacing.field}>
+            {items.filter(i => [
+              'guide',
+              'changelog',
+              'logs',
+              'github',
+              'discord',
             ].includes(i.key)).map(item => (
               <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} tone={item.tone} />
             ))}
           </div>
         </div>
 
-        {/* Section: Info */}
-        <div>
-          <h2 className={cn(
-            "mb-2 px-1",
-            typography.overline.size,
-            typography.overline.weight,
-            typography.overline.tracking,
-            typography.overline.transform,
-            "text-white/35"
-          )}>
-            Info
-          </h2>
-          <div className={spacing.field}>
-            {items.filter(i => [
-              'github',
-              'discord',
-              'changelog'
-            ].includes(i.key)).map(item => (
-              <Row key={item.key} icon={item.icon} title={item.title} subtitle={item.subtitle} onClick={item.onClick} />
-            ))}
-          </div>
-        </div>
-
-        {/* Section: Danger */}
+        {/* Section: Danger Zone */}
         <div>
           <h2 className={cn(
             "mb-2 px-1",
@@ -397,7 +456,7 @@ export function SettingsPage() {
           <div className="pointer-events-none absolute inset-x-0 top-0 px-4 pt-4">
             <div className={spacing.field}>
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className={cn("h-[52px] w-full animate-pulse", radius.md, "bg-white/5")} />
+                <div key={i} className={cn("h-13 w-full animate-pulse", radius.md, "bg-white/5")} />
               ))}
             </div>
           </div>
