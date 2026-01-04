@@ -27,6 +27,8 @@ export function AvatarPositionModal({
   const [dragStart, setDragStart] = useState<Position>({ x: 0, y: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [zoomInput, setZoomInput] = useState(`${Math.round(scale * 100)}`);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -51,7 +53,7 @@ export function AvatarPositionModal({
       setPosition({ x: 0, y: 0 });
       setImageLoaded(false);
       setImageSize(null);
-      
+
       const img = new Image();
       img.onload = () => {
         setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
@@ -59,6 +61,7 @@ export function AvatarPositionModal({
         setTimeout(() => {
           const centered = centerImage(img.naturalWidth, img.naturalHeight, 1);
           setPosition(centered);
+          setZoomInput("100");
         }, 50);
       };
       img.onerror = () => setImageLoaded(true);
@@ -68,17 +71,17 @@ export function AvatarPositionModal({
 
   const zoomToCenter = useCallback((newScale: number) => {
     if (!containerRef.current || !imageSize) return;
-    
+
     const containerRect = containerRef.current.getBoundingClientRect();
     const containerCenterX = containerRect.width / 2;
     const containerCenterY = containerRect.height / 2;
-    
+
     const imageCenterX = (containerCenterX - position.x) / scale;
     const imageCenterY = (containerCenterY - position.y) / scale;
-    
+
     const newX = containerCenterX - imageCenterX * newScale;
     const newY = containerCenterY - imageCenterY * newScale;
-    
+
     setScale(newScale);
     setPosition({ x: newX, y: newY });
   }, [scale, position, imageSize]);
@@ -93,10 +96,18 @@ export function AvatarPositionModal({
     zoomToCenter(newScale);
   }, [scale, zoomToCenter]);
 
+  useEffect(() => {
+    if (!isInputFocused) {
+      setZoomInput((scale * 100).toFixed(2).replace(/\.?0+$/, ""));
+    }
+  }, [scale, isInputFocused]);
+
   const handleReset = useCallback(() => {
     if (!imageSize) return;
-    setScale(1);
-    const centered = centerImage(imageSize.width, imageSize.height, 1);
+    const newScale = 1;
+    setScale(newScale);
+    setZoomInput("100");
+    const centered = centerImage(imageSize.width, imageSize.height, newScale);
     setPosition(centered);
   }, [imageSize, centerImage]);
 
@@ -176,7 +187,7 @@ export function AvatarPositionModal({
         if (lastPinchDistance.current !== null) {
           const scaleDelta = (distance - lastPinchDistance.current) * 0.004;
           const newScale = Math.min(Math.max(scale + scaleDelta, 0.1), 4);
-          
+
           const containerRect = containerRef.current.getBoundingClientRect();
           const containerCenterX = containerRect.width / 2;
           const containerCenterY = containerRect.height / 2;
@@ -184,7 +195,7 @@ export function AvatarPositionModal({
           const imageCenterY = (containerCenterY - position.y) / scale;
           const newX = containerCenterX - imageCenterX * newScale;
           const newY = containerCenterY - imageCenterY * newScale;
-          
+
           setScale(newScale);
           setPosition({ x: newX, y: newY });
         }
@@ -202,10 +213,10 @@ export function AvatarPositionModal({
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     if (!containerRef.current || !imageSize) return;
-    
+
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
     const newScale = Math.min(Math.max(scale + delta, 0.1), 4);
-    
+
     const containerRect = containerRef.current.getBoundingClientRect();
     const containerCenterX = containerRect.width / 2;
     const containerCenterY = containerRect.height / 2;
@@ -213,10 +224,35 @@ export function AvatarPositionModal({
     const imageCenterY = (containerCenterY - position.y) / scale;
     const newX = containerCenterX - imageCenterX * newScale;
     const newY = containerCenterY - imageCenterY * newScale;
-    
+
     setScale(newScale);
     setPosition({ x: newX, y: newY });
   }, [scale, position, imageSize]);
+
+  const handleZoomInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === "" || /^\d*\.?\d*$/.test(val)) {
+      setZoomInput(val);
+
+      const num = parseFloat(val);
+      if (!isNaN(num) && num >= 10 && num <= 400) {
+        const newScale = num / 100;
+        zoomToCenter(newScale);
+      }
+    }
+  };
+
+  const handleZoomBlur = () => {
+    setIsInputFocused(false);
+    let num = parseFloat(zoomInput);
+    if (isNaN(num)) num = scale * 100;
+
+    const constrainedNum = Math.min(Math.max(num, 10), 400);
+    const newScale = constrainedNum / 100;
+
+    zoomToCenter(newScale);
+    setZoomInput(constrainedNum.toFixed(2).replace(/\.?0+$/, ""));
+  };
 
   const handleConfirm = useCallback(async () => {
     if (!imageRef.current || !canvasRef.current || !containerRef.current) return;
@@ -238,7 +274,7 @@ export function AvatarPositionModal({
 
     const circleCenterX = (containerSize / 2 - position.x) / scale;
     const circleCenterY = (containerSize / 2 - position.y) / scale;
-    
+
     const cropRadius = circleRadius / scale;
     const sourceX = circleCenterX - cropRadius;
     const sourceY = circleCenterY - cropRadius;
@@ -320,11 +356,15 @@ export function AvatarPositionModal({
               <div
                 ref={containerRef}
                 className={cn(
-                  "relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden",
+                  "relative mx-auto aspect-square w-full max-w-70 overflow-hidden",
                   radius.lg,
                   "cursor-move touch-none select-none",
                   "border border-white/10"
                 )}
+                style={{
+                  transform: 'translateZ(0)',
+                  isolation: 'isolate'
+                }} 
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -351,55 +391,51 @@ export function AvatarPositionModal({
                 />
 
                 {/* Darkening overlay with circular cutout */}
-                <svg
-                  className="absolute inset-0 h-full w-full pointer-events-none"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <mask id="circleMask">
-                      <rect x="0" y="0" width="100" height="100" fill="white" />
-                      <circle cx="50" cy="50" r="45" fill="black" />
-                    </mask>
-                  </defs>
-                  {/* Dark overlay outside circle */}
-                  <rect
-                    x="0"
-                    y="0"
-                    width="100"
-                    height="100"
-                    fill="rgba(0, 0, 0, 0.7)"
-                    mask="url(#circleMask)"
-                  />
-                  {/* Circle border */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="45"
-                    fill="none"
-                    stroke="rgba(52, 211, 153, 0.6)"
-                    strokeWidth="0.8"
-                  />
-                  {/* Rule of thirds grid inside circle */}
-                  <line
-                    x1="50"
-                    y1="5"
-                    x2="50"
-                    y2="95"
-                    stroke="rgba(255, 255, 255, 0.15)"
-                    strokeWidth="0.3"
-                  />
-                  <line
-                    x1="5"
-                    y1="50"
-                    x2="95"
-                    y2="50"
-                    stroke="rgba(255, 255, 255, 0.15)"
-                    strokeWidth="0.3"
-                  />
-                  {/* Center point */}
-                  <circle cx="50" cy="50" r="1.5" fill="rgba(52, 211, 153, 0.5)" />
-                </svg>
+                <div
+                  className="absolute inset-0 z-10 pointer-events-none"
+                  style={{
+                    background: 'radial-gradient(circle closest-side, transparent 90%, rgba(0, 0, 0, 0.7) 90%)',
+                    WebkitBackdropFilter: 'none', 
+                  }}
+                />
+
+                {/* SVG for guides and border */}
+                <div className="absolute inset-0 z-20 pointer-events-none">
+                  <svg
+                    className="h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    {/* Circle border */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="45"
+                      fill="none"
+                      stroke="rgba(52, 211, 153, 0.6)"
+                      strokeWidth="0.8"
+                    />
+                    {/* Rule of thirds grid inside circle */}
+                    <line
+                      x1="50"
+                      y1="5"
+                      x2="50"
+                      y2="95"
+                      stroke="rgba(255, 255, 255, 0.15)"
+                      strokeWidth="0.3"
+                    />
+                    <line
+                      x1="5"
+                      y1="50"
+                      x2="95"
+                      y2="50"
+                      stroke="rgba(255, 255, 255, 0.15)"
+                      strokeWidth="0.3"
+                    />
+                    {/* Center point */}
+                    <circle cx="50" cy="50" r="1.5" fill="rgba(52, 211, 153, 0.5)" />
+                  </svg>
+                </div>
 
                 {/* Loading overlay */}
                 {!imageLoaded && (
@@ -425,11 +461,29 @@ export function AvatarPositionModal({
 
                 <div
                   className={cn(
-                    "flex h-12 min-w-20 items-center justify-center border border-white/10 bg-white/5 px-3",
-                    radius.md
+                    "flex h-12 min-w-20 items-center justify-center border border-white/10 bg-white/5",
+                    radius.md,
+                    "focus-within:border-white/20 focus-within:bg-white/8 transition-colors"
                   )}
                 >
-                  <span className="text-sm font-medium text-white/70">{Math.round(scale * 100)}%</span>
+                  <div className="flex items-center px-3">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={zoomInput}
+                      onChange={handleZoomInput}
+                      onFocus={() => setIsInputFocused(true)}
+                      onBlur={handleZoomBlur}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleZoomBlur();
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-12 bg-transparent text-center text-sm font-medium text-white/70 outline-none"
+                    />
+                    <span className="text-sm font-medium text-white/40">%</span>
+                  </div>
                 </div>
 
                 <button
