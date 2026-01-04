@@ -488,9 +488,19 @@ export function EditModelPage() {
                     {/* Temperature */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <span className="block text-xs font-medium text-white/70">Temperature</span>
-                          <span className="block text-[10px] text-white/40">Higher = more creative</span>
+                        <div className="flex items-center gap-2">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">Temperature</span>
+                            <span className="block text-[10px] text-white/40">Higher = more creative</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openDocs("models", "temperature")}
+                            className="text-white/30 hover:text-white/60 transition"
+                            aria-label="Help with temperature"
+                          >
+                            <HelpCircle size={12} />
+                          </button>
                         </div>
                         <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                           {modelAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
@@ -514,9 +524,19 @@ export function EditModelPage() {
                     {/* Top P */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <span className="block text-xs font-medium text-white/70">Top P</span>
-                          <span className="block text-[10px] text-white/40">Lower = more focused</span>
+                        <div className="flex items-center gap-2">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">Top P</span>
+                            <span className="block text-[10px] text-white/40">Lower = more focused</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openDocs("models", "top-p")}
+                            className="text-white/30 hover:text-white/60 transition"
+                            aria-label="Help with top p"
+                          >
+                            <HelpCircle size={12} />
+                          </button>
                         </div>
                         <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                           {modelAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
@@ -540,9 +560,19 @@ export function EditModelPage() {
                     {/* Max Tokens */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <span className="block text-xs font-medium text-white/70">Max Output Tokens</span>
-                          <span className="block text-[10px] text-white/40">Limit response length</span>
+                        <div className="flex items-center gap-2">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">Max Output Tokens</span>
+                            <span className="block text-[10px] text-white/40">Limit response length</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openDocs("models", "max-output-tokens")}
+                            className="text-white/30 hover:text-white/60 transition"
+                            aria-label="Help with max output tokens"
+                          >
+                            <HelpCircle size={12} />
+                          </button>
                         </div>
                         <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                           {modelAdvancedDraft.maxOutputTokens?.toLocaleString() ?? "Auto"}
@@ -567,9 +597,19 @@ export function EditModelPage() {
                     <div className="space-y-8">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <span className="block text-xs font-medium text-white/70">Frequency Penalty</span>
-                            <span className="block text-[10px] text-white/40">Reduce word repetition</span>
+                          <div className="flex items-center gap-2">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">Frequency Penalty</span>
+                              <span className="block text-[10px] text-white/40">Reduce word repetition</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openDocs("models", "frequency-penalty")}
+                              className="text-white/30 hover:text-white/60 transition"
+                              aria-label="Help with frequency penalty"
+                            >
+                              <HelpCircle size={12} />
+                            </button>
                           </div>
                           <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                             {modelAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
@@ -592,9 +632,19 @@ export function EditModelPage() {
 
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <span className="block text-xs font-medium text-white/70">Presence Penalty</span>
-                            <span className="block text-[10px] text-white/40">Encourage new topics</span>
+                          <div className="flex items-center gap-2">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">Presence Penalty</span>
+                              <span className="block text-[10px] text-white/40">Encourage new topics</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openDocs("models", "presence-penalty")}
+                              className="text-white/30 hover:text-white/60 transition"
+                              aria-label="Help with presence penalty"
+                            >
+                              <HelpCircle size={12} />
+                            </button>
                           </div>
                           <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                             {modelAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
@@ -619,9 +669,19 @@ export function EditModelPage() {
                     {/* Top K */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <span className="block text-xs font-medium text-white/70">Top K</span>
-                          <span className="block text-[10px] text-white/40">Sample from top K tokens</span>
+                        <div className="flex items-center gap-2">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">Top K</span>
+                            <span className="block text-[10px] text-white/40">Sample from top K tokens</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openDocs("models", "top-k-if-supported")}
+                            className="text-white/30 hover:text-white/60 transition"
+                            aria-label="Help with top k"
+                          >
+                            <HelpCircle size={12} />
+                          </button>
                         </div>
                         <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
                           {modelAdvancedDraft.topK ?? "Auto"}
@@ -649,6 +709,14 @@ export function EditModelPage() {
                           <div className="flex items-center gap-2">
                             <Brain size={14} className="text-amber-400" />
                             <label className="text-xs font-medium text-white/70">Reasoning (Thinking)</label>
+                            <button
+                              type="button"
+                              onClick={() => openDocs("models", "reasoning-mode")}
+                              className="text-white/30 hover:text-white/60 transition"
+                              aria-label="Help with reasoning mode"
+                            >
+                              <HelpCircle size={12} />
+                            </button>
                           </div>
                           {!isAutoReasoning && (
                             <label className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200">

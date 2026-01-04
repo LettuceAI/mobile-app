@@ -117,7 +117,29 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
 }
 
 pub(crate) fn app_version() -> String {
-    "1.0.0-beta.6.1".to_string()
+    #[cfg(target_os = "android")]
+    return "1.0.0-android".to_string();
+
+    #[cfg(target_os = "ios")]
+    return "1.0.0-ios".to_string();
+
+    #[cfg(target_os = "macos")]
+    return "1.0.0-beta-2-macos".to_string();
+
+    #[cfg(target_os = "windows")]
+    return "1.0.0-beta-2-windows".to_string();
+
+    #[cfg(target_os = "linux")]
+    return "1.0.0-beta-2-linux".to_string();
+
+    #[cfg(not(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )))]
+    return "UNKNOWN - APP IS NOT VALID".to_string();
 }
 
 pub fn get_local_ip() -> Result<String, String> {
