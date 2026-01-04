@@ -667,39 +667,50 @@ export function UsagePage() {
               </div>
             </motion.div>
 
-            {/* Filter Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              <motion.button
-                onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); setSelectedOperationType(null); }}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${!selectedModelId && !selectedCharacterId && !selectedOperationType ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
-                whileTap={{ scale: 0.98 }}
-              >
-                All
-              </motion.button>
-              <motion.button
-                onClick={() => setShowModelFilter((v) => !v)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${selectedModelId ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
-                whileTap={{ scale: 0.98 }}
-              >
-                {selectedModelId ? (modelOptions.find(m => m.id === selectedModelId)?.name || 'Model') : 'By Model'}
-              </motion.button>
-              <motion.button
-                onClick={() => setShowCharacterFilter((v) => !v)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${selectedCharacterId ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
-                whileTap={{ scale: 0.98 }}
-              >
-                {selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Character') : 'By Character'}
-              </motion.button>
-              <motion.button
-                onClick={() => setShowOperationTypeFilter((v) => !v)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition ${selectedOperationType ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'}`}
-                whileTap={{ scale: 0.98 }}
-              >
-                {selectedOperationType ? (operationTypeOptions.find(o => o.id === selectedOperationType)?.label || 'Type') : 'By Type'}
-              </motion.button>
+            {/* Filter Controls */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-1">
+                <motion.button
+                  onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); setSelectedOperationType(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${!selectedModelId && !selectedCharacterId && !selectedOperationType
+                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  All
+                </motion.button>
+                <motion.button
+                  onClick={() => setShowModelFilter((v) => !v)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedModelId
+                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <span className="truncate max-w-15">{selectedModelId ? (modelOptions.find(m => m.id === selectedModelId)?.name || 'Model') : 'Model'}</span>
+                </motion.button>
+                <motion.button
+                  onClick={() => setShowCharacterFilter((v) => !v)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedCharacterId
+                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <span className="truncate max-w-15">{selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Char') : 'Character'}</span>
+                </motion.button>
+                <motion.button
+                  onClick={() => setShowOperationTypeFilter((v) => !v)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedOperationType
+                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <span className="truncate max-w-15">{selectedOperationType ? (operationTypeOptions.find(o => o.id === selectedOperationType)?.label || 'Type') : 'Type'}</span>
+                </motion.button>
+              </div>
             </div>
 
-            {/* Model Filter Inline Menu (visual improvements) */}
+
+            {/* Model Filter Inline Menu */}
             <AnimatePresence>
               {showModelFilter && modelOptions.length > 0 && (
                 <motion.div
@@ -707,39 +718,60 @@ export function UsagePage() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
                 >
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {modelOptions.map(opt => {
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Model</h4>
+                  </div>
+
+                  {/* Options */}
+                  <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
+                    {modelOptions.map((opt, index) => {
                       const selected = selectedModelId === opt.id;
                       return (
                         <motion.button
                           key={opt.id}
                           onClick={() => { setSelectedModelId(opt.id); setShowModelFilter(false); }}
-                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs transition border ${selected ? 'bg-emerald-500/15 text-emerald-100 border-emerald-400/30' : 'text-white/80 hover:bg-white/10/60 border-transparent'}`}
+                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
+                            ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
+                            : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
                           whileTap={{ scale: 0.98 }}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.02 }}
                         >
-                          <span className="truncate pr-2">{opt.name}</span>
-                          {selected && <Check className="h-4 w-4 text-emerald-400" />}
+                          <span className="truncate pr-3">{opt.name}</span>
+                          {selected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
+                            >
+                              <Check className="h-3 w-3 text-emerald-400" />
+                            </motion.div>
+                          )}
                         </motion.button>
                       );
                     })}
                   </div>
-                  <div className="h-px bg-white/10 my-2" />
-                  <div className="flex justify-end">
+
+                  {/* Footer */}
+                  <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
                     <motion.button
                       onClick={() => { setSelectedModelId(null); setShowModelFilter(false); }}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
                       whileTap={{ scale: 0.98 }}
                     >
-                      Clear
+                      Clear Selection
                     </motion.button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Character Filter Inline Menu (visual improvements) */}
+
+            {/* Character Filter Inline Menu */}
             <AnimatePresence>
               {showCharacterFilter && characterOptions.length > 0 && (
                 <motion.div
@@ -747,39 +779,58 @@ export function UsagePage() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
                 >
-                  {/* Top gradient highlight */}
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b from-white/10 to-transparent" />
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {characterOptions.map(opt => {
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Character</h4>
+                  </div>
+
+                  {/* Options */}
+                  <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
+                    {characterOptions.map((opt, index) => {
                       const selected = selectedCharacterId === opt.id;
                       return (
                         <motion.button
                           key={opt.id}
                           onClick={() => { setSelectedCharacterId(opt.id); setShowCharacterFilter(false); }}
-                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs transition border ${selected ? 'bg-emerald-500/15 text-emerald-100 border-emerald-400/30' : 'text-white/80 hover:bg-white/10/60 border-transparent'}`}
+                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
+                            ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
+                            : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
                           whileTap={{ scale: 0.98 }}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.02 }}
                         >
-                          <span className="truncate pr-2">{opt.name}</span>
-                          {selected && <Check className="h-4 w-4 text-emerald-400" />}
+                          <span className="truncate pr-3">{opt.name}</span>
+                          {selected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
+                            >
+                              <Check className="h-3 w-3 text-emerald-400" />
+                            </motion.div>
+                          )}
                         </motion.button>
                       );
                     })}
                   </div>
-                  <div className="h-px bg-white/10 my-2" />
-                  <div className="flex justify-end">
+
+                  {/* Footer */}
+                  <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
                     <motion.button
                       onClick={() => { setSelectedCharacterId(null); setShowCharacterFilter(false); }}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
                       whileTap={{ scale: 0.98 }}
                     >
-                      Clear
+                      Clear Selection
                     </motion.button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+
 
             {/* Operation Type Filter Inline Menu */}
             <AnimatePresence>
@@ -789,37 +840,61 @@ export function UsagePage() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c12]/95 backdrop-blur-sm shadow-xl p-2"
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
                 >
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {operationTypeOptions.map(opt => {
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Type</h4>
+                  </div>
+
+                  {/* Options */}
+                  <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
+                    {operationTypeOptions.map((opt, index) => {
                       const selected = selectedOperationType === opt.id;
                       return (
                         <motion.button
                           key={opt.id}
                           onClick={() => { setSelectedOperationType(opt.id); setShowOperationTypeFilter(false); }}
-                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs transition border ${selected ? opt.color : 'text-white/80 hover:bg-white/10/60 border-transparent'}`}
+                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
+                            ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
+                            : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
                           whileTap={{ scale: 0.98 }}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.02 }}
                         >
-                          <span className="truncate pr-2">{opt.label}</span>
-                          {selected && <Check className="h-4 w-4" />}
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${opt.color.includes('blue') ? 'bg-blue-400' : opt.color.includes('purple') ? 'bg-purple-400' : opt.color.includes('cyan') ? 'bg-cyan-400' : opt.color.includes('amber') ? 'bg-amber-400' : opt.color.includes('emerald') ? 'bg-emerald-400' : 'bg-white/40'}`} />
+                            <span className="truncate">{opt.label}</span>
+                          </div>
+                          {selected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
+                            >
+                              <Check className="h-3 w-3 text-emerald-400" />
+                            </motion.div>
+                          )}
                         </motion.button>
                       );
                     })}
                   </div>
-                  <div className="h-px bg-white/10 my-2" />
-                  <div className="flex justify-end">
+
+                  {/* Footer */}
+                  <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
                     <motion.button
                       onClick={() => { setSelectedOperationType(null); setShowOperationTypeFilter(false); }}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
                       whileTap={{ scale: 0.98 }}
                     >
-                      Clear
+                      Clear Selection
                     </motion.button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+
 
             {/* Recent Requests */}
             {filteredRecords.length > 0 && (
