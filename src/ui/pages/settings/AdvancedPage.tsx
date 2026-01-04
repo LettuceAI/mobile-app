@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sliders, Sparkles, ChevronRight, ChevronDown, Cpu, Check } from "lucide-react";
+import { Sliders, Sparkles, ChevronRight, ChevronDown, Cpu, Check, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { readSettings, saveAdvancedSettings, checkEmbeddingModel } from "../../../core/storage/repo";
 import type { Model } from "../../../core/storage/schemas";
@@ -8,6 +8,7 @@ import { cn, typography, spacing, interactive } from "../../design-tokens";
 import { EmbeddingDownloadPrompt } from "../../components/EmbeddingDownloadPrompt";
 import { BottomMenu } from "../../components/BottomMenu";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
+import { openDocs } from "../../../core/utils/docs";
 
 export function AdvancedPage() {
     const navigate = useNavigate();
@@ -203,6 +204,17 @@ export function AdvancedPage() {
                                                 )}>
                                                     {creationHelperEnabled ? 'On' : 'Off'}
                                                 </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openDocs("creationHelper");
+                                                    }}
+                                                    className="text-white/40 hover:text-white/70 transition p-1"
+                                                    aria-label="Help with creation helper"
+                                                >
+                                                    <HelpCircle size={16} />
+                                                </button>
                                             </div>
                                             <div className="mt-0.5 text-[11px] text-white/50">
                                                 AI-guided character creation

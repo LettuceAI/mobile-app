@@ -16,6 +16,7 @@ interface Docs {
     sync: string;
     helpMeReply: string;
     textToSpeech: string;
+    creationHelper: string;
     faq: string;
 }
 
@@ -37,6 +38,7 @@ export const DOCS: Docs = {
     sync: `${BASE_DOCS_URL}/sync`,
     helpMeReply: `${BASE_DOCS_URL}/help-me-reply`,
     textToSpeech: `${BASE_DOCS_URL}/tts`,
+    creationHelper: `${BASE_DOCS_URL}/creation-helper`,
     faq: `https://www.lettuceai.app/faq`,
 }
 
