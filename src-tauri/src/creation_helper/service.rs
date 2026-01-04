@@ -8,9 +8,11 @@ use super::tools::{get_creation_helper_system_prompt, get_creation_helper_tools}
 use super::types::*;
 use crate::api::{api_request, ApiRequest};
 use crate::chat_manager::request_builder::build_chat_request;
+use crate::chat_manager::sse::usage_from_value;
 use crate::chat_manager::tooling::{parse_tool_calls, ToolConfig};
 use crate::storage_manager::db::{now_ms, open_db};
 use crate::storage_manager::settings::internal_read_settings;
+use crate::usage::{add_usage_record, RequestUsage};
 use crate::utils::{log_error, log_info};
 
 lazy_static::lazy_static! {
@@ -437,6 +439,11 @@ async fn process_assistant_turn(
         .unwrap_or("");
     let base_url = credential.get("baseUrl").and_then(|v| v.as_str());
 
+    let provider_label = credential
+        .get("label")
+        .and_then(|v| v.as_str())
+        .unwrap_or(provider_id);
+
     let mut api_messages = vec![json!({
         "role": "system",
         "content": get_creation_helper_system_prompt()
@@ -564,11 +571,35 @@ async fn process_assistant_turn(
             .and_then(|e| e.get("message"))
             .and_then(|m| m.as_str())
             .unwrap_or("API request failed");
+        record_creation_usage(
+            &app,
+            api_response.data(),
+            &session_id,
+            model_id,
+            model_name,
+            provider_id,
+            provider_label,
+            session.draft.name.as_deref().unwrap_or(""),
+            false,
+            Some(err.to_string()),
+        );
         log_error(&app, "creation_helper", format!("API error: {}", err));
         return Err(err.to_string());
     }
 
     let response_data = api_response.data();
+    record_creation_usage(
+        &app,
+        response_data,
+        &session_id,
+        model_id,
+        model_name,
+        provider_id,
+        provider_label,
+        session.draft.name.as_deref().unwrap_or(""),
+        true,
+        None,
+    );
 
     let mut content = response_data
         .get("choices")
@@ -696,10 +727,34 @@ async fn process_assistant_turn(
                 .and_then(|e| e.get("message"))
                 .and_then(|m| m.as_str())
                 .unwrap_or("API request failed");
+            record_creation_usage(
+                &app,
+                followup_response.data(),
+                &session_id,
+                model_id,
+                model_name,
+                provider_id,
+                provider_label,
+                session.draft.name.as_deref().unwrap_or(""),
+                false,
+                Some(err.to_string()),
+            );
             return Err(err.to_string());
         }
 
         let followup_data = followup_response.data();
+        record_creation_usage(
+            &app,
+            followup_data,
+            &session_id,
+            model_id,
+            model_name,
+            provider_id,
+            provider_label,
+            session.draft.name.as_deref().unwrap_or(""),
+            true,
+            None,
+        );
 
         content = followup_data
             .get("choices")
@@ -810,4 +865,56 @@ pub fn cleanup_old_sessions(max_age_ms: i64) -> Result<usize, String> {
     }
 
     Ok(count)
+}
+
+fn record_creation_usage(
+    app: &AppHandle,
+    response_data: &Value,
+    session_id: &str,
+    model_id: &str,
+    model_name: &str,
+    provider_id: &str,
+    provider_label: &str,
+    character_name: &str,
+    success: bool,
+    error_message: Option<String>,
+) {
+    let usage_summary = usage_from_value(response_data);
+    let request_id = Uuid::new_v4().to_string();
+
+    let usage = RequestUsage {
+        id: request_id,
+        timestamp: now_ms() as u64,
+        session_id: session_id.to_string(),
+        character_id: "creation_helper".to_string(),
+        character_name: if character_name.is_empty() {
+            "New Character".to_string()
+        } else {
+            character_name.to_string()
+        },
+        model_id: model_id.to_string(),
+        model_name: model_name.to_string(),
+        provider_id: provider_id.to_string(),
+        provider_label: provider_label.to_string(),
+        operation_type: "AI Creator".to_string(),
+        prompt_tokens: usage_summary.as_ref().and_then(|u| u.prompt_tokens),
+        completion_tokens: usage_summary.as_ref().and_then(|u| u.completion_tokens),
+        total_tokens: usage_summary.as_ref().and_then(|u| u.total_tokens),
+        memory_tokens: None,
+        summary_tokens: None,
+        reasoning_tokens: usage_summary.as_ref().and_then(|u| u.reasoning_tokens),
+        image_tokens: usage_summary.as_ref().and_then(|u| u.image_tokens),
+        cost: None,
+        success,
+        error_message,
+        metadata: HashMap::new(),
+    };
+
+    if let Err(e) = add_usage_record(app, usage) {
+        log_error(
+            app,
+            "creation_helper",
+            format!("Failed to record usage: {}", e),
+        );
+    }
 }
