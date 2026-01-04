@@ -1,17 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sliders, Sparkles, ChevronRight } from "lucide-react";
+import { Sliders, Sparkles, ChevronRight, ChevronDown, Cpu, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { readSettings, saveAdvancedSettings, checkEmbeddingModel } from "../../../core/storage/repo";
-//import type { Model } from "../../../core/storage/schemas";
+import type { Model } from "../../../core/storage/schemas";
 import { cn, typography, spacing, interactive } from "../../design-tokens";
 import { EmbeddingDownloadPrompt } from "../../components/EmbeddingDownloadPrompt";
+import { BottomMenu } from "../../components/BottomMenu";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 
 export function AdvancedPage() {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
-    const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
+    const [models, setModels] = useState<Model[]>([]);
     const [showDownloadPrompt, setShowDownloadPrompt] = useState(false);
+    const [showModelMenu, setShowModelMenu] = useState(false);
+    const [modelSearchQuery, setModelSearchQuery] = useState("");
 
     // Settings state
     const [creationHelperEnabled, setCreationHelperEnabled] = useState(false);
@@ -31,7 +35,7 @@ export function AdvancedPage() {
                 setCreationHelperModelId(settings.advancedSettings?.creationHelperModelId || "");
                 setDynamicMemoryEnabled(settings.advancedSettings?.dynamicMemory?.enabled ?? false);
                 setManualWindow(settings.advancedSettings?.manualModeContextWindow ?? 50);
-                setModels(settings.models.map((m: any) => ({ id: m.id, name: m.name })));
+                setModels(settings.models || []);
                 setIsLoading(false);
             } catch (err) {
                 console.error("Failed to load settings:", err);
@@ -238,15 +242,21 @@ export function AdvancedPage() {
                                                 <div className="mt-4 space-y-3 pt-3 border-t border-white/10">
                                                     <div>
                                                         <label className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Helper Model</label>
-                                                        <select
-                                                            value={creationHelperModelId}
-                                                            onChange={(e) => handleCreationHelperModelChange(e.target.value)}
-                                                            className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:border-rose-400/40 focus:outline-none"
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowModelMenu(true)}
+                                                            className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-2.5 text-left transition hover:bg-black/30 focus:border-rose-400/40 focus:outline-none"
                                                         >
-                                                            {models.map(m => (
-                                                                <option key={m.id} value={m.id}>{m.name}</option>
-                                                            ))}
-                                                        </select>
+                                                            <div className="flex items-center gap-2">
+                                                                {creationHelperModelId ? getProviderIcon(models.find(m => m.id === creationHelperModelId)?.providerId || '') : <Cpu className="h-5 w-5 text-white/40" />}
+                                                                <span className={`text-sm ${creationHelperModelId ? 'text-white' : 'text-white/50'}`}>
+                                                                    {creationHelperModelId
+                                                                        ? models.find(m => m.id === creationHelperModelId)?.displayName || models.find(m => m.id === creationHelperModelId)?.name || 'Selected Model'
+                                                                        : 'Select a model'}
+                                                                </span>
+                                                            </div>
+                                                            <ChevronDown className="h-4 w-4 text-white/40" />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </motion.div>
@@ -406,6 +416,62 @@ export function AdvancedPage() {
                 isOpen={showDownloadPrompt}
                 onClose={() => setShowDownloadPrompt(false)}
             />
+
+            {/* Model Selection BottomMenu */}
+            <BottomMenu
+                isOpen={showModelMenu}
+                onClose={() => {
+                    setShowModelMenu(false);
+                    setModelSearchQuery("");
+                }}
+                title="Select Model"
+            >
+                <div className="space-y-4">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={modelSearchQuery}
+                            onChange={(e) => setModelSearchQuery(e.target.value)}
+                            placeholder="Search models..."
+                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+                        />
+                        <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                        {models
+                            .filter(m => {
+                                if (!modelSearchQuery) return true;
+                                const q = modelSearchQuery.toLowerCase();
+                                return m.displayName?.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q);
+                            })
+                            .map((model) => (
+                                <button
+                                    key={model.id}
+                                    onClick={() => {
+                                        handleCreationHelperModelChange(model.id);
+                                        setShowModelMenu(false);
+                                        setModelSearchQuery("");
+                                    }}
+                                    className={cn(
+                                        "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                                        creationHelperModelId === model.id
+                                            ? "border-rose-400/40 bg-rose-400/10"
+                                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                                    )}
+                                >
+                                    {getProviderIcon(model.providerId)}
+                                    <div className="flex-1 min-w-0">
+                                        <span className="block truncate text-sm text-white">{model.displayName || model.name}</span>
+                                        <span className="block truncate text-xs text-white/40">{model.name}</span>
+                                    </div>
+                                    {creationHelperModelId === model.id && <Check className="h-4 w-4 shrink-0 text-rose-400" />}
+                                </button>
+                            ))}
+                    </div>
+                </div>
+            </BottomMenu>
         </div>
     );
 }
