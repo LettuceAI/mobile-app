@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Camera, Sparkles, Image, Upload } from "lucide-react";
+import { X, Camera, Image, Upload, Sparkles } from "lucide-react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 import { AvatarPicker } from "../../../components/AvatarPicker";
 
@@ -16,7 +16,6 @@ interface IdentityStepProps {
   onContinue: () => void;
   canContinue: boolean;
   onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onStartHelper?: () => void;
 }
 
 export function IdentityStep({
@@ -32,7 +31,6 @@ export function IdentityStep({
   onContinue,
   canContinue,
   onImport,
-  onStartHelper,
 }: IdentityStepProps) {
   return (
     <motion.div
@@ -44,26 +42,12 @@ export function IdentityStep({
     >
       {/* Title */}
       <div className={spacing.tight}>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
-              Create Character
-            </h2>
-            <p className={cn(typography.body.size, "text-white/50")}>
-              Give your AI character an identity
-            </p>
-          </div>
-          <button
-            onClick={onStartHelper}
-            className={cn(
-              "flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1.5 transition-all active:scale-95",
-              "hover:border-rose-400/50 hover:bg-rose-400/20"
-            )}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-rose-300" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-200">Use AI Creator</span>
-          </button>
-        </div>
+        <h2 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
+          Create Character
+        </h2>
+        <p className={cn(typography.body.size, "text-white/50")}>
+          Give your AI character an identity
+        </p>
       </div>
 
       {/* Avatar Section */}
@@ -97,9 +81,7 @@ export function IdentityStep({
             </button>
           )}
         </div>
-        <p className="mt-3 text-xs text-white/40">
-          Tap camera to add or generate avatar
-        </p>
+        <p className="mt-3 text-xs text-white/40">Tap camera to add or generate avatar</p>
       </div>
 
       {/* Name Input */}
@@ -109,7 +91,7 @@ export function IdentityStep({
             typography.label.size,
             typography.label.weight,
             typography.label.tracking,
-            "uppercase text-white/70"
+            "uppercase text-white/70",
           )}
         >
           Character Name *
@@ -126,7 +108,7 @@ export function IdentityStep({
               typography.body.size,
               interactive.transition.default,
               "focus:border-white/30 focus:bg-black/30 focus:outline-none",
-              name.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10"
+              name.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10",
             )}
           />
           {name.trim() && (
@@ -139,7 +121,7 @@ export function IdentityStep({
                 className={cn(
                   "flex h-6 w-6 items-center justify-center",
                   radius.full,
-                  "bg-emerald-400/20"
+                  "bg-emerald-400/20",
                 )}
               >
                 <Sparkles className="h-3 w-3 text-emerald-300" />
@@ -161,12 +143,14 @@ export function IdentityStep({
             exit={{ opacity: 0, height: 0 }}
             className={spacing.field}
           >
-            <label className={cn(
-              "flex cursor-pointer items-center justify-between border border-white/10 bg-black/20 px-4 py-3",
-              radius.md,
-              interactive.transition.default,
-              "active:bg-black/30"
-            )}>
+            <label
+              className={cn(
+                "flex cursor-pointer items-center justify-between border border-white/10 bg-black/20 px-4 py-3",
+                radius.md,
+                interactive.transition.default,
+                "active:bg-black/30",
+              )}
+            >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-emerald-400" />
@@ -200,16 +184,20 @@ export function IdentityStep({
             typography.label.size,
             typography.label.weight,
             typography.label.tracking,
-            "uppercase text-white/70"
+            "uppercase text-white/70",
           )}
         >
           Chat Background <span className="text-white/40">(Optional)</span>
         </label>
-        <div className={cn(
-          "overflow-hidden border",
-          radius.md,
-          backgroundImagePath ? "border-purple-400/30 bg-purple-400/5" : "border-white/10 bg-black/20"
-        )}>
+        <div
+          className={cn(
+            "overflow-hidden border",
+            radius.md,
+            backgroundImagePath
+              ? "border-purple-400/30 bg-purple-400/5"
+              : "border-white/10 bg-black/20",
+          )}
+        >
           {backgroundImagePath ? (
             <div className="relative">
               <img
@@ -218,7 +206,13 @@ export function IdentityStep({
                 className="h-24 w-full object-cover"
               />
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                <span className={cn(typography.caption.size, "text-white/80 bg-black/50 px-2 py-1", radius.sm)}>
+                <span
+                  className={cn(
+                    typography.caption.size,
+                    "text-white/80 bg-black/50 px-2 py-1",
+                    radius.sm,
+                  )}
+                >
                   Background Preview
                 </span>
               </div>
@@ -228,22 +222,26 @@ export function IdentityStep({
                   "absolute top-2 right-2 flex h-6 w-6 items-center justify-center border border-white/20 bg-black/50 text-white/70",
                   radius.full,
                   interactive.transition.fast,
-                  "active:scale-95 active:bg-black/70"
+                  "active:scale-95 active:bg-black/70",
                 )}
               >
                 <X size={12} />
               </button>
             </div>
           ) : (
-            <label className={cn(
-              "flex h-24 cursor-pointer flex-col items-center justify-center gap-2",
-              interactive.transition.default,
-              "active:bg-white/5"
-            )}>
-              <div className={cn(
-                "flex h-8 w-8 items-center justify-center border border-white/10 bg-white/5",
-                radius.md
-              )}>
+            <label
+              className={cn(
+                "flex h-24 cursor-pointer flex-col items-center justify-center gap-2",
+                interactive.transition.default,
+                "active:bg-white/5",
+              )}
+            >
+              <div
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center border border-white/10 bg-white/5",
+                  radius.md,
+                )}
+              >
                 <Image size={16} className="text-white/40" />
               </div>
               <div className="text-center">
@@ -276,11 +274,11 @@ export function IdentityStep({
             interactive.transition.fast,
             canContinue
               ? cn(
-                "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
-                shadows.glow,
-                "active:border-emerald-400/60 active:bg-emerald-400/30"
-              )
-              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
+                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                  shadows.glow,
+                  "active:border-emerald-400/60 active:bg-emerald-400/30",
+                )
+              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30",
           )}
         >
           Continue to Starting Scene
@@ -290,12 +288,14 @@ export function IdentityStep({
       {/* Import Character Button */}
       {onImport && (
         <div className="pt-2">
-          <label className={cn(
-            "flex w-full cursor-pointer items-center justify-center gap-2 border border-blue-400/40 bg-blue-400/20 py-3.5 text-sm font-semibold text-blue-100",
-            radius.md,
-            interactive.transition.fast,
-            "active:scale-[0.97] active:bg-blue-400/30"
-          )}>
+          <label
+            className={cn(
+              "flex w-full cursor-pointer items-center justify-center gap-2 border border-blue-400/40 bg-blue-400/20 py-3.5 text-sm font-semibold text-blue-100",
+              radius.md,
+              interactive.transition.fast,
+              "active:scale-[0.97] active:bg-blue-400/30",
+            )}
+          >
             <Upload className="h-4 w-4" />
             Import Character from File
             <input

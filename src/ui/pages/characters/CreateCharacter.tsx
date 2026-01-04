@@ -121,7 +121,6 @@ export function CreateCharacterPage() {
               onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
               onImport={actions.handleImport}
-              onStartHelper={() => navigate("/create/character/helper")}
             />
           ) : state.step === Step.StartingScene ? (
             <StartingSceneStep
