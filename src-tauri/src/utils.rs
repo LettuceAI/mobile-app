@@ -118,19 +118,19 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
 
 pub(crate) fn app_version() -> String {
     #[cfg(target_os = "android")]
-    return "1.0.0-android".to_string();
+    return "1.0.2-android".to_string();
 
     #[cfg(target_os = "ios")]
-    return "1.0.0-ios".to_string();
+    return "1.0.2-ios".to_string();
 
     #[cfg(target_os = "macos")]
-    return "1.0.0-beta-2-macos".to_string();
+    return "1.0.2-beta-2-macos".to_string();
 
     #[cfg(target_os = "windows")]
-    return "1.0.0-beta-2-windows".to_string();
+    return "1.0.2-beta-2-windows".to_string();
 
     #[cfg(target_os = "linux")]
-    return "1.0.0-beta-2-linux".to_string();
+    return "1.0.2-beta-2-linux".to_string();
 
     #[cfg(not(any(
         target_os = "android",

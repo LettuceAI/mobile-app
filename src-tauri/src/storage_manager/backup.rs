@@ -343,8 +343,9 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 Ok(serde_json::json!({
                     "id": r.get::<_, String>(0)?,
                     "content": r.get::<_, String>(1)?,
-                    "created_at": r.get::<_, i64>(2)?,
-                    "selected_variant_id": r.get::<_, Option<String>>(3)?,
+                    "direction": r.get::<_, Option<String>>(2)?,
+                    "created_at": r.get::<_, i64>(3)?,
+                    "selected_variant_id": r.get::<_, Option<String>>(4)?,
                 }))
             })
             .map_err(|e| e.to_string())?
@@ -363,7 +364,8 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                     Ok(serde_json::json!({
                         "id": r.get::<_, String>(0)?,
                         "content": r.get::<_, String>(1)?,
-                        "created_at": r.get::<_, i64>(2)?,
+                        "direction": r.get::<_, Option<String>>(2)?,
+                        "created_at": r.get::<_, i64>(3)?,
                     }))
                 })
                 .map_err(|e| e.to_string())?

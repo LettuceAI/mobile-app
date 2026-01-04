@@ -248,7 +248,6 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
               default_provider_credential_id=excluded.default_provider_credential_id,
               default_model_id=excluded.default_model_id,
               app_state=excluded.app_state,
-              advanced_model_settings=excluded.advanced_model_settings,
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt,
               migration_version=excluded.migration_version,
