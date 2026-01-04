@@ -5,7 +5,7 @@ pub mod prompt_engine;
 pub mod prompts;
 pub mod provider_adapter;
 pub mod request;
-mod request_builder;
+pub mod request_builder;
 mod service;
 pub mod sse;
 mod storage;

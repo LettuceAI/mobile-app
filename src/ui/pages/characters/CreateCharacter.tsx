@@ -11,7 +11,7 @@ import { TopNav } from "../../components/App";
 export function CreateCharacterPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state, actions, computed } = useCharacterForm();
+  const { state, actions, computed } = useCharacterForm(location.state?.draftCharacter);
 
   const handleBack = () => {
     if (state.step === Step.Description) {
@@ -61,6 +61,7 @@ export function CreateCharacterPage() {
               onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
               onImport={actions.handleImport}
+              onStartHelper={() => navigate("/create/character/helper")}
             />
           ) : state.step === Step.StartingScene ? (
             <StartingSceneStep

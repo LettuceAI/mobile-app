@@ -81,7 +81,7 @@ export function ModelsPage() {
                                     <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-white/50">
                                         <span className="truncate">{model.providerLabel || providerInfo?.label || model.providerId}</span>
                                         <span className="opacity-40">•</span>
-                                        <span className="truncate max-w-[150px] font-mono text-[10px]">{model.name}</span>
+                                        <span className="truncate max-w-37.5 font-mono text-[10px]">{model.name}</span>
 
                                         {(model.inputScopes?.includes("image") || model.outputScopes?.includes("image")) && (
                                             <>

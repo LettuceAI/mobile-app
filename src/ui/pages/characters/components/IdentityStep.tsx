@@ -16,6 +16,7 @@ interface IdentityStepProps {
   onContinue: () => void;
   canContinue: boolean;
   onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onStartHelper?: () => void;
 }
 
 export function IdentityStep({
@@ -31,6 +32,7 @@ export function IdentityStep({
   onContinue,
   canContinue,
   onImport,
+  onStartHelper,
 }: IdentityStepProps) {
   return (
     <motion.div
@@ -42,12 +44,26 @@ export function IdentityStep({
     >
       {/* Title */}
       <div className={spacing.tight}>
-        <h2 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
-          Create Character
-        </h2>
-        <p className={cn(typography.body.size, "text-white/50")}>
-          Give your AI character an identity
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className={cn(typography.h1.size, typography.h1.weight, "text-white")}>
+              Create Character
+            </h2>
+            <p className={cn(typography.body.size, "text-white/50")}>
+              Give your AI character an identity
+            </p>
+          </div>
+          <button
+            onClick={onStartHelper}
+            className={cn(
+              "flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1.5 transition-all active:scale-95",
+              "hover:border-rose-400/50 hover:bg-rose-400/20"
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-rose-300" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-200">Use AI Creator</span>
+          </button>
+        </div>
       </div>
 
       {/* Avatar Section */}
@@ -196,9 +212,9 @@ export function IdentityStep({
         )}>
           {backgroundImagePath ? (
             <div className="relative">
-              <img 
-                src={backgroundImagePath} 
-                alt="Background preview" 
+              <img
+                src={backgroundImagePath}
+                alt="Background preview"
                 className="h-24 w-full object-cover"
               />
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
@@ -260,10 +276,10 @@ export function IdentityStep({
             interactive.transition.fast,
             canContinue
               ? cn(
-                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
-                  shadows.glow,
-                  "active:border-emerald-400/60 active:bg-emerald-400/30"
-                )
+                "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                shadows.glow,
+                "active:border-emerald-400/60 active:bg-emerald-400/30"
+              )
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
           )}
         >

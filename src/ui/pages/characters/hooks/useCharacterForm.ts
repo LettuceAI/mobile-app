@@ -27,15 +27,15 @@ interface CharacterFormState {
   memoryType: "manual" | "dynamic";
   dynamicMemoryEnabled: boolean;
   disableAvatarGradient: boolean;
-  
+
   // Models
   models: Model[];
   loadingModels: boolean;
-  
+
   // Prompt templates
   promptTemplates: SystemPromptTemplate[];
   loadingTemplates: boolean;
-  
+
   // UI state
   saving: boolean;
   error: string | null;
@@ -131,7 +131,7 @@ function characterFormReducer(
   }
 }
 
-export function useCharacterForm() {
+export function useCharacterForm(draftCharacter?: any) {
   const [state, dispatch] = useReducer(characterFormReducer, initialState);
 
   // Load models and prompt templates on mount
@@ -144,18 +144,44 @@ export function useCharacterForm() {
           readSettings(),
           listPromptTemplates(),
         ]);
-        
+
         if (cancelled) return;
-        
+
         dispatch({ type: 'SET_MODELS', payload: settings.models });
-        const defaultId = settings.defaultModelId ?? settings.models[0]?.id ?? null;
-        dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: defaultId });
+
+        // Use draft character if provided, otherwise defaults
+        if (draftCharacter) {
+          console.log("[useCharacterForm] Received draftCharacter:", draftCharacter);
+          dispatch({ type: 'SET_NAME', payload: draftCharacter.name || '' });
+          dispatch({ type: 'SET_DESCRIPTION', payload: draftCharacter.description || '' });
+          dispatch({ type: 'SET_AVATAR_PATH', payload: draftCharacter.avatarPath || '' });
+          dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: draftCharacter.backgroundImagePath || '' });
+          dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: draftCharacter.disableAvatarGradient ?? false });
+          dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: draftCharacter.defaultModelId || settings.defaultModelId || settings.models[0]?.id || null });
+          dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: draftCharacter.promptTemplateId || null });
+
+          if (draftCharacter.scenes && draftCharacter.scenes.length > 0) {
+            const mappedScenes = draftCharacter.scenes.map((s: any) => ({
+              id: s.id || crypto.randomUUID(),
+              content: s.content || '',
+              createdAt: Date.now(),
+              direction: s.direction || null,
+              variants: [],
+            }));
+            dispatch({ type: 'SET_SCENES', payload: mappedScenes });
+            dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: draftCharacter.defaultSceneId || mappedScenes[0].id });
+          }
+        } else {
+          const defaultId = settings.defaultModelId ?? settings.models[0]?.id ?? null;
+          dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: defaultId });
+        }
+
         const dynamicEnabled = settings.advancedSettings?.dynamicMemory?.enabled ?? false;
         dispatch({ type: 'SET_DYNAMIC_MEMORY_ENABLED', payload: dynamicEnabled });
         if (!dynamicEnabled) {
           dispatch({ type: 'SET_MEMORY_TYPE', payload: 'manual' });
         }
-        
+
         dispatch({ type: 'SET_PROMPT_TEMPLATES', payload: templates });
       } catch (err) {
         console.error("Failed to load settings", err);
@@ -170,7 +196,7 @@ export function useCharacterForm() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [draftCharacter]);
 
   // Auto-set default scene if there's only one scene
   useEffect(() => {
@@ -265,42 +291,42 @@ export function useCharacterForm() {
     try {
       dispatch({ type: 'SET_ERROR', payload: null });
       const jsonContent = await readFileAsText(file);
-      
+
       const exportPackage = JSON.parse(jsonContent);
-      
+
       if (exportPackage.type && exportPackage.type !== "character") {
         throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a character export`);
       }
-      
+
       if (!exportPackage.character) {
         throw new Error("Invalid character export file");
       }
-      
+
       const characterData = exportPackage.character;
-      
+
       const sceneIdMap = new Map<string, string>();
-      
+
       const newScenes = characterData.scenes.map((scene: any) => {
         const newSceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
         sceneIdMap.set(scene.id, newSceneId);
-        
+
         const variantIdMap = new Map<string, string>();
-        
+
         const newVariants = scene.variants?.map((variant: any) => {
           const newVariantId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
           variantIdMap.set(variant.id, newVariantId);
-          
+
           return {
             id: newVariantId,
             content: variant.content,
             createdAt: Date.now(),
           };
         }) || [];
-        
-        const newSelectedVariantId = scene.selectedVariantId 
+
+        const newSelectedVariantId = scene.selectedVariantId
           ? variantIdMap.get(scene.selectedVariantId) || null
           : null;
-        
+
         return {
           id: newSceneId,
           content: scene.content,
@@ -310,7 +336,7 @@ export function useCharacterForm() {
         };
       });
 
-      const newDefaultSceneId = characterData.defaultSceneId 
+      const newDefaultSceneId = characterData.defaultSceneId
         ? sceneIdMap.get(characterData.defaultSceneId) || newScenes[0]?.id || null
         : newScenes[0]?.id || null;
 
@@ -322,7 +348,7 @@ export function useCharacterForm() {
       dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: characterData.promptTemplateId || null });
       const importedMemoryType = characterData.memoryType === "dynamic" ? "dynamic" : "manual";
       dispatch({ type: 'SET_MEMORY_TYPE', payload: state.dynamicMemoryEnabled ? importedMemoryType : "manual" });
-      
+
       if (exportPackage.avatarData) {
         dispatch({ type: 'SET_AVATAR_PATH', payload: exportPackage.avatarData });
       }
@@ -332,7 +358,7 @@ export function useCharacterForm() {
       }
 
       console.log("[handleImport] Character data loaded into form, ready to save");
-      
+
     } catch (error: any) {
       console.error("Failed to import character:", error);
       dispatch({ type: 'SET_ERROR', payload: error?.message || "Failed to import character" });
@@ -350,14 +376,14 @@ export function useCharacterForm() {
     try {
       dispatch({ type: 'SET_SAVING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
-      
+
       console.log("[CreateCharacter] Saving with avatarPath:", state.avatarPath ? "present" : "empty");
       console.log("[CreateCharacter] Saving with backgroundImagePath:", state.backgroundImagePath ? "present" : "empty");
-      
+
       // Generate character ID first so we can use it for avatar storage
       const characterId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
       console.log("[CreateCharacter] Generated character ID:", characterId);
-      
+
       // Save avatar using new centralized system
       let avatarFilename: string | undefined = undefined;
       if (state.avatarPath) {
@@ -369,7 +395,7 @@ export function useCharacterForm() {
           invalidateAvatarCache("character", characterId);
         }
       }
-      
+
       // Background images still use the old system (they're stored per-session)
       let backgroundImageId: string | undefined = undefined;
       if (state.backgroundImagePath) {
@@ -378,10 +404,10 @@ export function useCharacterForm() {
           console.error("[CreateCharacter] Failed to save background image");
         }
       }
-      
+
       console.log("[CreateCharacter] Avatar filename:", avatarFilename || "none");
       console.log("[CreateCharacter] Background image ID:", backgroundImageId || "none");
-      
+
       const characterData = {
         id: characterId,
         name: state.name.trim(),
@@ -395,9 +421,9 @@ export function useCharacterForm() {
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
         disableAvatarGradient: state.disableAvatarGradient,
       };
-      
+
       console.log("[CreateCharacter] Saving character data:", JSON.stringify(characterData, null, 2));
-      
+
       await saveCharacter(characterData);
 
       return true; // Success

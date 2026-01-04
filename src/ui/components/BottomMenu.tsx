@@ -4,7 +4,10 @@ import { ReactNode, useCallback, useMemo, useEffect, useId, isValidElement } fro
 
 const ICON_ACCENT_MAP: Record<string, string> = {
   "from-blue-500 to-blue-600": "border-blue-400/40 bg-blue-500/15 text-blue-200 group-hover:border-blue-300/50 group-hover:text-blue-100",
+  "from-blue-500 to-cyan-600": "border-cyan-400/40 bg-cyan-500/15 text-cyan-200 group-hover:border-cyan-300/50 group-hover:text-cyan-100",
   "from-purple-500 to-purple-600": "border-purple-400/35 bg-purple-500/15 text-purple-200 group-hover:border-purple-300/45 group-hover:text-purple-100",
+  "from-purple-500 to-pink-600": "border-pink-400/40 bg-pink-500/15 text-pink-200 group-hover:border-pink-300/50 group-hover:text-pink-100",
+  "from-amber-500 to-orange-600": "border-amber-400/40 bg-amber-500/15 text-amber-200 group-hover:border-amber-300/50 group-hover:text-amber-100",
   "from-indigo-500 to-blue-600": "border-indigo-400/40 bg-indigo-500/15 text-indigo-200 group-hover:border-indigo-300/50 group-hover:text-indigo-100",
   "from-emerald-500 to-emerald-600": "border-emerald-400/40 bg-emerald-500/15 text-emerald-200 group-hover:border-emerald-300/50 group-hover:text-emerald-100",
   "from-rose-500 to-red-600": "border-rose-400/40 bg-rose-500/15 text-rose-200 group-hover:border-rose-300/50 group-hover:text-rose-100",

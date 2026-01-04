@@ -8,9 +8,11 @@ import { typography, interactive, cn } from "../../design-tokens";
 interface TopNavProps {
   currentPath: string;
   onBackOverride?: () => void;
+  titleOverride?: string;
+  rightAction?: React.ReactNode;
 }
 
-export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavProps & { titleOverride?: string }) {
+export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction }: TopNavProps) {
   const navigate = useNavigate();
   const basePath = useMemo(() => currentPath.split("?")[0], [currentPath]);
   const hasAdvancedView = useMemo(() => currentPath.includes("view=advanced"), [currentPath]);
@@ -309,6 +311,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride }: TopNavPro
               <span className="text-xs font-medium">Save</span>
             </button>
           )}
+          {rightAction}
         </div>
       </div>
     </header>

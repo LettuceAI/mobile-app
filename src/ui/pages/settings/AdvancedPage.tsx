@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sliders, Sparkles, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { readSettings, saveAdvancedSettings, checkEmbeddingModel } from "../../../core/storage/repo";
 //import type { Model } from "../../../core/storage/schemas";
 import { cn, typography, spacing, interactive } from "../../design-tokens";
@@ -9,12 +10,12 @@ import { EmbeddingDownloadPrompt } from "../../components/EmbeddingDownloadPromp
 export function AdvancedPage() {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
-    //const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
+    const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
     const [showDownloadPrompt, setShowDownloadPrompt] = useState(false);
 
     // Settings state
-    //const [creationHelperEnabled, setCreationHelperEnabled] = useState(false);
-    //const [creationHelperModelId, setCreationHelperModelId] = useState<string>("");
+    const [creationHelperEnabled, setCreationHelperEnabled] = useState(false);
+    const [creationHelperModelId, setCreationHelperModelId] = useState<string>("");
     const [dynamicMemoryEnabled, setDynamicMemoryEnabled] = useState(false);
     const [manualWindow, setManualWindow] = useState<number | null>(50);
 
@@ -26,11 +27,11 @@ export function AdvancedPage() {
                     readSettings(),
                 ]);
 
-                //setCreationHelperEnabled(settings.advancedSettings?.creationHelperEnabled ?? false);
-                //setCreationHelperModelId(settings.advancedSettings?.creationHelperModelId || "");
+                setCreationHelperEnabled(settings.advancedSettings?.creationHelperEnabled ?? false);
+                setCreationHelperModelId(settings.advancedSettings?.creationHelperModelId || "");
                 setDynamicMemoryEnabled(settings.advancedSettings?.dynamicMemory?.enabled ?? false);
                 setManualWindow(settings.advancedSettings?.manualModeContextWindow ?? 50);
-                //setModels(settings.models.map((m: Model) => ({ id: m.id, name: m.name })));
+                setModels(settings.models.map((m: any) => ({ id: m.id, name: m.name })));
                 setIsLoading(false);
             } catch (err) {
                 console.error("Failed to load settings:", err);
@@ -41,7 +42,7 @@ export function AdvancedPage() {
         loadData();
     }, []);
 
-    /*const handleToggleCreationHelper = async () => {
+    const handleToggleCreationHelper = async () => {
         const newValue = !creationHelperEnabled;
         setCreationHelperEnabled(newValue);
 
@@ -50,16 +51,22 @@ export function AdvancedPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
                 };
             }
             settings.advancedSettings.creationHelperEnabled = newValue;
+
+            // Set default model if none selected
+            if (newValue && !settings.advancedSettings.creationHelperModelId && settings.defaultModelId) {
+                settings.advancedSettings.creationHelperModelId = settings.defaultModelId;
+                setCreationHelperModelId(settings.defaultModelId);
+            }
+
             await saveAdvancedSettings(settings.advancedSettings);
         } catch (err) {
             console.error("Failed to save creation helper setting:", err);
             setCreationHelperEnabled(!newValue);
         }
-    };*/
+    };
 
     const handleToggleDynamicMemory = async () => {
         const newValue = !dynamicMemoryEnabled;
@@ -121,7 +128,7 @@ export function AdvancedPage() {
         }
     };
 
-    /*const handleCreationHelperModelChange = async (modelId: string) => {
+    const handleCreationHelperModelChange = async (modelId: string) => {
         setCreationHelperModelId(modelId);
 
         try {
@@ -129,7 +136,6 @@ export function AdvancedPage() {
             if (!settings.advancedSettings) {
                 settings.advancedSettings = {
                     creationHelperEnabled: false,
-                    dynamicMemory: { enabled: false, summaryMessageInterval: 20, maxEntries: 50, minSimilarityThreshold: 0.35, hotMemoryTokenBudget: 2000, decayRate: 0.08, coldThreshold: 0.3 },
                 };
             }
             settings.advancedSettings.creationHelperModelId = modelId;
@@ -137,7 +143,7 @@ export function AdvancedPage() {
         } catch (err) {
             console.error("Failed to save creation helper model:", err);
         }
-    };*/
+    };
 
 
 
@@ -163,36 +169,89 @@ export function AdvancedPage() {
                     <div className="space-y-2">
                         {/* Creation Helper Toggle - Coming Soon */}
                         <div className={cn(
-                            "relative overflow-hidden rounded-xl border px-4 py-3 opacity-60",
-                            "border-white/10 bg-white/5"
+                            "relative overflow-hidden rounded-xl border px-4 py-3 transition-all duration-300",
+                            creationHelperEnabled
+                                ? "border-rose-400/20 bg-rose-400/10"
+                                : "border-white/10 bg-white/5"
                         )}>
                             <div className="relative flex items-start gap-3">
                                 <div className={cn(
-                                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
-                                    "border-white/10 bg-white/10"
+                                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300",
+                                    creationHelperEnabled
+                                        ? "border-rose-400/40 bg-rose-500/15 shadow-lg shadow-rose-500/25"
+                                        : "border-white/10 bg-white/10"
                                 )}>
-                                    <Sparkles className="h-4 w-4 text-white/70" />
+                                    <Sparkles className={cn(
+                                        "h-4 w-4 transition-colors duration-300",
+                                        creationHelperEnabled ? "text-rose-200" : "text-white/70"
+                                    )} />
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center justify-between gap-3">
-                                        <div className="flex-1">
+                                        <div className="flex-1 text-left">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium text-white">Creation Helper</span>
                                                 <span className={cn(
-                                                    "rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-[0.25em]",
-                                                    "border-white/20 bg-white/10 text-white/60"
+                                                    "rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-[0.25em] transition-all duration-300",
+                                                    creationHelperEnabled
+                                                        ? "border-rose-400/50 bg-rose-500/25 text-rose-100 shadow-sm shadow-rose-500/30"
+                                                        : "border-white/20 bg-white/10 text-white/60"
                                                 )}>
-                                                    Coming Soon
+                                                    {creationHelperEnabled ? 'On' : 'Off'}
                                                 </span>
                                             </div>
                                             <div className="mt-0.5 text-[11px] text-white/50">
-                                                AI will assist with character creation
+                                                AI-guided character creation
                                             </div>
                                         </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="relative inline-flex cursor-pointer items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={creationHelperEnabled}
+                                                    onChange={handleToggleCreationHelper}
+                                                    className="peer sr-only"
+                                                />
+                                                <div className={cn(
+                                                    "h-6 w-11 rounded-full border-2 border-transparent transition-all duration-200 ease-in-out",
+                                                    creationHelperEnabled
+                                                        ? "bg-rose-500 shadow-lg shadow-rose-500/30"
+                                                        : "bg-white/20"
+                                                )}>
+                                                    <div className={cn(
+                                                        "h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                                                        creationHelperEnabled ? "translate-x-5" : "translate-x-0"
+                                                    )} />
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
-                                    <div className="mt-2 text-[11px] text-white/45 leading-relaxed">
-                                        AI will suggest names, descriptions, and traits
-                                    </div>
+
+                                    <AnimatePresence>
+                                        {creationHelperEnabled && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: "auto", opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="mt-4 space-y-3 pt-3 border-t border-white/10">
+                                                    <div>
+                                                        <label className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Helper Model</label>
+                                                        <select
+                                                            value={creationHelperModelId}
+                                                            onChange={(e) => handleCreationHelperModelChange(e.target.value)}
+                                                            className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:border-rose-400/40 focus:outline-none"
+                                                        >
+                                                            {models.map(m => (
+                                                                <option key={m.id} value={m.id}>{m.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </div>
                         </div>

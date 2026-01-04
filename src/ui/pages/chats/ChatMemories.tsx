@@ -1124,7 +1124,7 @@ export function ChatMemoriesPage() {
                         )}
                       >
                         <div className={cn(
-                          "absolute left-0 top-0 bottom-0 w-[3px]",
+                          "absolute left-0 top-0 bottom-0 w-0.75",
                           item.isAi ? "bg-blue-400/60" : "bg-emerald-400/60"
                         )} />
 

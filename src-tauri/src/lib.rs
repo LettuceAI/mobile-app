@@ -1,6 +1,7 @@
 mod abort_manager;
 mod api;
 mod chat_manager;
+mod creation_helper;
 mod embedding_model;
 mod error;
 mod image_generator;
@@ -256,6 +257,15 @@ pub fn run() {
             tts_manager::audio_cache::tts_cache_delete,
             tts_manager::audio_cache::tts_cache_clear,
             tts_manager::audio_cache::tts_cache_stats,
+            creation_helper::creation_helper_start,
+            creation_helper::creation_helper_get_session,
+            creation_helper::creation_helper_send_message,
+            creation_helper::creation_helper_get_draft,
+            creation_helper::creation_helper_cancel,
+            creation_helper::creation_helper_complete,
+            creation_helper::creation_helper_get_images,
+            creation_helper::creation_helper_get_uploaded_image,
+            creation_helper::creation_helper_regenerate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

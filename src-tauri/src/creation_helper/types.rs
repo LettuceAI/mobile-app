@@ -1,0 +1,111 @@
+use serde::{Deserialize, Serialize};
+
+/// Draft character being built by the creation helper
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftCharacter {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub scenes: Vec<DraftScene>,
+    pub default_scene_id: Option<String>,
+    pub avatar_path: Option<String>,
+    pub background_image_path: Option<String>,
+    pub disable_avatar_gradient: bool,
+    pub default_model_id: Option<String>,
+    pub prompt_template_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftScene {
+    pub id: String,
+    pub content: String,
+    pub direction: Option<String>,
+}
+
+/// Message in the creation helper chat
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreationMessage {
+    pub id: String,
+    pub role: CreationMessageRole,
+    pub content: String,
+    #[serde(default)]
+    pub tool_calls: Vec<CreationToolCall>,
+    #[serde(default)]
+    pub tool_results: Vec<CreationToolResult>,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CreationMessageRole {
+    User,
+    Assistant,
+    System,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreationToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreationToolResult {
+    pub tool_call_id: String,
+    pub result: serde_json::Value,
+    pub success: bool,
+}
+
+/// State of a creation helper session
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreationSession {
+    pub id: String,
+    pub messages: Vec<CreationMessage>,
+    pub draft: DraftCharacter,
+    #[serde(default)]
+    pub draft_history: Vec<DraftCharacter>,
+    pub status: CreationStatus,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum CreationStatus {
+    Active,
+    PreviewShown,
+    Completed,
+    Cancelled,
+}
+
+/// Uploaded image reference for use by the AI
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadedImage {
+    pub id: String,
+    pub data: String, // base64
+    pub mime_type: String,
+}
+
+/// System prompt info returned by get_system_prompt_list
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemPromptInfo {
+    pub id: String,
+    pub name: String,
+}
+
+/// Model info returned by get_model_list
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+    pub display_name: String,
+}

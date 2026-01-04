@@ -4,3 +4,5 @@ export { IdentityStep } from './IdentityStep';
 export { StartingSceneStep } from './StartingSceneStep';
 export { DescriptionStep } from './DescriptionStep';
 export { AvatarPreview } from './AvatarPreview';
+export { CharacterPreviewCard } from './CharacterPreviewCard';
+

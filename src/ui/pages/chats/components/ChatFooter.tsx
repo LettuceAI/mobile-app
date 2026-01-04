@@ -168,7 +168,7 @@ export function ChatFooter({
       <div
         className={cn(
           "relative flex items-end gap-2.5 p-2",
-          "rounded-[32px]",
+          "rounded-4xl",
           "border border-white/15 bg-white/5 backdrop-blur-md",
           shadows.md,
         )}
