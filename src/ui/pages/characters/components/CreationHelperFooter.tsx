@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from "react";
-import { Plus, SendHorizonal, X, Image as ImageIcon, Users, User, Loader2, RotateCcw } from "lucide-react";
+import { Plus, SendHorizonal, X, Image as ImageIcon, Users, User, Square, RotateCcw } from "lucide-react";
 import { radius, typography, interactive, shadows, cn } from "../../../design-tokens";
 import { getPlatform } from "../../../../core/utils/platform";
 import { BottomMenu, MenuButton, MenuSection } from "../../../components";
@@ -19,6 +19,7 @@ interface CreationHelperFooterProps {
     error: string | null;
     sending: boolean;
     onSendMessage: () => Promise<void>;
+    onAbort?: () => void;
     pendingAttachments?: ImageAttachment[];
     onAddAttachment?: (attachment: ImageAttachment) => void;
     onRemoveAttachment?: (attachmentId: string) => void;
@@ -34,6 +35,7 @@ export function CreationHelperFooter({
     error,
     sending,
     onSendMessage,
+    onAbort,
     pendingAttachments = [],
     onAddAttachment,
     onRemoveAttachment,
@@ -94,7 +96,7 @@ export function CreationHelperFooter({
     };
 
     return (
-        <footer className="z-20 shrink-0 px-4 pb-6 pt-3 bg-[#050505]">
+        <footer className="z-20 shrink-0 px-4 pb-6 pt-3">
             {error && (
                 <div
                     className={cn(
@@ -199,7 +201,7 @@ export function CreationHelperFooter({
                 className={cn(
                     "relative flex items-end gap-2.5 p-2",
                     "rounded-4xl",
-                    "border border-white/15 bg-white/5 backdrop-blur-md",
+                    "border border-white/15 bg-white/5 backdrop-blur-3xl",
                     shadows.md,
                 )}
             >
@@ -251,29 +253,36 @@ export function CreationHelperFooter({
                     </span>
                 )}
                 <button
-                    onClick={() => onSendMessage()}
-                    disabled={sending || (!hasDraft && !hasAttachments && !hasReferences)}
+                    onClick={() => {
+                        if (sending && onAbort) {
+                            onAbort();
+                        } else {
+                            onSendMessage();
+                        }
+                    }}
+                    disabled={!sending && !hasDraft && !hasAttachments && !hasReferences}
                     className={cn(
                         "mb-0.5 flex h-10 w-11 shrink-0 items-center justify-center self-end",
                         radius.full,
                         sending
-                            ? "border border-white/15 bg-white/10 text-white/70"
+                            ? "border border-red-400/40 bg-red-400/20 text-red-200"
                             : hasDraft || hasAttachments || hasReferences
                                 ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100"
                                 : "border border-white/15 bg-white/10 text-white/70",
                         interactive.transition.fast,
                         interactive.active.scale,
+                        sending && "hover:border-red-400/60 hover:bg-red-400/30",
                         !sending &&
                         (hasDraft || hasAttachments || hasReferences) &&
                         "hover:border-emerald-400/60 hover:bg-emerald-400/30",
                         !sending && !hasDraft && !hasAttachments && !hasReferences && "hover:border-white/25 hover:bg-white/15",
                         "disabled:cursor-not-allowed disabled:opacity-40",
                     )}
-                    title="Send message"
-                    aria-label="Send message"
+                    title={sending ? "Stop generation" : "Send message"}
+                    aria-label={sending ? "Stop generation" : "Send message"}
                 >
                     {sending ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-white/50" />
+                        <Square className="h-4 w-4 fill-current" />
                     ) : (
                         <SendHorizonal size={18} />
                     )}

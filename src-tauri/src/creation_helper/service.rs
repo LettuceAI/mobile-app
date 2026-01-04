@@ -1,11 +1,12 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
 use super::tools::{get_creation_helper_system_prompt, get_creation_helper_tools};
 use super::types::*;
+use crate::abort_manager::AbortRegistry;
 use crate::api::{api_request, ApiRequest};
 use crate::chat_manager::request_builder::build_chat_request;
 use crate::chat_manager::sse::usage_from_value;
@@ -16,7 +17,7 @@ use crate::usage::{
     add_usage_record,
     tracking::{RequestUsage, UsageFinishReason, UsageOperationType},
 };
-use crate::utils::{log_error, log_info};
+use crate::utils::{log_error, log_info, log_warn};
 
 lazy_static::lazy_static! {
     static ref SESSIONS: Mutex<HashMap<String, CreationSession>> = Mutex::new(HashMap::new());
@@ -529,7 +530,7 @@ async fn process_assistant_turn(
         None,               // system_prompt (already in messages)
         0.7,                // temperature
         1.0,                // top_p
-        4096,               // max_tokens
+        20480,              // max_tokens
         false,              // not streaming for now
         None,               // request_id
         None,               // frequency_penalty
@@ -559,7 +560,29 @@ async fn process_assistant_turn(
         provider_id: Some(provider_id.to_string()),
     };
 
-    let api_response = api_request(app.clone(), api_request_payload).await?;
+    // Register this request for abort capability
+    let mut abort_rx = {
+        let registry = app.state::<AbortRegistry>();
+        registry.register(session_id.clone())
+    };
+
+    let api_response = tokio::select! {
+        _ = &mut abort_rx => {
+             log_warn(
+                &app,
+                "creation_helper",
+                format!("[creation_helper] request aborted by user for session {}", session_id),
+            );
+            return Err("Request aborted by user".to_string());
+        }
+        res = api_request(app.clone(), api_request_payload) => res?
+    };
+
+    // Unregister after completion
+    {
+        let registry = app.state::<AbortRegistry>();
+        registry.unregister(&session_id);
+    }
 
     if !api_response.ok {
         let full_error = serde_json::to_string_pretty(api_response.data()).unwrap_or_default();
@@ -690,7 +713,7 @@ async fn process_assistant_turn(
             None,
             0.7,
             1.0,
-            4096,
+            20480,
             false,
             None,
             None,
@@ -714,7 +737,29 @@ async fn process_assistant_turn(
             provider_id: Some(provider_id.to_string()),
         };
 
-        let followup_response = api_request(app.clone(), followup_request).await?;
+        // Register this request for abort capability
+        let mut abort_rx = {
+            let registry = app.state::<AbortRegistry>();
+            registry.register(session_id.clone())
+        };
+
+        let followup_response = tokio::select! {
+            _ = &mut abort_rx => {
+                 log_warn(
+                    &app,
+                    "creation_helper",
+                    format!("[creation_helper] follow-up request aborted by user for session {}", session_id),
+                );
+                return Err("Request aborted by user".to_string());
+            }
+            res = api_request(app.clone(), followup_request) => res?
+        };
+
+        // Unregister after completion
+        {
+            let registry = app.state::<AbortRegistry>();
+            registry.unregister(&session_id);
+        }
 
         if !followup_response.ok {
             let full_error =
@@ -812,7 +857,26 @@ pub fn get_draft(session_id: &str) -> Result<Option<DraftCharacter>, String> {
     Ok(sessions.get(session_id).map(|s| s.draft.clone()))
 }
 
-pub fn cancel_session(session_id: &str) -> Result<(), String> {
+pub fn cancel_session(app: &AppHandle, session_id: &str) -> Result<(), String> {
+    // First, abort any ongoing request via the AbortRegistry
+    let registry = app.state::<AbortRegistry>();
+    match registry.abort(session_id) {
+        Ok(_) => log_info(
+            app,
+            "creation_helper",
+            format!("Aborted request for session {}", session_id),
+        ),
+        Err(e) => log_warn(
+            app,
+            "creation_helper",
+            format!(
+                "No active request to abort for session {}: {}",
+                session_id, e
+            ),
+        ),
+    }
+
+    // Then update the session status
     let mut sessions = SESSIONS.lock().map_err(|e| e.to_string())?;
     if let Some(session) = sessions.get_mut(session_id) {
         session.status = CreationStatus::Cancelled;

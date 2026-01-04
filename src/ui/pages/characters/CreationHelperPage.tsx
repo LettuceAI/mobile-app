@@ -365,6 +365,11 @@ export function CreationHelperPage() {
           }
           : null,
       );
+
+      // Restore inputs so user can retry
+      setInputValue(inputValue);
+      setReferences(references);
+      setPendingAttachments(pendingAttachments);
     } finally {
       setSending(false);
     }
@@ -453,6 +458,16 @@ export function CreationHelperPage() {
       state: { draftCharacter: session.draft },
     });
   }, [session, navigate]);
+
+  const handleAbort = useCallback(() => {
+    if (!session) return;
+    invoke("creation_helper_cancel", { sessionId: session.id })
+      .then(() => {
+        setSending(false);
+        setError("Generation stopped.");
+      })
+      .catch(console.error);
+  }, [session]);
 
   const handleBack = () => {
     if (session) {
@@ -748,6 +763,7 @@ export function CreationHelperPage() {
           error={error}
           sending={sending}
           onSendMessage={handleSend}
+          onAbort={handleAbort}
           pendingAttachments={pendingAttachments}
           onAddAttachment={(attachment) => {
             setPendingAttachments((prev) => [...prev, attachment]);

@@ -50,8 +50,8 @@ pub fn creation_helper_get_draft(session_id: String) -> Result<Option<DraftChara
 }
 
 #[tauri::command]
-pub fn creation_helper_cancel(session_id: String) -> Result<(), String> {
-    service::cancel_session(&session_id)
+pub fn creation_helper_cancel(app: AppHandle, session_id: String) -> Result<(), String> {
+    service::cancel_session(&app, &session_id)
 }
 
 #[tauri::command]
