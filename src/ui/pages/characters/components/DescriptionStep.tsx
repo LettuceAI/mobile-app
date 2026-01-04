@@ -420,18 +420,18 @@ export function DescriptionStep({
               >
                 {voiceSelectionValue
                   ? (() => {
-                      if (voiceConfig?.source === "user") {
-                        const v = userVoices.find((uv) => uv.id === voiceConfig.userVoiceId);
-                        return v?.name || "Custom Voice";
-                      }
-                      if (voiceConfig?.source === "provider") {
-                        const pv = providerVoices[voiceConfig.providerId || ""]?.find(
-                          (pv) => pv.voiceId === voiceConfig.voiceId,
-                        );
-                        return pv?.name || "Provider Voice";
-                      }
-                      return "Selected Voice";
-                    })()
+                    if (voiceConfig?.source === "user") {
+                      const v = userVoices.find((uv) => uv.id === voiceConfig.userVoiceId);
+                      return v?.name || "Custom Voice";
+                    }
+                    if (voiceConfig?.source === "provider") {
+                      const pv = providerVoices[voiceConfig.providerId || ""]?.find(
+                        (pv) => pv.voiceId === voiceConfig.voiceId,
+                      );
+                      return pv?.name || "Provider Voice";
+                    }
+                    return "Selected Voice";
+                  })()
                   : "No voice assigned"}
               </span>
             </div>
@@ -455,12 +455,13 @@ export function DescriptionStep({
           className={cn(
             "flex items-center justify-between border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
             radius.md,
+            !voiceConfig && "opacity-50"
           )}
         >
           <div>
             <p className={cn(typography.body.size, "font-medium text-white")}>Autoplay voice</p>
             <p className={cn(typography.bodySmall.size, "mt-1 text-white/50")}>
-              Play this character's replies automatically
+              {voiceConfig ? "Play this character's replies automatically" : "Select a voice first"}
             </p>
           </div>
           <div className="flex items-center">
@@ -469,13 +470,15 @@ export function DescriptionStep({
               type="checkbox"
               checked={voiceAutoplay}
               onChange={() => onVoiceAutoplayChange(!voiceAutoplay)}
+              disabled={!voiceConfig}
               className="peer sr-only"
             />
             <label
               htmlFor="character-voice-autoplay"
               className={cn(
-                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all",
+                "relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all",
                 voiceAutoplay ? "bg-emerald-500" : "bg-white/20",
+                voiceConfig ? "cursor-pointer" : "cursor-not-allowed"
               )}
             >
               <span
@@ -521,10 +524,10 @@ export function DescriptionStep({
             interactive.transition.fast,
             canSave
               ? cn(
-                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
-                  shadows.glow,
-                  "active:border-emerald-400/60 active:bg-emerald-400/30",
-                )
+                "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                shadows.glow,
+                "active:border-emerald-400/60 active:bg-emerald-400/30",
+              )
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30",
           )}
         >

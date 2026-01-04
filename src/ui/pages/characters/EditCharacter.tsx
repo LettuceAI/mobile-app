@@ -938,11 +938,14 @@ export function EditCharacterPage() {
                 <p className="text-xs text-white/50">
                   Assign a voice for future text-to-speech playback
                 </p>
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                <div className={cn(
+                  "flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3",
+                  !voiceConfig && "opacity-50"
+                )}>
                   <div>
                     <p className="text-sm font-medium text-white">Autoplay voice</p>
                     <p className="mt-1 text-xs text-white/50">
-                      Play this character’s replies automatically
+                      {voiceConfig ? "Play this character's replies automatically" : "Select a voice first"}
                     </p>
                   </div>
                   <div className="flex items-center">
@@ -951,12 +954,13 @@ export function EditCharacterPage() {
                       type="checkbox"
                       checked={voiceAutoplay}
                       onChange={() => setFields({ voiceAutoplay: !voiceAutoplay })}
+                      disabled={!voiceConfig}
                       className="peer sr-only"
                     />
                     <label
                       htmlFor="character-voice-autoplay"
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
-                        }`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all ${voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
+                        } ${voiceConfig ? "cursor-pointer" : "cursor-not-allowed"}`}
                     >
                       <span
                         className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${voiceAutoplay ? "translate-x-5" : "translate-x-0.5"
