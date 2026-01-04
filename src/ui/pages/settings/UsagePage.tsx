@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { useUsageTracking, RequestUsage, UsageStats, UsageFilter } from '../../../core/usage';
-import { ChevronDown, Download, CheckCircle2, Check } from 'lucide-react';
+import { ChevronDown, Download, CheckCircle2, Check, BarChart3, History } from 'lucide-react';
 import { BottomMenu } from '../../components';
+import { UsageAnalytics } from './components/UsageAnalytics';
 
 /**
  * Format currency with smart decimals (show more decimals for small values)
@@ -351,6 +352,7 @@ export function UsagePage() {
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(RECORDS_PER_PAGE);
+  const [activeTab, setActiveTab] = useState<'history' | 'analytics'>('history');
 
   const loadData = async () => {
     setLoading(true);
@@ -571,388 +573,428 @@ export function UsagePage() {
 
       {/* Content */}
       <div className="space-y-4 px-4 py-4">
-        {/* Export Success/Error Toast */}
-        <AnimatePresence>
-          {exportSuccess && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-3 flex items-center gap-2"
+        {/* Tab Switcher */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-2">
+          <div className="flex items-center gap-1 rounded-lg bg-black/30 p-1">
+            <motion.button
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${activeTab === 'history'
+                ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                }`}
+              whileTap={{ scale: 0.97 }}
             >
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-emerald-100">CSV exported successfully</p>
-                <p className="text-[10px] text-emerald-200/70 truncate">{exportSuccess}</p>
-              </div>
-            </motion.div>
-          )}
-          {exportError && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="rounded-xl border border-red-500/30 bg-red-500/15 px-4 py-3 flex items-center gap-2"
-              onClick={() => setExportError(null)}
+              <History className="h-4 w-4" />
+              History
+            </motion.button>
+            <motion.button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${activeTab === 'analytics'
+                ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                }`}
+              whileTap={{ scale: 0.97 }}
             >
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-red-100">Export failed</p>
-                <p className="text-[10px] text-red-200/70">{exportError}</p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {loading && !stats ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </motion.button>
           </div>
-        ) : stats ? (
+        </div>
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' ? (
+          <UsageAnalytics
+            records={records}
+            modelOptions={modelOptions}
+            characterOptions={characterOptions}
+            operationTypeOptions={operationTypeOptions}
+          />
+        ) : (
           <>
-            {/* Overview Card (filtered) */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2.5"
-            >
-              <h2 className="text-lg font-semibold text-white mb-3">Overview</h2>
-              <StatRow
-                label="Total Cost"
-                value={<AnimatedNumber value={displayStats.totalCost} formatter={formatCurrency} />}
-              />
-              <StatRow
-                label="Total Requests"
-                value={<AnimatedNumber value={displayStats.totalRequests} formatter={(v) => formatNumber(Math.round(v))} />}
-                secondary={<><AnimatedNumber value={displayStats.successfulRequests} formatter={(v) => formatNumber(Math.round(v))} />{' '}successful</>}
-              />
-              <StatRow
-                label="Total Tokens"
-                value={<AnimatedNumber value={displayStats.totalTokens} formatter={(v) => formatNumber(Math.round(v))} />}
-                secondary={<><AnimatedNumber value={displayStats.totalTokens / Math.max(displayStats.totalRequests, 1)} formatter={(v) => formatNumber(Math.round(v))} />{' '}avg</>}
-              />
-              <StatRow
-                label="Average Cost"
-                value={<AnimatedNumber value={displayStats.averageCostPerRequest} formatter={formatCurrency} />}
-              />
-              <StatRow
-                label="Success Rate"
-                value={<><AnimatedNumber value={displayStats.successRate} formatter={(v) => v.toFixed(1)} />%</>}
-              />
-            </motion.div>
+            {/* Export Success/Error Toast */}
+            <AnimatePresence>
+              {exportSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-3 flex items-center gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-emerald-100">CSV exported successfully</p>
+                    <p className="text-[10px] text-emerald-200/70 truncate">{exportSuccess}</p>
+                  </div>
+                </motion.div>
+              )}
+              {exportError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-xl border border-red-500/30 bg-red-500/15 px-4 py-3 flex items-center gap-2"
+                  onClick={() => setExportError(null)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-red-100">Export failed</p>
+                    <p className="text-[10px] text-red-200/70">{exportError}</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-            {/* Cost Breakdown (filtered) */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3"
-            >
-              <h3 className="text-sm font-medium text-white">Cost Split</h3>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/50">Input Tokens</span>
-                  <span className="text-white/80">
-                    <AnimatedNumber value={displayStats.promptCost} formatter={formatCurrency} />
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/50">Output Tokens</span>
-                  <span className="text-white/80">
-                    <AnimatedNumber value={displayStats.completionCost} formatter={formatCurrency} />
-                  </span>
-                </div>
+            {loading && !stats ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
               </div>
-            </motion.div>
-
-            {/* Filter Controls */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-1">
-                <motion.button
-                  onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); setSelectedOperationType(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${!selectedModelId && !selectedCharacterId && !selectedOperationType
-                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  All
-                </motion.button>
-                <motion.button
-                  onClick={() => setShowModelFilter((v) => !v)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedModelId
-                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <span className="truncate max-w-15">{selectedModelId ? (modelOptions.find(m => m.id === selectedModelId)?.name || 'Model') : 'Model'}</span>
-                </motion.button>
-                <motion.button
-                  onClick={() => setShowCharacterFilter((v) => !v)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedCharacterId
-                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <span className="truncate max-w-15">{selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Char') : 'Character'}</span>
-                </motion.button>
-                <motion.button
-                  onClick={() => setShowOperationTypeFilter((v) => !v)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedOperationType
-                    ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                    : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <span className="truncate max-w-15">{selectedOperationType ? (operationTypeOptions.find(o => o.id === selectedOperationType)?.label || 'Type') : 'Type'}</span>
-                </motion.button>
-              </div>
-            </div>
-
-
-            {/* Model Filter Inline Menu */}
-            <AnimatePresence>
-              {showModelFilter && modelOptions.length > 0 && (
+            ) : stats ? (
+              <>
+                {/* Overview Card (filtered) */}
                 <motion.div
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2.5"
                 >
-                  {/* Header */}
-                  <div className="px-4 py-3 border-b border-white/10">
-                    <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Model</h4>
-                  </div>
+                  <h2 className="text-lg font-semibold text-white mb-3">Overview</h2>
+                  <StatRow
+                    label="Total Cost"
+                    value={<AnimatedNumber value={displayStats.totalCost} formatter={formatCurrency} />}
+                  />
+                  <StatRow
+                    label="Total Requests"
+                    value={<AnimatedNumber value={displayStats.totalRequests} formatter={(v) => formatNumber(Math.round(v))} />}
+                    secondary={<><AnimatedNumber value={displayStats.successfulRequests} formatter={(v) => formatNumber(Math.round(v))} />{' '}successful</>}
+                  />
+                  <StatRow
+                    label="Total Tokens"
+                    value={<AnimatedNumber value={displayStats.totalTokens} formatter={(v) => formatNumber(Math.round(v))} />}
+                    secondary={<><AnimatedNumber value={displayStats.totalTokens / Math.max(displayStats.totalRequests, 1)} formatter={(v) => formatNumber(Math.round(v))} />{' '}avg</>}
+                  />
+                  <StatRow
+                    label="Average Cost"
+                    value={<AnimatedNumber value={displayStats.averageCostPerRequest} formatter={formatCurrency} />}
+                  />
+                  <StatRow
+                    label="Success Rate"
+                    value={<><AnimatedNumber value={displayStats.successRate} formatter={(v) => v.toFixed(1)} />%</>}
+                  />
+                </motion.div>
 
-                  {/* Options */}
-                  <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
-                    {modelOptions.map((opt, index) => {
-                      const selected = selectedModelId === opt.id;
-                      return (
-                        <motion.button
-                          key={opt.id}
-                          onClick={() => { setSelectedModelId(opt.id); setShowModelFilter(false); }}
-                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
-                            ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
-                            : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
-                          whileTap={{ scale: 0.98 }}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.02 }}
-                        >
-                          <span className="truncate pr-3">{opt.name}</span>
-                          {selected && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
-                            >
-                              <Check className="h-3 w-3 text-emerald-400" />
-                            </motion.div>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
+                {/* Cost Breakdown (filtered) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                  className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3"
+                >
+                  <h3 className="text-sm font-medium text-white">Cost Split</h3>
 
-                  {/* Footer */}
-                  <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
-                    <motion.button
-                      onClick={() => { setSelectedModelId(null); setShowModelFilter(false); }}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      Clear Selection
-                    </motion.button>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">Input Tokens</span>
+                      <span className="text-white/80">
+                        <AnimatedNumber value={displayStats.promptCost} formatter={formatCurrency} />
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">Output Tokens</span>
+                      <span className="text-white/80">
+                        <AnimatedNumber value={displayStats.completionCost} formatter={formatCurrency} />
+                      </span>
+                    </div>
                   </div>
                 </motion.div>
-              )}
-            </AnimatePresence>
 
-
-            {/* Character Filter Inline Menu */}
-            <AnimatePresence>
-              {showCharacterFilter && characterOptions.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
-                >
-                  {/* Header */}
-                  <div className="px-4 py-3 border-b border-white/10">
-                    <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Character</h4>
-                  </div>
-
-                  {/* Options */}
-                  <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
-                    {characterOptions.map((opt, index) => {
-                      const selected = selectedCharacterId === opt.id;
-                      return (
-                        <motion.button
-                          key={opt.id}
-                          onClick={() => { setSelectedCharacterId(opt.id); setShowCharacterFilter(false); }}
-                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
-                            ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
-                            : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
-                          whileTap={{ scale: 0.98 }}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.02 }}
-                        >
-                          <span className="truncate pr-3">{opt.name}</span>
-                          {selected && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
-                            >
-                              <Check className="h-3 w-3 text-emerald-400" />
-                            </motion.div>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
+                {/* Filter Controls */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-1">
                     <motion.button
-                      onClick={() => { setSelectedCharacterId(null); setShowCharacterFilter(false); }}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                      whileTap={{ scale: 0.98 }}
+                      onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); setSelectedOperationType(null); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${!selectedModelId && !selectedCharacterId && !selectedOperationType
+                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                      whileTap={{ scale: 0.97 }}
                     >
-                      Clear Selection
+                      All
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setShowModelFilter((v) => !v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedModelId
+                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      <span className="truncate max-w-15">{selectedModelId ? (modelOptions.find(m => m.id === selectedModelId)?.name || 'Model') : 'Model'}</span>
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setShowCharacterFilter((v) => !v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedCharacterId
+                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      <span className="truncate max-w-15">{selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Char') : 'Character'}</span>
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setShowOperationTypeFilter((v) => !v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedOperationType
+                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
+                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      <span className="truncate max-w-15">{selectedOperationType ? (operationTypeOptions.find(o => o.id === selectedOperationType)?.label || 'Type') : 'Type'}</span>
                     </motion.button>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-
-            {/* Operation Type Filter Inline Menu */}
-            <AnimatePresence>
-              {showOperationTypeFilter && operationTypeOptions.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
-                >
-                  {/* Header */}
-                  <div className="px-4 py-3 border-b border-white/10">
-                    <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Type</h4>
-                  </div>
-
-                  {/* Options */}
-                  <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
-                    {operationTypeOptions.map((opt, index) => {
-                      const selected = selectedOperationType === opt.id;
-                      return (
-                        <motion.button
-                          key={opt.id}
-                          onClick={() => { setSelectedOperationType(opt.id); setShowOperationTypeFilter(false); }}
-                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
-                            ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
-                            : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
-                          whileTap={{ scale: 0.98 }}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.02 }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full ${opt.color.includes('blue') ? 'bg-blue-400' : opt.color.includes('purple') ? 'bg-purple-400' : opt.color.includes('cyan') ? 'bg-cyan-400' : opt.color.includes('amber') ? 'bg-amber-400' : opt.color.includes('emerald') ? 'bg-emerald-400' : 'bg-white/40'}`} />
-                            <span className="truncate">{opt.label}</span>
-                          </div>
-                          {selected && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
-                            >
-                              <Check className="h-3 w-3 text-emerald-400" />
-                            </motion.div>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
-                    <motion.button
-                      onClick={() => { setSelectedOperationType(null); setShowOperationTypeFilter(false); }}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      Clear Selection
-                    </motion.button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-
-            {/* Recent Requests */}
-            {filteredRecords.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="px-1 text-sm font-medium text-white/70">
-                  Recent Requests ({filteredRecords.length})
-                </h3>
-                <div className="space-y-2">
-                  <AnimatePresence initial={false}>
-                    {filteredRecords
-                      .sort((a, b) => b.timestamp - a.timestamp)
-                      .slice(0, visibleCount)
-                      .map((request, idx) => (
-                        <motion.div
-                          key={request.id}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.15 }}
-                          layout
-                        >
-                          <RequestRow request={request} alt={idx % 2 === 1} />
-                        </motion.div>
-                      ))}
-                  </AnimatePresence>
                 </div>
-                {visibleCount < filteredRecords.length && (
-                  <div className="pt-2">
-                    <motion.button
-                      onClick={() => setVisibleCount((v) => v + RECORDS_PER_PAGE)}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:border-white/20 hover:bg-white/10 transition active:scale-[0.99]"
-                      whileTap={{ scale: 0.98 }}
+
+
+                {/* Model Filter Inline Menu */}
+                <AnimatePresence>
+                  {showModelFilter && modelOptions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
                     >
-                      Load more
-                    </motion.button>
+                      {/* Header */}
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Model</h4>
+                      </div>
+
+                      {/* Options */}
+                      <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
+                        {modelOptions.map((opt, index) => {
+                          const selected = selectedModelId === opt.id;
+                          return (
+                            <motion.button
+                              key={opt.id}
+                              onClick={() => { setSelectedModelId(opt.id); setShowModelFilter(false); }}
+                              className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
+                                ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
+                                : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
+                              whileTap={{ scale: 0.98 }}
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.02 }}
+                            >
+                              <span className="truncate pr-3">{opt.name}</span>
+                              {selected && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
+                                >
+                                  <Check className="h-3 w-3 text-emerald-400" />
+                                </motion.div>
+                              )}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
+                        <motion.button
+                          onClick={() => { setSelectedModelId(null); setShowModelFilter(false); }}
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          Clear Selection
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+
+                {/* Character Filter Inline Menu */}
+                <AnimatePresence>
+                  {showCharacterFilter && characterOptions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
+                    >
+                      {/* Header */}
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Character</h4>
+                      </div>
+
+                      {/* Options */}
+                      <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
+                        {characterOptions.map((opt, index) => {
+                          const selected = selectedCharacterId === opt.id;
+                          return (
+                            <motion.button
+                              key={opt.id}
+                              onClick={() => { setSelectedCharacterId(opt.id); setShowCharacterFilter(false); }}
+                              className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
+                                ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
+                                : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
+                              whileTap={{ scale: 0.98 }}
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.02 }}
+                            >
+                              <span className="truncate pr-3">{opt.name}</span>
+                              {selected && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
+                                >
+                                  <Check className="h-3 w-3 text-emerald-400" />
+                                </motion.div>
+                              )}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
+                        <motion.button
+                          onClick={() => { setSelectedCharacterId(null); setShowCharacterFilter(false); }}
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          Clear Selection
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+
+                {/* Operation Type Filter Inline Menu */}
+                <AnimatePresence>
+                  {showOperationTypeFilter && operationTypeOptions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
+                    >
+                      {/* Header */}
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Type</h4>
+                      </div>
+
+                      {/* Options */}
+                      <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
+                        {operationTypeOptions.map((opt, index) => {
+                          const selected = selectedOperationType === opt.id;
+                          return (
+                            <motion.button
+                              key={opt.id}
+                              onClick={() => { setSelectedOperationType(opt.id); setShowOperationTypeFilter(false); }}
+                              className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
+                                ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
+                                : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
+                              whileTap={{ scale: 0.98 }}
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.02 }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2 w-2 rounded-full ${opt.color.includes('blue') ? 'bg-blue-400' : opt.color.includes('purple') ? 'bg-purple-400' : opt.color.includes('cyan') ? 'bg-cyan-400' : opt.color.includes('amber') ? 'bg-amber-400' : opt.color.includes('emerald') ? 'bg-emerald-400' : 'bg-white/40'}`} />
+                                <span className="truncate">{opt.label}</span>
+                              </div>
+                              {selected && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
+                                >
+                                  <Check className="h-3 w-3 text-emerald-400" />
+                                </motion.div>
+                              )}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
+                        <motion.button
+                          onClick={() => { setSelectedOperationType(null); setShowOperationTypeFilter(false); }}
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          Clear Selection
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+
+                {/* Recent Requests */}
+                {filteredRecords.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="px-1 text-sm font-medium text-white/70">
+                      Recent Requests ({filteredRecords.length})
+                    </h3>
+                    <div className="space-y-2">
+                      <AnimatePresence initial={false}>
+                        {filteredRecords
+                          .sort((a, b) => b.timestamp - a.timestamp)
+                          .slice(0, visibleCount)
+                          .map((request, idx) => (
+                            <motion.div
+                              key={request.id}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -6 }}
+                              transition={{ duration: 0.15 }}
+                              layout
+                            >
+                              <RequestRow request={request} alt={idx % 2 === 1} />
+                            </motion.div>
+                          ))}
+                      </AnimatePresence>
+                    </div>
+                    {visibleCount < filteredRecords.length && (
+                      <div className="pt-2">
+                        <motion.button
+                          onClick={() => setVisibleCount((v) => v + RECORDS_PER_PAGE)}
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:border-white/20 hover:bg-white/10 transition active:scale-[0.99]"
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          Load more
+                        </motion.button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {filteredRecords.length === 0 && (
+                {filteredRecords.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center"
+                  >
+                    <p className="text-sm text-white/50">No usage data available for this period</p>
+                  </motion.div>
+                )}
+              </>
+            ) : (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center"
               >
-                <p className="text-sm text-white/50">No usage data available for this period</p>
+                <p className="text-sm text-white/50">Failed to load usage data</p>
               </motion.div>
             )}
           </>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center"
-          >
-            <p className="text-sm text-white/50">Failed to load usage data</p>
-          </motion.div>
         )}
       </div>
     </motion.div>
