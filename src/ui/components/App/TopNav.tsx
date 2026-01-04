@@ -1,9 +1,10 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Filter, Search, Settings, Plus, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Filter, Search, Settings, Plus, Check, Loader2, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { typography, interactive, cn } from "../../design-tokens";
+import { openDocs } from "../../../core/utils/docs";
 
 interface TopNavProps {
   currentPath: string;
@@ -85,6 +86,22 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     if (basePath.includes("/lorebook")) return true;
     return false;
   }, [basePath, hasAdvancedView]);
+
+  // Map paths to docs keys for contextual help
+  const docsKeyForPath = useMemo(() => {
+    if (basePath === "/settings/providers") return "providers";
+    if (basePath === "/settings/models" || basePath.startsWith("/settings/models/")) return "models";
+    if (basePath === "/settings/prompts" || basePath.startsWith("/settings/prompts/")) return "systemPrompts";
+    if (basePath === "/settings/characters" || (basePath.startsWith("/settings/characters/") && basePath.endsWith("/edit"))) return "characters";
+    if (basePath === "/settings/personas" || (basePath.startsWith("/settings/personas/") && basePath.endsWith("/edit"))) return "personas";
+    if (basePath === "/settings/accessibility") return "accessibility";
+    if (basePath === "/settings/sync") return "sync";
+    if (basePath === "/settings/advanced/memory") return "memorySystem";
+    if (basePath.includes("/lorebook")) return "lorebooks";
+    return null;
+  }, [basePath]);
+
+  const showHelpButton = useMemo(() => docsKeyForPath !== null, [docsKeyForPath]);
 
   const isCenteredTitle = useMemo(() => {
     return basePath.startsWith("/settings");
@@ -251,6 +268,20 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
               aria-label="Settings"
             >
               <Settings size={20} strokeWidth={2.5} className="text-white" />
+            </button>
+          )}
+          {showHelpButton && (
+            <button
+              onClick={() => docsKeyForPath && openDocs(docsKeyForPath as any)}
+              className={cn(
+                "flex items-center justify-center rounded-full",
+                "text-white/80 hover:text-white hover:bg-white/10",
+                interactive.transition.fast,
+                interactive.active.scale
+              )}
+              aria-label="Help"
+            >
+              <HelpCircle size={20} strokeWidth={2.5} className="text-white/50" />
             </button>
           )}
           {showAddButton && (

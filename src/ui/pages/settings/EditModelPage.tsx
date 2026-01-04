@@ -11,7 +11,7 @@ import {
   ADVANCED_REASONING_BUDGET_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
 import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
-import { Loader2, FileText, Info, Settings, Brain, RefreshCw, ChevronDown, Check, Search, ChevronRight } from "lucide-react";
+import { Loader2, FileText, Info, Settings, Brain, RefreshCw, ChevronDown, Check, Search, ChevronRight, HelpCircle } from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
@@ -19,6 +19,7 @@ import { getProviderReasoningSupport } from "../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../core/prompts/service";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { cn } from "../../design-tokens";
+import { openDocs } from "../../../core/utils/docs";
 
 export function EditModelPage() {
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
@@ -412,9 +413,19 @@ export function EditModelPage() {
 
                 {/* Capabilities */}
                 <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5">
-                  <div>
-                    <p className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Capabilities</p>
-                    <p className="mt-1 text-xs text-white/40">Supported input/output modalities</p>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Capabilities</p>
+                      <p className="mt-1 text-xs text-white/40">Supported input/output modalities</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openDocs("imagegen", "model-capabilities")}
+                      className="text-white/40 hover:text-white/60 transition"
+                      aria-label="Help with capabilities"
+                    >
+                      <HelpCircle size={16} />
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

@@ -54,6 +54,7 @@ export interface BottomMenuProps {
   location?: "top" | "bottom";
   children: ReactNode;
   className?: string;
+  rightAction?: ReactNode;
 }
 
 export function BottomMenu({
@@ -64,6 +65,7 @@ export function BottomMenu({
   location = "bottom",
   children,
   className = "",
+  rightAction,
 }: BottomMenuProps) {
   const isBottomMenu = location === "bottom";
   const dragControls = useDragControls();
@@ -156,14 +158,14 @@ export function BottomMenu({
             aria-labelledby={titleId}
             {...(isBottomMenu
               ? {
-                  drag: "y" as const,
-                  dragControls,
-                  dragListener: false,
-                  dragConstraints: { top: 0, bottom: 200 }, // Reduced for better feel
-                  dragElastic: { top: 0, bottom: 0.1 }, // Less elastic for snappier feel
-                  dragMomentum: false,
-                  onDragEnd: handleDragEnd,
-                }
+                drag: "y" as const,
+                dragControls,
+                dragListener: false,
+                dragConstraints: { top: 0, bottom: 200 }, // Reduced for better feel
+                dragElastic: { top: 0, bottom: 0.1 }, // Less elastic for snappier feel
+                dragMomentum: false,
+                onDragEnd: handleDragEnd,
+              }
               : {})}
           >
             {isBottomMenu && (
@@ -186,15 +188,18 @@ export function BottomMenu({
               <h3 id={titleId} className="text-lg font-semibold text-white">
                 {title}
               </h3>
-              {includeExitIcon && (
-                <button
-                  className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white hover:bg-white/10 active:scale-95"
-                  onClick={onClose}
-                  aria-label="Close menu"
-                >
-                  <X size={14} />
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {rightAction}
+                {includeExitIcon && (
+                  <button
+                    className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white hover:bg-white/10 active:scale-95"
+                    onClick={onClose}
+                    aria-label="Close menu"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className={`px-6 ${isBottomMenu ? "pb-8" : "pt-2 pb-4"} overflow-y-auto flex-1`}>
@@ -225,19 +230,17 @@ export function MenuButton({
 
   return (
     <motion.button
-      className={`group relative w-full rounded-xl border border-white/10 bg-white/4 p-3 text-left text-white ${
-        disabled || loading
-          ? "cursor-not-allowed opacity-50"
-          : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
-      } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}
+      className={`group relative w-full rounded-xl border border-white/10 bg-white/4 p-3 text-left text-white ${disabled || loading
+        ? "cursor-not-allowed opacity-50"
+        : "hover:border-white/15 hover:bg-white/[0.07] active:scale-[0.98]"
+        } focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25`}
       onClick={handleClick}
       disabled={disabled || loading}
     >
       <div className="flex items-center gap-2">
         <div
-          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${
-            disabled || loading ? "opacity-60" : ""
-          }`}
+          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${iconAccentClasses} ${disabled || loading ? "opacity-60" : ""
+            }`}
         >
           {loading ? (
             <Loader2 size={18} className="animate-spin" />

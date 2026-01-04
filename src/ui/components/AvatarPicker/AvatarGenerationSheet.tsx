@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, RefreshCw, Check, X, ChevronDown } from "lucide-react";
+import { Sparkles, Loader2, RefreshCw, Check, X, ChevronDown, HelpCircle } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import { BottomMenu } from "../BottomMenu";
@@ -12,6 +12,7 @@ import {
 } from "../../../core/image-generation";
 import { readSettings } from "../../../core/storage/repo";
 import type { Model, ProviderCredential } from "../../../core/storage/schemas";
+import { openDocs } from "../../../core/utils/docs";
 
 interface AvatarGenerationSheetProps {
   isOpen: boolean;
@@ -52,10 +53,10 @@ export function AvatarGenerationSheet({
         const firstModel = imageModels[0] ?? null;
         const provider = firstModel
           ? providerCreds.find(
-              (p) =>
-                p.providerId === firstModel.providerId &&
-                p.label === firstModel.providerLabel
-            ) ?? providerCreds.find((p) => p.providerId === firstModel.providerId) ?? null
+            (p) =>
+              p.providerId === firstModel.providerId &&
+              p.label === firstModel.providerLabel
+          ) ?? providerCreds.find((p) => p.providerId === firstModel.providerId) ?? null
           : null;
 
         setSelectedModel(firstModel);
@@ -125,7 +126,7 @@ export function AvatarGenerationSheet({
     if (!generatedImage) return;
 
     const imageSrc = generatedImage.url || (generatedImage.filePath ? convertFileSrc(generatedImage.filePath) : null);
-    
+
     if (imageSrc) {
       try {
         const response = await fetch(imageSrc);
@@ -166,7 +167,21 @@ export function AvatarGenerationSheet({
   }
 
   return (
-    <BottomMenu isOpen={isOpen} onClose={onClose} title="Generate Avatar">
+    <BottomMenu
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Generate Avatar"
+      rightAction={
+        <button
+          type="button"
+          onClick={() => openDocs("imagegen", "avatar-generation")}
+          className="text-white/40 hover:text-white/60 transition"
+          aria-label="Help with avatar generation"
+        >
+          <HelpCircle size={18} />
+        </button>
+      }
+    >
       <div className="space-y-4">
         {/* Model Selector */}
         <div className="space-y-2">
