@@ -2,7 +2,11 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::models::{calculate_request_cost, get_model_pricing};
-use crate::usage::{add_usage_record, RequestUsage};
+use crate::usage::{
+    add_usage_record,
+    tracking::{RequestUsage, UsageFinishReason, UsageOperationType},
+};
+
 use crate::utils::{log_error, log_info, log_warn, now_millis};
 
 use super::storage::{
@@ -115,7 +119,7 @@ pub async fn record_usage_if_available(
     provider_cred: &ProviderCredential,
     api_key: &str,
     created_at: u64,
-    operation_type: &str,
+    operation_type: UsageOperationType,
     log_scope: &str,
 ) {
     let Some(usage_info) = usage else {
@@ -132,7 +136,11 @@ pub async fn record_usage_if_available(
         model_name: model.name.clone(),
         provider_id: provider_cred.provider_id.clone(),
         provider_label: provider_cred.provider_id.clone(),
-        operation_type: operation_type.to_string(),
+        operation_type,
+        finish_reason: usage_info
+            .finish_reason
+            .as_ref()
+            .and_then(|s| UsageFinishReason::from_str(s)),
         prompt_tokens: usage_info.prompt_tokens,
         completion_tokens: usage_info.completion_tokens,
         total_tokens: usage_info.total_tokens,
@@ -227,7 +235,7 @@ pub fn record_failed_usage(
     character: &Character,
     model: &Model,
     provider_cred: &ProviderCredential,
-    operation_type: &str,
+    operation_type: UsageOperationType,
     error_message: &str,
     log_scope: &str,
 ) {
@@ -245,7 +253,11 @@ pub fn record_failed_usage(
         model_name: model.name.clone(),
         provider_id: provider_cred.provider_id.clone(),
         provider_label: provider_cred.provider_id.clone(),
-        operation_type: operation_type.to_string(),
+        operation_type,
+        finish_reason: usage_info
+            .finish_reason
+            .as_ref()
+            .and_then(|s| UsageFinishReason::from_str(s)),
         prompt_tokens: usage_info.prompt_tokens,
         completion_tokens: usage_info.completion_tokens,
         total_tokens: usage_info.total_tokens,

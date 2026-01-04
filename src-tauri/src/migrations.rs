@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 22;
+pub const CURRENT_MIGRATION_VERSION: u32 = 23;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -257,6 +257,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v21_to_v22(app)?;
         version = 22;
+    }
+
+    if version < 23 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v22 -> v23: Add finish_reason column to usage_records",
+        );
+        migrate_v22_to_v23(app)?;
+        version = 23;
     }
 
     // Finalize
@@ -1601,6 +1611,20 @@ fn migrate_v21_to_v22(app: &AppHandle) -> Result<(), String> {
 
     // Add direction column to scene_variants if it doesn't exist
     let _ = conn.execute("ALTER TABLE scene_variants ADD COLUMN direction TEXT", []);
+
+    Ok(())
+}
+
+fn migrate_v22_to_v23(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Add finish_reason column to usage_records if it doesn't exist
+    let _ = conn.execute(
+        "ALTER TABLE usage_records ADD COLUMN finish_reason TEXT",
+        [],
+    );
 
     Ok(())
 }

@@ -17,6 +17,8 @@ use super::request::{
 use super::service::{
     record_failed_usage, record_usage_if_available, resolve_api_key, ChatContext,
 };
+use crate::usage::tracking::UsageOperationType;
+
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
@@ -1169,7 +1171,7 @@ pub async fn chat_completion(
                 &character,
                 model,
                 provider_cred,
-                "chat",
+                UsageOperationType::Chat,
                 &err_message,
                 "chat_completion",
             );
@@ -1363,7 +1365,7 @@ pub async fn chat_completion(
         provider_cred,
         &api_key,
         assistant_created_at,
-        "chat",
+        UsageOperationType::Chat,
         "chat_completion",
     )
     .await;
@@ -1787,7 +1789,7 @@ pub async fn chat_regenerate(
             &character,
             model,
             provider_cred,
-            "regenerate",
+            UsageOperationType::Regenerate,
             &err_message,
             "chat_regenerate",
         );
@@ -1927,7 +1929,7 @@ pub async fn chat_regenerate(
         provider_cred,
         &api_key,
         created_at,
-        "regenerate",
+        UsageOperationType::Regenerate,
         "chat_regenerate",
     )
     .await;
@@ -2281,7 +2283,7 @@ pub async fn chat_continue(
             &character,
             model,
             provider_cred,
-            "continue",
+            UsageOperationType::Continue,
             &err_message,
             "chat_continue",
         );
@@ -2432,7 +2434,7 @@ pub async fn chat_continue(
         provider_cred,
         &api_key,
         assistant_created_at,
-        "continue",
+        UsageOperationType::Continue,
         "chat_continue",
     )
     .await;
@@ -3124,9 +3126,9 @@ async fn run_memory_tool_update(
         model,
         provider_cred,
         api_key,
-        now_millis().unwrap_or_default(),
+        now_millis().unwrap_or(0),
+        UsageOperationType::MemoryManager,
         "memory_manager",
-        "run_memory_tool_update",
     )
     .await;
 
@@ -3512,9 +3514,9 @@ async fn summarize_messages(
         model,
         provider_cred,
         api_key,
-        now_millis().unwrap_or_default(),
-        "summary",
-        "summarize_messages",
+        now_millis().unwrap_or(0),
+        UsageOperationType::Summary,
+        "dynamic_summary",
     )
     .await;
 
@@ -3867,7 +3869,7 @@ pub async fn chat_generate_user_reply(
         &provider_cred,
         &api_key,
         now_millis().unwrap_or(0),
-        "reply_helper",
+        UsageOperationType::ReplyHelper,
         "help_me_reply",
     )
     .await;

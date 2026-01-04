@@ -345,6 +345,12 @@ fn usage_from_map(map: &Map<String, Value>) -> Option<UsageSummary> {
         }
     });
 
+    let finish_reason = map
+        .get("finish_reason")
+        .or_else(|| map.get("finishReason"))
+        .and_then(|r| r.as_str())
+        .map(|s| s.to_string());
+
     if prompt_tokens.is_none() && completion_tokens.is_none() && total_tokens.is_none() {
         None
     } else {
@@ -354,6 +360,7 @@ fn usage_from_map(map: &Map<String, Value>) -> Option<UsageSummary> {
             total_tokens,
             reasoning_tokens,
             image_tokens,
+            finish_reason,
         })
     }
 }

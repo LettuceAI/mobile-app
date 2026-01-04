@@ -402,6 +402,26 @@ pub fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             }
         });
 
+    let finish_reason = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("finish_reason"))
+        .and_then(|r| r.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            v.get("candidates")
+                .and_then(|c| c.get(0))
+                .and_then(|c| c.get("finishReason"))
+                .and_then(|r| r.as_str())
+                .map(|s| s.to_string())
+        })
+        .or_else(|| {
+            // Anthropic/SSE specific if available in the same value
+            v.get("stop_reason")
+                .and_then(|r| r.as_str())
+                .map(|s| s.to_string())
+        });
+
     eprintln!(
         "[DEBUG] Parsed usage: prompt={:?}, completion={:?}, total={:?}, reasoning={:?}",
         prompt_tokens, completion_tokens, total_tokens, reasoning_tokens
@@ -416,6 +436,7 @@ pub fn usage_from_value(v: &Value) -> Option<UsageSummary> {
             total_tokens,
             reasoning_tokens,
             image_tokens,
+            finish_reason,
         })
     }
 }

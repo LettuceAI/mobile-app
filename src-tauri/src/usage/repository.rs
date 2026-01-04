@@ -40,8 +40,8 @@ impl UsageRepository {
         tx.execute(
             r#"INSERT OR REPLACE INTO usage_records (
                 id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label,
-                operation_type, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                operation_type, finish_reason, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             rusqlite::params![
                 usage.id,
                 usage.timestamp as i64,
@@ -52,7 +52,8 @@ impl UsageRepository {
                 usage.model_name,
                 usage.provider_id,
                 usage.provider_label,
-                usage.operation_type,
+                usage.operation_type.as_str(),
+                usage.finish_reason.map(|r| r.as_str()),
                 usage.prompt_tokens.map(|v| v as i64),
                 usage.completion_tokens.map(|v| v as i64),
                 usage.total_tokens.map(|v| v as i64),
@@ -119,7 +120,7 @@ impl UsageRepository {
         }
 
         let sql = format!(
-            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
+            "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, finish_reason, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
             if where_clauses.is_empty() { String::new() } else { format!("WHERE {}", where_clauses.join(" AND ")) }
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -136,18 +137,19 @@ impl UsageRepository {
                     r.get::<_, String>(7)?,          // provider_id
                     r.get::<_, String>(8)?,          // provider_label
                     r.get::<_, String>(9)?,          // operation_type
-                    r.get::<_, Option<i64>>(10)?,    // prompt_tokens
-                    r.get::<_, Option<i64>>(11)?,    // completion_tokens
-                    r.get::<_, Option<i64>>(12)?,    // total_tokens
-                    r.get::<_, Option<i64>>(13)?,    // memory_tokens
-                    r.get::<_, Option<i64>>(14)?,    // summary_tokens
-                    r.get::<_, Option<i64>>(15)?,    // reasoning_tokens
-                    r.get::<_, Option<i64>>(16)?,    // image_tokens
-                    r.get::<_, Option<f64>>(17)?,    // prompt_cost
-                    r.get::<_, Option<f64>>(18)?,    // completion_cost
-                    r.get::<_, Option<f64>>(19)?,    // total_cost
-                    r.get::<_, i64>(20)?,            // success
-                    r.get::<_, Option<String>>(21)?, // error_message
+                    r.get::<_, Option<String>>(10)?, // finish_reason
+                    r.get::<_, Option<i64>>(11)?,    // prompt_tokens
+                    r.get::<_, Option<i64>>(12)?,    // completion_tokens
+                    r.get::<_, Option<i64>>(13)?,    // total_tokens
+                    r.get::<_, Option<i64>>(14)?,    // memory_tokens
+                    r.get::<_, Option<i64>>(15)?,    // summary_tokens
+                    r.get::<_, Option<i64>>(16)?,    // reasoning_tokens
+                    r.get::<_, Option<i64>>(17)?,    // image_tokens
+                    r.get::<_, Option<f64>>(18)?,    // prompt_cost
+                    r.get::<_, Option<f64>>(19)?,    // completion_cost
+                    r.get::<_, Option<f64>>(20)?,    // total_cost
+                    r.get::<_, i64>(21)?,            // success
+                    r.get::<_, Option<String>>(22)?, // error_message
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -165,7 +167,8 @@ impl UsageRepository {
                 model_name,
                 provider_id,
                 provider_label,
-                operation_type,
+                operation_type_raw,
+                finish_reason_raw,
                 pt,
                 ct,
                 tt,
@@ -203,7 +206,10 @@ impl UsageRepository {
                 model_name,
                 provider_id,
                 provider_label,
-                operation_type,
+                operation_type: super::tracking::UsageOperationType::from_str(&operation_type_raw)
+                    .unwrap_or(super::tracking::UsageOperationType::Chat),
+                finish_reason: finish_reason_raw
+                    .and_then(|s| super::tracking::UsageFinishReason::from_str(&s)),
                 prompt_tokens: pt.map(|v| v as u64),
                 completion_tokens: ct.map(|v| v as u64),
                 total_tokens: tt.map(|v| v as u64),

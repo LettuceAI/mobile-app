@@ -22,19 +22,20 @@ export interface RequestUsage {
   providerId: string;
   providerLabel: string;
   operationType: string; // Type of operation (chat, regenerate, continue, summary, memory_manager, etc.)
-  
+  finishReason?: string;
+
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
   reasoningTokens?: number;
-  imageTokens?: number;  
-  
+  imageTokens?: number;
+
   // Token breakdown for prompt analysis
   memoryTokens?: number;  // Tokens from memory embeddings
   summaryTokens?: number; // Tokens from memory summary
-  
+
   cost?: RequestCost;
-  
+
   success: boolean;
   errorMessage?: string;
   metadata?: Record<string, string>;

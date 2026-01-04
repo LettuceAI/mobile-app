@@ -55,6 +55,24 @@ function getOperationTypeInfo(operationType: string): { label: string; color: st
 }
 
 /**
+ * Get finish reason display label
+ */
+function getFinishReasonLabel(reason: string): string {
+  const normalized = reason.toLowerCase();
+  switch (normalized) {
+    case 'stop': return 'Stop';
+    case 'length': return 'Max Tokens';
+    case 'contentfilter':
+    case 'content_filter': return 'Content Filter';
+    case 'toolcalls':
+    case 'tool_calls': return 'Tool Calls';
+    case 'aborted': return 'Aborted';
+    case 'error': return 'Error';
+    default: return reason.charAt(0).toUpperCase() + reason.slice(1);
+  }
+}
+
+/**
  * Mobile-friendly date picker component
  */
 function DateRangePicker({
@@ -209,6 +227,13 @@ function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) 
                   })}
                 </span>
               </div>
+
+              {request.finishReason && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-white/40">Finish Reason</span>
+                  <span className="text-white/60">{getFinishReasonLabel(request.finishReason)}</span>
+                </div>
+              )}
 
               {request.promptTokens !== undefined && (
                 <div className="flex justify-between text-xs">

@@ -12,7 +12,10 @@ use crate::chat_manager::sse::usage_from_value;
 use crate::chat_manager::tooling::{parse_tool_calls, ToolConfig};
 use crate::storage_manager::db::{now_ms, open_db};
 use crate::storage_manager::settings::internal_read_settings;
-use crate::usage::{add_usage_record, RequestUsage};
+use crate::usage::{
+    add_usage_record,
+    tracking::{RequestUsage, UsageFinishReason, UsageOperationType},
+};
 use crate::utils::{log_error, log_info};
 
 lazy_static::lazy_static! {
@@ -896,7 +899,12 @@ fn record_creation_usage(
         model_name: model_name.to_string(),
         provider_id: provider_id.to_string(),
         provider_label: provider_label.to_string(),
-        operation_type: "AI Creator".to_string(),
+        operation_type: UsageOperationType::AICreator,
+        finish_reason: usage_summary.as_ref().and_then(|u| {
+            u.finish_reason
+                .as_ref()
+                .and_then(|s| UsageFinishReason::from_str(s))
+        }),
         prompt_tokens: usage_summary.as_ref().and_then(|u| u.prompt_tokens),
         completion_tokens: usage_summary.as_ref().and_then(|u| u.completion_tokens),
         total_tokens: usage_summary.as_ref().and_then(|u| u.total_tokens),

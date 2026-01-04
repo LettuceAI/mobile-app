@@ -1,21 +1,113 @@
 use crate::models::RequestCost;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UsageOperationType {
+    Chat,
+    Regenerate,
+    Continue,
+    Summary,
+    MemoryManager,
+    AICreator,
+    ReplyHelper,
+}
+
+impl UsageOperationType {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "chat" => Some(Self::Chat),
+            "regenerate" => Some(Self::Regenerate),
+            "continue" => Some(Self::Continue),
+            "summary" => Some(Self::Summary),
+            "memory_manager" => Some(Self::MemoryManager),
+            "ai_creator" | "ai creator" => Some(Self::AICreator),
+            "reply_helper" => Some(Self::ReplyHelper),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Chat => "chat",
+            Self::Regenerate => "regenerate",
+            Self::Continue => "continue",
+            Self::Summary => "summary",
+            Self::MemoryManager => "memory_manager",
+            Self::AICreator => "ai_creator",
+            Self::ReplyHelper => "reply_helper",
+        }
+    }
+}
+
+impl fmt::Display for UsageOperationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UsageFinishReason {
+    Stop,
+    Length,
+    ContentFilter,
+    ToolCalls,
+    Aborted,
+    Error,
+    Other,
+}
+
+impl UsageFinishReason {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "stop" | "end_turn" | "stop_sequence" => Some(Self::Stop),
+            "length" | "max_tokens" => Some(Self::Length),
+            "content_filter" | "safety" | "recitation" | "language" | "prohibited_content"
+            | "spii" => Some(Self::ContentFilter),
+            "tool_calls" | "function_call" | "tool_use" => Some(Self::ToolCalls),
+            "aborted" => Some(Self::Aborted),
+            "error" => Some(Self::Error),
+            _ => Some(Self::Other),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stop => "stop",
+            Self::Length => "length",
+            Self::ContentFilter => "content_filter",
+            Self::ToolCalls => "tool_calls",
+            Self::Aborted => "aborted",
+            Self::Error => "error",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl fmt::Display for UsageFinishReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
 
 /// Individual request/message usage tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestUsage {
-    pub id: String,             // Unique request ID
-    pub timestamp: u64,         // Unix timestamp in milliseconds
-    pub session_id: String,     // Which session this belongs to
-    pub character_id: String,   // Which character
-    pub character_name: String, // Character name for display
-    pub model_id: String,       // Which model
-    pub model_name: String,     // Model name for display
-    pub provider_id: String,    // Which provider (openai, anthropic, openrouter, etc)
+    pub id: String,                               // Unique request ID
+    pub timestamp: u64,                           // Unix timestamp in milliseconds
+    pub session_id: String,                       // Which session this belongs to
+    pub character_id: String,                     // Which character
+    pub character_name: String,                   // Character name for display
+    pub model_id: String,                         // Which model
+    pub model_name: String,                       // Model name for display
+    pub provider_id: String, // Which provider (openai, anthropic, openrouter, etc)
     pub provider_label: String, // Provider label for display
-    pub operation_type: String, // Type of operation (chat, regenerate, continue, summary, memory_manager, etc)
+    pub operation_type: UsageOperationType, // Type of operation
+    pub finish_reason: Option<UsageFinishReason>, // Reason why the request finished
 
     pub prompt_tokens: Option<u64>,
     pub completion_tokens: Option<u64>,

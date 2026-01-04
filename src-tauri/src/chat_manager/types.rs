@@ -422,6 +422,8 @@ pub struct UsageSummary {
     pub reasoning_tokens: Option<u64>,
     #[serde(default)]
     pub image_tokens: Option<u64>,
+    #[serde(default)]
+    pub finish_reason: Option<String>,
 }
 
 #[derive(Serialize)]
