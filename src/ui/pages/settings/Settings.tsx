@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode, RefreshCw, Volume2, Accessibility } from "lucide-react";
+import { ChevronRight, Cpu, EthernetPort, Shield, RotateCcw, BookOpen, Github, BarChart3, FileText, Wrench, ScrollText, Sliders, HardDrive, FileCode, RefreshCw, Volume2, Accessibility, HelpCircle } from "lucide-react";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { useSettingsSummary } from "./hooks/useSettingsSummary";
 import { isDevelopmentMode } from "../../../core/utils/env";
@@ -228,6 +228,22 @@ export function SettingsPage() {
       onClick: () => navigate('/welcome')
     },
     {
+      key: 'docs',
+      icon: <HelpCircle />,
+      title: 'Documentation',
+      subtitle: 'Guides & reference',
+      tone: 'support' as const,
+      onClick: async () => {
+        try {
+          const { openUrl } = await import('@tauri-apps/plugin-opener');
+          await openUrl("https://www.lettuceai.app/docs");
+        } catch (error) {
+          console.error('Failed to open URL:', error);
+          window.open("https://www.lettuceai.app/docs", '_blank');
+        }
+      }
+    },
+    {
       key: 'github',
       icon: <Github />,
       title: 'Report Issues',
@@ -269,7 +285,15 @@ export function SettingsPage() {
       title: 'Changelog',
       subtitle: `What's new`,
       tone: 'support' as const,
-      onClick: () => navigate('/settings/changelog')
+      onClick: async () => {
+        try {
+          const { openUrl } = await import('@tauri-apps/plugin-opener');
+          await openUrl("https://www.lettuceai.app/changelog");
+        } catch (error) {
+          console.error('Failed to open URL:', error);
+          window.open("https://www.lettuceai.app/changelog", '_blank');
+        }
+      }
     },
     {
       key: 'reset',
@@ -397,6 +421,7 @@ export function SettingsPage() {
           <div className={spacing.field}>
             {items.filter(i => [
               'guide',
+              'docs',
               'changelog',
               'logs',
               'github',
