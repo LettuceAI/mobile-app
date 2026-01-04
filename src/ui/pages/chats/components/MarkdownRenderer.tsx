@@ -107,7 +107,7 @@ function flushParagraph(buffer: string[], nodes: JSX.Element[], keyIndex: { valu
   }
   const key = `p-${keyIndex.value++}`;
   nodes.push(
-    <p key={key} className="whitespace-pre-wrap break-words">
+    <p key={key} className="whitespace-pre-wrap wrap-break-word">
       {parseInline(paragraphText, key)}
     </p>,
   );

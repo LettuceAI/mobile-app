@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
+import React from "react";
 
 import { useCharacterForm, Step } from "./hooks/useCharacterForm";
 //import { ProgressIndicator } from "./components/ProgressIndicator";
@@ -7,11 +8,70 @@ import { IdentityStep } from "./components/IdentityStep";
 import { StartingSceneStep } from "./components/StartingSceneStep";
 import { DescriptionStep } from "./components/DescriptionStep";
 import { TopNav } from "../../components/App";
+import {
+  listAudioProviders,
+  listUserVoices,
+  getProviderVoices,
+  refreshProviderVoices,
+  type AudioProvider,
+  type CachedVoice,
+  type UserVoice,
+} from "../../../core/storage/audioProviders";
 
 export function CreateCharacterPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, actions, computed } = useCharacterForm(location.state?.draftCharacter);
+
+  const [audioProviders, setAudioProviders] = React.useState<AudioProvider[]>([]);
+  const [userVoices, setUserVoices] = React.useState<UserVoice[]>([]);
+  const [providerVoices, setProviderVoices] = React.useState<Record<string, CachedVoice[]>>({});
+  const [loadingVoices, setLoadingVoices] = React.useState(false);
+  const [voiceError, setVoiceError] = React.useState<string | null>(null);
+  const [hasLoadedVoices, setHasLoadedVoices] = React.useState(false);
+
+  const loadVoices = React.useCallback(async () => {
+    setLoadingVoices(true);
+    setVoiceError(null);
+    try {
+      const [providers, voices] = await Promise.all([listAudioProviders(), listUserVoices()]);
+      setAudioProviders(providers);
+      setUserVoices(voices);
+
+      const voicesByProvider: Record<string, CachedVoice[]> = {};
+      await Promise.all(
+        providers.map(async (provider) => {
+          try {
+            if (provider.providerType === "elevenlabs" && provider.apiKey) {
+              voicesByProvider[provider.id] = await refreshProviderVoices(provider.id);
+            } else {
+              voicesByProvider[provider.id] = await getProviderVoices(provider.id);
+            }
+          } catch (err) {
+            console.warn("Failed to refresh provider voices:", err);
+            try {
+              voicesByProvider[provider.id] = await getProviderVoices(provider.id);
+            } catch (fallbackErr) {
+              console.warn("Failed to load cached voices:", fallbackErr);
+              voicesByProvider[provider.id] = [];
+            }
+          }
+        }),
+      );
+      setProviderVoices(voicesByProvider);
+      setHasLoadedVoices(true);
+    } catch (err) {
+      console.error("Failed to load voices:", err);
+      setVoiceError("Failed to load voices");
+    } finally {
+      setLoadingVoices(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (state.step !== Step.Description || hasLoadedVoices) return;
+    void loadVoices();
+  }, [state.step, hasLoadedVoices, loadVoices]);
 
   const handleBack = () => {
     if (state.step === Step.Description) {
@@ -30,9 +90,9 @@ export function CreateCharacterPage() {
     }
   };
 
-  //const stepLabel = 
-  //  state.step === Step.Identity ? "Identity" : 
-  //  state.step === Step.StartingScene ? "Starting Scene" : 
+  //const stepLabel =
+  //  state.step === Step.Identity ? "Identity" :
+  //  state.step === Step.StartingScene ? "Starting Scene" :
   //  "Description";
 
   return (
@@ -89,6 +149,15 @@ export function CreateCharacterPage() {
               loadingTemplates={state.loadingTemplates}
               systemPromptTemplateId={state.systemPromptTemplateId}
               onSelectSystemPrompt={actions.setSystemPromptTemplateId}
+              voiceConfig={state.voiceConfig}
+              onVoiceConfigChange={actions.setVoiceConfig}
+              voiceAutoplay={state.voiceAutoplay}
+              onVoiceAutoplayChange={actions.setVoiceAutoplay}
+              audioProviders={audioProviders}
+              userVoices={userVoices}
+              providerVoices={providerVoices}
+              loadingVoices={loadingVoices}
+              voiceError={voiceError}
               onSave={handleSave}
               canSave={computed.canSaveDescription}
               saving={state.saving}

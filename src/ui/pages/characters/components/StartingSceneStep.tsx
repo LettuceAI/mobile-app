@@ -452,7 +452,7 @@ export function StartingSceneStep({
               disabled={!editingSceneContent.trim()}
               className={cn(
                 "flex-1 py-3 text-sm font-semibold text-white transition",
-                "bg-gradient-to-r from-emerald-500 to-green-500",
+                "bg-linear-to-r from-emerald-500 to-green-500",
                 "hover:from-emerald-400 hover:to-green-400",
                 "active:scale-[0.98]",
                 "disabled:cursor-not-allowed disabled:opacity-50",

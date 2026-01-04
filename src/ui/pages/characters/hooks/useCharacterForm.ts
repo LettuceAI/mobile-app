@@ -2,7 +2,12 @@ import { useReducer, useEffect, useCallback } from "react";
 import { readSettings, saveCharacter } from "../../../../core/storage";
 import { saveAvatar } from "../../../../core/storage/avatars";
 import { convertToImageRef } from "../../../../core/storage/images";
-import type { Model, Scene, SystemPromptTemplate } from "../../../../core/storage/schemas";
+import type {
+  Model,
+  Scene,
+  SystemPromptTemplate,
+  CharacterVoiceConfig,
+} from "../../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
@@ -27,6 +32,8 @@ interface CharacterFormState {
   memoryType: "manual" | "dynamic";
   dynamicMemoryEnabled: boolean;
   disableAvatarGradient: boolean;
+  voiceConfig: CharacterVoiceConfig | null;
+  voiceAutoplay: boolean;
 
   // Models
   models: Model[];
@@ -42,39 +49,43 @@ interface CharacterFormState {
 }
 
 type CharacterFormAction =
-  | { type: 'SET_STEP'; payload: Step }
-  | { type: 'SET_NAME'; payload: string }
-  | { type: 'SET_AVATAR_PATH'; payload: string }
-  | { type: 'SET_BACKGROUND_IMAGE_PATH'; payload: string }
-  | { type: 'SET_SCENES'; payload: Scene[] }
-  | { type: 'SET_DEFAULT_SCENE_ID'; payload: string | null }
-  | { type: 'SET_DESCRIPTION'; payload: string }
-  | { type: 'SET_SELECTED_MODEL_ID'; payload: string | null }
-  | { type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID'; payload: string | null }
-  | { type: 'SET_MEMORY_TYPE'; payload: "manual" | "dynamic" }
-  | { type: 'SET_DYNAMIC_MEMORY_ENABLED'; payload: boolean }
-  | { type: 'SET_DISABLE_AVATAR_GRADIENT'; payload: boolean }
-  | { type: 'SET_MODELS'; payload: Model[] }
-  | { type: 'SET_LOADING_MODELS'; payload: boolean }
-  | { type: 'SET_PROMPT_TEMPLATES'; payload: SystemPromptTemplate[] }
-  | { type: 'SET_LOADING_TEMPLATES'; payload: boolean }
-  | { type: 'SET_SAVING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'RESET_FORM' };
+  | { type: "SET_STEP"; payload: Step }
+  | { type: "SET_NAME"; payload: string }
+  | { type: "SET_AVATAR_PATH"; payload: string }
+  | { type: "SET_BACKGROUND_IMAGE_PATH"; payload: string }
+  | { type: "SET_SCENES"; payload: Scene[] }
+  | { type: "SET_DEFAULT_SCENE_ID"; payload: string | null }
+  | { type: "SET_DESCRIPTION"; payload: string }
+  | { type: "SET_SELECTED_MODEL_ID"; payload: string | null }
+  | { type: "SET_SYSTEM_PROMPT_TEMPLATE_ID"; payload: string | null }
+  | { type: "SET_MEMORY_TYPE"; payload: "manual" | "dynamic" }
+  | { type: "SET_DYNAMIC_MEMORY_ENABLED"; payload: boolean }
+  | { type: "SET_DISABLE_AVATAR_GRADIENT"; payload: boolean }
+  | { type: "SET_VOICE_CONFIG"; payload: CharacterVoiceConfig | null }
+  | { type: "SET_VOICE_AUTOPLAY"; payload: boolean }
+  | { type: "SET_MODELS"; payload: Model[] }
+  | { type: "SET_LOADING_MODELS"; payload: boolean }
+  | { type: "SET_PROMPT_TEMPLATES"; payload: SystemPromptTemplate[] }
+  | { type: "SET_LOADING_TEMPLATES"; payload: boolean }
+  | { type: "SET_SAVING"; payload: boolean }
+  | { type: "SET_ERROR"; payload: string | null }
+  | { type: "RESET_FORM" };
 
 const initialState: CharacterFormState = {
   step: Step.Identity,
-  name: '',
-  avatarPath: '',
-  backgroundImagePath: '',
+  name: "",
+  avatarPath: "",
+  backgroundImagePath: "",
   scenes: [],
   defaultSceneId: null,
-  description: '',
+  description: "",
   selectedModelId: null,
   systemPromptTemplateId: null,
-  memoryType: 'manual',
+  memoryType: "manual",
   dynamicMemoryEnabled: false,
   disableAvatarGradient: false,
+  voiceConfig: null,
+  voiceAutoplay: false,
   models: [],
   loadingModels: true,
   promptTemplates: [],
@@ -85,46 +96,50 @@ const initialState: CharacterFormState = {
 
 function characterFormReducer(
   state: CharacterFormState,
-  action: CharacterFormAction
+  action: CharacterFormAction,
 ): CharacterFormState {
   switch (action.type) {
-    case 'SET_STEP':
+    case "SET_STEP":
       return { ...state, step: action.payload };
-    case 'SET_NAME':
+    case "SET_NAME":
       return { ...state, name: action.payload };
-    case 'SET_AVATAR_PATH':
+    case "SET_AVATAR_PATH":
       return { ...state, avatarPath: action.payload };
-    case 'SET_BACKGROUND_IMAGE_PATH':
+    case "SET_BACKGROUND_IMAGE_PATH":
       return { ...state, backgroundImagePath: action.payload };
-    case 'SET_SCENES':
+    case "SET_SCENES":
       return { ...state, scenes: action.payload };
-    case 'SET_DEFAULT_SCENE_ID':
+    case "SET_DEFAULT_SCENE_ID":
       return { ...state, defaultSceneId: action.payload };
-    case 'SET_DESCRIPTION':
+    case "SET_DESCRIPTION":
       return { ...state, description: action.payload };
-    case 'SET_SELECTED_MODEL_ID':
+    case "SET_SELECTED_MODEL_ID":
       return { ...state, selectedModelId: action.payload };
-    case 'SET_SYSTEM_PROMPT_TEMPLATE_ID':
+    case "SET_SYSTEM_PROMPT_TEMPLATE_ID":
       return { ...state, systemPromptTemplateId: action.payload };
-    case 'SET_MEMORY_TYPE':
+    case "SET_MEMORY_TYPE":
       return { ...state, memoryType: action.payload };
-    case 'SET_DYNAMIC_MEMORY_ENABLED':
+    case "SET_DYNAMIC_MEMORY_ENABLED":
       return { ...state, dynamicMemoryEnabled: action.payload };
-    case 'SET_DISABLE_AVATAR_GRADIENT':
+    case "SET_DISABLE_AVATAR_GRADIENT":
       return { ...state, disableAvatarGradient: action.payload };
-    case 'SET_MODELS':
+    case "SET_VOICE_CONFIG":
+      return { ...state, voiceConfig: action.payload };
+    case "SET_VOICE_AUTOPLAY":
+      return { ...state, voiceAutoplay: action.payload };
+    case "SET_MODELS":
       return { ...state, models: action.payload };
-    case 'SET_LOADING_MODELS':
+    case "SET_LOADING_MODELS":
       return { ...state, loadingModels: action.payload };
-    case 'SET_PROMPT_TEMPLATES':
+    case "SET_PROMPT_TEMPLATES":
       return { ...state, promptTemplates: action.payload };
-    case 'SET_LOADING_TEMPLATES':
+    case "SET_LOADING_TEMPLATES":
       return { ...state, loadingTemplates: action.payload };
-    case 'SET_SAVING':
+    case "SET_SAVING":
       return { ...state, saving: action.payload };
-    case 'SET_ERROR':
+    case "SET_ERROR":
       return { ...state, error: action.payload };
-    case 'RESET_FORM':
+    case "RESET_FORM":
       return initialState;
     default:
       return state;
@@ -140,55 +155,71 @@ export function useCharacterForm(draftCharacter?: any) {
 
     (async () => {
       try {
-        const [settings, templates] = await Promise.all([
-          readSettings(),
-          listPromptTemplates(),
-        ]);
+        const [settings, templates] = await Promise.all([readSettings(), listPromptTemplates()]);
 
         if (cancelled) return;
 
-        dispatch({ type: 'SET_MODELS', payload: settings.models });
+        dispatch({ type: "SET_MODELS", payload: settings.models });
 
         // Use draft character if provided, otherwise defaults
         if (draftCharacter) {
           console.log("[useCharacterForm] Received draftCharacter:", draftCharacter);
-          dispatch({ type: 'SET_NAME', payload: draftCharacter.name || '' });
-          dispatch({ type: 'SET_DESCRIPTION', payload: draftCharacter.description || '' });
-          dispatch({ type: 'SET_AVATAR_PATH', payload: draftCharacter.avatarPath || '' });
-          dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: draftCharacter.backgroundImagePath || '' });
-          dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: draftCharacter.disableAvatarGradient ?? false });
-          dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: draftCharacter.defaultModelId || settings.defaultModelId || settings.models[0]?.id || null });
-          dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: draftCharacter.promptTemplateId || null });
+          dispatch({ type: "SET_NAME", payload: draftCharacter.name || "" });
+          dispatch({ type: "SET_DESCRIPTION", payload: draftCharacter.description || "" });
+          dispatch({ type: "SET_AVATAR_PATH", payload: draftCharacter.avatarPath || "" });
+          dispatch({
+            type: "SET_BACKGROUND_IMAGE_PATH",
+            payload: draftCharacter.backgroundImagePath || "",
+          });
+          dispatch({
+            type: "SET_DISABLE_AVATAR_GRADIENT",
+            payload: draftCharacter.disableAvatarGradient ?? false,
+          });
+          dispatch({
+            type: "SET_SELECTED_MODEL_ID",
+            payload:
+              draftCharacter.defaultModelId ||
+              settings.defaultModelId ||
+              settings.models[0]?.id ||
+              null,
+          });
+          dispatch({
+            type: "SET_SYSTEM_PROMPT_TEMPLATE_ID",
+            payload: draftCharacter.promptTemplateId || null,
+          });
 
           if (draftCharacter.scenes && draftCharacter.scenes.length > 0) {
             const mappedScenes = draftCharacter.scenes.map((s: any) => ({
               id: s.id || crypto.randomUUID(),
-              content: s.content || '',
+              content: s.content || "",
               createdAt: Date.now(),
               direction: s.direction || null,
               variants: [],
             }));
-            dispatch({ type: 'SET_SCENES', payload: mappedScenes });
-            dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: draftCharacter.defaultSceneId || mappedScenes[0].id });
+            dispatch({ type: "SET_SCENES", payload: mappedScenes });
+            dispatch({
+              type: "SET_DEFAULT_SCENE_ID",
+              payload: draftCharacter.defaultSceneId || mappedScenes[0].id,
+            });
           }
         } else {
           const defaultId = settings.defaultModelId ?? settings.models[0]?.id ?? null;
-          dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: defaultId });
+          dispatch({ type: "SET_SELECTED_MODEL_ID", payload: defaultId });
         }
 
         const dynamicEnabled = settings.advancedSettings?.dynamicMemory?.enabled ?? false;
-        dispatch({ type: 'SET_DYNAMIC_MEMORY_ENABLED', payload: dynamicEnabled });
+        dispatch({ type: "SET_DYNAMIC_MEMORY_ENABLED", payload: dynamicEnabled });
         if (!dynamicEnabled) {
-          dispatch({ type: 'SET_MEMORY_TYPE', payload: 'manual' });
+          dispatch({ type: "SET_MEMORY_TYPE", payload: "manual" });
         }
 
-        dispatch({ type: 'SET_PROMPT_TEMPLATES', payload: templates });
+        dispatch({ type: "SET_PROMPT_TEMPLATES", payload: templates });
       } catch (err) {
         console.error("Failed to load settings", err);
       } finally {
         if (!cancelled) {
-          dispatch({ type: 'SET_LOADING_MODELS', payload: false });
-          dispatch({ type: 'SET_LOADING_TEMPLATES', payload: false });
+          dispatch({ type: "SET_LOADING_MODELS", payload: false });
+          dispatch({ type: "SET_LOADING_TEMPLATES", payload: false });
         }
       }
     })();
@@ -201,59 +232,70 @@ export function useCharacterForm(draftCharacter?: any) {
   // Auto-set default scene if there's only one scene
   useEffect(() => {
     if (state.scenes.length === 1 && !state.defaultSceneId) {
-      dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: state.scenes[0].id });
+      dispatch({ type: "SET_DEFAULT_SCENE_ID", payload: state.scenes[0].id });
     }
   }, [state.scenes, state.defaultSceneId]);
 
   useEffect(() => {
     if (!state.dynamicMemoryEnabled && state.memoryType !== "manual") {
-      dispatch({ type: 'SET_MEMORY_TYPE', payload: 'manual' });
+      dispatch({ type: "SET_MEMORY_TYPE", payload: "manual" });
     }
   }, [state.dynamicMemoryEnabled, state.memoryType]);
 
   // Actions
-  const setStep = useCallback((step: Step) => {
-    dispatch({ type: 'SET_STEP', payload: step });
-  }, [state.dynamicMemoryEnabled]);
+  const setStep = useCallback(
+    (step: Step) => {
+      dispatch({ type: "SET_STEP", payload: step });
+    },
+    [state.dynamicMemoryEnabled],
+  );
 
   const setName = useCallback((name: string) => {
-    dispatch({ type: 'SET_NAME', payload: name });
+    dispatch({ type: "SET_NAME", payload: name });
   }, []);
 
   const setAvatarPath = useCallback((path: string) => {
-    dispatch({ type: 'SET_AVATAR_PATH', payload: path });
+    dispatch({ type: "SET_AVATAR_PATH", payload: path });
   }, []);
 
   const setBackgroundImagePath = useCallback((path: string) => {
-    dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: path });
+    dispatch({ type: "SET_BACKGROUND_IMAGE_PATH", payload: path });
   }, []);
 
   const setScenes = useCallback((scenes: Scene[]) => {
-    dispatch({ type: 'SET_SCENES', payload: scenes });
+    dispatch({ type: "SET_SCENES", payload: scenes });
   }, []);
 
   const setDefaultSceneId = useCallback((id: string | null) => {
-    dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: id });
+    dispatch({ type: "SET_DEFAULT_SCENE_ID", payload: id });
   }, []);
 
   const setDescription = useCallback((description: string) => {
-    dispatch({ type: 'SET_DESCRIPTION', payload: description });
+    dispatch({ type: "SET_DESCRIPTION", payload: description });
   }, []);
 
   const setSelectedModelId = useCallback((id: string | null) => {
-    dispatch({ type: 'SET_SELECTED_MODEL_ID', payload: id });
+    dispatch({ type: "SET_SELECTED_MODEL_ID", payload: id });
   }, []);
 
   const setSystemPromptTemplateId = useCallback((id: string | null) => {
-    dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: id });
+    dispatch({ type: "SET_SYSTEM_PROMPT_TEMPLATE_ID", payload: id });
   }, []);
 
   const setMemoryType = useCallback((memoryType: "manual" | "dynamic") => {
-    dispatch({ type: 'SET_MEMORY_TYPE', payload: memoryType });
+    dispatch({ type: "SET_MEMORY_TYPE", payload: memoryType });
   }, []);
 
-  const setDisableAvatarGradient = useCallback((disabled: boolean) => {
-    dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: disabled });
+  const setDisableAvatarGradient = useCallback((value: boolean) => {
+    dispatch({ type: "SET_DISABLE_AVATAR_GRADIENT", payload: value });
+  }, []);
+
+  const setVoiceConfig = useCallback((value: CharacterVoiceConfig | null) => {
+    dispatch({ type: "SET_VOICE_CONFIG", payload: value });
+  }, []);
+
+  const setVoiceAutoplay = useCallback((value: boolean) => {
+    dispatch({ type: "SET_VOICE_AUTOPLAY", payload: value });
   }, []);
 
   const handleAvatarUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -262,7 +304,7 @@ export function useCharacterForm(draftCharacter?: any) {
 
     const reader = new FileReader();
     reader.onload = () => {
-      dispatch({ type: 'SET_AVATAR_PATH', payload: reader.result as string });
+      dispatch({ type: "SET_AVATAR_PATH", payload: reader.result as string });
     };
     reader.readAsDataURL(file);
   }, []);
@@ -274,7 +316,7 @@ export function useCharacterForm(draftCharacter?: any) {
     const input = event.target;
     void processBackgroundImage(file)
       .then((dataUrl: any) => {
-        dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: dataUrl });
+        dispatch({ type: "SET_BACKGROUND_IMAGE_PATH", payload: dataUrl });
       })
       .catch((error: any) => {
         console.warn("CharacterForm: failed to process background image", error);
@@ -289,13 +331,15 @@ export function useCharacterForm(draftCharacter?: any) {
     if (!file) return;
 
     try {
-      dispatch({ type: 'SET_ERROR', payload: null });
+      dispatch({ type: "SET_ERROR", payload: null });
       const jsonContent = await readFileAsText(file);
 
       const exportPackage = JSON.parse(jsonContent);
 
       if (exportPackage.type && exportPackage.type !== "character") {
-        throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a character export`);
+        throw new Error(
+          `Invalid import: This is a ${exportPackage.type} export, not a character export`,
+        );
       }
 
       if (!exportPackage.character) {
@@ -312,16 +356,18 @@ export function useCharacterForm(draftCharacter?: any) {
 
         const variantIdMap = new Map<string, string>();
 
-        const newVariants = scene.variants?.map((variant: any) => {
-          const newVariantId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-          variantIdMap.set(variant.id, newVariantId);
+        const newVariants =
+          scene.variants?.map((variant: any) => {
+            const newVariantId =
+              globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+            variantIdMap.set(variant.id, newVariantId);
 
-          return {
-            id: newVariantId,
-            content: variant.content,
-            createdAt: Date.now(),
-          };
-        }) || [];
+            return {
+              id: newVariantId,
+              content: variant.content,
+              createdAt: Date.now(),
+            };
+          }) || [];
 
         const newSelectedVariantId = scene.selectedVariantId
           ? variantIdMap.get(scene.selectedVariantId) || null
@@ -340,45 +386,64 @@ export function useCharacterForm(draftCharacter?: any) {
         ? sceneIdMap.get(characterData.defaultSceneId) || newScenes[0]?.id || null
         : newScenes[0]?.id || null;
 
-      dispatch({ type: 'SET_NAME', payload: characterData.name });
-      dispatch({ type: 'SET_DESCRIPTION', payload: characterData.description || '' });
-      dispatch({ type: 'SET_SCENES', payload: newScenes });
-      dispatch({ type: 'SET_DEFAULT_SCENE_ID', payload: newDefaultSceneId });
-      dispatch({ type: 'SET_DISABLE_AVATAR_GRADIENT', payload: characterData.disableAvatarGradient || false });
-      dispatch({ type: 'SET_SYSTEM_PROMPT_TEMPLATE_ID', payload: characterData.promptTemplateId || null });
+      dispatch({ type: "SET_NAME", payload: characterData.name });
+      dispatch({ type: "SET_DESCRIPTION", payload: characterData.description || "" });
+      dispatch({ type: "SET_SCENES", payload: newScenes });
+      dispatch({ type: "SET_DEFAULT_SCENE_ID", payload: newDefaultSceneId });
+      dispatch({
+        type: "SET_DISABLE_AVATAR_GRADIENT",
+        payload: characterData.disableAvatarGradient || false,
+      });
+      dispatch({
+        type: "SET_SYSTEM_PROMPT_TEMPLATE_ID",
+        payload: characterData.promptTemplateId || null,
+      });
       const importedMemoryType = characterData.memoryType === "dynamic" ? "dynamic" : "manual";
-      dispatch({ type: 'SET_MEMORY_TYPE', payload: state.dynamicMemoryEnabled ? importedMemoryType : "manual" });
+      dispatch({
+        type: "SET_MEMORY_TYPE",
+        payload: state.dynamicMemoryEnabled ? importedMemoryType : "manual",
+      });
 
       if (exportPackage.avatarData) {
-        dispatch({ type: 'SET_AVATAR_PATH', payload: exportPackage.avatarData });
+        dispatch({ type: "SET_AVATAR_PATH", payload: exportPackage.avatarData });
       }
 
       if (exportPackage.backgroundImageData) {
-        dispatch({ type: 'SET_BACKGROUND_IMAGE_PATH', payload: exportPackage.backgroundImageData });
+        dispatch({ type: "SET_BACKGROUND_IMAGE_PATH", payload: exportPackage.backgroundImageData });
       }
 
       console.log("[handleImport] Character data loaded into form, ready to save");
-
     } catch (error: any) {
       console.error("Failed to import character:", error);
-      dispatch({ type: 'SET_ERROR', payload: error?.message || "Failed to import character" });
+      dispatch({ type: "SET_ERROR", payload: error?.message || "Failed to import character" });
     } finally {
       // Clear the file input
-      event.target.value = '';
+      event.target.value = "";
     }
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (state.description.trim().length === 0 || state.selectedModelId === null || state.saving || state.scenes.length === 0) {
+    if (
+      state.description.trim().length === 0 ||
+      state.selectedModelId === null ||
+      state.saving ||
+      state.scenes.length === 0
+    ) {
       return;
     }
 
     try {
-      dispatch({ type: 'SET_SAVING', payload: true });
-      dispatch({ type: 'SET_ERROR', payload: null });
+      dispatch({ type: "SET_SAVING", payload: true });
+      dispatch({ type: "SET_ERROR", payload: null });
 
-      console.log("[CreateCharacter] Saving with avatarPath:", state.avatarPath ? "present" : "empty");
-      console.log("[CreateCharacter] Saving with backgroundImagePath:", state.backgroundImagePath ? "present" : "empty");
+      console.log(
+        "[CreateCharacter] Saving with avatarPath:",
+        state.avatarPath ? "present" : "empty",
+      );
+      console.log(
+        "[CreateCharacter] Saving with backgroundImagePath:",
+        state.backgroundImagePath ? "present" : "empty",
+      );
 
       // Generate character ID first so we can use it for avatar storage
       const characterId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -420,27 +485,48 @@ export function useCharacterForm(draftCharacter?: any) {
         promptTemplateId: state.systemPromptTemplateId,
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
         disableAvatarGradient: state.disableAvatarGradient,
+        voiceConfig: state.voiceConfig || undefined,
+        voiceAutoplay: state.voiceAutoplay,
       };
 
-      console.log("[CreateCharacter] Saving character data:", JSON.stringify(characterData, null, 2));
+      console.log(
+        "[CreateCharacter] Saving character data:",
+        JSON.stringify(characterData, null, 2),
+      );
 
       await saveCharacter(characterData);
 
       return true; // Success
     } catch (e: any) {
       console.error("Failed to save character:", e);
-      dispatch({ type: 'SET_ERROR', payload: e?.message || "Failed to save character" });
+      dispatch({ type: "SET_ERROR", payload: e?.message || "Failed to save character" });
       return false; // Failure
     } finally {
-      dispatch({ type: 'SET_SAVING', payload: false });
+      dispatch({ type: "SET_SAVING", payload: false });
     }
-  }, [state.name, state.avatarPath, state.backgroundImagePath, state.scenes, state.defaultSceneId, state.description, state.selectedModelId, state.systemPromptTemplateId, state.memoryType, state.dynamicMemoryEnabled, state.saving]);
+  }, [
+    state.name,
+    state.avatarPath,
+    state.backgroundImagePath,
+    state.scenes,
+    state.defaultSceneId,
+    state.description,
+    state.selectedModelId,
+    state.systemPromptTemplateId,
+    state.memoryType,
+    state.dynamicMemoryEnabled,
+    state.voiceConfig,
+    state.voiceAutoplay,
+    state.saving,
+  ]);
 
   // Computed values
   const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
   const canContinueStartingScene = state.scenes.length > 0 && !state.saving;
-  const canSaveDescription = state.description.trim().length > 0 && state.selectedModelId !== null && !state.saving;
-  const progress = state.step === Step.Identity ? 0.33 : state.step === Step.StartingScene ? 0.66 : 1;
+  const canSaveDescription =
+    state.description.trim().length > 0 && state.selectedModelId !== null && !state.saving;
+  const progress =
+    state.step === Step.Identity ? 0.33 : state.step === Step.StartingScene ? 0.66 : 1;
 
   return {
     state,
@@ -456,6 +542,8 @@ export function useCharacterForm(draftCharacter?: any) {
       setSystemPromptTemplateId,
       setMemoryType,
       setDisableAvatarGradient,
+      setVoiceConfig,
+      setVoiceAutoplay,
       handleAvatarUpload,
       handleBackgroundImageUpload,
       handleImport,
