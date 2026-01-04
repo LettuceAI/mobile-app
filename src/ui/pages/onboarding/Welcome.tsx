@@ -1,12 +1,23 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, ShieldCheck, Sparkles, Upload, FileArchive, Lock, Loader2, Eye, EyeOff, CheckCircle, HardDrive, Download } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  FileArchive,
+  Lock,
+  Loader2,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  HardDrive,
+  Download,
+} from "lucide-react";
 import { motion } from "framer-motion";
 
-import {
-  setOnboardingCompleted,
-  setOnboardingSkipped,
-} from "../../../core/storage/appState";
+import { setOnboardingCompleted, setOnboardingSkipped } from "../../../core/storage/appState";
 import { storageBridge } from "../../../core/storage/files";
 import logoSvg from "../../../assets/logo.svg";
 import { typography, radius, spacing, interactive, shadows, colors, cn } from "../../design-tokens";
@@ -27,7 +38,7 @@ export function WelcomePage() {
     await setOnboardingCompleted(true);
     await setOnboardingSkipped(true);
     // Small delay to ensure state is persisted before navigation
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     navigate("/");
   };
 
@@ -37,10 +48,11 @@ export function WelcomePage() {
   };
 
   return (
-    <div className={cn("flex min-h-screen flex-col text-gray-200", colors.effects.gradient.surface)}>
+    <div
+      className={cn("flex min-h-screen flex-col text-gray-200", colors.effects.gradient.surface)}
+    >
       {/* Desktop: Split layout | Mobile: Stacked layout */}
       <div className="flex flex-1 flex-col lg:flex-row items-center justify-center px-4 py-12 lg:px-16 lg:gap-16 xl:gap-24">
-
         {/* Left Side - Branding (desktop) / Top (mobile) */}
         <motion.div
           className="flex flex-col items-center lg:items-start lg:flex-1 lg:max-w-lg"
@@ -51,52 +63,74 @@ export function WelcomePage() {
           {/* Logo Section */}
           <div className="relative mb-8 overflow-visible">
             {/* Glow effect - larger spread for smoother edges */}
-            <div className={cn("absolute -inset-8 rounded-full blur-3xl opacity-60 animate-pulse", colors.effects.gradient.brand)} />
+            <div
+              className={cn(
+                "absolute -inset-8 rounded-full blur-3xl opacity-60 animate-pulse",
+                colors.effects.gradient.brand,
+              )}
+            />
 
             {/* Logo container */}
-            <div className={cn(
-              "relative flex h-24 w-24 lg:h-32 lg:w-32 items-center justify-center",
-              colors.glass.default,
-              radius.full,
-              shadows.xl
-            )}>
+            <div
+              className={cn(
+                "relative flex h-24 w-24 lg:h-32 lg:w-32 items-center justify-center",
+                colors.glass.default,
+                radius.full,
+                shadows.xl,
+              )}
+            >
               <img src={logoSvg} alt="LettuceAI" className="h-14 w-14 lg:h-20 lg:w-20" />
             </div>
           </div>
 
           {/* Brand name */}
-          <h1 className={cn(
-            typography.display.size,
-            typography.display.weight,
-            "mb-3 lg:text-5xl",
-            "text-center lg:text-left",
-            colors.effects.gradient.text
-          )}>
+          <h1
+            className={cn(
+              typography.display.size,
+              typography.display.weight,
+              "mb-3 lg:text-5xl",
+              "text-center lg:text-left",
+              colors.effects.gradient.text,
+            )}
+          >
             LettuceAI
           </h1>
 
           {/* Tagline */}
-          <p className={cn(
-            typography.body.size,
-            typography.body.lineHeight,
-            "max-w-[280px] lg:max-w-md lg:text-lg",
-            "text-center lg:text-left text-white/60"
-          )}>
+          <p
+            className={cn(
+              typography.body.size,
+              typography.body.lineHeight,
+              "max-w-70lg:max-w-md lg:text-lg",
+              "text-center lg:text-left text-white/60",
+            )}
+          >
             Your personal AI companion. Private, secure, and always on-device.
           </p>
 
           {/* Feature Pills */}
-          <div className={cn("mt-6 flex items-center flex-wrap gap-2 lg:gap-3", "justify-center lg:justify-start")}>
+          <div
+            className={cn(
+              "mt-6 flex items-center flex-wrap gap-2 lg:gap-3",
+              "justify-center lg:justify-start",
+            )}
+          >
             {quickFacts.map(({ icon: Icon, label }) => (
               <div
                 key={label}
                 className={cn(
                   "flex items-center gap-1.5 border border-white/10 bg-white/5 px-3 py-1.5 lg:px-4 lg:py-2 backdrop-blur-sm",
-                  radius.full
+                  radius.full,
                 )}
               >
                 <Icon size={14} className="text-emerald-400 lg:w-4 lg:h-4" strokeWidth={2.5} />
-                <span className={cn(typography.bodySmall.size, typography.label.weight, "text-white/70 lg:text-sm")}>
+                <span
+                  className={cn(
+                    typography.bodySmall.size,
+                    typography.label.weight,
+                    "text-white/70 lg:text-sm",
+                  )}
+                >
                   {label}
                 </span>
               </div>
@@ -105,11 +139,7 @@ export function WelcomePage() {
 
           {/* Desktop-only: Bottom hint on left side */}
           <motion.p
-            className={cn(
-              "mt-8 hidden lg:block",
-              typography.caption.size,
-              "text-white/40"
-            )}
+            className={cn("mt-8 hidden lg:block", typography.caption.size, "text-white/40")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.5 }}
@@ -126,23 +156,32 @@ export function WelcomePage() {
           transition={{ duration: 0.4, delay: 0.2 }}
         >
           {/* Beta Warning */}
-          <div className={cn(
-            "mb-6 w-full rounded-xl border border-amber-400/30 bg-amber-400/10 p-4"
-          )}>
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-              <div>
-                <h3 className={cn(typography.bodySmall.size, typography.body.weight, "text-amber-200")}>
-                  {platform.type === "desktop" ? "Desktop Alpha build" : "Beta Build"}
-                </h3>
-                <p className={cn(typography.caption.size, "mt-1 text-amber-200/70")}>
-                  {platform.type === "desktop"
-                    ? "You're using the desktop version. Some features may differ from mobile. Report issues on GitHub."
-                    : "This is a Android beta version. Please report any issues or feedback on our GitHub repository."}
-                </p>
+          {platform.type === "desktop" && (
+            <div
+              className={cn(
+                "mb-6 w-full rounded-xl border border-amber-400/30 bg-amber-400/10 p-4",
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                <div>
+                  <h3
+                    className={cn(
+                      typography.bodySmall.size,
+                      typography.body.weight,
+                      "text-amber-200",
+                    )}
+                  >
+                    Desktop Beta build
+                  </h3>
+                  <p className={cn(typography.caption.size, "mt-1 text-amber-200/70")}>
+                    You're using the desktop version. Some features may differ from mobile. Report
+                    issues on GitHub.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* CTA Buttons */}
           <div className={cn("w-full", spacing.field)}>
@@ -156,12 +195,16 @@ export function WelcomePage() {
                 shadows.glow,
                 interactive.transition.default,
                 interactive.active.scale,
-                "hover:border-emerald-400/60 hover:bg-emerald-400/30"
+                "hover:border-emerald-400/60 hover:bg-emerald-400/30",
               )}
               onClick={handleAddProvider}
             >
               <span>Get Started</span>
-              <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
+              <ArrowRight
+                size={18}
+                className="transition-transform group-hover:translate-x-0.5"
+                strokeWidth={2.5}
+              />
             </button>
 
             <button
@@ -172,7 +215,7 @@ export function WelcomePage() {
                 typography.body.size,
                 interactive.transition.default,
                 interactive.active.scale,
-                "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
+                "hover:border-white/20 hover:bg-white/8 hover:text-white/80",
               )}
               onClick={() => setShowSkipWarning(true)}
             >
@@ -187,7 +230,7 @@ export function WelcomePage() {
                 typography.body.size,
                 interactive.transition.default,
                 interactive.active.scale,
-                "hover:border-white/20 hover:bg-white/8 hover:text-white/80"
+                "hover:border-white/20 hover:bg-white/8 hover:text-white/80",
               )}
               onClick={() => setShowRestoreBackup(true)}
             >
@@ -198,11 +241,7 @@ export function WelcomePage() {
 
           {/* Mobile-only: Bottom hint */}
           <motion.p
-            className={cn(
-              "mt-8 text-center lg:hidden",
-              typography.caption.size,
-              "text-white/40"
-            )}
+            className={cn("mt-8 text-center lg:hidden", typography.caption.size, "text-white/40")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.5 }}
@@ -273,18 +312,18 @@ function SkipWarning({
         className={cn(
           "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6",
           "rounded-t-3xl sm:rounded-3xl sm:mb-8",
-          shadows.xl
+          shadows.xl,
         )}
         initial={{ y: "100%", opacity: 0 }}
         animate={{
           y: isExiting ? "100%" : 0,
-          opacity: isExiting ? 0 : 1
+          opacity: isExiting ? 0 : 1,
         }}
         transition={{
           type: "spring",
           damping: 30,
           stiffness: 350,
-          duration: 0.2
+          duration: 0.2,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -296,30 +335,33 @@ function SkipWarning({
         </div>
 
         {/* Warning content */}
-        <div className={cn(
-          "flex items-start gap-3 border border-amber-400/20 bg-amber-400/5 p-4 mb-6",
-          radius.md
-        )}>
-          <div className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center bg-amber-400/20 text-amber-300",
-            radius.md
-          )}>
+        <div
+          className={cn(
+            "flex items-start gap-3 border border-amber-400/20 bg-amber-400/5 p-4 mb-6",
+            radius.md,
+          )}
+        >
+          <div
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center bg-amber-400/20 text-amber-300",
+              radius.md,
+            )}
+          >
             <AlertTriangle size={20} strokeWidth={2.5} />
           </div>
           <div className={spacing.tight}>
-            <h4 className={cn(
-              typography.body.size,
-              typography.h3.weight,
-              "text-white"
-            )}>
+            <h4 className={cn(typography.body.size, typography.h3.weight, "text-white")}>
               Provider needed to chat
             </h4>
-            <p className={cn(
-              typography.bodySmall.size,
-              typography.bodySmall.lineHeight,
-              "text-white/60"
-            )}>
-              Without a provider, you won't be able to send messages. You can add one later from settings.
+            <p
+              className={cn(
+                typography.bodySmall.size,
+                typography.bodySmall.lineHeight,
+                "text-white/60",
+              )}
+            >
+              Without a provider, you won't be able to send messages. You can add one later from
+              settings.
             </p>
           </div>
         </div>
@@ -335,7 +377,7 @@ function SkipWarning({
               typography.h3.weight,
               interactive.transition.fast,
               interactive.active.scale,
-              "hover:border-emerald-400/60 hover:bg-emerald-400/30"
+              "hover:border-emerald-400/60 hover:bg-emerald-400/30",
             )}
             onClick={handleAddProvider}
           >
@@ -350,7 +392,7 @@ function SkipWarning({
               typography.body.size,
               interactive.transition.fast,
               interactive.active.scale,
-              "hover:border-white/20 hover:bg-white/10 hover:text-white"
+              "hover:border-white/20 hover:bg-white/10 hover:text-white",
             )}
             onClick={handleConfirm}
           >
@@ -463,12 +505,12 @@ function RestoreBackupModal({
 
       const hasDynamicMemory = await storageBridge.backupCheckDynamicMemory(
         selectedBackup.path,
-        selectedBackup.encrypted ? password : undefined
+        selectedBackup.encrypted ? password : undefined,
       );
 
       await storageBridge.backupImport(
         selectedBackup.path,
-        selectedBackup.encrypted ? password : undefined
+        selectedBackup.encrypted ? password : undefined,
       );
 
       await setOnboardingCompleted(true);
@@ -487,7 +529,7 @@ function RestoreBackupModal({
         navigate("/");
       }, 200);
     } catch (e) {
-      console.log(e)
+      console.log(e);
       setError(e instanceof Error ? e.message : "Failed to restore backup");
       setRestoring(false);
     }
@@ -504,7 +546,6 @@ function RestoreBackupModal({
     setRestoring(true);
 
     try {
-
       await storageBridge.backupDisableDynamicMemory();
 
       navigate("/");
@@ -534,18 +575,18 @@ function RestoreBackupModal({
           "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6",
           "rounded-t-3xl sm:rounded-3xl sm:mb-8",
           "max-h-[80vh] overflow-hidden flex flex-col",
-          shadows.xl
+          shadows.xl,
         )}
         initial={{ y: "100%", opacity: 0 }}
         animate={{
           y: isExiting ? "100%" : 0,
-          opacity: isExiting ? 0 : 1
+          opacity: isExiting ? 0 : 1,
         }}
         transition={{
           type: "spring",
           damping: 30,
           stiffness: 350,
-          duration: 0.2
+          duration: 0.2,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -574,10 +615,12 @@ function RestoreBackupModal({
 
               {/* Error display for list view */}
               {error && (
-                <div className={cn(
-                  "flex items-start gap-2 border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200 mb-4",
-                  radius.md
-                )}>
+                <div
+                  className={cn(
+                    "flex items-start gap-2 border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200 mb-4",
+                    radius.md,
+                  )}
+                >
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -599,9 +642,7 @@ function RestoreBackupModal({
                 <div className={cn("border border-white/10 bg-white/5 p-6 text-center", radius.md)}>
                   <FileArchive className="mx-auto h-8 w-8 text-white/20" />
                   <p className="mt-3 text-sm text-white/40">No backups found</p>
-                  <p className="mt-1 text-xs text-white/30">
-                    Tap browse to select a .lettuce file
-                  </p>
+                  <p className="mt-1 text-xs text-white/30">Tap browse to select a .lettuce file</p>
                   <button
                     onClick={handleBrowseForBackup}
                     className={cn(
@@ -609,7 +650,7 @@ function RestoreBackupModal({
                       "border border-blue-400/30 bg-blue-400/10",
                       "text-sm text-blue-300 font-medium",
                       "hover:bg-blue-400/20 active:scale-[0.98]",
-                      interactive.transition.default
+                      interactive.transition.default,
                     )}
                   >
                     <Upload className="h-4 w-4" />
@@ -630,7 +671,7 @@ function RestoreBackupModal({
                         "w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left",
                         interactive.transition.default,
                         "hover:border-white/20 hover:bg-white/8",
-                        "active:scale-[0.99]"
+                        "active:scale-[0.99]",
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -639,8 +680,12 @@ function RestoreBackupModal({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-medium text-white">{backup.filename}</p>
-                            {backup.encrypted && <Lock className="h-3 w-3 shrink-0 text-amber-400/70" />}
+                            <p className="truncate text-sm font-medium text-white">
+                              {backup.filename}
+                            </p>
+                            {backup.encrypted && (
+                              <Lock className="h-3 w-3 shrink-0 text-amber-400/70" />
+                            )}
                           </div>
                           <p className="mt-0.5 text-[11px] text-white/40">
                             {formatDate(backup.createdAt)} · v{backup.appVersion}
@@ -659,7 +704,9 @@ function RestoreBackupModal({
                 <div className="flex items-center gap-3">
                   <FileArchive className="h-6 w-6 text-white/40" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">{selectedBackup.filename}</p>
+                    <p className="truncate text-sm font-medium text-white">
+                      {selectedBackup.filename}
+                    </p>
                     <p className="text-xs text-white/40">
                       {formatDate(selectedBackup.createdAt)} · v{selectedBackup.appVersion}
                     </p>
@@ -668,19 +715,26 @@ function RestoreBackupModal({
               </div>
 
               {/* Info notice */}
-              <div className={cn(
-                "flex items-start gap-2 border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs text-blue-200",
-                radius.md
-              )}>
+              <div
+                className={cn(
+                  "flex items-start gap-2 border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs text-blue-200",
+                  radius.md,
+                )}
+              >
                 <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>This will set up the app with your backed up data, including characters, chats, and settings.</span>
+                <span>
+                  This will set up the app with your backed up data, including characters, chats,
+                  and settings.
+                </span>
               </div>
 
               {error && (
-                <div className={cn(
-                  "flex items-center gap-2 border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200",
-                  radius.md
-                )}>
+                <div
+                  className={cn(
+                    "flex items-center gap-2 border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200",
+                    radius.md,
+                  )}
+                >
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   {error}
                 </div>
@@ -688,7 +742,9 @@ function RestoreBackupModal({
 
               {selectedBackup.encrypted && (
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-white/50">Backup Password</label>
+                  <label className="mb-1.5 block text-xs font-medium text-white/50">
+                    Backup Password
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
@@ -698,7 +754,7 @@ function RestoreBackupModal({
                       className={cn(
                         "w-full border border-white/10 bg-white/5 px-4 py-3 pr-12 text-white placeholder-white/30",
                         radius.lg,
-                        "focus:border-white/20 focus:outline-none"
+                        "focus:border-white/20 focus:outline-none",
                       )}
                     />
                     <button
@@ -731,7 +787,7 @@ function RestoreBackupModal({
                   interactive.transition.fast,
                   interactive.active.scale,
                   "hover:border-emerald-400/60 hover:bg-emerald-400/30",
-                  "disabled:opacity-50"
+                  "disabled:opacity-50",
                 )}
               >
                 {restoring ? (
@@ -757,7 +813,7 @@ function RestoreBackupModal({
                   interactive.transition.fast,
                   interactive.active.scale,
                   "hover:border-white/20 hover:bg-white/10 hover:text-white",
-                  "disabled:opacity-50"
+                  "disabled:opacity-50",
                 )}
               >
                 Back
@@ -773,7 +829,7 @@ function RestoreBackupModal({
                 typography.body.size,
                 interactive.transition.fast,
                 interactive.active.scale,
-                "hover:border-white/20 hover:bg-white/10 hover:text-white"
+                "hover:border-white/20 hover:bg-white/10 hover:text-white",
               )}
             >
               Cancel
@@ -794,7 +850,7 @@ function RestoreBackupModal({
             className={cn(
               "w-full max-w-lg border border-white/10 bg-[#0b0b0d] p-6",
               "rounded-t-3xl",
-              shadows.xl
+              shadows.xl,
             )}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
@@ -811,13 +867,15 @@ function RestoreBackupModal({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-amber-200">Dynamic Memory Detected</p>
                   <p className="mt-1 text-xs text-amber-200/70">
-                    This backup contains characters with dynamic memory enabled, which requires the embedding model (~120MB).
+                    This backup contains characters with dynamic memory enabled, which requires the
+                    embedding model (~120MB).
                   </p>
                 </div>
               </div>
 
               <p className="text-sm text-white/60">
-                You can download the model now to enable dynamic memory, or continue without it (dynamic memory will be disabled for affected characters).
+                You can download the model now to enable dynamic memory, or continue without it
+                (dynamic memory will be disabled for affected characters).
               </p>
 
               <div className="flex flex-col gap-2 pt-2">
@@ -830,7 +888,7 @@ function RestoreBackupModal({
                     typography.body.size,
                     typography.h3.weight,
                     interactive.transition.fast,
-                    "hover:border-blue-400/60 hover:bg-blue-400/30"
+                    "hover:border-blue-400/60 hover:bg-blue-400/30",
                   )}
                 >
                   <Download className="h-4 w-4" />
@@ -844,7 +902,7 @@ function RestoreBackupModal({
                     "border border-white/10 bg-white/5 text-white/60",
                     typography.body.size,
                     interactive.transition.fast,
-                    "hover:border-white/20 hover:bg-white/10 hover:text-white"
+                    "hover:border-white/20 hover:bg-white/10 hover:text-white",
                   )}
                 >
                   Continue Without Dynamic Memory
@@ -852,7 +910,8 @@ function RestoreBackupModal({
               </div>
 
               <p className="text-xs text-white/40 text-center">
-                You can re-enable dynamic memory later in character settings after downloading the model.
+                You can re-enable dynamic memory later in character settings after downloading the
+                model.
               </p>
             </div>
           </motion.div>
