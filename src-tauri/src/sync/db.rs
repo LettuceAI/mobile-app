@@ -65,7 +65,7 @@ pub fn fetch_layer_data(
 
 fn fetch_globals(conn: &DbConnection) -> Result<Vec<u8>, String> {
     // Settings
-    let mut stmt = conn.prepare("SELECT id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, advanced_settings, migration_version, created_at, updated_at FROM settings").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, default_provider_credential_id, default_model_id, app_state, prompt_template_id, system_prompt, advanced_settings, migration_version, created_at, updated_at FROM settings").map_err(|e| e.to_string())?;
     let settings_iter = stmt
         .query_map([], |r| {
             Ok(Settings {
@@ -73,13 +73,12 @@ fn fetch_globals(conn: &DbConnection) -> Result<Vec<u8>, String> {
                 default_provider_credential_id: r.get(1)?,
                 default_model_id: r.get(2)?,
                 app_state: r.get(3)?,
-                advanced_model_settings: r.get(4)?,
-                prompt_template_id: r.get(5)?,
-                system_prompt: r.get(6)?,
-                advanced_settings: r.get(7)?,
-                migration_version: r.get(8)?,
-                created_at: r.get(9)?,
-                updated_at: r.get(10)?,
+                prompt_template_id: r.get(4)?,
+                system_prompt: r.get(5)?,
+                advanced_settings: r.get(6)?,
+                migration_version: r.get(7)?,
+                created_at: r.get(8)?,
+                updated_at: r.get(9)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -535,9 +534,9 @@ fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
 
     // Settings (ID=1)
     if let Some(s) = settings.first() {
-        tx.execute(r#"INSERT OR REPLACE INTO settings (id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, advanced_settings, migration_version, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
-                    params![s.id, s.default_provider_credential_id, s.default_model_id, s.app_state, s.advanced_model_settings, s.prompt_template_id, s.system_prompt, s.advanced_settings, s.migration_version, s.created_at, s.updated_at])
+        tx.execute(r#"INSERT OR REPLACE INTO settings (id, default_provider_credential_id, default_model_id, app_state, prompt_template_id, system_prompt, advanced_settings, migration_version, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+                    params![s.id, s.default_provider_credential_id, s.default_model_id, s.app_state, s.prompt_template_id, s.system_prompt, s.advanced_settings, s.migration_version, s.created_at, s.updated_at])
             .map_err(|e| e.to_string())?;
     }
 
