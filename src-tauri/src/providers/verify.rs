@@ -113,15 +113,34 @@ pub async fn verify_provider_api_key(
             .unwrap_or(status == 200),
     };
 
+    let error = if valid {
+        None
+    } else {
+        extract_error_message(&json)
+    };
+
+    if valid {
+        log_info(
+            &app,
+            "verify_provider_api_key",
+            format!("Verification successful for provider={}", provider_id),
+        );
+    } else {
+        crate::utils::log_error(
+            &app,
+            "verify_provider_api_key",
+            format!(
+                "Verification failed for provider={}: status={} error={:?}",
+                provider_id, status, error
+            ),
+        );
+    }
+
     Ok(VerifyProviderApiKeyResult {
         provider_id,
         valid,
         status: Some(status),
-        error: if valid {
-            None
-        } else {
-            extract_error_message(&json)
-        },
+        error,
         details: if valid { None } else { Some(json) },
     })
 }

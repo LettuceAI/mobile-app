@@ -26,9 +26,20 @@ pub struct ChatContext {
 
 impl ChatContext {
     pub fn initialize(app: AppHandle) -> Result<Self, String> {
+        log_info(&app, "chat_context", "Initializing chat context");
         let settings = load_settings(&app)?;
         let characters = load_characters(&app)?;
         let personas = load_personas(&app)?;
+
+        log_info(
+            &app,
+            "chat_context",
+            format!(
+                "Context loaded: {} characters, {} personas",
+                characters.len(),
+                personas.len()
+            ),
+        );
 
         Ok(Self {
             app,

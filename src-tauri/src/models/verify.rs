@@ -1,4 +1,5 @@
 use crate::storage_manager;
+use crate::utils::{log_error, log_info};
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
@@ -20,6 +21,14 @@ pub async fn verify_model_exists(
     credential_id: String,
     model: String,
 ) -> Result<VerifyModelResponse, String> {
+    log_info(
+        &app,
+        "verify_model",
+        format!(
+            "Verifying model exists: provider={} credential={} model={}",
+            provider_id, credential_id, model
+        ),
+    );
     let supports_model_list = matches!(
         provider_id.as_str(),
         "openai"
@@ -168,6 +177,20 @@ pub async fn verify_model_exists(
                 }
             }
         }
+    }
+
+    if exists {
+        log_info(
+            &app,
+            "verify_model",
+            format!("Model {} exists on provider {}", model, provider_id),
+        );
+    } else {
+        log_error(
+            &app,
+            "verify_model",
+            format!("Model {} not found on provider {}", model, provider_id),
+        );
     }
 
     Ok(VerifyModelResponse {

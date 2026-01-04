@@ -2,6 +2,7 @@ use rusqlite::{params, OptionalExtension};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use super::db::{now_ms, open_db};
+use crate::utils::{log_error, log_info};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
     let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
@@ -147,18 +148,51 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
 
 #[tauri::command]
 pub fn characters_list(app: tauri::AppHandle) -> Result<String, String> {
+    log_info(&app, "characters_list", "Listing all characters");
     let conn = open_db(&app)?;
     let mut stmt = conn
         .prepare("SELECT id FROM characters ORDER BY created_at ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log_error(
+                &app,
+                "characters_list",
+                format!("Failed to prepare statement: {}", e),
+            );
+            e.to_string()
+        })?;
     let rows = stmt
         .query_map([], |r| Ok(r.get::<_, String>(0)?))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log_error(
+                &app,
+                "characters_list",
+                format!("Failed to query map: {}", e),
+            );
+            e.to_string()
+        })?;
     let mut out = Vec::new();
     for id in rows {
-        let id = id.map_err(|e| e.to_string())?;
-        out.push(read_character(&conn, &id)?);
+        let id = id.map_err(|e| {
+            log_error(&app, "characters_list", format!("Failed to get id: {}", e));
+            e.to_string()
+        })?;
+        match read_character(&conn, &id) {
+            Ok(char_data) => out.push(char_data),
+            Err(e) => {
+                log_error(
+                    &app,
+                    "characters_list",
+                    format!("Failed to read character {}: {}", id, e),
+                );
+                return Err(e);
+            }
+        }
     }
+    log_info(
+        &app,
+        "characters_list",
+        format!("Found {} characters", out.len()),
+    );
     Ok(serde_json::to_string(&out).map_err(|e| e.to_string())?)
 }
 
@@ -171,6 +205,13 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    log_info(
+        &app,
+        "character_upsert",
+        format!("Upserting character {}", id),
+    );
+
     let name = c
         .get("name")
         .and_then(|v| v.as_str())
@@ -350,8 +391,28 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         "UPDATE characters SET default_scene_id = ? WHERE id = ?",
         params![new_default_scene_id, &id],
     )
-    .map_err(|e| e.to_string())?;
-    tx.commit().map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        log_error(
+            &app,
+            "character_upsert",
+            format!("Failed to update default scene: {}", e),
+        );
+        e.to_string()
+    })?;
+    tx.commit().map_err(|e| {
+        log_error(
+            &app,
+            "character_upsert",
+            format!("Failed to commit transaction: {}", e),
+        );
+        e.to_string()
+    })?;
+
+    log_info(
+        &app,
+        "character_upsert",
+        format!("Successfully upserted character {}", id),
+    );
 
     let conn2 = open_db(&app)?;
     read_character(&conn2, &id).and_then(|v| serde_json::to_string(&v).map_err(|e| e.to_string()))
@@ -359,8 +420,25 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
 
 #[tauri::command]
 pub fn character_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    log_info(
+        &app,
+        "character_delete",
+        format!("Deleting character {}", id),
+    );
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM characters WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log_error(
+                &app,
+                "character_delete",
+                format!("Failed to delete character {}: {}", id, e),
+            );
+            e.to_string()
+        })?;
+    log_info(
+        &app,
+        "character_delete",
+        format!("Successfully deleted character {}", id),
+    );
     Ok(())
 }

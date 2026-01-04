@@ -6,7 +6,7 @@ use uuid;
 
 use super::db::{now_ms, open_db};
 use crate::embedding_model;
-use crate::utils::{log_error, log_warn};
+use crate::utils::{log_error, log_info, log_warn};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -945,8 +945,26 @@ pub fn messages_upsert_batch(
     let Some(msgs) = v.as_array() else {
         return Err("messages_json must be a JSON array".to_string());
     };
+
+    log_info(
+        &app,
+        "messages_upsert_batch",
+        format!(
+            "Upserting {} messages for session {}",
+            msgs.len(),
+            session_id
+        ),
+    );
+
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| {
+        log_error(
+            &app,
+            "messages_upsert_batch",
+            format!("Failed to begin transaction: {}", e),
+        );
+        e.to_string()
+    })?;
 
     for m in msgs {
         let mid = m
@@ -1073,13 +1091,28 @@ pub fn message_delete(
     session_id: String,
     message_id: String,
 ) -> Result<(), String> {
+    log_info(
+        &app,
+        "message_delete",
+        format!(
+            "Deleting message {} from session {}",
+            message_id, session_id
+        ),
+    );
     let conn = open_db(&app)?;
     let now = now_ms() as i64;
     conn.execute(
         "DELETE FROM messages WHERE id = ? AND session_id = ?",
         params![&message_id, &session_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        log_error(
+            &app,
+            "message_delete",
+            format!("Failed to delete message: {}", e),
+        );
+        e.to_string()
+    })?;
     conn.execute(
         "UPDATE sessions SET updated_at = ? WHERE id = ?",
         params![now, &session_id],
@@ -1186,7 +1219,7 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
         .map(|s| s.to_string());
 
     // Debug log
-    log_warn(
+    log_info(
         &app,
         "session_upsert",
         format!(
@@ -1372,9 +1405,17 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
 
 #[tauri::command]
 pub fn session_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    log_info(&app, "session_delete", format!("Deleting session {}", id));
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM sessions WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log_error(
+                &app,
+                "session_delete",
+                format!("Failed to delete session: {}", e),
+            );
+            e.to_string()
+        })?;
     Ok(())
 }
 
@@ -1478,6 +1519,11 @@ pub async fn session_add_memory(
     session_id: String,
     memory: String,
 ) -> Result<Option<String>, String> {
+    log_info(
+        &app,
+        "session_add_memory",
+        format!("Adding memory to session {}", session_id),
+    );
     let conn = open_db(&app)?;
 
     // Read current memories

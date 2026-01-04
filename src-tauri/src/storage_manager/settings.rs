@@ -2,8 +2,10 @@ use rusqlite::{params, OptionalExtension};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use super::{db::now_ms, db::open_db, legacy::read_encrypted_file, legacy::settings_path};
+use crate::utils::{log_error, log_info};
 
 fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    log_info(app, "settings", "Reading settings from DB");
     let conn = open_db(app)?;
 
     let exists: Option<i64> = conn
@@ -194,9 +196,17 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 }
 
 fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), String> {
+    log_info(app, "settings", "Writing settings to DB");
     let mut conn = open_db(app)?;
     let now = now_ms() as i64;
-    let json: JsonValue = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    let json: JsonValue = serde_json::from_str(&data).map_err(|e| {
+        log_error(
+            app,
+            "settings",
+            format!("Failed to parse settings JSON: {}", e),
+        );
+        e.to_string()
+    })?;
 
     let default_provider_credential_id = json
         .get("defaultProviderCredentialId")
