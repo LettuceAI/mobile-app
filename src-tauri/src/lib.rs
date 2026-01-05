@@ -4,6 +4,7 @@ mod chat_manager;
 mod creation_helper;
 mod embedding_model;
 mod error;
+mod group_chat_manager;
 mod image_generator;
 mod logger;
 pub mod migrations;
@@ -266,6 +267,39 @@ pub fn run() {
             creation_helper::creation_helper_get_images,
             creation_helper::creation_helper_get_uploaded_image,
             creation_helper::creation_helper_regenerate,
+            // Group chat commands
+            storage_manager::group_sessions::group_sessions_list,
+            storage_manager::group_sessions::group_sessions_list_all,
+            storage_manager::group_sessions::group_session_create,
+            storage_manager::group_sessions::group_session_get,
+            storage_manager::group_sessions::group_session_update,
+            storage_manager::group_sessions::group_session_delete,
+            storage_manager::group_sessions::group_session_archive,
+            storage_manager::group_sessions::group_session_update_title,
+            storage_manager::group_sessions::group_session_duplicate,
+            storage_manager::group_sessions::group_session_add_character,
+            storage_manager::group_sessions::group_session_remove_character,
+            storage_manager::group_sessions::group_participation_stats,
+            storage_manager::group_sessions::group_participation_increment,
+            storage_manager::group_sessions::group_messages_list,
+            storage_manager::group_sessions::group_message_upsert,
+            storage_manager::group_sessions::group_message_delete,
+            storage_manager::group_sessions::group_messages_delete_after,
+            storage_manager::group_sessions::group_message_add_variant,
+            storage_manager::group_sessions::group_message_select_variant,
+            storage_manager::group_sessions::group_message_count,
+            storage_manager::group_sessions::group_session_update_memories,
+            storage_manager::group_sessions::group_session_update_manual_memories,
+            storage_manager::group_sessions::group_session_add_memory,
+            storage_manager::group_sessions::group_session_remove_memory,
+            storage_manager::group_sessions::group_session_update_memory,
+            storage_manager::group_sessions::group_session_toggle_memory_pin,
+            storage_manager::group_sessions::group_session_set_memory_cold_state,
+            group_chat_manager::group_chat_send,
+            group_chat_manager::group_chat_regenerate,
+            group_chat_manager::group_chat_continue,
+            group_chat_manager::group_chat_get_selection_prompt,
+            group_chat_manager::group_chat_retry_dynamic_memory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

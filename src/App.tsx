@@ -25,14 +25,34 @@ import { VoicesPage } from "./ui/pages/settings/VoicesPage";
 import { DynamicMemoryPage } from "./ui/pages/settings/DynamicMemoryPage";
 import { EmbeddingDownloadPage } from "./ui/pages/settings/EmbeddingDownloadPage";
 import { EmbeddingTestPage } from "./ui/pages/settings/EmbeddingTestPage";
-import { ChatPage, ChatConversationPage, ChatSettingsPage, ChatHistoryPage, ChatMemoriesPage, SearchMessagesPage } from "./ui/pages/chats";
+import {
+  ChatPage,
+  ChatConversationPage,
+  ChatSettingsPage,
+  ChatHistoryPage,
+  ChatMemoriesPage,
+  SearchMessagesPage,
+} from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
-import { CreateCharacterPage, EditCharacterPage, LorebookEditor, CreationHelperPage } from "./ui/pages/characters";
+import {
+  CreateCharacterPage,
+  EditCharacterPage,
+  LorebookEditor,
+  CreationHelperPage,
+} from "./ui/pages/characters";
 import { CreatePersonaPage, PersonasPage, EditPersonaPage } from "./ui/pages/personas";
 import { SearchPage } from "./ui/pages/search";
 import { LibraryPage } from "./ui/pages/library/LibraryPage";
 import { StandaloneLorebookEditor } from "./ui/pages/library/StandaloneLorebookEditor";
 import { SyncPage } from "./ui/pages/sync/SyncPage";
+import {
+  GroupChatsListPage,
+  GroupChatCreatePage,
+  GroupChatPage,
+  GroupChatSettingsPage,
+  GroupChatHistoryPage,
+  GroupChatMemoriesPage,
+} from "./ui/pages/group-chats";
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { V1UpgradeToast } from "./ui/components/V1UpgradeToast";
@@ -57,7 +77,7 @@ function App() {
     };
 
     const handleBeforeUnload = () => {
-      storageBridge.dbCheckpoint().catch(() => { });
+      storageBridge.dbCheckpoint().catch(() => {});
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -135,36 +155,50 @@ function AppContent() {
   console.log("AppContent render:", location.pathname, location.key);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const isChatRoute = location.pathname === "/chat" || location.pathname === "/";
-  const isChatDetailRoute = location.pathname.startsWith("/chat/");
+  // Group chat detail: /group-chats/:id, /group-chats/:id/settings, /group-chats/new (NOT /group-chats list)
+  const isGroupChatDetailRoute = location.pathname.startsWith("/group-chats/");
+  const isChatDetailRoute = location.pathname.startsWith("/chat/") || isGroupChatDetailRoute;
   const isSearchRoute = location.pathname === "/search";
   const isOnboardingRoute = useMemo(
     () =>
       location.pathname.startsWith("/welcome") ||
       location.pathname.startsWith("/onboarding") ||
       location.pathname.startsWith("/wheretofind"),
-    [location.pathname]
+    [location.pathname],
   );
   const isCreateRoute = useMemo(
     () => location.pathname.startsWith("/create/"),
-    [location.pathname]
+    [location.pathname],
   );
 
   const isSettingRoute = useMemo(
     () => location.pathname.startsWith("/settings"),
-    [location.pathname]
+    [location.pathname],
   );
   const shouldAnimatePage = !location.pathname.startsWith("/settings/providers");
 
   const isLorebookEditorRoute = useMemo(
     () => location.pathname.startsWith("/library/lorebooks/"),
-    [location.pathname]
+    [location.pathname],
   );
 
-  const showTopNav = !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute && !isLorebookEditorRoute;
-  const showBottomNav = !isSettingRoute && !isOnboardingRoute && !isChatDetailRoute && !isCreateRoute && !isSearchRoute && !isLorebookEditorRoute;
+  const showTopNav =
+    !isOnboardingRoute &&
+    !isChatDetailRoute &&
+    !isCreateRoute &&
+    !isSearchRoute &&
+    !isLorebookEditorRoute;
+  const showBottomNav =
+    !isSettingRoute &&
+    !isOnboardingRoute &&
+    !isChatDetailRoute &&
+    !isCreateRoute &&
+    !isSearchRoute &&
+    !isLorebookEditorRoute;
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
-  const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } = useFirstTimeTooltip("create_button");
+  const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } =
+    useFirstTimeTooltip("create_button");
   const [showDelayedTooltip, setShowDelayedTooltip] = useState(false);
 
   useAndroidBackHandler();
@@ -174,8 +208,6 @@ function AppContent() {
       setShowCreateMenu(false);
     }
   }, [isOnboardingRoute, isCreateRoute]);
-
-
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
@@ -205,7 +237,9 @@ function AppContent() {
       if (main) {
         main.scrollTop = 0;
 
-        const inner = main.querySelector('[data-settings-scroll], .settings-scroll') as HTMLElement | null;
+        const inner = main.querySelector(
+          "[data-settings-scroll], .settings-scroll",
+        ) as HTMLElement | null;
         if (inner) {
           inner.scrollTop = 0;
         }
@@ -220,34 +254,32 @@ function AppContent() {
   const isDesktop = useMemo(() => {
     const platform = getPlatform();
     return platform.type === "desktop";
-  }, [])
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
-        className={`relative z-10 mx-auto flex min-h-screen w-full ${isChatDetailRoute ? "max-w-full" : "max-w-md lg:max-w-none"
-          } flex-col ${showBottomNav ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
+        className={`relative z-10 mx-auto flex min-h-screen w-full ${
+          isChatDetailRoute ? "max-w-full" : "max-w-md lg:max-w-none"
+        } flex-col ${showBottomNav ? "pb-[calc(72px+env(safe-area-inset-bottom))]" : "pb-0"}`}
       >
-        {showTopNav && (
-          <TopNav
-            currentPath={location.pathname + location.search}
-          />
-        )}
+        {showTopNav && <TopNav currentPath={location.pathname + location.search} />}
 
         <main
           ref={mainRef}
-          className={`flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${isOnboardingRoute
-            ? `overflow-y-auto ${isDesktop ? "" : "px-0 pt-5 pb-5"}`
-            : isChatDetailRoute
-              ? "overflow-hidden px-0 pt-0 pb-0"
-              : isCreateRoute
+          className={`flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${
+            isOnboardingRoute
+              ? `overflow-y-auto ${isDesktop ? "" : "px-0 pt-5 pb-5"}`
+              : isChatDetailRoute
                 ? "overflow-hidden px-0 pt-0 pb-0"
-                : isSearchRoute
+                : isCreateRoute
                   ? "overflow-hidden px-0 pt-0 pb-0"
-                  : isLorebookEditorRoute
+                  : isSearchRoute
                     ? "overflow-hidden px-0 pt-0 pb-0"
-                    : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
-            }`}
+                    : isLorebookEditorRoute
+                      ? "overflow-hidden px-0 pt-0 pb-0"
+                      : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
+          }`}
         >
           <motion.div
             key={location.pathname.startsWith("/settings") ? location.pathname : location.key}
@@ -299,19 +331,35 @@ function AppContent() {
               <Route path="/create/character" element={<CreateCharacterPage />} />
               <Route path="/create/character/helper" element={<CreationHelperPage />} />
               <Route path="/settings/characters" element={<CharactersPage />} />
-              <Route path="/settings/characters/:characterId/edit" element={<EditCharacterPage />} />
-              <Route path="/settings/characters/:characterId/lorebook" element={<LorebookEditor />} />
+              <Route
+                path="/settings/characters/:characterId/edit"
+                element={<EditCharacterPage />}
+              />
+              <Route
+                path="/settings/characters/:characterId/lorebook"
+                element={<LorebookEditor />}
+              />
               <Route path="/create/persona" element={<CreatePersonaPage />} />
               <Route path="/personas" element={<PersonasPage />} />
               <Route path="/settings/personas" element={<PersonasPage />} />
               <Route path="/settings/personas/:personaId/edit" element={<EditPersonaPage />} />
+              <Route path="/group-chats" element={<GroupChatsListPage />} />
+              <Route path="/group-chats/history" element={<GroupChatHistoryPage />} />
+              <Route path="/group-chats/new" element={<GroupChatCreatePage />} />
+              <Route path="/group-chats/:groupSessionId" element={<GroupChatPage />} />
+              <Route
+                path="/group-chats/:groupSessionId/settings"
+                element={<GroupChatSettingsPage />}
+              />
+              <Route
+                path="/group-chats/:groupSessionId/memories"
+                element={<GroupChatMemoriesPage />}
+              />
             </Routes>
           </motion.div>
         </main>
 
-        {showBottomNav && (
-          <BottomNav onCreateClick={() => setShowCreateMenu(true)} />
-        )}
+        {showBottomNav && <BottomNav onCreateClick={() => setShowCreateMenu(true)} />}
       </div>
 
       {showBottomNav && (
@@ -336,7 +384,6 @@ function AppContent() {
     </div>
   );
 }
-
 
 function OnboardingCheck() {
   const [isChecking, setIsChecking] = useState(true);

@@ -2,6 +2,7 @@ pub mod backup;
 pub mod character_transfer;
 pub mod characters;
 pub mod db;
+pub mod group_sessions;
 pub mod importer;
 pub mod legacy;
 pub mod lorebook;

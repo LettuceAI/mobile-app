@@ -589,12 +589,13 @@ export function providerSupportsParameter(
   providerId: string,
   parameter: keyof AdvancedModelSettings,
 ): boolean {
-  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId] ||
-    (providerId === 'google-gemini' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
-    (providerId === 'google' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
-    (providerId === 'chutes.ai' ? PROVIDER_PARAMETER_SUPPORT.chutes : null) ||
-    (providerId === 'moonshot-ai' ? PROVIDER_PARAMETER_SUPPORT.moonshot : null) ||
-    (providerId === 'z.ai' ? PROVIDER_PARAMETER_SUPPORT.zai : null);
+  const provider =
+    PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId] ||
+    (providerId === "google-gemini" ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === "google" ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === "chutes.ai" ? PROVIDER_PARAMETER_SUPPORT.chutes : null) ||
+    (providerId === "moonshot-ai" ? PROVIDER_PARAMETER_SUPPORT.moonshot : null) ||
+    (providerId === "z.ai" ? PROVIDER_PARAMETER_SUPPORT.zai : null);
 
   if (!provider) return false;
   return provider.supportedParameters[parameter] ?? false;
@@ -604,12 +605,13 @@ export function providerSupportsParameter(
  * Gets the reasoning support type for a specific provider
  */
 export function getProviderReasoningSupport(providerId: string): ReasoningSupport {
-  const provider = PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId] ||
-    (providerId === 'google-gemini' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
-    (providerId === 'google' ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
-    (providerId === 'chutes.ai' ? PROVIDER_PARAMETER_SUPPORT.chutes : null) ||
-    (providerId === 'moonshot-ai' ? PROVIDER_PARAMETER_SUPPORT.moonshot : null) ||
-    (providerId === 'z.ai' ? PROVIDER_PARAMETER_SUPPORT.zai : null);
+  const provider =
+    PROVIDER_PARAMETER_SUPPORT[providerId as ProviderId] ||
+    (providerId === "google-gemini" ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === "google" ? PROVIDER_PARAMETER_SUPPORT.gemini : null) ||
+    (providerId === "chutes.ai" ? PROVIDER_PARAMETER_SUPPORT.chutes : null) ||
+    (providerId === "moonshot-ai" ? PROVIDER_PARAMETER_SUPPORT.moonshot : null) ||
+    (providerId === "z.ai" ? PROVIDER_PARAMETER_SUPPORT.zai : null);
 
   if (!provider) return "none";
   return provider.reasoningSupport;
@@ -672,6 +674,131 @@ export const MessageSchema = z.object({
   reasoning: z.string().nullish(),
 });
 export type StoredMessage = z.infer<typeof MessageSchema>;
+
+// ============================================================================
+// Group Chat Schemas
+// ============================================================================
+
+export const GroupMemoryEmbeddingSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  embedding: z.array(z.number()),
+  createdAt: z.number().int(),
+  tokenCount: z.number().int().nonnegative().default(0),
+  isCold: z.boolean().default(false),
+  importanceScore: z.number().default(1.0),
+  lastAccessedAt: z.number().int().default(0),
+  accessCount: z.number().int().default(0),
+  isPinned: z.boolean().default(false),
+});
+export type GroupMemoryEmbedding = z.infer<typeof GroupMemoryEmbeddingSchema>;
+
+export const GroupSessionSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  characterIds: z.array(z.string().uuid()),
+  personaId: z.string().uuid().nullish(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+  /** Whether this session is archived */
+  archived: z.boolean().default(false),
+  /** Manual memories (simple text entries) */
+  memories: z.array(z.string()).default([]),
+  /** Dynamic memory embeddings with semantic search support */
+  memoryEmbeddings: z.array(GroupMemoryEmbeddingSchema).default([]),
+  /** Summary of memories for context compression */
+  memorySummary: z.string().default(""),
+  /** Token count of the memory summary */
+  memorySummaryTokenCount: z.number().int().default(0),
+  /** Memory tool events tracking (for dynamic memory cycle gating) */
+  memoryToolEvents: z
+    .array(
+      z.object({
+        type: z.string().optional(),
+        windowEnd: z.number().int().optional(),
+        timestamp: z.number().int().optional(),
+        memoriesCount: z.number().int().optional(),
+        // Also support the full format used in normal sessions
+        id: z.string().optional(),
+        windowStart: z.number().int().optional(),
+        summary: z.string().optional(),
+        actions: z
+          .array(
+            z.object({
+              name: z.string(),
+              arguments: z.any().optional(),
+              timestamp: z.number().int().optional(),
+              updatedMemories: z.array(z.string()).optional(),
+            }),
+          )
+          .optional(),
+        createdAt: z.number().int().optional(),
+      }),
+    )
+    .default([]),
+});
+export type GroupSession = z.infer<typeof GroupSessionSchema>;
+
+export const GroupParticipationSchema = z.object({
+  id: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  characterId: z.string().uuid(),
+  speakCount: z.number().int().default(0),
+  lastSpokeTurn: z.number().int().nullish(),
+  lastSpokeAt: z.number().int().nullish(),
+});
+export type GroupParticipation = z.infer<typeof GroupParticipationSchema>;
+
+export const GroupMessageVariantSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  speakerCharacterId: z.string().uuid().nullish(),
+  createdAt: z.number().int(),
+  usage: UsageSummarySchema.optional().nullable(),
+  reasoning: z.string().nullish(),
+  selectionReasoning: z.string().nullish(),
+});
+export type GroupMessageVariant = z.infer<typeof GroupMessageVariantSchema>;
+
+export const GroupMessageSchema = z.object({
+  id: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+  speakerCharacterId: z.string().uuid().nullish(),
+  turnNumber: z.number().int(),
+  createdAt: z.number().int(),
+  usage: UsageSummarySchema.optional().nullable(),
+  variants: z.array(GroupMessageVariantSchema).optional(),
+  selectedVariantId: z.string().uuid().nullish(),
+  isPinned: z.boolean().default(false),
+  attachments: z.array(ImageAttachmentSchema).optional(),
+  reasoning: z.string().nullish(),
+  selectionReasoning: z.string().nullish(),
+});
+export type GroupMessage = z.infer<typeof GroupMessageSchema>;
+
+export const GroupSessionPreviewSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  characterIds: z.array(z.string().uuid()),
+  updatedAt: z.number().int(),
+  lastMessage: z.string().nullish(),
+  messageCount: z.number().int(),
+  archived: z.boolean().default(false),
+});
+export type GroupSessionPreview = z.infer<typeof GroupSessionPreviewSchema>;
+
+export const GroupChatResponseSchema = z.object({
+  message: GroupMessageSchema,
+  characterId: z.string().uuid(),
+  characterName: z.string(),
+  reasoning: z.string().nullish(),
+  selectionReasoning: z.string().nullish(),
+  wasMentioned: z.boolean(),
+  participationStats: z.array(GroupParticipationSchema),
+});
+export type GroupChatResponse = z.infer<typeof GroupChatResponseSchema>;
 
 export const SceneVariantSchema = z.object({
   id: z.string().uuid(),

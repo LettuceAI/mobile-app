@@ -1,4 +1,5 @@
 mod commands;
+pub mod dynamic_memory;
 pub mod lorebook_matcher;
 pub mod messages;
 pub mod prompt_engine;
@@ -6,9 +7,9 @@ pub mod prompts;
 pub mod provider_adapter;
 pub mod request;
 pub mod request_builder;
-mod service;
+pub mod service;
 pub mod sse;
-mod storage;
+pub mod storage;
 pub mod tooling;
 pub mod types;
 

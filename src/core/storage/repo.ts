@@ -9,6 +9,7 @@ import {
   SettingsSchema,
   PersonaSchema,
   MessageSchema,
+  GroupSessionSchema,
   type Character,
   type Session,
   type Settings,
@@ -19,6 +20,7 @@ import {
   type AppState,
   type Lorebook,
   type LorebookEntry,
+  type GroupSession,
   createDefaultSettings,
   createDefaultAccessibilitySettings,
 } from "./schemas";
@@ -81,16 +83,17 @@ export async function readSettings(): Promise<Settings> {
   if (parsed.success) {
     const settings = parsed.data;
 
-    const modelsWithoutProviderLabel = settings.models.filter(m => !m.providerLabel);
+    const modelsWithoutProviderLabel = settings.models.filter((m) => !m.providerLabel);
     const missingAccessibility = !settings.advancedSettings?.accessibility;
 
     for (const model of modelsWithoutProviderLabel) {
-      const providerCred = settings.providerCredentials.find((p) => p.providerId === model.providerId);
+      const providerCred = settings.providerCredentials.find(
+        (p) => p.providerId === model.providerId,
+      );
       if (providerCred) {
         (model as any).providerLabel = providerCred.label;
       }
     }
-
 
     if (missingAccessibility) {
       settings.advancedSettings = {
@@ -147,8 +150,13 @@ export async function setMigrationVersion(version: number): Promise<void> {
   broadcastSettingsUpdated();
 }
 
-export async function addOrUpdateProviderCredential(cred: Omit<ProviderCredential, "id"> & { id?: string }): Promise<ProviderCredential> {
-  const entity: ProviderCredential = await storageBridge.providerUpsert({ id: cred.id ?? uuidv4(), ...cred });
+export async function addOrUpdateProviderCredential(
+  cred: Omit<ProviderCredential, "id"> & { id?: string },
+): Promise<ProviderCredential> {
+  const entity: ProviderCredential = await storageBridge.providerUpsert({
+    id: cred.id ?? uuidv4(),
+    ...cred,
+  });
   // Ensure a default provider is set if missing
   const current = await readSettings();
   if (!current.defaultProviderCredentialId) {
@@ -168,7 +176,9 @@ export async function removeProviderCredential(id: string): Promise<void> {
   broadcastSettingsUpdated();
 }
 
-export async function addOrUpdateModel(model: Omit<Model, "id" | "createdAt"> & { id?: string }): Promise<Model> {
+export async function addOrUpdateModel(
+  model: Omit<Model, "id" | "createdAt"> & { id?: string },
+): Promise<Model> {
   const entity: Model = await storageBridge.modelUpsert({ id: model.id ?? uuidv4(), ...model });
   const current = await readSettings();
   if (!current.defaultModelId) {
@@ -203,12 +213,13 @@ export async function listCharacters(): Promise<Character[]> {
 export async function saveCharacter(c: Partial<Character>): Promise<Character> {
   const settings = await readSettings();
   const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
-  const defaultRules = c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
+  const defaultRules =
+    c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
   const timestamp = now();
 
   const scenes = c.scenes ?? [];
   const entity: Character = {
-    id: c.id ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+    id: c.id ?? globalThis.crypto?.randomUUID?.() ?? uuidv4(),
     name: c.name!,
     avatarPath: c.avatarPath,
     backgroundImagePath: c.backgroundImagePath,
@@ -247,7 +258,9 @@ export async function listLorebooks(): Promise<Lorebook[]> {
   return z.array(LorebookSchema).parse(data);
 }
 
-export async function saveLorebook(lorebook: Partial<Lorebook> & { name: string }): Promise<Lorebook> {
+export async function saveLorebook(
+  lorebook: Partial<Lorebook> & { name: string },
+): Promise<Lorebook> {
   const timestamp = now();
   const entity = {
     id: lorebook.id ?? uuidv4(),
@@ -269,7 +282,10 @@ export async function listCharacterLorebooks(characterId: string): Promise<Loreb
   return z.array(LorebookSchema).parse(data);
 }
 
-export async function setCharacterLorebooks(characterId: string, lorebookIds: string[]): Promise<void> {
+export async function setCharacterLorebooks(
+  characterId: string,
+  lorebookIds: string[],
+): Promise<void> {
   await storageBridge.characterLorebooksSet(characterId, lorebookIds);
 }
 
@@ -283,7 +299,9 @@ export async function getLorebookEntry(entryId: string): Promise<LorebookEntry |
   return data ? LorebookEntrySchema.parse(data) : null;
 }
 
-export async function saveLorebookEntry(entry: Partial<LorebookEntry> & { lorebookId: string }): Promise<LorebookEntry> {
+export async function saveLorebookEntry(
+  entry: Partial<LorebookEntry> & { lorebookId: string },
+): Promise<LorebookEntry> {
   const timestamp = now();
   const entity = {
     id: entry.id ?? uuidv4(),
@@ -321,11 +339,13 @@ export async function listSessionIds(): Promise<string[]> {
   return storageBridge.sessionsListIds();
 }
 
-export async function listSessionPreviews(characterId?: string, limit?: number): Promise<SessionPreview[]> {
+export async function listSessionPreviews(
+  characterId?: string,
+  limit?: number,
+): Promise<SessionPreview[]> {
   const data = await storageBridge.sessionsListPreviews(characterId, limit);
   return z.array(SessionPreviewSchema).parse(data);
 }
-
 
 export async function saveAdvancedSettings(settings: Settings["advancedSettings"]): Promise<void> {
   await storageBridge.settingsSetAdvanced(settings);
@@ -352,7 +372,12 @@ export async function listMessages(
 ): Promise<StoredMessage[]> {
   const beforeCreatedAt = options.before?.createdAt;
   const beforeId = options.before?.id;
-  const data = await storageBridge.messagesList(sessionId, options.limit, beforeCreatedAt, beforeId);
+  const data = await storageBridge.messagesList(
+    sessionId,
+    options.limit,
+    beforeCreatedAt,
+    beforeId,
+  );
   return z.array(MessageSchema).parse(data);
 }
 
@@ -391,23 +416,28 @@ export async function deleteSession(id: string): Promise<void> {
   await storageBridge.sessionDelete(id);
 }
 
-export async function createSession(characterId: string, title: string, selectedSceneId?: string): Promise<Session> {
+export async function createSession(
+  characterId: string,
+  title: string,
+  selectedSceneId?: string,
+): Promise<Session> {
   const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
   const timestamp = now();
 
   const messages: StoredMessage[] = [];
 
   const characters = await listCharacters();
-  const character = characters.find(c => c.id === characterId);
+  const character = characters.find((c) => c.id === characterId);
 
   if (character) {
     const sceneId = selectedSceneId || character.defaultSceneId || character.scenes[0]?.id;
 
     if (sceneId) {
-      const scene = character.scenes.find(s => s.id === sceneId);
+      const scene = character.scenes.find((s) => s.id === sceneId);
       if (scene) {
         const sceneContent = scene.selectedVariantId
-          ? scene.variants?.find(v => v.id === scene.selectedVariantId)?.content ?? scene.content
+          ? (scene.variants?.find((v) => v.id === scene.selectedVariantId)?.content ??
+            scene.content)
           : scene.content;
 
         if (sceneContent.trim()) {
@@ -443,9 +473,9 @@ export async function createSession(characterId: string, title: string, selected
 
 export async function createBranchedSession(
   sourceSession: Session,
-  branchAtMessageId: string
+  branchAtMessageId: string,
 ): Promise<Session> {
-  const messageIndex = sourceSession.messages.findIndex(m => m.id === branchAtMessageId);
+  const messageIndex = sourceSession.messages.findIndex((m) => m.id === branchAtMessageId);
   if (messageIndex === -1) {
     throw new Error("Message not found in session");
   }
@@ -455,15 +485,16 @@ export async function createBranchedSession(
 
   const branchedMessages: StoredMessage[] = sourceSession.messages
     .slice(0, messageIndex + 1)
-    .map(msg => {
-      const newVariants = msg.variants?.map(v => ({
+    .map((msg) => {
+      const newVariants = msg.variants?.map((v) => ({
         ...v,
         id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
       }));
 
-      const newSelectedVariantId = msg.selectedVariantId && msg.variants
-        ? newVariants?.[msg.variants.findIndex(v => v.id === msg.selectedVariantId)]?.id
-        : undefined;
+      const newSelectedVariantId =
+        msg.selectedVariantId && msg.variants
+          ? newVariants?.[msg.variants.findIndex((v) => v.id === msg.selectedVariantId)]?.id
+          : undefined;
       return {
         ...msg,
         id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
@@ -496,15 +527,15 @@ export async function createBranchedSession(
 export async function createBranchedSessionToCharacter(
   sourceSession: Session,
   branchAtMessageId: string,
-  targetCharacterId: string
+  targetCharacterId: string,
 ): Promise<Session> {
-  const messageIndex = sourceSession.messages.findIndex(m => m.id === branchAtMessageId);
+  const messageIndex = sourceSession.messages.findIndex((m) => m.id === branchAtMessageId);
   if (messageIndex === -1) {
     throw new Error("Message not found in session");
   }
 
   const characters = await listCharacters();
-  const targetCharacter = characters.find(c => c.id === targetCharacterId);
+  const targetCharacter = characters.find((c) => c.id === targetCharacterId);
   const characterName = targetCharacter?.name || "Unknown";
 
   const id = globalThis.crypto?.randomUUID?.() ?? uuidv4();
@@ -512,16 +543,17 @@ export async function createBranchedSessionToCharacter(
 
   const branchedMessages: StoredMessage[] = sourceSession.messages
     .slice(0, messageIndex + 1)
-    .filter(msg => msg.role !== "scene")
-    .map(msg => {
-      const newVariants = msg.variants?.map(v => ({
+    .filter((msg) => msg.role !== "scene")
+    .map((msg) => {
+      const newVariants = msg.variants?.map((v) => ({
         ...v,
         id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
       }));
 
-      const newSelectedVariantId = msg.selectedVariantId && msg.variants
-        ? newVariants?.[msg.variants.findIndex(v => v.id === msg.selectedVariantId)]?.id
-        : undefined;
+      const newSelectedVariantId =
+        msg.selectedVariantId && msg.variants
+          ? newVariants?.[msg.variants.findIndex((v) => v.id === msg.selectedVariantId)]?.id
+          : undefined;
       return {
         ...msg,
         id: globalThis.crypto?.randomUUID?.() ?? uuidv4(),
@@ -550,11 +582,18 @@ export async function createBranchedSessionToCharacter(
   return s;
 }
 
-export async function toggleMessagePin(sessionId: string, messageId: string): Promise<boolean | null> {
+export async function toggleMessagePin(
+  sessionId: string,
+  messageId: string,
+): Promise<boolean | null> {
   return storageBridge.messageTogglePin(sessionId, messageId);
 }
 
-export async function setMemoryColdState(sessionId: string, memoryIndex: number, isCold: boolean): Promise<Session | null> {
+export async function setMemoryColdState(
+  sessionId: string,
+  memoryIndex: number,
+  isCold: boolean,
+): Promise<Session | null> {
   const updated = await storageBridge.sessionSetMemoryColdState(sessionId, memoryIndex, isCold);
   broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
@@ -567,22 +606,84 @@ export async function addMemory(sessionId: string, memory: string): Promise<Sess
   return updated ? SessionSchema.parse(updated) : null;
 }
 
-export async function removeMemory(sessionId: string, memoryIndex: number): Promise<Session | null> {
+export async function removeMemory(
+  sessionId: string,
+  memoryIndex: number,
+): Promise<Session | null> {
   const updated = await storageBridge.sessionRemoveMemory(sessionId, memoryIndex);
   broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
 
-export async function updateMemory(sessionId: string, memoryIndex: number, newMemory: string): Promise<Session | null> {
+export async function updateMemory(
+  sessionId: string,
+  memoryIndex: number,
+  newMemory: string,
+): Promise<Session | null> {
   const updated = await storageBridge.sessionUpdateMemory(sessionId, memoryIndex, newMemory);
   broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
 
-export async function toggleMemoryPin(sessionId: string, memoryIndex: number): Promise<Session | null> {
+export async function toggleMemoryPin(
+  sessionId: string,
+  memoryIndex: number,
+): Promise<Session | null> {
   const updated = await storageBridge.sessionToggleMemoryPin(sessionId, memoryIndex);
   broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
+}
+
+// Group Session Memory CRUD Operations
+export async function groupSessionAddMemory(
+  sessionId: string,
+  memory: string,
+): Promise<GroupSession | null> {
+  const updated = await storageBridge.groupSessionAddMemory(sessionId, memory);
+  return updated ? GroupSessionSchema.parse(updated) : null;
+}
+
+export async function groupSessionRemoveMemory(
+  sessionId: string,
+  memoryIndex: number,
+): Promise<GroupSession | null> {
+  const updated = await storageBridge.groupSessionRemoveMemory(sessionId, memoryIndex);
+  return updated ? GroupSessionSchema.parse(updated) : null;
+}
+
+export async function groupSessionUpdateMemory(
+  sessionId: string,
+  memoryIndex: number,
+  newMemory: string,
+): Promise<GroupSession | null> {
+  const updated = await storageBridge.groupSessionUpdateMemory(sessionId, memoryIndex, newMemory);
+  return updated ? GroupSessionSchema.parse(updated) : null;
+}
+
+export async function groupSessionToggleMemoryPin(
+  sessionId: string,
+  memoryIndex: number,
+): Promise<GroupSession | null> {
+  const updated = await storageBridge.groupSessionToggleMemoryPin(sessionId, memoryIndex);
+  return updated ? GroupSessionSchema.parse(updated) : null;
+}
+
+export async function groupSessionSetMemoryColdState(
+  sessionId: string,
+  memoryIndex: number,
+  isCold: boolean,
+): Promise<GroupSession | null> {
+  const updated = await storageBridge.groupSessionSetMemoryColdState(
+    sessionId,
+    memoryIndex,
+    isCold,
+  );
+  return updated ? GroupSessionSchema.parse(updated) : null;
+}
+
+export async function getGroupSession(sessionId: string): Promise<GroupSession | null> {
+  const data = await storageBridge.groupSessionGet(sessionId);
+  return data ? GroupSessionSchema.parse(data) : null;
 }
 
 // Persona management functions
@@ -593,12 +694,14 @@ export async function listPersonas(): Promise<Persona[]> {
 
 export async function getPersona(id: string): Promise<Persona | null> {
   const personas = await listPersonas();
-  return personas.find(p => p.id === id) || null;
+  return personas.find((p) => p.id === id) || null;
 }
 
-export async function savePersona(p: Partial<Persona> & { id?: string; title: string; description: string }): Promise<Persona> {
+export async function savePersona(
+  p: Partial<Persona> & { id?: string; title: string; description: string },
+): Promise<Persona> {
   const entity: Persona = {
-    id: p.id ?? (globalThis.crypto?.randomUUID?.() ?? uuidv4()),
+    id: p.id ?? globalThis.crypto?.randomUUID?.() ?? uuidv4(),
     title: p.title,
     description: p.description,
     avatarPath: p.avatarPath,
@@ -624,7 +727,11 @@ export async function checkEmbeddingModel(): Promise<boolean> {
   return storageBridge.checkEmbeddingModel();
 }
 
-export async function getEmbeddingModelInfo(): Promise<{ installed: boolean; version: string | null; maxTokens: number }> {
+export async function getEmbeddingModelInfo(): Promise<{
+  installed: boolean;
+  version: string | null;
+  maxTokens: number;
+}> {
   return storageBridge.getEmbeddingModelInfo();
 }
 
