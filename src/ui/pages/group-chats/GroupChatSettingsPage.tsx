@@ -1,5 +1,3 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import type { ReactNode } from "react";
 import {
   ArrowLeft,
   User,
@@ -15,229 +13,12 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { storageBridge } from "../../../core/storage/files";
-import { listCharacters, listPersonas } from "../../../core/storage/repo";
-import type {
-  GroupSession,
-  GroupParticipation,
-  Character,
-  Persona,
-} from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu, MenuSection } from "../../components";
 import { Routes, useNavigationManager } from "../../navigation";
-import { useAvatar } from "../../hooks/useAvatar";
+import { useGroupChatSettingsController } from "./hooks/useGroupChatSettingsController";
+import { SectionHeader, CharacterAvatar, QuickChip, PersonaOption } from "./components/settings";
 
-// ============================================================================
-// Reusable Components
-// ============================================================================
-
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <div className="flex items-end justify-between gap-3 mb-3">
-      <div className="min-w-0">
-        <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white truncate")}>
-          {title}
-        </h2>
-        {subtitle ? (
-          <p className={cn(typography.bodySmall.size, "text-white/50 mt-0.5 truncate")}>
-            {subtitle}
-          </p>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function CharacterAvatar({
-  character,
-  size = "md",
-}: {
-  character: Character;
-  size?: "sm" | "md" | "lg";
-}) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
-
-  const sizeClasses = {
-    sm: "h-8 w-8 text-xs",
-    md: "h-10 w-10 text-sm",
-    lg: "h-12 w-12 text-base",
-  };
-
-  return (
-    <div
-      className={cn(
-        sizeClasses[size],
-        "rounded-full overflow-hidden",
-        "bg-linear-to-br from-white/10 to-white/5",
-        "border border-white/10",
-        "flex items-center justify-center",
-      )}
-    >
-      {avatarUrl ? (
-        <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
-      ) : (
-        <span className="font-bold text-white/60">{character.name.slice(0, 2).toUpperCase()}</span>
-      )}
-    </div>
-  );
-}
-
-function QuickChip({
-  icon,
-  label,
-  value,
-  onClick,
-  disabled = false,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "group flex w-full min-h-14 items-center justify-between",
-        radius.md,
-        "border p-4 text-left",
-        interactive.transition.default,
-        interactive.active.scale,
-        disabled
-          ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-          : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
-      )}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <div
-          className={cn(
-            "flex h-10 w-10 items-center justify-center",
-            radius.full,
-            "border border-white/15 bg-white/10 text-white/80",
-          )}
-        >
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div
-            className={cn(
-              typography.overline.size,
-              typography.overline.weight,
-              typography.overline.tracking,
-              typography.overline.transform,
-              "text-white/50",
-            )}
-          >
-            {label}
-          </div>
-          <div className={cn(typography.bodySmall.size, "text-white truncate")}>{value}</div>
-        </div>
-      </div>
-      <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-    </button>
-  );
-}
-
-interface PersonaOptionProps {
-  title: string;
-  description: string;
-  isDefault?: boolean;
-  isSelected: boolean;
-  onClick: () => void;
-  onLongPress?: () => void;
-}
-
-function PersonaOption({
-  title,
-  description,
-  isDefault,
-  isSelected,
-  onClick,
-  onLongPress,
-}: PersonaOptionProps) {
-  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
-  const [isLongPressTriggered, setIsLongPressTriggered] = useState(false);
-
-  const handleTouchStart = () => {
-    if (!onLongPress) return;
-    setIsLongPressTriggered(false);
-    const timer = window.setTimeout(() => {
-      setIsLongPressTriggered(true);
-      onLongPress();
-    }, 500);
-    setLongPressTimer(timer);
-  };
-
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-    if (!isLongPressTriggered) {
-      onClick();
-    }
-  };
-
-  return (
-    <button
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onClick={() => {
-        if (!isLongPressTriggered) {
-          onClick();
-        }
-      }}
-      className={cn(
-        "group relative flex w-full items-center gap-3 justify-between",
-        radius.lg,
-        "p-4 text-left",
-        interactive.transition.default,
-        interactive.active.scale,
-        isSelected
-          ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
-          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10",
-      )}
-      aria-pressed={isSelected}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>
-            {title}
-          </div>
-          {isDefault && (
-            <span
-              className={cn(
-                "shrink-0 rounded-full border border-blue-400/30 bg-blue-400/10 px-2 text-[10px] font-medium text-blue-200",
-              )}
-            >
-              App default
-            </span>
-          )}
-        </div>
-        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>
-          {description}
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          "flex h-8 w-8 items-center justify-center rounded-full border",
-          isSelected
-            ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
-            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20",
-        )}
-        aria-hidden="true"
-      >
-        {isSelected ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
-      </div>
-    </button>
-  );
-}
-
-// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -246,156 +27,36 @@ export function GroupChatSettingsPage() {
   const navigate = useNavigate();
   const { backOrReplace } = useNavigationManager();
 
-  // State
-  const [session, setSession] = useState<GroupSession | null>(null);
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [personas, setPersonas] = useState<Persona[]>([]);
-  const [participationStats, setParticipationStats] = useState<GroupParticipation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    session,
+    personas,
+    groupCharacters,
+    availableCharacters,
+    currentPersonaDisplay,
+    ui,
+    setEditingName,
+    setNameDraft,
+    setShowPersonaSelector,
+    setShowAddCharacter,
+    setShowRemoveConfirm,
+    handleSaveName,
+    handleChangePersona,
+    handleAddCharacter,
+    handleRemoveCharacter,
+    getParticipationPercent,
+    participationStats
+  } = useGroupChatSettingsController(groupSessionId);
 
-  // Edit states
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
-  const [showPersonaSelector, setShowPersonaSelector] = useState(false);
-  const [showAddCharacter, setShowAddCharacter] = useState(false);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  // Load data
-  const loadData = useCallback(async () => {
-    if (!groupSessionId) return;
-
-    try {
-      const [sessionData, allChars, personaList, stats] = await Promise.all([
-        storageBridge.groupSessionGet(groupSessionId),
-        listCharacters(),
-        listPersonas(),
-        storageBridge.groupParticipationStats(groupSessionId),
-      ]);
-
-      if (!sessionData) {
-        setError("Group session not found");
-        return;
-      }
-
-      setSession(sessionData);
-      setCharacters(allChars);
-      setPersonas(personaList);
-      setParticipationStats(stats);
-      setNameDraft(sessionData.name);
-    } catch (err) {
-      console.error("Failed to load group chat settings:", err);
-      setError("Failed to load settings");
-    } finally {
-      setLoading(false);
-    }
-  }, [groupSessionId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Derived data
-  const groupCharacters = useMemo(() => {
-    if (!session) return [];
-    return session.characterIds
-      .map((id) => characters.find((c) => c.id === id))
-      .filter(Boolean) as Character[];
-  }, [session, characters]);
-
-  const availableCharacters = useMemo(() => {
-    if (!session) return [];
-    return characters.filter((c) => !session.characterIds.includes(c.id));
-  }, [session, characters]);
-
-  const currentPersona = useMemo(() => {
-    if (!session?.personaId) return null;
-    return personas.find((p) => p.id === session.personaId) || null;
-  }, [session, personas]);
-
-  const currentPersonaDisplay = useMemo(() => {
-    if (!session?.personaId) return "No persona";
-    if (!currentPersona) return "Custom persona";
-    return currentPersona.isDefault ? `${currentPersona.title} (default)` : currentPersona.title;
-  }, [currentPersona, session?.personaId]);
-
-  // Handlers
-  const handleSaveName = async () => {
-    if (!session || !nameDraft.trim()) return;
-
-    try {
-      setSaving(true);
-      const updated = await storageBridge.groupSessionUpdate(
-        session.id,
-        nameDraft.trim(),
-        session.characterIds,
-        session.personaId,
-      );
-      setSession(updated);
-      setEditingName(false);
-    } catch (err) {
-      console.error("Failed to save name:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleChangePersona = async (personaId: string | null) => {
-    if (!session) return;
-
-    try {
-      setSaving(true);
-      const updated = await storageBridge.groupSessionUpdate(
-        session.id,
-        session.name,
-        session.characterIds,
-        personaId,
-      );
-      setSession(updated);
-      setShowPersonaSelector(false);
-    } catch (err) {
-      console.error("Failed to change persona:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAddCharacter = async (characterId: string) => {
-    if (!session) return;
-
-    try {
-      setSaving(true);
-      const updated = await storageBridge.groupSessionAddCharacter(session.id, characterId);
-      setSession(updated);
-      setShowAddCharacter(false);
-    } catch (err) {
-      console.error("Failed to add character:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemoveCharacter = async (characterId: string) => {
-    if (!session) return;
-
-    // Don't allow removing if only 2 characters left
-    if (session.characterIds.length <= 2) {
-      setShowRemoveConfirm(null);
-      return;
-    }
-
-    try {
-      setSaving(true);
-      const updated = await storageBridge.groupSessionRemoveCharacter(session.id, characterId);
-      setSession(updated);
-      setShowRemoveConfirm(null);
-    } catch (err) {
-      console.error("Failed to remove character:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const {
+    loading,
+    error,
+    editingName,
+    nameDraft,
+    showPersonaSelector,
+    showAddCharacter,
+    showRemoveConfirm,
+    saving,
+  } = ui;
 
   const handleBack = () => {
     if (groupSessionId) {
@@ -403,14 +64,6 @@ export function GroupChatSettingsPage() {
     } else {
       backOrReplace(Routes.groupChats);
     }
-  };
-
-  const getParticipationPercent = (characterId: string): number => {
-    const stat = participationStats.find((s) => s.characterId === characterId);
-    if (!stat) return 0;
-    const total = participationStats.reduce((sum, s) => sum + s.speakCount, 0);
-    if (total === 0) return 0;
-    return Math.round((stat.speakCount / total) * 100);
   };
 
   // Loading state

@@ -757,6 +757,7 @@ export const GroupMessageVariantSchema = z.object({
   usage: UsageSummarySchema.optional().nullable(),
   reasoning: z.string().nullish(),
   selectionReasoning: z.string().nullish(),
+  modelId: z.string().uuid().nullish(),
 });
 export type GroupMessageVariant = z.infer<typeof GroupMessageVariantSchema>;
 
@@ -771,10 +772,11 @@ export const GroupMessageSchema = z.object({
   usage: UsageSummarySchema.optional().nullable(),
   variants: z.array(GroupMessageVariantSchema).optional(),
   selectedVariantId: z.string().uuid().nullish(),
-  isPinned: z.boolean().default(false),
-  attachments: z.array(ImageAttachmentSchema).optional(),
+  isPinned: z.boolean().optional(),
+  attachments: z.array(ImageAttachmentSchema).default([]),
   reasoning: z.string().nullish(),
   selectionReasoning: z.string().nullish(),
+  modelId: z.string().uuid().nullish(),
 });
 export type GroupMessage = z.infer<typeof GroupMessageSchema>;
 

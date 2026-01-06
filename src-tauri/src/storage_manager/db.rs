@@ -514,6 +514,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           attachments TEXT NOT NULL DEFAULT '[]',
           reasoning TEXT,
           selection_reasoning TEXT,
+          model_id TEXT,
           FOREIGN KEY(session_id) REFERENCES group_sessions(id) ON DELETE CASCADE
         );
 
@@ -529,6 +530,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           total_tokens INTEGER,
           reasoning TEXT,
           selection_reasoning TEXT,
+          model_id TEXT,
           FOREIGN KEY(message_id) REFERENCES group_messages(id) ON DELETE CASCADE
         );
 

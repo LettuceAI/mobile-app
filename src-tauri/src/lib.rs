@@ -299,6 +299,7 @@ pub fn run() {
             group_chat_manager::group_chat_regenerate,
             group_chat_manager::group_chat_continue,
             group_chat_manager::group_chat_get_selection_prompt,
+            group_chat_manager::group_chat_generate_user_reply,
             group_chat_manager::group_chat_retry_dynamic_memory,
         ])
         .run(tauri::generate_context!())

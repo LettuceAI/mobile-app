@@ -2,7 +2,12 @@ import { motion, type PanInfo, AnimatePresence } from "framer-motion";
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import { RefreshCw, Pin, User, Bot, ChevronDown, Volume2, Loader2, Square } from "lucide-react";
 import { MarkdownRenderer } from "../../chats/components/MarkdownRenderer";
-import type { GroupMessage, GroupMessageVariant, Character, Persona } from "../../../../core/storage/schemas";
+import type {
+  GroupMessage,
+  GroupMessageVariant,
+  Character,
+  Persona,
+} from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { useSessionAttachments } from "../../../hooks/useSessionAttachment";
@@ -64,7 +69,11 @@ const MessageAvatar = React.memo(function MessageAvatar({
     return (
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {characterAvatar ? (
-          <img src={characterAvatar} alt={character?.name || "Assistant"} className="h-full w-full object-cover" />
+          <img
+            src={characterAvatar}
+            alt={character?.name || "Assistant"}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <Bot size={16} className="text-white/60" />
         )}
@@ -94,7 +103,7 @@ const MessageActions = React.memo(function MessageActions({
         type: "tween",
         duration: 0.15,
         ease: [0.25, 0.46, 0.45, 0.94],
-        delay: 0.1
+        delay: 0.1,
       }}
     >
       <button
@@ -108,10 +117,10 @@ const MessageActions = React.memo(function MessageActions({
           interactive.transition.fast,
           "hover:border-white/30 hover:bg-white/20 hover:scale-105",
           interactive.active.scale,
-          "disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:scale-100"
+          "disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:scale-100",
         )}
         aria-label="Regenerate response"
-        style={{ willChange: 'transform' }}
+        style={{ willChange: "transform" }}
       >
         {isRegenerating ? (
           <RefreshCw size={14} className="animate-spin rounded-full" />
@@ -130,7 +139,7 @@ const ThinkingSection = React.memo(function ThinkingSection({
   reasoning: string;
   isStreaming: boolean;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const THINKING_TEXTS = [
     "Thinking really hard…",
@@ -161,9 +170,7 @@ const ThinkingSection = React.memo(function ThinkingSection({
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           "flex items-center gap-2 py-1 text-left text-xs transition-colors",
-          isStreaming
-            ? "text-white/60 hover:text-white/80"
-            : "text-white/40 hover:text-white/60"
+          isStreaming ? "text-white/60 hover:text-white/80" : "text-white/40 hover:text-white/60",
         )}
       >
         <motion.div
@@ -174,12 +181,8 @@ const ThinkingSection = React.memo(function ThinkingSection({
           <ChevronDown size={12} />
         </motion.div>
         <span className="flex items-center gap-1.5">
-          {isStreaming && (
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
-          )}
-          <span className="font-medium">
-            {isStreaming ? thinkingText : "Thought process"}
-          </span>
+          {isStreaming && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />}
+          <span className="font-medium">{isStreaming ? thinkingText : "Thought process"}</span>
         </span>
       </button>
 
@@ -192,11 +195,13 @@ const ThinkingSection = React.memo(function ThinkingSection({
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className={cn(
-              "mt-1 pl-5 border-l border-white/10",
-              "text-xs text-white/40 italic leading-relaxed",
-              "max-h-40 overflow-y-auto"
-            )}>
+            <div
+              className={cn(
+                "mt-1 pl-5 border-l border-white/10",
+                "text-xs text-white/40 italic leading-relaxed",
+                "max-h-40 overflow-y-auto",
+              )}
+            >
               <MarkdownRenderer
                 content={reasoning}
                 className="text-xs text-white/40 **:text-white/40"
@@ -243,7 +248,11 @@ function GroupChatMessageInner({
     const variantState = getVariantState(message);
     const totalVariants = variantState.total || (isAssistant ? 1 : 0);
     const selectedVariantIndex =
-      variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
+      variantState.selectedIndex >= 0
+        ? variantState.selectedIndex
+        : totalVariants > 0
+          ? totalVariants - 1
+          : -1;
 
     const enableSwipe = isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
 
@@ -267,11 +276,12 @@ function GroupChatMessageInner({
 
   const playText = displayContent ?? message.content;
   const voiceConfig = character?.voiceConfig;
-  const hasVoiceAssignment = voiceConfig?.source === "user"
-    ? !!voiceConfig.userVoiceId
-    : voiceConfig?.source === "provider"
-      ? !!voiceConfig.providerId && !!voiceConfig.voiceId
-      : false;
+  const hasVoiceAssignment =
+    voiceConfig?.source === "user"
+      ? !!voiceConfig.userVoiceId
+      : voiceConfig?.source === "provider"
+        ? !!voiceConfig.providerId && !!voiceConfig.voiceId
+        : false;
   const canPlayAudio =
     computed.isAssistant &&
     !computed.isPlaceholder &&
@@ -280,43 +290,55 @@ function GroupChatMessageInner({
   const isAudioLoading = audioStatus === "loading";
   const isAudioPlaying = audioStatus === "playing";
 
-  const handlePlayAudio = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!canPlayAudio) return;
-    if (isAudioLoading) {
-      onCancelAudio?.(message);
-      return;
-    }
-    if (isAudioPlaying) {
-      onStopAudio?.(message);
-      return;
-    }
-    if (!onPlayAudio) return;
-    try {
-      await onPlayAudio(message, playText);
-    } catch (error) {
-      console.error("Failed to play message audio:", error);
-    }
-  }, [canPlayAudio, isAudioLoading, isAudioPlaying, message, onCancelAudio, onPlayAudio, onStopAudio, playText]);
+  const handlePlayAudio = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!canPlayAudio) return;
+      if (isAudioLoading) {
+        onCancelAudio?.(message);
+        return;
+      }
+      if (isAudioPlaying) {
+        onStopAudio?.(message);
+        return;
+      }
+      if (!onPlayAudio) return;
+      try {
+        await onPlayAudio(message, playText);
+      } catch (error) {
+        console.error("Failed to play message audio:", error);
+      }
+    },
+    [
+      canPlayAudio,
+      isAudioLoading,
+      isAudioPlaying,
+      message,
+      onCancelAudio,
+      onPlayAudio,
+      onStopAudio,
+      playText,
+    ],
+  );
 
   const dragProps = useMemo(
     () =>
       computed.enableSwipe
         ? {
-          drag: "x" as const,
-          dragConstraints: { left: -140, right: 140 },
-          dragElastic: 0.08,
-          dragMomentum: false,
-          dragSnapToOrigin: true,
-          dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
-          onDragEnd: (_: unknown, info: PanInfo) =>
-            void handleVariantDrag(message.id, info.offset.x),
-          whileDrag: { scale: 0.98 },
-          style: { willChange: "transform", transform: "translate3d(0,0,0)" },
-        }
+            drag: "x" as const,
+            dragConstraints: { left: -140, right: 140 },
+            dragElastic: 0.08,
+            dragMomentum: false,
+            dragSnapToOrigin: true,
+            dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
+            onDragEnd: (_: unknown, info: PanInfo) =>
+              void handleVariantDrag(message.id, info.offset.x),
+            whileDrag: { scale: 0.98 },
+            style: { willChange: "transform", transform: "translate3d(0,0,0)" },
+          }
         : {},
-    [computed.enableSwipe, handleVariantDrag, message.id]
+    [computed.enableSwipe, handleVariantDrag, message.id],
   );
 
   const animTransition = useMemo(
@@ -324,7 +346,7 @@ function GroupChatMessageInner({
       computed.shouldAnimate
         ? { type: "tween" as const, duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] as const }
         : { duration: 0 },
-    [computed.shouldAnimate]
+    [computed.shouldAnimate],
   );
 
   // Long press handlers
@@ -350,18 +372,24 @@ function GroupChatMessageInner({
     }
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    onLongPress(message);
-  }, [message, onLongPress]);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      onLongPress(message);
+    },
+    [message, onLongPress],
+  );
 
   // Event handlers for long press
-  const eventHandlers = useMemo(() => ({
-    onPointerDown: handlePointerDown,
-    onPointerUp: handlePointerUp,
-    onPointerLeave: handlePointerLeave,
-    onContextMenu: handleContextMenu,
-  }), [handlePointerDown, handlePointerUp, handlePointerLeave, handleContextMenu]);
+  const eventHandlers = useMemo(
+    () => ({
+      onPointerDown: handlePointerDown,
+      onPointerUp: handlePointerUp,
+      onPointerLeave: handlePointerLeave,
+      onContextMenu: handleContextMenu,
+    }),
+    [handlePointerDown, handlePointerUp, handlePointerLeave, handleContextMenu],
+  );
 
   // Load attachments with lazy loading support for persisted images
   const loadedAttachments = useSessionAttachments(message.attachments);
@@ -370,17 +398,13 @@ function GroupChatMessageInner({
     <div
       className={cn(
         "relative flex gap-2",
-        message.role === "user" ? "justify-end" : "justify-start"
+        message.role === "user" ? "justify-end" : "justify-start",
       )}
     >
       {/* Avatar for assistant messages (left side) */}
       {message.role === "assistant" && (
         <div className="flex shrink-0 flex-col items-center gap-1">
-          <MessageAvatar
-            role={message.role}
-            character={character}
-            persona={persona}
-          />
+          <MessageAvatar role={message.role} character={character} persona={persona} />
           {canPlayAudio && (
             <button
               type="button"
@@ -389,12 +413,24 @@ function GroupChatMessageInner({
                 "audio-btn flex h-6 w-6 items-center justify-center rounded-full",
                 "border border-white/40 bg-white/10 text-white shadow-sm",
                 "transition hover:bg-white/20 active:scale-95",
-                "disabled:cursor-not-allowed disabled:opacity-70"
+                "disabled:cursor-not-allowed disabled:opacity-70",
               )}
-              aria-label={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play message audio"}
+              aria-label={
+                isAudioLoading
+                  ? "Cancel audio generation"
+                  : isAudioPlaying
+                    ? "Stop audio"
+                    : "Play message audio"
+              }
               aria-pressed={isAudioPlaying}
               aria-busy={isAudioLoading}
-              title={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play audio"}
+              title={
+                isAudioLoading
+                  ? "Cancel audio generation"
+                  : isAudioPlaying
+                    ? "Stop audio"
+                    : "Play audio"
+              }
             >
               {isAudioLoading ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -408,7 +444,9 @@ function GroupChatMessageInner({
         </div>
       )}
 
-      <div className={cn("flex flex-col max-w-[82%]", computed.isUser ? "items-end" : "items-start")}>
+      <div
+        className={cn("flex flex-col max-w-[82%]", computed.isUser ? "items-end" : "items-start")}
+      >
         {/* Speaker Name */}
         {!computed.isUser && character && (
           <span className="text-xs font-medium text-white/50 mb-1 px-1">{character.name}</span>
@@ -424,14 +462,14 @@ function GroupChatMessageInner({
             typography.body.size,
             message.role === "user"
               ? cn(
-                "ml-auto bg-emerald-500/20 text-emerald-100 border border-emerald-400/30",
-                heldMessageId === message.id && "ring-2 ring-emerald-400/50"
-              )
+                  "ml-auto bg-emerald-500/20 text-emerald-100 border border-emerald-400/30",
+                  heldMessageId === message.id && "ring-2 ring-emerald-400/50",
+                )
               : cn(
-                "border bg-white/5 text-white/90",
-                heldMessageId === message.id ? "border-white/30" : "border-white/10"
-              ),
-            "select-none"
+                  "border bg-white/5 text-white/90",
+                  heldMessageId === message.id ? "border-white/30" : "border-white/10",
+                ),
+            "select-none",
           )}
           {...eventHandlers}
           {...dragProps}
@@ -470,12 +508,14 @@ function GroupChatMessageInner({
                       className={cn(
                         radius.md,
                         "overflow-hidden border border-white/15",
-                        attachment.data && onImageClick && "cursor-pointer hover:border-white/30 transition-colors"
+                        attachment.data &&
+                          onImageClick &&
+                          "cursor-pointer hover:border-white/30 transition-colors",
                       )}
-                      onClick={() => attachment.data && onImageClick?.(
-                        attachment.data,
-                        attachment.filename || "Attached image"
-                      )}
+                      onClick={() =>
+                        attachment.data &&
+                        onImageClick?.(attachment.data, attachment.filename || "Attached image")
+                      }
                     >
                       {attachment.data ? (
                         <img
@@ -483,7 +523,10 @@ function GroupChatMessageInner({
                           alt={attachment.filename || "Attached image"}
                           className="max-h-48 max-w-full object-contain"
                           style={{
-                            maxWidth: attachment.width && attachment.width > 300 ? 300 : attachment.width || 300
+                            maxWidth:
+                              attachment.width && attachment.width > 300
+                                ? 300
+                                : attachment.width || 300,
                           }}
                         />
                       ) : (
@@ -492,7 +535,7 @@ function GroupChatMessageInner({
                           className="flex items-center justify-center bg-white/5"
                           style={{
                             width: Math.min(attachment.width || 150, 300),
-                            height: Math.min(attachment.height || 100, 192)
+                            height: Math.min(attachment.height || 100, 192),
                           }}
                         >
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
@@ -517,7 +560,7 @@ function GroupChatMessageInner({
                 "mt-2.5 flex items-center justify-between pr-2",
                 typography.caption.size,
                 typography.caption.weight,
-                "uppercase tracking-wider text-white/40"
+                "uppercase tracking-wider text-white/40",
               )}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -618,8 +661,8 @@ function TypingIndicator() {
   return (
     <div className="flex items-center gap-1" aria-label="Assistant is typing" aria-live="polite">
       <span className="typing-dot" />
-      <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
-      <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
+      <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+      <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
     </div>
   );
 }

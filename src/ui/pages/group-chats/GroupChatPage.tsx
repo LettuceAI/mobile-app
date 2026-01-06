@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Settings,
+  Settings as SettingsIcon,
   ChevronDown,
   Loader2,
   Copy,
@@ -10,25 +10,37 @@ import {
   RotateCcw,
   Edit3,
   Users,
-  X,
   Sparkles,
+  Image,
+  RefreshCw,
+  PenLine,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 
 import { storageBridge } from "../../../core/storage/files";
-import { listCharacters, listPersonas } from "../../../core/storage/repo";
+import {
+  listCharacters,
+  listPersonas,
+  readSettings,
+  generateGroupChatUserReply,
+} from "../../../core/storage/repo";
 import type {
   GroupSession,
   GroupMessage,
   GroupParticipation,
   Character,
   Persona,
+  ImageAttachment,
+  Settings,
+  Model,
 } from "../../../core/storage/schemas";
 import { radius, interactive, cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
 import { Routes } from "../../navigation";
-import { BottomMenu } from "../../components/BottomMenu";
+import { BottomMenu, MenuButton } from "../../components/BottomMenu";
+import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
 import { GroupChatFooter, GroupChatMessage, type VariantState } from "./components";
 
 const MESSAGES_PAGE_SIZE = 50;
@@ -54,8 +66,8 @@ export function GroupChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [messages, setMessages] = useState<GroupMessage[]>([]);
-  const [participationStats, setParticipationStats] = useState<GroupParticipation[]>([]);
-  const [showParticipation, setShowParticipation] = useState(true);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [_participationStats, setParticipationStats] = useState<GroupParticipation[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sendingStatus, setSendingStatus] = useState<string | null>(null); // "selecting" | "generating"
@@ -70,6 +82,17 @@ export function GroupChatPage() {
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+
+  // Plus menu & Help Me Reply states
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showChoiceMenu, setShowChoiceMenu] = useState(false);
+  const [showResultMenu, setShowResultMenu] = useState(false);
+  const [generatedReply, setGeneratedReply] = useState<string | null>(null);
+  const [generatingReply, setGeneratingReply] = useState(false);
+  const [helpMeReplyError, setHelpMeReplyError] = useState<string | null>(null);
+  const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<ImageAttachment[]>([]);
+  const [supportsImageInput, setSupportsImageInput] = useState(false);
 
   // Message actions state
   const [messageAction, setMessageAction] = useState<MessageActionState | null>(null);
@@ -93,16 +116,23 @@ export function GroupChatPage() {
     if (!groupSessionId) return;
 
     try {
-      const [sessionData, chars, personaList, msgs, stats] = await Promise.all([
+      const [sessionData, chars, personaList, msgs, stats, settingsData] = await Promise.all([
         storageBridge.groupSessionGet(groupSessionId),
         listCharacters(),
         listPersonas(),
         storageBridge.groupMessagesList(groupSessionId, MESSAGES_PAGE_SIZE),
         storageBridge.groupParticipationStats(groupSessionId),
+        readSettings(),
       ]);
+
+      console.log("🔍 Loaded messages:", msgs.length, "messages");
+      console.log("🔍 First message modelId:", msgs[0]?.modelId);
+      console.log("🔍 Last message modelId:", msgs[msgs.length - 1]?.modelId);
+      console.log("🔍 Sample message:", msgs[msgs.length - 1]);
 
       if (!sessionData) {
         setError("Group session not found");
+        setLoading(false);
         return;
       }
 
@@ -111,9 +141,9 @@ export function GroupChatPage() {
       setPersonas(personaList);
       setMessages(msgs);
       setParticipationStats(stats);
+      setSettings(settingsData);
     } catch (err) {
-      console.error("Failed to load group chat:", err);
-      setError("Failed to load group chat");
+      setError(err instanceof Error ? err.message : "Failed to load session");
     } finally {
       setLoading(false);
     }
@@ -309,6 +339,9 @@ export function GroupChatPage() {
         groupSessionId,
         MESSAGES_PAGE_SIZE,
       );
+      console.log("🔍 After send - updated messages count:", updatedMessages.length);
+      console.log("🔍 Last message after send:", updatedMessages[updatedMessages.length - 1]);
+      console.log("🔍 Last message modelId:", updatedMessages[updatedMessages.length - 1]?.modelId);
       setMessages(updatedMessages);
       setParticipationStats(response.participationStats);
     } catch (err) {
@@ -669,6 +702,105 @@ export function GroupChatPage() {
     }
   }, [messageAction, groupSessionId, editDraft, closeMessageActions]);
 
+  // Check if all group characters support image input
+  useEffect(() => {
+    const checkImageSupport = async () => {
+      if (!session || !settings || !characters.length) {
+        setSupportsImageInput(false);
+        return;
+      }
+
+      try {
+        const groupChars = session.characterIds
+          .map((id) => characters.find((c) => c.id === id))
+          .filter(Boolean) as Character[];
+
+        if (groupChars.length === 0) {
+          setSupportsImageInput(false);
+          return;
+        }
+
+        // Check if ALL characters support image input
+        const allSupport = groupChars.every((char) => {
+          const effectiveModelId = char.defaultModelId || settings.defaultModelId;
+          const model = settings.models.find((m: Model) => m.id === effectiveModelId);
+          return model?.inputScopes?.includes("image") ?? false;
+        });
+
+        setSupportsImageInput(allSupport);
+      } catch (err) {
+        console.error("Failed to check image support:", err);
+        setSupportsImageInput(false);
+      }
+    };
+
+    checkImageSupport();
+  }, [session, settings, characters]);
+
+  // Plus menu handlers
+  const handleOpenPlusMenu = useCallback(() => {
+    setShowPlusMenu(true);
+  }, []);
+
+  const handleHelpMeReply = useCallback(
+    async (mode: "new" | "enrich") => {
+      if (!session?.id) return;
+
+      // Close other menus and show result menu with loading state immediately
+      setShowChoiceMenu(false);
+      setShowPlusMenu(false);
+      setGeneratedReply(null);
+      setHelpMeReplyError(null);
+      setGeneratingReply(true);
+      setShowResultMenu(true);
+
+      try {
+        const currentDraft = mode === "enrich" && draft.trim() ? draft : undefined;
+        const result = await generateGroupChatUserReply(session.id, currentDraft);
+        setGeneratedReply(result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setHelpMeReplyError(message);
+      } finally {
+        setGeneratingReply(false);
+      }
+    },
+    [session?.id, draft],
+  );
+
+  const handleUseReply = useCallback(() => {
+    if (generatedReply) {
+      setDraft(generatedReply);
+    }
+    setShowResultMenu(false);
+    setGeneratedReply(null);
+    setHelpMeReplyError(null);
+  }, [generatedReply]);
+
+  const handlePlusMenuImageUpload = useCallback(() => {
+    setShowPlusMenu(false);
+    setShouldTriggerFileInput(true);
+  }, []);
+
+  const handlePlusMenuHelpMeReply = useCallback(() => {
+    setShowPlusMenu(false);
+    if (draft.trim()) {
+      // Has draft - show choice menu
+      setShowChoiceMenu(true);
+    } else {
+      // No draft - generate directly
+      void handleHelpMeReply("new");
+    }
+  }, [draft, handleHelpMeReply]);
+
+  const addPendingAttachment = useCallback((attachment: ImageAttachment) => {
+    setPendingAttachments((prev) => [...prev, attachment]);
+  }, []);
+
+  const removePendingAttachment = useCallback((attachmentId: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+  }, []);
+
   const groupCharacters = useMemo(() => {
     if (!session) return [];
     return session.characterIds
@@ -716,7 +848,7 @@ export function GroupChatPage() {
           onBack={() => navigate(Routes.groupChats)}
           onSettings={() => navigate(Routes.groupChatSettings(session.id))}
           onMemories={() => navigate(Routes.groupChatMemories(session.id))}
-        />       
+        />
       </div>
 
       {/* Main content area - flex-1 takes remaining space */}
@@ -751,6 +883,7 @@ export function GroupChatPage() {
                     await handleRegenerate(msg.id);
                   }}
                   onLongPress={(msg) => openMessageActions(msg)}
+                  reasoning={message.reasoning ?? undefined}
                 />
               ))}
             </AnimatePresence>
@@ -810,8 +943,116 @@ export function GroupChatPage() {
           onContinue={messages.length > 0 ? () => handleContinue() : undefined}
           onAbort={undefined}
           hasBackgroundImage={false}
+          pendingAttachments={pendingAttachments}
+          onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}
+          onRemoveAttachment={supportsImageInput ? removePendingAttachment : undefined}
+          onOpenPlusMenu={handleOpenPlusMenu}
+          triggerFileInput={shouldTriggerFileInput}
+          onFileInputTriggered={() => setShouldTriggerFileInput(false)}
         />
       </div>
+
+      {/* Plus Menu - Upload Image & Help Me Reply */}
+      <BottomMenu isOpen={showPlusMenu} onClose={() => setShowPlusMenu(false)} title="Add Content">
+        <div className="space-y-2">
+          {supportsImageInput && (
+            <MenuButton icon={Image} title="Upload Image" onClick={handlePlusMenuImageUpload} />
+          )}
+          <MenuButton
+            icon={Sparkles}
+            title="Help Me Reply"
+            description="Let AI suggest what to say"
+            onClick={handlePlusMenuHelpMeReply}
+          />
+        </div>
+      </BottomMenu>
+
+      {/* Choice Menu - Use existing draft or generate new */}
+      <BottomMenu
+        isOpen={showChoiceMenu}
+        onClose={() => setShowChoiceMenu(false)}
+        title="Help Me Reply"
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-white/60 mb-4">
+            You have a draft message. How would you like to proceed?
+          </p>
+          <MenuButton
+            icon={PenLine}
+            title="Use my text as base"
+            description="Expand and improve your draft"
+            onClick={() => handleHelpMeReply("enrich")}
+          />
+          <MenuButton
+            icon={Sparkles}
+            title="Write something new"
+            description="Generate a fresh reply"
+            onClick={() => handleHelpMeReply("new")}
+          />
+        </div>
+      </BottomMenu>
+
+      {/* Result Menu - Show generated reply with Regenerate/Use options */}
+      <BottomMenu
+        isOpen={showResultMenu}
+        onClose={() => {
+          setShowResultMenu(false);
+          setGeneratedReply(null);
+          setHelpMeReplyError(null);
+        }}
+        title="Suggested Reply"
+      >
+        <div className="space-y-4">
+          {generatingReply ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+            </div>
+          ) : helpMeReplyError ? (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400 text-sm">{helpMeReplyError}</p>
+            </div>
+          ) : generatedReply ? (
+            <div
+              className={cn(
+                "bg-white/5 border border-white/10 p-4",
+                radius.lg,
+                "max-h-[40vh] overflow-y-auto",
+              )}
+            >
+              <p className="text-white/90 text-sm whitespace-pre-wrap">{generatedReply}</p>
+            </div>
+          ) : null}
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleHelpMeReply(draft.trim() ? "enrich" : "new")}
+              disabled={generatingReply}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-3 px-4",
+                radius.lg,
+                "bg-white/10 text-white/80 hover:bg-white/15",
+                "disabled:opacity-50 transition-all",
+              )}
+            >
+              <RefreshCw size={18} />
+              <span>Regenerate</span>
+            </button>
+            <button
+              onClick={handleUseReply}
+              disabled={generatingReply || !generatedReply}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-3 px-4",
+                radius.lg,
+                "bg-emerald-500 text-white hover:bg-emerald-600",
+                "disabled:opacity-50 transition-all",
+              )}
+            >
+              <Check size={18} />
+              <span>Use Reply</span>
+            </button>
+          </div>
+        </div>
+      </BottomMenu>
 
       {/* Message Actions Bottom Sheet */}
       <MessageActionsBottomSheet
@@ -836,6 +1077,7 @@ export function GroupChatPage() {
           }
         }}
         characters={groupCharacters}
+        settings={settings}
       />
     </div>
   );
@@ -914,7 +1156,7 @@ function GroupChatHeader({
           className="flex h-9 w-9 items-center justify-center text-white/70 hover:text-white transition"
           aria-label="Settings"
         >
-          <Settings size={18} />
+          <SettingsIcon size={18} />
         </button>
       </div>
     </header>
@@ -1013,6 +1255,7 @@ function MessageActionsBottomSheet({
   setMessageAction,
   onRegenerate,
   characters,
+  settings,
 }: {
   messageAction: MessageActionState | null;
   actionError: string | null;
@@ -1030,10 +1273,22 @@ function MessageActionsBottomSheet({
   setMessageAction: (value: MessageActionState | null) => void;
   onRegenerate: (characterId?: string) => void;
   characters: Character[];
+  settings: Settings | null;
 }) {
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
 
   const isAssistant = messageAction?.message.role === "assistant";
+
+  // Debug logging for model info
+  if (messageAction && isAssistant) {
+    console.log("[MessageActions] Debug info:", {
+      hasModelId: Boolean(messageAction.message.modelId),
+      modelId: messageAction.message.modelId,
+      hasSettings: Boolean(settings),
+      settingsModelsCount: settings?.models.length,
+      modelFound: settings?.models.find((m) => m.id === messageAction.message.modelId),
+    });
+  }
 
   return (
     <>
@@ -1045,6 +1300,34 @@ function MessageActionsBottomSheet({
       >
         {messageAction && (
           <div className="text-white">
+            {/* Model Info (for assistant messages) */}
+            {isAssistant && messageAction.message.modelId && settings && (
+              <div className="mb-4 px-3 py-2 rounded-lg border border-blue-400/20 bg-blue-400/10">
+                <p className="text-[10px] text-blue-300/60 uppercase tracking-wide mb-1">
+                  Generated with
+                </p>
+                <p className="text-xs text-blue-200 font-medium">
+                  {settings.models.find((m) => m.id === messageAction.message.modelId)
+                    ?.displayName || messageAction.message.modelId}
+                </p>
+              </div>
+            )}
+
+            {/* Thinking/Reasoning (for assistant messages) */}
+            {isAssistant && messageAction.message.reasoning && (
+              <div className="mb-4 px-3 py-2 rounded-lg border border-purple-400/20 bg-purple-400/10">
+                <p className="text-[10px] text-purple-300/60 uppercase tracking-wide mb-1">
+                  Thought process
+                </p>
+                <div className="text-xs text-purple-200 italic max-h-40 overflow-y-auto">
+                  <MarkdownRenderer
+                    content={messageAction.message.reasoning}
+                    className="text-xs text-purple-200 **:text-purple-200"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Selection Reasoning (for assistant messages) */}
             {isAssistant && messageAction.message.selectionReasoning && (
               <div className="mb-4 px-3 py-2 rounded-lg border border-white/10 bg-white/5">

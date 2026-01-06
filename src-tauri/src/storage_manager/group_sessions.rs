@@ -125,6 +125,7 @@ pub struct GroupMessage {
     pub attachments: Vec<serde_json::Value>,
     pub reasoning: Option<String>,
     pub selection_reasoning: Option<String>,
+    pub model_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +138,7 @@ pub struct GroupMessageVariant {
     pub usage: Option<UsageSummary>,
     pub reasoning: Option<String>,
     pub selection_reasoning: Option<String>,
+    pub model_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,7 +307,7 @@ fn read_group_messages(
         (Some(ts), Some(bid)) => (
             "SELECT id, session_id, role, content, speaker_character_id, turn_number, created_at,
                     prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned,
-                    attachments, reasoning, selection_reasoning
+                    attachments, reasoning, selection_reasoning, model_id
              FROM group_messages
              WHERE session_id = ?1 AND (created_at < ?2 OR (created_at = ?2 AND id < ?3))
              ORDER BY created_at DESC, id DESC
@@ -321,7 +323,7 @@ fn read_group_messages(
         _ => (
             "SELECT id, session_id, role, content, speaker_character_id, turn_number, created_at,
                     prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned,
-                    attachments, reasoning, selection_reasoning
+                    attachments, reasoning, selection_reasoning, model_id
              FROM group_messages
              WHERE session_id = ?1
              ORDER BY created_at DESC, id DESC
@@ -340,6 +342,7 @@ fn read_group_messages(
 
     while let Some(row) = rows.next().map_err(|e| e.to_string())? {
         let message_id: String = row.get(0).map_err(|e| e.to_string())?;
+        let message_id_for_log = message_id.clone();
         let attachments_json: String = row.get(12).map_err(|e| e.to_string())?;
         let attachments: Vec<serde_json::Value> =
             serde_json::from_str(&attachments_json).unwrap_or_default();
@@ -381,11 +384,24 @@ fn read_group_messages(
             attachments,
             reasoning: row.get(13).map_err(|e| e.to_string())?,
             selection_reasoning: row.get(14).map_err(|e| e.to_string())?,
+            model_id: {
+                let model_id_value: Option<String> = row.get(15).map_err(|e| e.to_string())?;
+                eprintln!(
+                    "🔍 Read message {} from DB with model_id: {:?}",
+                    message_id_for_log, model_id_value
+                );
+                model_id_value
+            },
         });
     }
 
     // Reverse to get chronological order
     messages.reverse();
+    eprintln!(
+        "🔍 Returning {} messages, last message model_id: {:?}",
+        messages.len(),
+        messages.last().and_then(|m| m.model_id.as_ref())
+    );
     Ok(messages)
 }
 
@@ -395,7 +411,7 @@ fn load_group_message_variants(
 ) -> Result<Vec<GroupMessageVariant>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, content, speaker_character_id, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning, selection_reasoning
+            "SELECT id, content, speaker_character_id, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning, selection_reasoning, model_id
              FROM group_message_variants
              WHERE message_id = ?1
              ORDER BY created_at ASC",
@@ -429,6 +445,7 @@ fn load_group_message_variants(
             usage,
             reasoning: row.get(7).map_err(|e| e.to_string())?,
             selection_reasoning: row.get(8).map_err(|e| e.to_string())?,
+            model_id: row.get(9).map_err(|e| e.to_string())?,
         });
     }
 

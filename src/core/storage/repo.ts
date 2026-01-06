@@ -738,3 +738,10 @@ export async function getEmbeddingModelInfo(): Promise<{
 export async function generateUserReply(sessionId: string, currentDraft?: string): Promise<string> {
   return storageBridge.chatGenerateUserReply(sessionId, currentDraft);
 }
+
+export async function generateGroupChatUserReply(
+  sessionId: string,
+  currentDraft?: string,
+): Promise<string> {
+  return storageBridge.groupChatGenerateUserReply(sessionId, currentDraft);
+}

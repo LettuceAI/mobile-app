@@ -1,88 +1,25 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Users } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { storageBridge } from "../../../core/storage/files";
-import { listCharacters } from "../../../core/storage/repo";
-import type { Character } from "../../../core/storage/schemas";
-import { typography, radius, interactive, cn } from "../../design-tokens";
-import { useAvatar } from "../../hooks/useAvatar";
+import { radius, interactive, cn } from "../../design-tokens";
 import { Routes } from "../../navigation";
+import { CharacterSelectItem } from "./components/create/CharacterSelectItem";
+import { useGroupChatCreateController } from "./hooks/useGroupChatCreateController";
 
 export function GroupChatCreatePage() {
   const navigate = useNavigate();
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [groupName, setGroupName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const chars = await listCharacters();
-        setCharacters(chars);
-      } catch (err) {
-        console.error("Failed to load characters:", err);
-        setError("Failed to load characters");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const toggleCharacter = (characterId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(characterId)) {
-        next.delete(characterId);
-      } else {
-        next.add(characterId);
-      }
-      return next;
+  const { characters, ui, defaultName, setGroupName, toggleCharacter, handleCreate } =
+    useGroupChatCreateController({
+      onCreated: (sessionId) => navigate(Routes.groupChat(sessionId), { replace: true }),
     });
-  };
 
-  const handleCreate = async () => {
-    if (selectedIds.size < 2) {
-      setError("Please select at least 2 characters for a group chat");
-      return;
-    }
-
-    const name = groupName.trim() || generateDefaultName();
-
-    try {
-      setCreating(true);
-      setError(null);
-
-      const session = await storageBridge.groupSessionCreate(name, Array.from(selectedIds));
-
-      // Navigate to the new group chat
-      navigate(Routes.groupChat(session.id), { replace: true });
-    } catch (err) {
-      console.error("Failed to create group session:", err);
-      setError("Failed to create group chat");
-      setCreating(false);
-    }
-  };
-
-  const generateDefaultName = (): string => {
-    const selectedChars = characters.filter((c) => selectedIds.has(c.id));
-    if (selectedChars.length <= 3) {
-      return selectedChars.map((c) => c.name).join(", ");
-    }
-    return `${selectedChars
-      .slice(0, 2)
-      .map((c) => c.name)
-      .join(", ")} & ${selectedChars.length - 2} others`;
-  };
-
-  const canCreate = selectedIds.size >= 2;
+  const selectedCount = ui.selectedIds.size;
+  const canCreate = selectedCount >= 2;
+  const namePlaceholder =
+    selectedCount >= 2 && defaultName.trim().length > 0 ? defaultName : "Enter group name...";
 
   return (
-    <div className="flex h-full flex-col text-gray-200">
-      {/* Header */}
+    <div className="flex h-screen flex-col text-gray-200 overflow-hidden">
       <header className="shrink-0 px-4 pb-3 pt-10 border-b border-white/10 bg-[#050505]">
         <div className="flex items-center gap-3">
           <button
@@ -96,18 +33,16 @@ export function GroupChatCreatePage() {
         </div>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto px-4 py-4">
-        {/* Group Name Input */}
+      <main className="flex-1 overflow-y-auto px-4 py-4 pb-0">
         <div className="mb-6">
           <label className="block text-sm font-medium text-white/70 mb-2">
             Group Name (optional)
           </label>
           <input
             type="text"
-            value={groupName}
+            value={ui.groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            placeholder={selectedIds.size >= 2 ? generateDefaultName() : "Enter group name..."}
+            placeholder={namePlaceholder}
             className={cn(
               "w-full px-4 py-3",
               radius.md,
@@ -119,18 +54,17 @@ export function GroupChatCreatePage() {
           />
         </div>
 
-        {/* Character Selection */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-medium text-white/70">
-              Select Characters ({selectedIds.size} selected)
+              Select Characters ({selectedCount} selected)
             </label>
-            {selectedIds.size < 2 && (
+            {selectedCount < 2 && (
               <span className="text-xs text-amber-400/80">Min. 2 required</span>
             )}
           </div>
 
-          {loading ? (
+          {ui.loading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
                 <div
@@ -162,7 +96,7 @@ export function GroupChatCreatePage() {
                 <CharacterSelectItem
                   key={character.id}
                   character={character}
-                  selected={selectedIds.has(character.id)}
+                  selected={ui.selectedIds.has(character.id)}
                   onToggle={() => toggleCharacter(character.id)}
                 />
               ))}
@@ -170,8 +104,7 @@ export function GroupChatCreatePage() {
           )}
         </div>
 
-        {/* Error Message */}
-        {error && (
+        {ui.error && (
           <div
             className={cn(
               "mb-4 px-4 py-2.5",
@@ -180,16 +113,15 @@ export function GroupChatCreatePage() {
               "text-sm text-red-200",
             )}
           >
-            {error}
+            {ui.error}
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="shrink-0 px-4 py-4 border-t border-white/10 bg-[#050505]">
+      <footer className="shrink-0 px-4 py-4 border-t border-white/10 bg-[#050505] sticky bottom-0">
         <button
           onClick={handleCreate}
-          disabled={!canCreate || creating}
+          disabled={!canCreate || ui.creating}
           className={cn(
             "w-full py-3",
             radius.md,
@@ -201,89 +133,9 @@ export function GroupChatCreatePage() {
             "disabled:opacity-50",
           )}
         >
-          {creating ? "Creating..." : `Create Group Chat (${selectedIds.size} characters)`}
+          {ui.creating ? "Creating..." : `Create Group Chat (${selectedCount} characters)`}
         </button>
       </footer>
     </div>
-  );
-}
-
-function CharacterSelectItem({
-  character,
-  selected,
-  onToggle,
-}: {
-  character: Character;
-  selected: boolean;
-  onToggle: () => void;
-}) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
-
-  return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        "w-full flex items-center gap-3 p-3 text-left",
-        radius.md,
-        "border transition",
-        selected
-          ? "border-emerald-400/40 bg-emerald-400/10"
-          : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10",
-        interactive.transition.fast,
-      )}
-    >
-      {/* Avatar */}
-      <div
-        className={cn(
-          "relative h-12 w-12 shrink-0 overflow-hidden rounded-full",
-          "bg-linear-to-br from-white/10 to-white/5",
-          selected ? "ring-2 ring-emerald-400/50" : "ring-1 ring-white/10",
-        )}
-      >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-bold text-white/60">
-            {character.name.slice(0, 2).toUpperCase()}
-          </div>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <h3
-          className={cn(
-            "truncate font-medium",
-            typography.body.size,
-            selected ? "text-emerald-100" : "text-white",
-          )}
-        >
-          {character.name}
-        </h3>
-        {character.description && (
-          <p
-            className={cn(
-              "truncate text-sm",
-              selected ? "text-emerald-200/60" : "text-white/50",
-            )}
-          >
-            {character.description}
-          </p>
-        )}
-      </div>
-
-      {/* Checkbox */}
-      <div
-        className={cn(
-          "h-6 w-6 shrink-0 rounded-full flex items-center justify-center",
-          "border transition",
-          selected
-            ? "border-emerald-400 bg-emerald-400 text-black"
-            : "border-white/30 bg-transparent",
-        )}
-      >
-        {selected && <Check size={14} strokeWidth={3} />}
-      </div>
-    </button>
   );
 }

@@ -27,8 +27,9 @@ use crate::chat_manager::dynamic_memory::{
 use crate::chat_manager::prompts::{
     self, APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
 };
-use crate::chat_manager::request::{extract_error_message, extract_text, extract_usage};
-use crate::chat_manager::request_builder;
+use crate::chat_manager::request::{
+    extract_error_message, extract_reasoning, extract_text, extract_usage,
+};
 use crate::chat_manager::service::resolve_api_key;
 use crate::chat_manager::storage::{load_personas, load_settings, select_model};
 use crate::chat_manager::tooling::{
@@ -847,7 +848,7 @@ async fn summarize_group_messages(
     settings: &Settings,
 ) -> Result<String, String> {
     let mut messages_for_api = Vec::new();
-    let system_role = request_builder::system_role_for(provider_cred);
+    let system_role = crate::chat_manager::request_builder::system_role_for(provider_cred);
 
     let summary_template = prompts::get_template(app, APP_DYNAMIC_SUMMARY_TEMPLATE_ID)
         .ok()
@@ -895,7 +896,7 @@ async fn summarize_group_messages(
         .max_output_tokens
         .unwrap_or(2048);
 
-    let built = request_builder::build_chat_request(
+    let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         api_key,
         &model.name,
@@ -971,7 +972,7 @@ async fn run_group_memory_tool_update(
     let max_entries = dynamic_max_entries(settings);
 
     let mut messages_for_api = Vec::new();
-    let system_role = request_builder::system_role_for(provider_cred);
+    let system_role = crate::chat_manager::request_builder::system_role_for(provider_cred);
 
     let base_template = prompts::get_template(app, APP_DYNAMIC_MEMORY_TEMPLATE_ID)
         .ok()
@@ -1016,7 +1017,7 @@ async fn run_group_memory_tool_update(
         .max_output_tokens
         .unwrap_or(2048);
 
-    let built = request_builder::build_chat_request(
+    let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         api_key,
         &model.name,
@@ -1563,11 +1564,13 @@ fn save_user_message(
         attachments: vec![],
         reasoning: None,
         selection_reasoning: None,
+        model_id: None,
     })
 }
 
 /// Save an assistant message to the group chat
 fn save_assistant_message(
+    app: &AppHandle,
     conn: &rusqlite::Connection,
     session_id: &str,
     character_id: &str,
@@ -1575,6 +1578,7 @@ fn save_assistant_message(
     reasoning: Option<&str>,
     selection_reasoning: Option<&str>,
     usage: Option<&UsageSummary>,
+    model_id: Option<&str>,
 ) -> Result<GroupMessage, String> {
     let now = now_ms();
     let id = Uuid::new_v4().to_string();
@@ -1594,10 +1598,19 @@ fn save_assistant_message(
         None => (None, None, None),
     };
 
+    log_info(
+        app,
+        "save_assistant_message",
+        format!(
+            "✓ Saving message {} with model_id: {:?}, character_id: {}",
+            id, model_id, character_id
+        ),
+    );
+
     conn.execute(
         "INSERT INTO group_messages (id, session_id, role, content, speaker_character_id, turn_number,
-         created_at, prompt_tokens, completion_tokens, total_tokens, is_pinned, attachments, reasoning, selection_reasoning, selected_variant_id)
-         VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, '[]', ?10, ?11, ?12)",
+         created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, attachments, reasoning, selection_reasoning, model_id)
+         VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, '[]', ?11, ?12, ?13)",
         rusqlite::params![
             id,
             session_id,
@@ -1608,28 +1621,42 @@ fn save_assistant_message(
             prompt_tokens,
             completion_tokens,
             total_tokens,
+            variant_id,
             reasoning,
             selection_reasoning,
-            variant_id
+            model_id
         ],
     )
     .map_err(|e| e.to_string())?;
 
     // Insert the first variant
     conn.execute(
-        "INSERT INTO group_message_variants (id, message_id, content, speaker_character_id, created_at, reasoning, selection_reasoning)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO group_message_variants (id, message_id, content, speaker_character_id, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning, selection_reasoning, model_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             variant_id,
             id,
             content,
             character_id,
             now,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
             reasoning,
-            selection_reasoning
+            selection_reasoning,
+            model_id
         ],
     )
     .map_err(|e| e.to_string())?;
+
+    log_info(
+        app,
+        "save_assistant_message",
+        format!(
+            "✓ Successfully inserted message {} to group_messages table",
+            id
+        ),
+    );
 
     conn.execute(
         "UPDATE group_sessions SET updated_at = ?1 WHERE id = ?2",
@@ -1638,6 +1665,15 @@ fn save_assistant_message(
     .map_err(|e| e.to_string())?;
 
     update_participation(conn, session_id, character_id, turn_number)?;
+
+    log_info(
+        app,
+        "save_assistant_message",
+        format!(
+            "✓ Message saved successfully, returning GroupMessage with model_id: {:?}",
+            model_id
+        ),
+    );
 
     Ok(GroupMessage {
         id,
@@ -1654,6 +1690,7 @@ fn save_assistant_message(
         attachments: vec![],
         reasoning: reasoning.map(|s| s.to_string()),
         selection_reasoning: selection_reasoning.map(|s| s.to_string()),
+        model_id: model_id.map(|s| s.to_string()),
     })
 }
 
@@ -1883,7 +1920,7 @@ async fn select_speaker_via_llm_with_tracking(
         choice: Some(ToolChoice::Required),
     };
 
-    let built = request_builder::build_chat_request(
+    let built = crate::chat_manager::request_builder::build_chat_request(
         cred,
         &api_key,
         &model.name,
@@ -1990,7 +2027,7 @@ async fn generate_character_response(
     pool: &State<'_, SwappablePool>,
     request_id: &str,
     operation_type: UsageOperationType,
-) -> Result<(String, Option<String>, Option<UsageSummary>), String> {
+) -> Result<(String, Option<String>, Option<UsageSummary>, String), String> {
     let conn = pool.get_connection()?;
 
     // Load full character data
@@ -2075,14 +2112,18 @@ async fn generate_character_response(
         true,
     );
 
-    let mut messages = vec![json!({
-        "role": "system",
-        "content": system_prompt
-    })];
-    messages.extend(api_messages);
+    // Use provider-specific system message handling (like regular chat)
+    let system_role = crate::chat_manager::request_builder::system_role_for(cred);
+    let mut messages_for_api = Vec::new();
+    crate::chat_manager::messages::push_system_message(
+        &mut messages_for_api,
+        &system_role,
+        Some(system_prompt),
+    );
+    messages_for_api.extend(api_messages);
 
     let persona_name = persona.as_ref().map(|p| p.title.as_str()).unwrap_or("User");
-    messages.push(json!({
+    messages_for_api.push(json!({
         "role": "user",
         "content": format!("[{}]: {}", persona_name, context.user_message)
     }));
@@ -2125,12 +2166,12 @@ async fn generate_character_response(
         .and_then(|a| a.frequency_penalty);
     let top_k = model.advanced_model_settings.as_ref().and_then(|a| a.top_k);
 
-    let built = request_builder::build_chat_request(
+    let built = crate::chat_manager::request_builder::build_chat_request(
         cred,
         &api_key,
         &model.name,
-        &messages,
-        None, // system prompt already in messages
+        &messages_for_api,
+        None, // system prompt already handled via push_system_message
         temperature,
         top_p,
         max_tokens,
@@ -2151,6 +2192,26 @@ async fn generate_character_response(
         format!(
             "Generating response from {} via {} model {}",
             character.name, cred.provider_id, model.name
+        ),
+    );
+
+    // Log request details for debugging
+    log_info(
+        app,
+        "group_chat_response",
+        format!(
+            "Request details: endpoint={} model={} stream={} temp={} max_tokens={}",
+            built.url, model.name, true, temperature, max_tokens
+        ),
+    );
+
+    log_info(
+        app,
+        "group_chat_response",
+        format!(
+            "Request body: {}",
+            serde_json::to_string_pretty(&built.body)
+                .unwrap_or_else(|_| "unable to serialize".to_string())
         ),
     );
 
@@ -2187,9 +2248,32 @@ async fn generate_character_response(
     );
 
     if !api_response.ok {
+        let fallback = format!("Provider returned status {}", api_response.status);
+        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+
+        log_error(
+            app,
+            "group_chat_response",
+            format!(
+                "API request failed: status={} error={}",
+                api_response.status, err_message
+            ),
+        );
+
+        // Log the full response body for debugging
+        log_info(
+            app,
+            "group_chat_response",
+            format!(
+                "Full error response: {}",
+                serde_json::to_string_pretty(api_response.data())
+                    .unwrap_or_else(|_| "unable to serialize".to_string())
+            ),
+        );
+
         return Err(format!(
-            "Character response API request failed with status {}",
-            api_response.status
+            "Character response API request failed with status {}: {}",
+            api_response.status, err_message
         ));
     }
 
@@ -2228,15 +2312,17 @@ async fn generate_character_response(
     let text = text.ok_or_else(|| "Empty response from provider".to_string())?;
 
     let usage = extract_usage(api_response.data());
+    let reasoning = extract_reasoning(api_response.data());
 
-    let reasoning = api_response
-        .data()
-        .get("choices")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("reasoning"))
-        .and_then(|r| r.as_str())
-        .map(|s| s.to_string());
+    log_info(
+        app,
+        "generate_character_response",
+        format!(
+            "Extracted reasoning: {} (len={})",
+            if reasoning.is_some() { "YES" } else { "NO" },
+            reasoning.as_ref().map(|r| r.len()).unwrap_or(0)
+        ),
+    );
 
     let message_usage = usage.as_ref().map(|u| UsageSummary {
         prompt_tokens: u.prompt_tokens.map(|v| v as i32),
@@ -2257,7 +2343,17 @@ async fn generate_character_response(
     )
     .await;
 
-    Ok((text, reasoning, message_usage))
+    let model_id_to_return = model.id.clone();
+    log_info(
+        app,
+        "generate_character_response",
+        format!(
+            "✓ Generated response with model_id: {} (model name: {})",
+            model_id_to_return, model.display_name
+        ),
+    );
+
+    Ok((text, reasoning, message_usage, model_id_to_return))
 }
 
 #[tauri::command]
@@ -2359,7 +2455,7 @@ pub async fn group_chat_send(
 
     let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let (response_content, reasoning, message_usage) = generate_character_response(
+    let (response_content, reasoning, message_usage, model_id_str) = generate_character_response(
         &app,
         &mut context,
         &selected_character_id,
@@ -2371,7 +2467,19 @@ pub async fn group_chat_send(
     .await?;
 
     let conn = pool.get_connection()?;
+
+    log_info(
+        &app,
+        "group_chat_send",
+        format!(
+            "✓ About to save message with model_id: {} (length: {} chars)",
+            model_id_str,
+            model_id_str.len()
+        ),
+    );
+
     let message = save_assistant_message(
+        &app,
         &conn,
         &session_id,
         &selected_character_id,
@@ -2379,6 +2487,7 @@ pub async fn group_chat_send(
         reasoning.as_deref(),
         selection_reasoning.as_deref(),
         message_usage.as_ref(),
+        Some(&model_id_str),
     )?;
 
     let stats_json = group_sessions::group_participation_stats_internal(&conn, &session_id)?;
@@ -2547,7 +2656,7 @@ pub async fn group_chat_regenerate(
 
     let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let (response_content, reasoning, message_usage) = generate_character_response(
+    let (response_content, reasoning, message_usage, model_id_str) = generate_character_response(
         &app,
         &mut context,
         &selected_character_id,
@@ -2563,8 +2672,8 @@ pub async fn group_chat_regenerate(
     let variant_id = Uuid::new_v4().to_string();
 
     conn.execute(
-        "INSERT INTO group_message_variants (id, message_id, content, speaker_character_id, created_at, reasoning, selection_reasoning, prompt_tokens, completion_tokens, total_tokens)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO group_message_variants (id, message_id, content, speaker_character_id, created_at, reasoning, selection_reasoning, prompt_tokens, completion_tokens, total_tokens, model_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             variant_id,
             message_id,
@@ -2576,18 +2685,29 @@ pub async fn group_chat_regenerate(
             message_usage.as_ref().and_then(|u| u.prompt_tokens),
             message_usage.as_ref().and_then(|u| u.completion_tokens),
             message_usage.as_ref().and_then(|u| u.total_tokens),
+            model_id_str,
         ],
     )
     .map_err(|e| e.to_string())?;
 
+    log_info(
+        &app,
+        "group_chat_regenerate",
+        format!(
+            "✓ Successfully inserted variant {} to group_message_variants table",
+            variant_id
+        ),
+    );
+
     conn.execute(
-        "UPDATE group_messages SET content = ?1, speaker_character_id = ?2, selected_variant_id = ?3, reasoning = ?4, selection_reasoning = ?5 WHERE id = ?6",
+        "UPDATE group_messages SET content = ?1, speaker_character_id = ?2, selected_variant_id = ?3, reasoning = ?4, selection_reasoning = ?5, model_id = ?6 WHERE id = ?7",
         rusqlite::params![
             response_content,
             selected_character_id,
             variant_id,
             reasoning,
             selection_reasoning,
+            model_id_str,
             message_id
         ],
     )
@@ -2698,7 +2818,7 @@ pub async fn group_chat_continue(
 
     let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let (response_content, reasoning, message_usage) = generate_character_response(
+    let (response_content, reasoning, message_usage, model_id_str) = generate_character_response(
         &app,
         &mut context,
         &selected_character_id,
@@ -2711,6 +2831,7 @@ pub async fn group_chat_continue(
 
     let conn = pool.get_connection()?;
     let message = save_assistant_message(
+        &app,
         &conn,
         &session_id,
         &selected_character_id,
@@ -2718,6 +2839,7 @@ pub async fn group_chat_continue(
         reasoning.as_deref(),
         selection_reasoning.as_deref(),
         message_usage.as_ref(),
+        Some(&model_id_str),
     )?;
 
     let stats_json = group_sessions::group_participation_stats_internal(&conn, &session_id)?;
@@ -2755,4 +2877,274 @@ pub fn group_chat_get_selection_prompt(
     let conn = pool.get_connection()?;
     let context = build_selection_context(&conn, &session_id, &user_message)?;
     Ok(selection::build_selection_prompt(&context))
+}
+
+/// Helper to remove {{#if current_draft}}...{{else}}...{{/if}} and keep else content
+fn remove_if_block(text: &mut String) {
+    if let Some(if_start) = text.find("{{#if current_draft}}") {
+        if let Some(endif_start) = text[if_start..].find("{{/if}}") {
+            let else_content =
+                if let Some(else_start) = text[if_start..if_start + endif_start].find("{{else}}") {
+                    let else_abs = if_start + else_start + 8; // +8 for "{{else}}"
+                    let endif_abs = if_start + endif_start;
+                    text[else_abs..endif_abs].to_string()
+                } else {
+                    String::new()
+                };
+            text.replace_range(if_start..(if_start + endif_start + 7), &else_content);
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn group_chat_generate_user_reply(
+    app: AppHandle,
+    session_id: String,
+    current_draft: Option<String>,
+    pool: State<'_, SwappablePool>,
+) -> Result<String, String> {
+    log_info(
+        &app,
+        "group_help_me_reply",
+        format!(
+            "Generating user reply for group session={}, has_draft={}",
+            &session_id,
+            current_draft.is_some()
+        ),
+    );
+
+    let settings = load_settings(&app)?;
+    let conn = pool.get_connection()?;
+
+    let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
+    let session: GroupSession = serde_json::from_str(&session_json)
+        .map_err(|e| format!("Failed to parse session: {}", e))?;
+
+    let personas = load_personas(&app)?;
+    let persona = personas
+        .iter()
+        .find(|p| Some(&p.id) == session.persona_id.as_ref());
+
+    let messages_json =
+        group_sessions::group_messages_list_internal(&conn, &session_id, 10, None, None)?;
+    let recent_msgs: Vec<GroupMessage> = serde_json::from_str(&messages_json)
+        .map_err(|e| format!("Failed to parse messages: {}", e))?;
+
+    if recent_msgs.is_empty() {
+        return Err("No conversation history to base reply on".to_string());
+    }
+
+    // Load all characters in this group
+    let mut group_characters: Vec<Character> = Vec::new();
+    for char_id in &session.character_ids {
+        let character = load_character(&conn, char_id)?;
+        group_characters.push(character);
+    }
+
+    if group_characters.is_empty() {
+        return Err("No characters found in group session".to_string());
+    }
+
+    let model_id = settings
+        .default_model_id
+        .as_ref()
+        .ok_or_else(|| "No default model configured".to_string())?;
+
+    let model = settings
+        .models
+        .iter()
+        .find(|m| &m.id == model_id)
+        .ok_or_else(|| "Default model not found".to_string())?;
+
+    let provider_cred = settings
+        .provider_credentials
+        .iter()
+        .find(|cred| cred.provider_id == model.provider_id)
+        .ok_or_else(|| "Provider credential not found".to_string())?;
+
+    let api_key = resolve_api_key(&app, provider_cred, "group_help_me_reply")?;
+
+    let base_prompt = prompts::get_help_me_reply_prompt(&app);
+
+    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("User");
+    let persona_desc = persona.map(|p| p.description.as_str()).unwrap_or("");
+
+    // Build character list for the prompt
+    let char_list = group_characters
+        .iter()
+        .map(|c| {
+            let desc = c.description.as_deref().unwrap_or("");
+            if desc.is_empty() {
+                c.name.clone()
+            } else {
+                format!("{} ({})", c.name, desc)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut system_prompt = base_prompt;
+    system_prompt = system_prompt.replace("{{char.name}}", &char_list);
+    system_prompt = system_prompt.replace("{{char.desc}}", "participants in a group conversation");
+    system_prompt = system_prompt.replace("{{persona.name}}", persona_name);
+    system_prompt = system_prompt.replace("{{persona.desc}}", persona_desc);
+    let draft_str = current_draft.as_deref().unwrap_or("");
+    system_prompt = system_prompt.replace("{{current_draft}}", draft_str);
+    // Legacy placeholders
+    system_prompt = system_prompt.replace("{{char}}", &char_list);
+    system_prompt = system_prompt.replace("{{persona}}", persona_name);
+
+    if let Some(ref draft) = current_draft {
+        if !draft.trim().is_empty() {
+            system_prompt = system_prompt.replace("{{#if current_draft}}", "");
+            system_prompt = system_prompt.replace("{{current_draft}}", draft);
+            if let Some(else_start) = system_prompt.find("{{else}}") {
+                if let Some(endif_start) = system_prompt[else_start..].find("{{/if}}") {
+                    system_prompt.replace_range(else_start..(else_start + endif_start + 7), "");
+                }
+            }
+            system_prompt = system_prompt.replace("{{/if}}", "");
+        } else {
+            remove_if_block(&mut system_prompt);
+        }
+    } else {
+        remove_if_block(&mut system_prompt);
+    }
+
+    let conversation_context = recent_msgs
+        .iter()
+        .map(|msg| {
+            let speaker_name = if msg.role == "user" {
+                persona_name
+            } else {
+                group_characters
+                    .iter()
+                    .find(|c| Some(&c.id) == msg.speaker_character_id.as_ref())
+                    .map(|c| c.name.as_str())
+                    .unwrap_or("Character")
+            };
+            format!("{}: {}", speaker_name, msg.content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    let user_prompt = format!(
+        "Here is the recent group conversation:\n\n{}\n\nGenerate a reply for {} to say next in this group chat.",
+        conversation_context, persona_name
+    );
+
+    // Use provider-specific system message handling
+    let system_role = crate::chat_manager::request_builder::system_role_for(provider_cred);
+    let mut messages_for_api = Vec::new();
+    crate::chat_manager::messages::push_system_message(
+        &mut messages_for_api,
+        &system_role,
+        Some(system_prompt),
+    );
+    messages_for_api.push(json!({ "role": "user", "content": user_prompt }));
+
+    let built = crate::chat_manager::request_builder::build_chat_request(
+        provider_cred,
+        &api_key,
+        &model.name,
+        &messages_for_api,
+        None,  // system prompt already handled via push_system_message
+        0.8,   // temperature
+        1.0,   // top_p
+        20480, // max_tokens
+        false, // no streaming
+        None,  // request_id
+        None,  // frequency_penalty
+        None,  // presence_penalty
+        None,  // top_k
+        None,  // tool_config
+        false, // reasoning_enabled
+        None,  // reasoning_effort
+        None,  // reasoning_budget
+    );
+
+    log_info(
+        &app,
+        "group_help_me_reply",
+        format!("Sending request to {}", built.url),
+    );
+
+    let api_request_payload = ApiRequest {
+        url: built.url,
+        method: Some("POST".into()),
+        headers: Some(built.headers),
+        query: None,
+        body: Some(built.body),
+        timeout_ms: Some(60_000),
+        stream: Some(false),
+        request_id: None,
+        provider_id: Some(provider_cred.provider_id.clone()),
+    };
+
+    let api_response = api_request(app.clone(), api_request_payload).await?;
+
+    if !api_response.ok {
+        let fallback = format!("Provider returned status {}", api_response.status);
+        let err_message = extract_error_message(&api_response.data).unwrap_or(fallback.clone());
+
+        log_error(
+            &app,
+            "group_help_me_reply",
+            format!(
+                "API request failed: status={} error={}",
+                api_response.status, err_message
+            ),
+        );
+
+        log_info(
+            &app,
+            "group_help_me_reply",
+            format!(
+                "Full error response: {}",
+                serde_json::to_string_pretty(&api_response.data)
+                    .unwrap_or_else(|_| "unable to serialize".to_string())
+            ),
+        );
+
+        return Err(format!(
+            "API request failed with status {}: {}",
+            api_response.status, err_message
+        ));
+    }
+
+    let generated_text = extract_text(&api_response.data)
+        .ok_or_else(|| "Failed to extract text from response".to_string())?;
+
+    let cleaned = generated_text
+        .trim()
+        .trim_matches('"')
+        .trim_start_matches(&format!("{}:", persona_name))
+        .trim()
+        .to_string();
+
+    log_info(
+        &app,
+        "group_help_me_reply",
+        format!("Generated reply: {} chars", cleaned.len()),
+    );
+
+    let usage = extract_usage(&api_response.data);
+
+    // Record usage - use first character as representative
+    if let Some(first_char) = group_characters.first() {
+        record_group_usage(
+            &app,
+            &usage,
+            &session,
+            &first_char,
+            model,
+            provider_cred,
+            &api_key,
+            UsageOperationType::ReplyHelper,
+            "group_help_me_reply",
+        )
+        .await;
+    }
+
+    Ok(cleaned)
 }
