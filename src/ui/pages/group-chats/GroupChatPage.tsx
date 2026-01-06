@@ -716,15 +716,7 @@ export function GroupChatPage() {
           onBack={() => navigate(Routes.groupChats)}
           onSettings={() => navigate(Routes.groupChatSettings(session.id))}
           onMemories={() => navigate(Routes.groupChatMemories(session.id))}
-        />
-        {/* Participation Bar - shows who's been speaking */}
-        {showParticipation && participationStats.length > 0 && (
-          <ParticipationBar
-            stats={participationStats}
-            characters={groupCharacters}
-            onClose={() => setShowParticipation(false)}
-          />
-        )}
+        />       
       </div>
 
       {/* Main content area - flex-1 takes remaining space */}
@@ -957,79 +949,6 @@ function CharacterMiniAvatar({
     </div>
   );
 }
-
-function ParticipationBar({
-  stats,
-  characters,
-  onClose,
-}: {
-  stats: GroupParticipation[];
-  characters: Character[];
-  onClose?: () => void;
-}) {
-  const totalSpeaks = stats.reduce((sum, s) => sum + s.speakCount, 0);
-
-  if (totalSpeaks === 0) return null;
-
-  const sortedStats = [...stats].sort((a, b) => b.speakCount - a.speakCount);
-
-  const colors = [
-    "bg-emerald-400",
-    "bg-blue-400",
-    "bg-purple-400",
-    "bg-amber-400",
-    "bg-pink-400",
-    "bg-cyan-400",
-    "bg-orange-400",
-    "bg-lime-400",
-  ];
-
-  return (
-    <div className="px-4 py-2 border-b border-white/5 bg-[#0a0a0c]">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-1.5 rounded-full overflow-hidden flex bg-white/5">
-          {sortedStats.map((stat, index) => {
-            const pct = (stat.speakCount / totalSpeaks) * 100;
-            return (
-              <div
-                key={stat.characterId}
-                className={cn(colors[index % colors.length], "transition-all duration-300")}
-                style={{ width: `${pct}%` }}
-              />
-            );
-          })}
-        </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="text-white/30 hover:text-white/50 transition-colors"
-            aria-label="Hide participation bar"
-          >
-            <X size={12} />
-          </button>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-        {sortedStats.slice(0, 4).map((stat, index) => {
-          const char = characters.find((c) => c.id === stat.characterId);
-          const pct = Math.round((stat.speakCount / totalSpeaks) * 100);
-          return (
-            <div key={stat.characterId} className="flex items-center gap-1">
-              <div className={cn("h-1.5 w-1.5 rounded-full", colors[index % colors.length])} />
-              <span className="text-[10px] text-white/50">
-                {char?.name?.split(" ")[0] || "?"} {pct}%
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Message Actions Bottom Sheet
-// ============================================================================
 
 function ActionRow({
   icon: Icon,

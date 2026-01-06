@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import type { ReactNode } from "react";
 import {
   ArrowLeft,
   User,
@@ -23,7 +24,7 @@ import type {
   Persona,
 } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
-import { BottomMenu } from "../../components";
+import { BottomMenu, MenuSection } from "../../components";
 import { Routes, useNavigationManager } from "../../navigation";
 import { useAvatar } from "../../hooks/useAvatar";
 
@@ -82,100 +83,156 @@ function CharacterAvatar({
   );
 }
 
+function QuickChip({
+  icon,
+  label,
+  value,
+  onClick,
+  disabled = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "group flex w-full min-h-14 items-center justify-between",
+        radius.md,
+        "border p-4 text-left",
+        interactive.transition.default,
+        interactive.active.scale,
+        disabled
+          ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
+          : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
+      )}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className={cn(
+            "flex h-10 w-10 items-center justify-center",
+            radius.full,
+            "border border-white/15 bg-white/10 text-white/80",
+          )}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              typography.overline.size,
+              typography.overline.weight,
+              typography.overline.tracking,
+              typography.overline.transform,
+              "text-white/50",
+            )}
+          >
+            {label}
+          </div>
+          <div className={cn(typography.bodySmall.size, "text-white truncate")}>{value}</div>
+        </div>
+      </div>
+      <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
+    </button>
+  );
+}
+
 interface PersonaOptionProps {
-  persona: Persona | null;
+  title: string;
+  description: string;
+  isDefault?: boolean;
   isSelected: boolean;
   onClick: () => void;
   onLongPress?: () => void;
 }
 
-function PersonaOption({ persona, isSelected, onClick, onLongPress }: PersonaOptionProps) {
-  const longPressTimer = useRef<number | null>(null);
-  const isLongPressTriggered = useRef(false);
+function PersonaOption({
+  title,
+  description,
+  isDefault,
+  isSelected,
+  onClick,
+  onLongPress,
+}: PersonaOptionProps) {
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
+  const [isLongPressTriggered, setIsLongPressTriggered] = useState(false);
 
   const handleTouchStart = () => {
     if (!onLongPress) return;
-    isLongPressTriggered.current = false;
-    longPressTimer.current = window.setTimeout(() => {
-      isLongPressTriggered.current = true;
+    setIsLongPressTriggered(false);
+    const timer = window.setTimeout(() => {
+      setIsLongPressTriggered(true);
       onLongPress();
     }, 500);
+    setLongPressTimer(timer);
   };
 
   const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
     }
-    if (!isLongPressTriggered.current) {
+    if (!isLongPressTriggered) {
       onClick();
     }
-    isLongPressTriggered.current = false;
   };
-
-  const avatarUrl = useAvatar("persona", persona?.id ?? undefined, persona?.avatarPath);
-  const displayName = persona?.title || "No Persona";
-  const displayDescription = persona?.description || "Chat without a persona";
 
   return (
     <button
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={() => {
-        if (longPressTimer.current) {
-          clearTimeout(longPressTimer.current);
-          longPressTimer.current = null;
-        }
-      }}
       onClick={() => {
-        if (!isLongPressTriggered.current) {
+        if (!isLongPressTriggered) {
           onClick();
         }
       }}
       className={cn(
-        "group flex w-full items-center gap-3",
+        "group relative flex w-full items-center gap-3 justify-between",
         radius.lg,
-        "border p-3 text-left",
+        "p-4 text-left",
         interactive.transition.default,
         interactive.active.scale,
         isSelected
-          ? "border-emerald-400/40 bg-emerald-400/10"
-          : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
+          ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
+          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10",
       )}
+      aria-pressed={isSelected}
     >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>
+            {title}
+          </div>
+          {isDefault && (
+            <span
+              className={cn(
+                "shrink-0 rounded-full border border-blue-400/30 bg-blue-400/10 px-2 text-[10px] font-medium text-blue-200",
+              )}
+            >
+              App default
+            </span>
+          )}
+        </div>
+        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>
+          {description}
+        </div>
+      </div>
+
       <div
         className={cn(
-          "flex h-10 w-10 items-center justify-center",
-          radius.full,
-          "border overflow-hidden",
-          isSelected ? "border-emerald-400/40 bg-emerald-400/20" : "border-white/15 bg-white/10",
+          "flex h-8 w-8 items-center justify-center rounded-full border",
+          isSelected
+            ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
+            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20",
         )}
+        aria-hidden="true"
       >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-        ) : (
-          <User className={cn("h-4 w-4", isSelected ? "text-emerald-300" : "text-white/60")} />
-        )}
+        {isSelected ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
       </div>
-      <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            typography.bodySmall.size,
-            "font-medium truncate",
-            isSelected ? "text-emerald-100" : "text-white",
-          )}
-        >
-          {displayName}
-        </p>
-        <p className={cn(typography.caption.size, "text-white/50 truncate mt-0.5")}>
-          {displayDescription}
-        </p>
-      </div>
-      {isSelected && (
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400/20">
-          <Check className="h-3.5 w-3.5 text-emerald-300" />
-        </div>
-      )}
     </button>
   );
 }
@@ -256,6 +313,12 @@ export function GroupChatSettingsPage() {
     if (!session?.personaId) return null;
     return personas.find((p) => p.id === session.personaId) || null;
   }, [session, personas]);
+
+  const currentPersonaDisplay = useMemo(() => {
+    if (!session?.personaId) return "No persona";
+    if (!currentPersona) return "Custom persona";
+    return currentPersona.isDefault ? `${currentPersona.title} (default)` : currentPersona.title;
+  }, [currentPersona, session?.personaId]);
 
   // Handlers
   const handleSaveName = async () => {
@@ -509,46 +572,12 @@ export function GroupChatSettingsPage() {
           {/* Persona Section */}
           <section className={spacing.item}>
             <SectionHeader title="Persona" subtitle="Your identity in this conversation" />
-            <button
+            <QuickChip
+              icon={<User className="h-4 w-4" />}
+              label="Persona"
+              value={currentPersonaDisplay}
               onClick={() => setShowPersonaSelector(true)}
-              className={cn(
-                "group flex w-full items-center justify-between gap-3",
-                radius.lg,
-                "border p-4 text-left",
-                interactive.transition.default,
-                interactive.active.scale,
-                "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={cn(
-                    "flex h-10 w-10 items-center justify-center",
-                    radius.full,
-                    "border border-white/15 bg-white/10 overflow-hidden",
-                  )}
-                >
-                  {currentPersona?.avatarPath ? (
-                    <img
-                      src={currentPersona.avatarPath}
-                      alt={currentPersona.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <User className="h-4 w-4 text-white/70" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {currentPersona?.title || "No Persona"}
-                  </p>
-                  <p className="text-xs text-white/50 mt-0.5 truncate">
-                    {currentPersona?.description || "Chat without a persona"}
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-white/40 group-hover:text-white transition" />
-            </button>
+            />
           </section>
 
           {/* Characters Section */}
@@ -709,32 +738,34 @@ export function GroupChatSettingsPage() {
         onClose={() => setShowPersonaSelector(false)}
         title="Select Persona"
       >
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-          {/* No Persona option */}
-          <PersonaOption
-            persona={null}
-            isSelected={!session.personaId}
-            onClick={() => handleChangePersona(null)}
-          />
-
-          {/* Persona options */}
-          {personas.map((persona) => (
-            <PersonaOption
-              key={persona.id}
-              persona={persona}
-              isSelected={session.personaId === persona.id}
-              onClick={() => handleChangePersona(persona.id)}
-            />
-          ))}
-
-          {personas.length === 0 && (
-            <div className="text-center py-8 text-white/50 text-sm">
-              No personas created yet.
-              <br />
-              Create one in Settings → Personas.
+        <MenuSection>
+          {personas.length === 0 ? (
+            <div className={cn(radius.lg, "border border-amber-500/20 bg-amber-500/10 px-6 py-4")}>
+              <p className={cn(typography.bodySmall.size, "text-amber-200")}>
+                No personas available. Create one in settings first.
+              </p>
+            </div>
+          ) : (
+            <div className={spacing.field}>
+              <PersonaOption
+                title="No Persona"
+                description="Disable persona for this conversation"
+                isSelected={session.personaId === null || session.personaId === undefined}
+                onClick={() => handleChangePersona(null)}
+              />
+              {personas.map((persona) => (
+                <PersonaOption
+                  key={persona.id}
+                  title={persona.title}
+                  description={persona.description}
+                  isDefault={persona.isDefault}
+                  isSelected={persona.id === session.personaId}
+                  onClick={() => handleChangePersona(persona.id)}
+                />
+              ))}
             </div>
           )}
-        </div>
+        </MenuSection>
       </BottomMenu>
 
       {/* Add Character Modal */}
