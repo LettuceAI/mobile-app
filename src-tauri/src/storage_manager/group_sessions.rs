@@ -54,6 +54,12 @@ pub struct GroupSession {
     /// Whether this session is archived
     #[serde(default)]
     pub archived: bool,
+    /// Chat type: "conversation" or "roleplay"
+    #[serde(default = "default_chat_type")]
+    pub chat_type: String,
+    /// Starting scene for roleplay chats (JSON-encoded scene data)
+    #[serde(default)]
+    pub starting_scene: Option<serde_json::Value>,
     /// Manual memories (simple text entries)
     #[serde(default)]
     pub memories: Vec<String>,
@@ -69,6 +75,10 @@ pub struct GroupSession {
     /// Memory tool events tracking (for dynamic memory cycle gating)
     #[serde(default)]
     pub memory_tool_events: Vec<serde_json::Value>,
+}
+
+fn default_chat_type() -> String {
+    "conversation".to_string()
 }
 
 /// Memory embedding for semantic search in group sessions
@@ -159,6 +169,7 @@ pub struct GroupSessionPreview {
     pub last_message: Option<String>,
     pub message_count: i32,
     pub archived: bool,
+    pub chat_type: String,
 }
 
 // ============================================================================
@@ -169,7 +180,8 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
     let mut stmt = conn
         .prepare(
             "SELECT id, name, character_ids, persona_id, created_at, updated_at,
-                    memories, memory_embeddings, memory_summary, memory_summary_token_count, archived, memory_tool_events
+                    memories, memory_embeddings, memory_summary, memory_summary_token_count, archived, memory_tool_events,
+                    chat_type, starting_scene
              FROM group_sessions WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -204,8 +216,9 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
             .unwrap_or(0);
 
         let archived: bool = row
-            .get::<_, Option<bool>>(10)
+            .get::<_, Option<i32>>(10)
             .map_err(|e| e.to_string())?
+            .map(|v| v != 0)
             .unwrap_or(false);
 
         let memory_tool_events_json: String = row
@@ -215,6 +228,15 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
         let memory_tool_events: Vec<serde_json::Value> =
             serde_json::from_str(&memory_tool_events_json).unwrap_or_default();
 
+        let chat_type: String = row
+            .get::<_, Option<String>>(12)
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "conversation".to_string());
+
+        let starting_scene_json: Option<String> = row.get(13).map_err(|e| e.to_string())?;
+        let starting_scene: Option<serde_json::Value> =
+            starting_scene_json.and_then(|s| serde_json::from_str(&s).ok());
+
         Ok(Some(GroupSession {
             id: row.get(0).map_err(|e| e.to_string())?,
             name: row.get(1).map_err(|e| e.to_string())?,
@@ -223,6 +245,8 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
             created_at: row.get(4).map_err(|e| e.to_string())?,
             updated_at: row.get(5).map_err(|e| e.to_string())?,
             archived,
+            chat_type,
+            starting_scene,
             memories,
             memory_embeddings,
             memory_summary,
@@ -477,7 +501,8 @@ pub fn group_sessions_list(pool: State<'_, SwappablePool>) -> Result<String, Str
             "SELECT gs.id, gs.name, gs.character_ids, gs.updated_at,
                     (SELECT content FROM group_messages WHERE session_id = gs.id ORDER BY created_at DESC LIMIT 1) as last_message,
                     (SELECT COUNT(*) FROM group_messages WHERE session_id = gs.id) as message_count,
-                    COALESCE(gs.archived, 0) as archived
+                    COALESCE(gs.archived, 0) as archived,
+                    COALESCE(gs.chat_type, 'conversation') as chat_type
              FROM group_sessions gs
              WHERE COALESCE(gs.archived, 0) = 0
              ORDER BY gs.updated_at DESC",
@@ -500,6 +525,7 @@ pub fn group_sessions_list(pool: State<'_, SwappablePool>) -> Result<String, Str
             last_message: row.get(4).map_err(|e| e.to_string())?,
             message_count: row.get(5).map_err(|e| e.to_string())?,
             archived: row.get::<_, i32>(6).map_err(|e| e.to_string())? != 0,
+            chat_type: row.get(7).map_err(|e| e.to_string())?,
         });
     }
 
@@ -516,7 +542,8 @@ pub fn group_sessions_list_all(pool: State<'_, SwappablePool>) -> Result<String,
             "SELECT gs.id, gs.name, gs.character_ids, gs.updated_at,
                     (SELECT content FROM group_messages WHERE session_id = gs.id ORDER BY created_at DESC LIMIT 1) as last_message,
                     (SELECT COUNT(*) FROM group_messages WHERE session_id = gs.id) as message_count,
-                    COALESCE(gs.archived, 0) as archived
+                    COALESCE(gs.archived, 0) as archived,
+                    COALESCE(gs.chat_type, 'conversation') as chat_type
              FROM group_sessions gs
              ORDER BY gs.updated_at DESC",
         )
@@ -538,6 +565,7 @@ pub fn group_sessions_list_all(pool: State<'_, SwappablePool>) -> Result<String,
             last_message: row.get(4).map_err(|e| e.to_string())?,
             message_count: row.get(5).map_err(|e| e.to_string())?,
             archived: row.get::<_, i32>(6).map_err(|e| e.to_string())? != 0,
+            chat_type: row.get(7).map_err(|e| e.to_string())?,
         });
     }
 
@@ -620,10 +648,35 @@ pub fn group_session_duplicate(
         source.persona_id
     };
 
+    // Get chat_type and starting_scene from original session
+    let chat_type: String = conn
+        .query_row(
+            "SELECT chat_type FROM group_sessions WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "conversation".to_string());
+
+    let starting_scene_json: Option<String> = conn
+        .query_row(
+            "SELECT starting_scene FROM group_sessions WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .ok();
+
     conn.execute(
-        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0)",
-        params![new_id, name, character_ids_json, final_persona_id, now],
+        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7)",
+        params![
+            new_id,
+            name,
+            character_ids_json,
+            final_persona_id,
+            now,
+            chat_type,
+            starting_scene_json
+        ],
     )
     .map_err(|e| e.to_string())?;
 
@@ -642,8 +695,10 @@ pub fn group_session_create(
     name: String,
     character_ids_json: String,
     persona_id: Option<String>,
-    pool: State<'_, SwappablePool>,
+    chat_type: Option<String>,
+    starting_scene_json: Option<String>,
     app: tauri::AppHandle,
+    pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
     let now = now_ms();
@@ -670,24 +725,56 @@ pub fn group_session_create(
         persona_id
     };
 
+    let chat_type_value = chat_type.unwrap_or_else(|| "conversation".to_string());
+    let starting_scene_parsed: Option<serde_json::Value> = starting_scene_json
+        .as_ref()
+        .and_then(|s| serde_json::from_str(s).ok());
+
     conn.execute(
-        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0)",
-        params![id, name, character_ids_json, final_persona_id, now],
+        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7)",
+        params![
+            id,
+            name,
+            character_ids_json,
+            final_persona_id,
+            now,
+            chat_type_value,
+            starting_scene_json.as_deref()
+        ],
     )
     .map_err(|e| e.to_string())?;
 
     // Create participation records for each character
     ensure_participation_records(&conn, &id, &character_ids)?;
 
+    // Insert starting scene message for roleplay type
+    if chat_type_value == "roleplay" {
+        if let Some(ref scene_value) = starting_scene_parsed {
+            if let Some(content) = scene_value.get("content").and_then(|v| v.as_str()) {
+                if !content.trim().is_empty() {
+                    let scene_message_id = Uuid::new_v4().to_string();
+                    conn.execute(
+                        "INSERT INTO group_messages (id, session_id, role, content, speaker_character_id, turn_number, created_at, is_pinned, attachments)
+                         VALUES (?1, ?2, 'scene', ?3, NULL, 0, ?4, 0, '[]')",
+                        params![scene_message_id, id, content, now],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+
     let session = GroupSession {
-        id,
+        id: id.clone(),
         name,
         character_ids,
         persona_id: final_persona_id,
         created_at: now as i64,
         updated_at: now as i64,
         archived: false,
+        chat_type: chat_type_value,
+        starting_scene: starting_scene_parsed,
         memories: Vec::new(),
         memory_embeddings: Vec::new(),
         memory_summary: String::new(),
@@ -814,6 +901,53 @@ pub fn group_session_remove_character(
     conn.execute(
         "DELETE FROM group_participation WHERE session_id = ?1 AND character_id = ?2",
         params![session_id, character_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    match read_group_session(&conn, &session_id)? {
+        Some(session) => serde_json::to_string(&session).map_err(|e| e.to_string()),
+        None => Err("Session not found".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn group_session_update_starting_scene(
+    session_id: String,
+    starting_scene_json: Option<String>,
+    pool: State<'_, SwappablePool>,
+) -> Result<String, String> {
+    let conn = pool.get_connection()?;
+    let now = now_ms();
+
+    conn.execute(
+        "UPDATE group_sessions SET starting_scene = ?1, updated_at = ?2 WHERE id = ?3",
+        params![starting_scene_json, now, session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    match read_group_session(&conn, &session_id)? {
+        Some(session) => serde_json::to_string(&session).map_err(|e| e.to_string()),
+        None => Err("Session not found".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn group_session_update_chat_type(
+    session_id: String,
+    chat_type: String,
+    pool: State<'_, SwappablePool>,
+) -> Result<String, String> {
+    let conn = pool.get_connection()?;
+    let now = now_ms();
+
+    // Validate chat_type
+    if chat_type != "conversation" && chat_type != "roleplay" {
+        return Err("Invalid chat_type. Must be 'conversation' or 'roleplay'".to_string());
+    }
+
+    conn.execute(
+        "UPDATE group_sessions SET chat_type = ?1, updated_at = ?2 WHERE id = ?3",
+        params![chat_type, now, session_id],
     )
     .map_err(|e| e.to_string())?;
 

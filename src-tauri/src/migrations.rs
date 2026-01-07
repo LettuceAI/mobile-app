@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 27;
+pub const CURRENT_MIGRATION_VERSION: u32 = 28;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -307,6 +307,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v26_to_v27(app)?;
         version = 27;
+    }
+
+    if version < 28 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v27 -> v28: Add chat_type and starting_scene to group_sessions",
+        );
+        migrate_v27_to_v28(app)?;
+        version = 28;
     }
 
     // Update the stored version
@@ -1086,6 +1096,64 @@ fn migrate_v26_to_v27(app: &AppHandle) -> Result<(), String> {
     if !has_model_id_variants {
         let _ = conn.execute(
             "ALTER TABLE group_message_variants ADD COLUMN model_id TEXT",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+fn migrate_v27_to_v28(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if chat_type column exists in group_sessions
+    let mut has_chat_type = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "chat_type" {
+            has_chat_type = true;
+            break;
+        }
+    }
+
+    // Add chat_type column to group_sessions
+    if !has_chat_type {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN chat_type TEXT NOT NULL DEFAULT 'conversation'",
+            [],
+        );
+    }
+
+    // Check if starting_scene column exists in group_sessions
+    let mut has_starting_scene = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "starting_scene" {
+            has_starting_scene = true;
+            break;
+        }
+    }
+
+    // Add starting_scene column to group_sessions
+    if !has_starting_scene {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN starting_scene TEXT",
             [],
         );
     }

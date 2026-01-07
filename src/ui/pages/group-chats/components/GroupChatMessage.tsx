@@ -46,7 +46,7 @@ const MessageAvatar = React.memo(function MessageAvatar({
   character,
   persona,
 }: {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "scene";
   character?: Character;
   persona?: Persona | null;
 }) {
@@ -65,7 +65,7 @@ const MessageAvatar = React.memo(function MessageAvatar({
     );
   }
 
-  if (role === "assistant") {
+  if (role === "assistant" || role === "scene") {
     return (
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {characterAvatar ? (
@@ -139,7 +139,7 @@ const ThinkingSection = React.memo(function ThinkingSection({
   reasoning: string;
   isStreaming: boolean;
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const THINKING_TEXTS = [
     "Thinking really hard…",
@@ -241,12 +241,13 @@ function GroupChatMessageInner({
   // Memoize all computed values
   const computed = useMemo(() => {
     const isAssistant = message.role === "assistant";
+    const isScene = message.role === "scene";
     const isUser = message.role === "user";
     const isPlaceholder = message.id.startsWith("temp-") || message.id.startsWith("placeholder");
-    const actionable = (isAssistant || isUser) && !isPlaceholder;
+    const actionable = (isAssistant || isUser || isScene) && !isPlaceholder;
     const isLatestAssistant = isAssistant && actionable && index === messagesLength - 1;
     const variantState = getVariantState(message);
-    const totalVariants = variantState.total || (isAssistant ? 1 : 0);
+    const totalVariants = variantState.total || (isAssistant || isScene ? 1 : 0);
     const selectedVariantIndex =
       variantState.selectedIndex >= 0
         ? variantState.selectedIndex
@@ -257,11 +258,12 @@ function GroupChatMessageInner({
     const enableSwipe = isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
 
     const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
-    const showRegenerateButton = isLatestAssistant;
+    const showRegenerateButton = isLatestAssistant && !isScene;
     const shouldAnimate = !isPlaceholder;
 
     return {
       isAssistant,
+      isScene,
       isUser,
       isPlaceholder,
       isLatestAssistant,
@@ -283,7 +285,7 @@ function GroupChatMessageInner({
         ? !!voiceConfig.providerId && !!voiceConfig.voiceId
         : false;
   const canPlayAudio =
-    computed.isAssistant &&
+    (computed.isAssistant || computed.isScene) &&
     !computed.isPlaceholder &&
     hasVoiceAssignment &&
     playText.trim().length > 0;
@@ -401,8 +403,8 @@ function GroupChatMessageInner({
         message.role === "user" ? "justify-end" : "justify-start",
       )}
     >
-      {/* Avatar for assistant messages (left side) */}
-      {message.role === "assistant" && (
+      {/* Avatar for assistant/scene messages (left side) */}
+      {(message.role === "assistant" || message.role === "scene") && (
         <div className="flex shrink-0 flex-col items-center gap-1">
           <MessageAvatar role={message.role} character={character} persona={persona} />
           {canPlayAudio && (

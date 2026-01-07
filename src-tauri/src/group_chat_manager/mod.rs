@@ -1763,9 +1763,15 @@ fn build_group_system_prompt(
     settings: &Settings,
     retrieved_memories: &[MemoryEmbedding],
 ) -> String {
-    use crate::chat_manager::prompts::get_group_chat_prompt;
+    use crate::chat_manager::prompts::{get_group_chat_prompt, get_group_chat_roleplay_prompt};
 
-    let template = get_group_chat_prompt(app);
+    // Select template based on chat type
+    let is_roleplay = session.chat_type == "roleplay";
+    let template = if is_roleplay {
+        get_group_chat_roleplay_prompt(app)
+    } else {
+        get_group_chat_prompt(app)
+    };
 
     // Character and persona descriptions are passed RAW to the LLM without any
     // translation or processing. The LLM receives the full description text as-is.
@@ -1833,6 +1839,32 @@ fn build_group_system_prompt(
         String::new()
     };
 
+    // Handle scene content for roleplay chats
+    let (scene_content, scene_direction) = if is_roleplay {
+        if let Some(scene_value) = &session.starting_scene {
+            // Extract content and direction from scene JSON
+            let mut content = scene_value
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let direction = scene_value
+                .get("direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            // Replace character name placeholders {{@"Character Name"}}
+            content = replace_character_name_placeholders(&content, other_characters);
+
+            (content, direction)
+        } else {
+            (String::new(), String::new())
+        }
+    } else {
+        (String::new(), String::new())
+    };
+
     // Substitute placeholders (same pattern as normal chat)
     let mut result = template;
     result = result.replace("{{char.name}}", char_name);
@@ -1843,6 +1875,8 @@ fn build_group_system_prompt(
     result = result.replace("{{context_summary}}", &context_summary_text);
     result = result.replace("{{key_memories}}", &key_memories_text);
     result = result.replace("{{content_rules}}", &content_rules);
+    result = result.replace("{{scene}}", &scene_content);
+    result = result.replace("{{scene_direction}}", &scene_direction);
 
     // Legacy placeholder support
     result = result.replace("{{char}}", char_name);
@@ -1854,6 +1888,41 @@ fn build_group_system_prompt(
     }
 
     result.trim().to_string()
+}
+
+/// Replace character name placeholders in scene content
+/// Supports {{@"Character Name"}} syntax
+fn replace_character_name_placeholders(content: &str, characters: &[CharacterInfo]) -> String {
+    let mut result = content.to_string();
+
+    // Find all {{@"..."}} patterns and replace them
+    loop {
+        if let Some(start) = result.find(r#"{{@""#) {
+            if let Some(end) = result[start + 4..].find(r#""}}"#) {
+                let name_start = start + 4;
+                let name_end = start + 4 + end;
+                let character_name = &result[name_start..name_end];
+
+                // Check if this character exists in the group
+                let replacement = if characters.iter().any(|c| c.name == character_name) {
+                    character_name.to_string()
+                } else {
+                    // If character not found, keep the original placeholder
+                    format!(r#"{{{{@"{}"}}}}"#, character_name)
+                };
+
+                // Replace this occurrence
+                let placeholder_end = name_end + 2;
+                result.replace_range(start..placeholder_end, &replacement);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    result
 }
 
 /// Load persona from database

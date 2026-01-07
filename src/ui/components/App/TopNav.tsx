@@ -81,6 +81,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     if (basePath.startsWith("/settings/") || basePath === "/settings") return true;
     if (basePath.startsWith("/create/")) return true;
     if (basePath.startsWith("/library/lorebooks")) return true;
+    if (basePath === "/group-chats/new") return true;
     return false;
   }, [basePath]);
 

@@ -693,6 +693,24 @@ export const GroupMemoryEmbeddingSchema = z.object({
 });
 export type GroupMemoryEmbedding = z.infer<typeof GroupMemoryEmbeddingSchema>;
 
+export const SceneVariantSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  direction: z.string().optional(),
+  createdAt: z.number().int(),
+});
+export type SceneVariant = z.infer<typeof SceneVariantSchema>;
+
+export const SceneSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  direction: z.string().optional(),
+  createdAt: z.number().int(),
+  variants: z.array(SceneVariantSchema).optional(),
+  selectedVariantId: z.string().uuid().nullish(),
+});
+export type Scene = z.infer<typeof SceneSchema>;
+
 export const GroupSessionSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -702,6 +720,10 @@ export const GroupSessionSchema = z.object({
   updatedAt: z.number().int(),
   /** Whether this session is archived */
   archived: z.boolean().default(false),
+  /** Chat type: "conversation" or "roleplay" */
+  chatType: z.enum(["conversation", "roleplay"]).default("conversation"),
+  /** Starting scene for roleplay chats */
+  startingScene: SceneSchema.optional().nullable(),
   /** Manual memories (simple text entries) */
   memories: z.array(z.string()).default([]),
   /** Dynamic memory embeddings with semantic search support */
@@ -764,7 +786,7 @@ export type GroupMessageVariant = z.infer<typeof GroupMessageVariantSchema>;
 export const GroupMessageSchema = z.object({
   id: z.string().uuid(),
   sessionId: z.string().uuid(),
-  role: z.enum(["user", "assistant"]),
+  role: z.enum(["user", "assistant", "scene"]),
   content: z.string(),
   speakerCharacterId: z.string().uuid().nullish(),
   turnNumber: z.number().int(),
@@ -788,6 +810,7 @@ export const GroupSessionPreviewSchema = z.object({
   lastMessage: z.string().nullish(),
   messageCount: z.number().int(),
   archived: z.boolean().default(false),
+  chatType: z.enum(["conversation", "roleplay"]).default("conversation"),
 });
 export type GroupSessionPreview = z.infer<typeof GroupSessionPreviewSchema>;
 
@@ -801,24 +824,6 @@ export const GroupChatResponseSchema = z.object({
   participationStats: z.array(GroupParticipationSchema),
 });
 export type GroupChatResponse = z.infer<typeof GroupChatResponseSchema>;
-
-export const SceneVariantSchema = z.object({
-  id: z.string().uuid(),
-  content: z.string(),
-  direction: z.string().optional(),
-  createdAt: z.number().int(),
-});
-export type SceneVariant = z.infer<typeof SceneVariantSchema>;
-
-export const SceneSchema = z.object({
-  id: z.string().uuid(),
-  content: z.string(),
-  direction: z.string().optional(),
-  createdAt: z.number().int(),
-  variants: z.array(SceneVariantSchema).optional(),
-  selectedVariantId: z.string().uuid().nullish(),
-});
-export type Scene = z.infer<typeof SceneSchema>;
 
 export const ProviderCredentialSchema = z.object({
   id: z.string().uuid(),

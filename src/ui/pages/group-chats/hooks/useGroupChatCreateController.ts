@@ -17,6 +17,32 @@ export function useGroupChatCreateController(options: GroupChatCreateControllerO
   const [characters, setCharacters] = useState<Character[]>([]);
   const [ui, dispatch] = useReducer(groupChatCreateReducer, initialGroupChatCreateState);
 
+  // Get available scenes from selected characters
+  const availableScenes = useMemo(() => {
+    const selectedChars = characters.filter((c) => ui.selectedIds.has(c.id));
+    const scenes: Array<{
+      characterId: string;
+      characterName: string;
+      sceneId: string;
+      content: string;
+    }> = [];
+
+    selectedChars.forEach((char) => {
+      if (char.scenes && char.scenes.length > 0) {
+        char.scenes.forEach((scene) => {
+          scenes.push({
+            characterId: char.id,
+            characterName: char.name,
+            sceneId: scene.id,
+            content: scene.content,
+          });
+        });
+      }
+    });
+
+    return scenes;
+  }, [characters, ui.selectedIds]);
+
   useEffect(() => {
     let isActive = true;
 
@@ -46,6 +72,22 @@ export function useGroupChatCreateController(options: GroupChatCreateControllerO
     dispatch({ type: "toggle-character", id: characterId });
   }, []);
 
+  const setChatType = useCallback((value: "conversation" | "roleplay") => {
+    dispatch({ type: "set-chat-type", value });
+  }, []);
+
+  const setCustomScene = useCallback((value: string) => {
+    dispatch({ type: "set-custom-scene", value });
+  }, []);
+
+  const setSelectedCharacterSceneId = useCallback((value: string | null) => {
+    dispatch({ type: "set-selected-character-scene-id", value });
+  }, []);
+
+  const setSceneSource = useCallback((value: "none" | "custom" | "character") => {
+    dispatch({ type: "set-scene-source", value });
+  }, []);
+
   const defaultName = useMemo(() => {
     const selectedChars = characters.filter((c) => ui.selectedIds.has(c.id));
     if (selectedChars.length <= 3) {
@@ -72,7 +114,39 @@ export function useGroupChatCreateController(options: GroupChatCreateControllerO
       dispatch({ type: "set-creating", value: true });
       dispatch({ type: "set-error", value: null });
 
-      const session = await storageBridge.groupSessionCreate(name, Array.from(ui.selectedIds));
+      // Build starting scene for roleplay type
+      let startingScene = null;
+      if (ui.chatType === "roleplay") {
+        if (ui.sceneSource === "custom" && ui.customScene.trim()) {
+          startingScene = {
+            id: crypto.randomUUID(),
+            content: ui.customScene.trim(),
+            direction: "",
+            createdAt: Date.now(),
+          };
+        } else if (ui.sceneSource === "character" && ui.selectedCharacterSceneId) {
+          // Find the selected scene from available scenes
+          const selectedScene = availableScenes.find(
+            (s) => s.sceneId === ui.selectedCharacterSceneId,
+          );
+          if (selectedScene) {
+            startingScene = {
+              id: crypto.randomUUID(),
+              content: selectedScene.content,
+              direction: "",
+              createdAt: Date.now(),
+            };
+          }
+        }
+      }
+
+      const session = await storageBridge.groupSessionCreate(
+        name,
+        Array.from(ui.selectedIds),
+        null,
+        ui.chatType,
+        startingScene,
+      );
       onCreated?.(session.id);
     } catch (err) {
       console.error("Failed to create group session:", err);
@@ -80,14 +154,29 @@ export function useGroupChatCreateController(options: GroupChatCreateControllerO
     } finally {
       dispatch({ type: "set-creating", value: false });
     }
-  }, [ui.selectedIds, ui.groupName, defaultName, onCreated]);
+  }, [
+    ui.selectedIds,
+    ui.groupName,
+    ui.chatType,
+    ui.sceneSource,
+    ui.customScene,
+    ui.selectedCharacterSceneId,
+    defaultName,
+    onCreated,
+    availableScenes,
+  ]);
 
   return {
     characters,
     ui,
     defaultName,
+    availableScenes,
     setGroupName,
     toggleCharacter,
+    setChatType,
+    setCustomScene,
+    setSelectedCharacterSceneId,
+    setSceneSource,
     handleCreate,
   } as const;
 }

@@ -361,11 +361,19 @@ export const storageBridge = {
     invoke<string>("group_sessions_list").then((s) => JSON.parse(s) as any[]),
   groupSessionsListAll: () =>
     invoke<string>("group_sessions_list_all").then((s) => JSON.parse(s) as any[]),
-  groupSessionCreate: (name: string, characterIds: string[], personaId?: string | null) =>
+  groupSessionCreate: (
+    name: string,
+    characterIds: string[],
+    personaId?: string | null,
+    chatType?: "conversation" | "roleplay",
+    startingScene?: any | null,
+  ) =>
     invoke<string>("group_session_create", {
       name,
       characterIdsJson: JSON.stringify(characterIds),
       personaId: personaId ?? null,
+      chatType: chatType ?? "conversation",
+      startingSceneJson: startingScene ? JSON.stringify(startingScene) : null,
     }).then((s) => JSON.parse(s)),
   groupSessionGet: (id: string) =>
     invoke<string | null>("group_session_get", { id }).then((s) =>
@@ -401,6 +409,16 @@ export const storageBridge = {
     invoke<string>("group_session_remove_character", { sessionId, characterId }).then((s) =>
       JSON.parse(s),
     ),
+  groupSessionUpdateStartingScene: (sessionId: string, startingScene: any | null) =>
+    invoke<string>("group_session_update_starting_scene", {
+      sessionId,
+      startingSceneJson: startingScene ? JSON.stringify(startingScene) : null,
+    }).then((s) => JSON.parse(s)),
+  groupSessionUpdateChatType: (sessionId: string, chatType: "conversation" | "roleplay") =>
+    invoke<string>("group_session_update_chat_type", {
+      sessionId,
+      chatType,
+    }).then((s) => JSON.parse(s)),
 
   // Group Participation
   groupParticipationStats: (sessionId: string) =>
