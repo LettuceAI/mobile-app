@@ -117,29 +117,28 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
 }
 
 pub(crate) fn app_version() -> String {
-    #[cfg(target_os = "android")]
-    return "1.0.2-android".to_string();
+    let base_version = env!("CARGO_PKG_VERSION");
+    let is_dev = option_env!("DEV_BUILD").is_some();
 
-    #[cfg(target_os = "ios")]
-    return "1.0.2-ios".to_string();
+    let platform = if cfg!(target_os = "android") {
+        "android"
+    } else if cfg!(target_os = "ios") {
+        "ios"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "unknown"
+    };
 
-    #[cfg(target_os = "macos")]
-    return "1.0.2-beta-2-macos".to_string();
-
-    #[cfg(target_os = "windows")]
-    return "1.0.2-beta-2-windows".to_string();
-
-    #[cfg(target_os = "linux")]
-    return "1.0.2-beta-2-linux".to_string();
-
-    #[cfg(not(any(
-        target_os = "android",
-        target_os = "ios",
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "linux"
-    )))]
-    return "UNKNOWN - APP IS NOT VALID".to_string();
+    if is_dev {
+        format!("{}-dev-{}", base_version, platform)
+    } else {
+        format!("{}-{}", base_version, platform)
+    }
 }
 
 pub fn get_local_ip() -> Result<String, String> {

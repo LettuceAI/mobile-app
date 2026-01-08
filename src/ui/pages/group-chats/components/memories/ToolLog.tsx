@@ -1,6 +1,6 @@
 import { Clock } from "lucide-react";
 
-import type { GroupSession } from "../../../../core/storage/schemas";
+import type { GroupSession } from "../../../../../core/storage/schemas";
 import { components, colors, radius, spacing, typography, cn } from "../../../../design-tokens";
 import { UpdatedMemoriesList } from "./UpdatedMemoriesList";
 

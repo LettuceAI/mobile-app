@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: "lts/*"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -32,8 +32,8 @@ jobs:
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -44,7 +44,7 @@ jobs:
         with:
           ndk-version: ${{ env.NDK_VERSION }}
           link-to-sdk: true
-      
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -53,7 +53,6 @@ jobs:
             pkg-config \
             libssl-dev \
             perl
-
 
       - name: Install Android Rust targets
         run: |
@@ -96,7 +95,64 @@ jobs:
             sudo ln -sf "$TOOLCHAIN/llvm-ranlib" "/usr/local/bin/${triple}-ranlib"
           done
 
-      - name: Build Tauri Android app
+      - name: Create dev config override
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          VERSION="0.1.${{ github.run_number }}-dev.$SHORT_SHA"
+
+          cat > dev-config.json << EOF
+          {
+            "\$schema": "https://schema.tauri.app/config/2",
+            "productName": "lettuceai-dev",
+            "version": "$VERSION",
+            "identifier": "dev.lettuceai.app",
+            "build": {
+              "beforeDevCommand": "npm run dev",
+              "devUrl": "http://localhost:1420",
+              "beforeBuildCommand": "npm run build",
+              "frontendDist": "../dist"
+            },
+            "app": {
+              "windows": [
+                {
+                  "title": "LettuceAI (Dev)",
+                  "width": 1100,
+                  "height": 720,
+                  "minHeight": 600,
+                  "minWidth": 900,
+                  "transparent": true
+                }
+              ],
+              "security": {
+                "csp": null,
+                "assetProtocol": {
+                  "enable": true,
+                  "scope": [
+                    "\$APPDATA/**"
+                  ]
+                }
+              }
+            },
+            "bundle": {
+              "active": true,
+              "targets": "all",
+              "icon": [
+                "icons/32x32.png",
+                "icons/128x128.png",
+                "icons/128x128@2x.png",
+                "icons/icon.icns",
+                "icons/icon.ico"
+              ],
+              "resources": [
+                "./feedback_sounds/fail.mp3",
+                "./feedback_sounds/send.mp3",
+                "./feedback_sounds/success.mp3"
+              ]
+            }
+          }
+          EOF
+
+      - name: Build Tauri Android app (Dev build)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
@@ -104,9 +160,10 @@ jobs:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           RUST_BACKTRACE: 1
+          RUSTFLAGS: "--cfg DEV_BUILD"
         run: |
           pnpm install
-          pnpm tauri android build --ci
+          pnpm tauri android build --ci --config dev-config.json
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4

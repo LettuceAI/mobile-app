@@ -1037,7 +1037,7 @@ pub fn group_session_branch_to_character(
 
         // Replace character name placeholders in content
         let mut processed_content = content.clone();
-        for (char_id, char_name) in &character_names {
+        for (_char_id, char_name) in &character_names {
             // Replace {{@"CharacterName"}} with the chosen character's name
             let placeholder = format!("{{{{@\"{}\"}}+}}", char_name);
             processed_content = processed_content.replace(&placeholder, &character_name);

@@ -1,4 +1,4 @@
-import type { GroupMessage } from "../../../core/storage/schemas";
+import type { GroupMessage } from "../../../../core/storage/schemas";
 
 export type SendingStatus = "selecting" | "generating" | null;
 
