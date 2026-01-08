@@ -259,7 +259,12 @@ export function GroupChatFooter({
   }, [showMentionPicker]);
 
   return (
-    <footer className={`z-20 shrink-0 px-4 pb-3 pt-3 ${!hasBackgroundImage ? "bg-[#050505]" : ""}`}>
+    <footer
+      className={cn(
+        "z-20 shrink-0 px-4 pb-3 pt-3",
+        hasBackgroundImage ? "backdrop-blur-xl" : "bg-[#050505]",
+      )}
+    >
       {error && (
         <div
           className={cn(

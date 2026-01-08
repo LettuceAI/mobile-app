@@ -28,6 +28,7 @@ interface GroupChatCreateFormState {
   // Step 2: Group Setup
   groupName: string;
   chatType: "conversation" | "roleplay";
+  backgroundImagePath: string;
 
   // Step 3: Starting Scene
   sceneSource: "none" | "custom" | "character";
@@ -46,6 +47,7 @@ type GroupChatCreateFormAction =
   | { type: "SET_LOADING_CHARACTERS"; payload: boolean }
   | { type: "SET_GROUP_NAME"; payload: string }
   | { type: "SET_CHAT_TYPE"; payload: "conversation" | "roleplay" }
+  | { type: "SET_BACKGROUND_IMAGE_PATH"; payload: string }
   | { type: "SET_SCENE_SOURCE"; payload: "none" | "custom" | "character" }
   | { type: "SET_CUSTOM_SCENE"; payload: string }
   | { type: "SET_SELECTED_CHARACTER_SCENE_ID"; payload: string | null }
@@ -60,6 +62,7 @@ const initialState: GroupChatCreateFormState = {
   loadingCharacters: true,
   groupName: "",
   chatType: "conversation",
+  backgroundImagePath: "",
   sceneSource: "none",
   customScene: "",
   selectedCharacterSceneId: null,
@@ -69,7 +72,7 @@ const initialState: GroupChatCreateFormState = {
 
 function groupChatCreateFormReducer(
   state: GroupChatCreateFormState,
-  action: GroupChatCreateFormAction
+  action: GroupChatCreateFormAction,
 ): GroupChatCreateFormState {
   switch (action.type) {
     case "SET_STEP":
@@ -91,6 +94,8 @@ function groupChatCreateFormReducer(
       return { ...state, groupName: action.payload, error: null };
     case "SET_CHAT_TYPE":
       return { ...state, chatType: action.payload, error: null };
+    case "SET_BACKGROUND_IMAGE_PATH":
+      return { ...state, backgroundImagePath: action.payload, error: null };
     case "SET_SCENE_SOURCE":
       return { ...state, sceneSource: action.payload, error: null };
     case "SET_CUSTOM_SCENE":
@@ -141,7 +146,7 @@ export function useGroupChatCreateForm(options: UseGroupChatCreateFormOptions = 
   // Computed values
   const selectedCharacters = useMemo(
     () => state.characters.filter((c) => state.selectedIds.has(c.id)),
-    [state.characters, state.selectedIds]
+    [state.characters, state.selectedIds],
   );
 
   const availableScenes = useMemo((): AvailableScene[] => {
@@ -190,6 +195,10 @@ export function useGroupChatCreateForm(options: UseGroupChatCreateFormOptions = 
     dispatch({ type: "SET_CHAT_TYPE", payload: value });
   }, []);
 
+  const setBackgroundImagePath = useCallback((value: string) => {
+    dispatch({ type: "SET_BACKGROUND_IMAGE_PATH", payload: value });
+  }, []);
+
   const setSceneSource = useCallback((value: "none" | "custom" | "character") => {
     dispatch({ type: "SET_SCENE_SOURCE", payload: value });
   }, []);
@@ -235,7 +244,7 @@ export function useGroupChatCreateForm(options: UseGroupChatCreateFormOptions = 
           };
         } else if (state.sceneSource === "character" && state.selectedCharacterSceneId) {
           const selectedScene = availableScenes.find(
-            (s) => s.sceneId === state.selectedCharacterSceneId
+            (s) => s.sceneId === state.selectedCharacterSceneId,
           );
           if (selectedScene) {
             startingScene = {
@@ -253,7 +262,8 @@ export function useGroupChatCreateForm(options: UseGroupChatCreateFormOptions = 
         Array.from(state.selectedIds),
         null,
         state.chatType,
-        startingScene
+        startingScene,
+        state.backgroundImagePath || null,
       );
       onCreated?.(session.id);
     } catch (err) {
@@ -266,6 +276,7 @@ export function useGroupChatCreateForm(options: UseGroupChatCreateFormOptions = 
     state.selectedIds,
     state.groupName,
     state.chatType,
+    state.backgroundImagePath,
     state.sceneSource,
     state.customScene,
     state.selectedCharacterSceneId,
@@ -290,6 +301,7 @@ export function useGroupChatCreateForm(options: UseGroupChatCreateFormOptions = 
       toggleCharacter,
       setGroupName,
       setChatType,
+      setBackgroundImagePath,
       setSceneSource,
       setCustomScene,
       setSelectedCharacterSceneId,

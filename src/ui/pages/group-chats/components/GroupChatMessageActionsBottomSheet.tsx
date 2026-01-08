@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Copy, Trash2, RotateCcw, Edit3, Users, Sparkles } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Edit3, Users } from "lucide-react";
 
 import type { Character, Settings, Model } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { BottomMenu } from "../../../components/BottomMenu";
+import { MarkdownRenderer } from "../../chats/components/MarkdownRenderer";
 import { radius, cn, interactive } from "../../../design-tokens";
 import type { MessageActionState } from "../reducers/groupChatReducer";
 import { readSettings } from "../../../../core/storage/repo";
@@ -95,12 +96,10 @@ export function GroupChatMessageActionsBottomSheet({
 
   const isAssistant = messageAction?.message.role === "assistant";
 
-  // Load settings to get model information
   useEffect(() => {
     readSettings().then(setSettings).catch(console.error);
   }, []);
 
-  // Get model name from model_id
   useEffect(() => {
     console.log("ModelId debug:", {
       messageAction: messageAction?.message,
@@ -133,32 +132,27 @@ export function GroupChatMessageActionsBottomSheet({
                 <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">
                   Why this character responded
                 </p>
-                <p className="text-xs text-white/70 italic">
-                  {messageAction.message.selectionReasoning}
-                </p>
-              </div>
-            )}
-
-            {isAssistant && messageAction.message.modelId && (
-              <div className="mb-3 px-3 py-2 rounded-lg border border-purple-400/20 bg-purple-400/10">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={14} className="text-purple-400" />
-                  <span className="text-xs text-purple-200">
-                    Generated with {modelName || messageAction.message.modelId}
-                  </span>
+                <div className="text-xs text-white/70 italic">
+                  <MarkdownRenderer
+                    content={messageAction.message.selectionReasoning}
+                    className="text-xs text-white/70 italic"
+                  />
                 </div>
               </div>
             )}
 
             {messageAction.message.usage && (
-              <div className="flex items-center gap-2 text-xs text-white/40 mb-4">
-                <span>{messageAction.message.usage.promptTokens ?? 0} in</span>
-                <span>·</span>
-                <span>{messageAction.message.usage.completionTokens ?? 0} out</span>
-                <span>·</span>
-                <span className="text-white/60 font-medium">
-                  {messageAction.message.usage.totalTokens ?? 0} tokens
-                </span>
+              <div className="flex items-center gap-x-3 text-xs text-white/40 mb-4">
+                <div className="flex items-center gap-2 border-r border-white/10 pr-3">
+                  <span title="Prompt Tokens">↓{messageAction.message.usage.promptTokens ?? 0}</span>
+                  <span title="Completion Tokens">↑{messageAction.message.usage.completionTokens ?? 0}</span>
+                </div>               
+                <div className="flex-1">
+                  <span className="text-white/60">{modelName || messageAction.message.modelId}</span>
+                </div>
+                <div className="tabular-nums">
+                  {(messageAction.message.usage.totalTokens ?? 0).toLocaleString()} <span className="text-[12px] uppercase opacity-50">total</span>
+                </div>
               </div>
             )}
 

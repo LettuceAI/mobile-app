@@ -11,6 +11,7 @@ import type {
 import { radius, typography, interactive, cn } from "../../../design-tokens";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { useSessionAttachments } from "../../../hooks/useSessionAttachment";
+import { replaceCharacterPlaceholders } from "../utils/replaceCharacterPlaceholders";
 
 export interface VariantState {
   total: number;
@@ -27,6 +28,7 @@ export interface GroupChatMessageProps {
   sending: boolean;
   character?: Character;
   persona?: Persona | null;
+  characters?: Character[];
   getVariantState: (message: GroupMessage) => VariantState;
   handleVariantDrag: (messageId: string, offsetX: number) => void;
   handleRegenerate: (message: GroupMessage) => Promise<void>;
@@ -223,6 +225,7 @@ function GroupChatMessageInner({
   sending,
   character,
   persona,
+  characters = [],
   getVariantState,
   handleVariantDrag,
   handleRegenerate,
@@ -276,7 +279,16 @@ function GroupChatMessageInner({
     };
   }, [message.role, message.id, message.content, index, messagesLength, getVariantState]);
 
-  const playText = displayContent ?? message.content;
+  // Replace character placeholders in content for scene messages
+  const processedContent = useMemo(() => {
+    const content = displayContent ?? message.content;
+    if (computed.isScene && characters.length > 0) {
+      return replaceCharacterPlaceholders(content, characters);
+    }
+    return content;
+  }, [displayContent, message.content, computed.isScene, characters]);
+
+  const playText = processedContent;
   const voiceConfig = character?.voiceConfig;
   const hasVoiceAssignment =
     voiceConfig?.source === "user"
@@ -550,7 +562,7 @@ function GroupChatMessageInner({
 
               <MarkdownRenderer
                 key={message.id + ":" + computed.selectedVariantIndex}
-                content={displayContent ?? message.content}
+                content={processedContent}
                 className="text-inherit select-none"
               />
             </>

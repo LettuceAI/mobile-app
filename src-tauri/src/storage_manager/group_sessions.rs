@@ -60,6 +60,9 @@ pub struct GroupSession {
     /// Starting scene for roleplay chats (JSON-encoded scene data)
     #[serde(default)]
     pub starting_scene: Option<serde_json::Value>,
+    /// Background image path for the group chat
+    #[serde(default)]
+    pub background_image_path: Option<String>,
     /// Manual memories (simple text entries)
     #[serde(default)]
     pub memories: Vec<String>,
@@ -181,7 +184,7 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
         .prepare(
             "SELECT id, name, character_ids, persona_id, created_at, updated_at,
                     memories, memory_embeddings, memory_summary, memory_summary_token_count, archived, memory_tool_events,
-                    chat_type, starting_scene
+                    chat_type, starting_scene, background_image_path
              FROM group_sessions WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -237,6 +240,8 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
         let starting_scene: Option<serde_json::Value> =
             starting_scene_json.and_then(|s| serde_json::from_str(&s).ok());
 
+        let background_image_path: Option<String> = row.get(14).map_err(|e| e.to_string())?;
+
         Ok(Some(GroupSession {
             id: row.get(0).map_err(|e| e.to_string())?,
             name: row.get(1).map_err(|e| e.to_string())?,
@@ -247,6 +252,7 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
             archived,
             chat_type,
             starting_scene,
+            background_image_path,
             memories,
             memory_embeddings,
             memory_summary,
@@ -666,8 +672,8 @@ pub fn group_session_duplicate(
         .ok();
 
     conn.execute(
-        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7)",
+        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene, background_image_path)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7, ?8)",
         params![
             new_id,
             name,
@@ -675,7 +681,8 @@ pub fn group_session_duplicate(
             final_persona_id,
             now,
             chat_type,
-            starting_scene_json
+            starting_scene_json,
+            source.background_image_path
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -691,12 +698,385 @@ pub fn group_session_duplicate(
 }
 
 #[tauri::command]
+pub fn group_session_duplicate_with_messages(
+    source_id: String,
+    new_name: Option<String>,
+    include_messages: bool,
+    pool: State<'_, SwappablePool>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let conn = pool.get_connection()?;
+
+    // Read the source session
+    let source = read_group_session(&conn, &source_id)?
+        .ok_or_else(|| "Source session not found".to_string())?;
+
+    let now = now_ms();
+    let new_id = Uuid::new_v4().to_string();
+    let name = new_name.unwrap_or_else(|| format!("{} (copy)", source.name));
+    let character_ids_json =
+        serde_json::to_string(&source.character_ids).map_err(|e| e.to_string())?;
+
+    // Use source persona_id, or fallback to default persona if source had none
+    let final_persona_id = if source.persona_id.is_none() {
+        // Try to get default persona
+        match super::personas::persona_default_get(app) {
+            Ok(Some(default_persona_json)) => {
+                let default_persona: serde_json::Value =
+                    serde_json::from_str(&default_persona_json).unwrap_or(serde_json::json!({}));
+                default_persona
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            }
+            _ => None,
+        }
+    } else {
+        source.persona_id
+    };
+
+    // Get chat_type and starting_scene from original session
+    let chat_type: String = conn
+        .query_row(
+            "SELECT chat_type FROM group_sessions WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "conversation".to_string());
+
+    let starting_scene_json: Option<String> = conn
+        .query_row(
+            "SELECT starting_scene FROM group_sessions WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    // Get memories if including messages
+    let (
+        memories_json,
+        memory_embeddings_json,
+        memory_summary,
+        memory_summary_token_count,
+        memory_tool_events_json,
+    ) = if include_messages {
+        let memories: Option<String> = conn
+            .query_row(
+                "SELECT memories FROM group_sessions WHERE id = ?1",
+                params![source_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let memory_embeddings: Option<String> = conn
+            .query_row(
+                "SELECT memory_embeddings FROM group_sessions WHERE id = ?1",
+                params![source_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let memory_summary: String = conn
+            .query_row(
+                "SELECT COALESCE(memory_summary, '') FROM group_sessions WHERE id = ?1",
+                params![source_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_default();
+
+        let memory_summary_token_count: i64 = conn
+            .query_row(
+                "SELECT COALESCE(memory_summary_token_count, 0) FROM group_sessions WHERE id = ?1",
+                params![source_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        let memory_tool_events: Option<String> = conn
+            .query_row(
+                "SELECT memory_tool_events FROM group_sessions WHERE id = ?1",
+                params![source_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        (
+            memories,
+            memory_embeddings,
+            memory_summary,
+            memory_summary_token_count,
+            memory_tool_events,
+        )
+    } else {
+        (
+            Some("[]".to_string()),
+            Some("[]".to_string()),
+            String::new(),
+            0,
+            Some("[]".to_string()),
+        )
+    };
+
+    // Try to insert with background_image_path, fall back if column doesn't exist
+    let insert_result = conn.execute(
+        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene, background_image_path, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![
+            new_id,
+            name,
+            character_ids_json,
+            final_persona_id,
+            now,
+            chat_type,
+            starting_scene_json,
+            source.background_image_path,
+            memories_json,
+            memory_embeddings_json,
+            memory_summary,
+            memory_summary_token_count,
+            memory_tool_events_json
+        ],
+    );
+
+    if insert_result.is_err() {
+        // Fallback without background_image_path if column doesn't exist
+        conn.execute(
+            "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                new_id,
+                name,
+                character_ids_json,
+                final_persona_id,
+                now,
+                chat_type,
+                starting_scene_json,
+                memories_json,
+                memory_embeddings_json,
+                memory_summary,
+                memory_summary_token_count,
+                memory_tool_events_json
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Create participation records for each character
+    ensure_participation_records(&conn, &new_id, &source.character_ids)?;
+
+    // Copy messages if requested
+    if include_messages {
+        // Get all messages from source session
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, role, content, speaker_character_id, turn_number, created_at, is_pinned, attachments
+                 FROM group_messages
+                 WHERE session_id = ?1
+                 ORDER BY turn_number, created_at",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let messages: Vec<(
+            String,
+            String,
+            String,
+            Option<String>,
+            i64,
+            i64,
+            i64,
+            String,
+        )> = stmt
+            .query_map(params![source_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        // Insert copied messages
+        for (
+            _old_id,
+            role,
+            content,
+            speaker_character_id,
+            turn_number,
+            created_at,
+            is_pinned,
+            attachments,
+        ) in messages
+        {
+            let new_message_id = Uuid::new_v4().to_string();
+            conn.execute(
+                "INSERT INTO group_messages (id, session_id, role, content, speaker_character_id, turn_number, created_at, is_pinned, attachments)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    new_message_id,
+                    new_id,
+                    role,
+                    content,
+                    speaker_character_id,
+                    turn_number,
+                    created_at,
+                    is_pinned,
+                    attachments
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Return the new session
+    let new_session = read_group_session(&conn, &new_id)?
+        .ok_or_else(|| "Failed to read newly created session".to_string())?;
+
+    serde_json::to_string(&new_session).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn group_session_branch_to_character(
+    source_id: String,
+    character_id: String,
+    new_name: Option<String>,
+    pool: State<'_, SwappablePool>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let conn = pool.get_connection()?;
+
+    // Read the source session
+    let source = read_group_session(&conn, &source_id)?
+        .ok_or_else(|| "Source session not found".to_string())?;
+
+    // Verify character exists in the group
+    if !source.character_ids.contains(&character_id) {
+        return Err("Character not found in group session".to_string());
+    }
+
+    // Get character info to build name and for placeholder replacement
+    let character_name: String = conn
+        .query_row(
+            "SELECT name FROM characters WHERE id = ?1",
+            params![character_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Character not found".to_string())?;
+
+    // Get all character names for placeholder replacement
+    let mut character_names = std::collections::HashMap::new();
+    for char_id in &source.character_ids {
+        if let Ok(name) = conn.query_row(
+            "SELECT name FROM characters WHERE id = ?1",
+            params![char_id],
+            |row| row.get::<_, String>(0),
+        ) {
+            character_names.insert(char_id.clone(), name);
+        }
+    }
+
+    let now = now_ms();
+    let new_session_id = Uuid::new_v4().to_string();
+    let name = new_name.unwrap_or_else(|| format!("{} - {}", source.name, character_name));
+
+    // Create new single-character session
+    conn.execute(
+        "INSERT INTO sessions (id, character_id, persona_id, title, created_at, updated_at, archived)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0)",
+        params![
+            new_session_id,
+            character_id,
+            source.persona_id,
+            name,
+            now
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Get messages from group session and convert to single-character messages
+    let mut stmt = conn
+        .prepare(
+            "SELECT role, content, speaker_character_id, turn_number, created_at, is_pinned
+             FROM group_messages
+             WHERE session_id = ?1
+             ORDER BY turn_number, created_at",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let messages: Vec<(String, String, Option<String>, i64, i64, i64)> = stmt
+        .query_map(params![source_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    // Convert and insert messages - convert ALL messages to the chosen character
+    for (role, content, _speaker_character_id, _turn_number, created_at, is_pinned) in messages {
+        let new_message_id = Uuid::new_v4().to_string();
+
+        // Convert all assistant messages (from any character) to messages from the chosen character
+        let new_role = if role == "assistant" {
+            "assistant"
+        } else {
+            role.as_str()
+        };
+
+        // Replace character name placeholders in content
+        let mut processed_content = content.clone();
+        for (char_id, char_name) in &character_names {
+            // Replace {{@"CharacterName"}} with the chosen character's name
+            let placeholder = format!("{{{{@\"{}\"}}+}}", char_name);
+            processed_content = processed_content.replace(&placeholder, &character_name);
+
+            // Also handle the format without the +
+            let placeholder_alt = format!("{{{{@\"{}\"}}}}", char_name);
+            processed_content = processed_content.replace(&placeholder_alt, &character_name);
+        }
+
+        conn.execute(
+            "INSERT INTO messages (id, session_id, role, content, created_at, is_pinned, attachments)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, '[]')",
+            params![
+                new_message_id,
+                new_session_id,
+                new_role,
+                processed_content,
+                created_at,
+                is_pinned
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Build response with the new session
+    let session_json = super::sessions::session_get(app, new_session_id)?
+        .ok_or_else(|| "Failed to read newly created session".to_string())?;
+
+    Ok(session_json)
+}
+
+#[tauri::command]
 pub fn group_session_create(
     name: String,
     character_ids_json: String,
     persona_id: Option<String>,
     chat_type: Option<String>,
     starting_scene_json: Option<String>,
+    background_image_path: Option<String>,
     app: tauri::AppHandle,
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
@@ -731,8 +1111,8 @@ pub fn group_session_create(
         .and_then(|s| serde_json::from_str(s).ok());
 
     conn.execute(
-        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7)",
+        "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived, chat_type, starting_scene, background_image_path)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, 0, ?6, ?7, ?8)",
         params![
             id,
             name,
@@ -740,7 +1120,8 @@ pub fn group_session_create(
             final_persona_id,
             now,
             chat_type_value,
-            starting_scene_json.as_deref()
+            starting_scene_json.as_deref(),
+            background_image_path
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -775,6 +1156,7 @@ pub fn group_session_create(
         archived: false,
         chat_type: chat_type_value,
         starting_scene: starting_scene_parsed,
+        background_image_path,
         memories: Vec::new(),
         memory_embeddings: Vec::new(),
         memory_summary: String::new(),
@@ -922,6 +1304,27 @@ pub fn group_session_update_starting_scene(
     conn.execute(
         "UPDATE group_sessions SET starting_scene = ?1, updated_at = ?2 WHERE id = ?3",
         params![starting_scene_json, now, session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    match read_group_session(&conn, &session_id)? {
+        Some(session) => serde_json::to_string(&session).map_err(|e| e.to_string()),
+        None => Err("Session not found".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn group_session_update_background_image(
+    session_id: String,
+    background_image_path: Option<String>,
+    pool: State<'_, SwappablePool>,
+) -> Result<String, String> {
+    let conn = pool.get_connection()?;
+    let now = now_ms();
+
+    conn.execute(
+        "UPDATE group_sessions SET background_image_path = ?1, updated_at = ?2 WHERE id = ?3",
+        params![background_image_path, now, session_id],
     )
     .map_err(|e| e.to_string())?;
 

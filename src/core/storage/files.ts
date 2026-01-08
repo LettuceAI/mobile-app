@@ -367,6 +367,7 @@ export const storageBridge = {
     personaId?: string | null,
     chatType?: "conversation" | "roleplay",
     startingScene?: any | null,
+    backgroundImagePath?: string | null,
   ) =>
     invoke<string>("group_session_create", {
       name,
@@ -374,6 +375,7 @@ export const storageBridge = {
       personaId: personaId ?? null,
       chatType: chatType ?? "conversation",
       startingSceneJson: startingScene ? JSON.stringify(startingScene) : null,
+      backgroundImagePath: backgroundImagePath ?? null,
     }).then((s) => JSON.parse(s)),
   groupSessionGet: (id: string) =>
     invoke<string | null>("group_session_get", { id }).then((s) =>
@@ -401,6 +403,22 @@ export const storageBridge = {
       sourceId,
       newName: newName ?? null,
     }).then((s) => JSON.parse(s)),
+  groupSessionDuplicateWithMessages: (
+    sourceId: string,
+    includeMessages: boolean,
+    newName?: string | null,
+  ) =>
+    invoke<string>("group_session_duplicate_with_messages", {
+      sourceId,
+      includeMessages,
+      newName: newName ?? null,
+    }).then((s) => JSON.parse(s)),
+  groupSessionBranchToCharacter: (sourceId: string, characterId: string, newName?: string | null) =>
+    invoke<string>("group_session_branch_to_character", {
+      sourceId,
+      characterId,
+      newName: newName ?? null,
+    }).then((s) => JSON.parse(s)),
   groupSessionAddCharacter: (sessionId: string, characterId: string) =>
     invoke<string>("group_session_add_character", { sessionId, characterId }).then((s) =>
       JSON.parse(s),
@@ -413,6 +431,11 @@ export const storageBridge = {
     invoke<string>("group_session_update_starting_scene", {
       sessionId,
       startingSceneJson: startingScene ? JSON.stringify(startingScene) : null,
+    }).then((s) => JSON.parse(s)),
+  groupSessionUpdateBackgroundImage: (sessionId: string, backgroundImagePath: string | null) =>
+    invoke<string>("group_session_update_background_image", {
+      sessionId,
+      backgroundImagePath,
     }).then((s) => JSON.parse(s)),
   groupSessionUpdateChatType: (sessionId: string, chatType: "conversation" | "roleplay") =>
     invoke<string>("group_session_update_chat_type", {

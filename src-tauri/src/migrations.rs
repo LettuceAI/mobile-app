@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 28;
+pub const CURRENT_MIGRATION_VERSION: u32 = 29;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -317,6 +317,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v27_to_v28(app)?;
         version = 28;
+    }
+
+    if version < 29 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v28 -> v29: Add background_image_path to group_sessions",
+        );
+        migrate_v28_to_v29(app)?;
+        version = 29;
     }
 
     // Update the stored version
@@ -1096,6 +1106,39 @@ fn migrate_v26_to_v27(app: &AppHandle) -> Result<(), String> {
     if !has_model_id_variants {
         let _ = conn.execute(
             "ALTER TABLE group_message_variants ADD COLUMN model_id TEXT",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+fn migrate_v28_to_v29(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if background_image_path column exists in group_sessions
+    let mut has_background_image_path = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "background_image_path" {
+            has_background_image_path = true;
+            break;
+        }
+    }
+
+    // Add background_image_path column to group_sessions
+    if !has_background_image_path {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN background_image_path TEXT",
             [],
         );
     }

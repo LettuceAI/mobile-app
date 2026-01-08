@@ -57,6 +57,8 @@ export function GroupChatCreatePage() {
               onChatTypeChange={actions.setChatType}
               groupName={state.groupName}
               onGroupNameChange={actions.setGroupName}
+              backgroundImagePath={state.backgroundImagePath}
+              onBackgroundImageChange={actions.setBackgroundImagePath}
               namePlaceholder={computed.defaultName || "Enter group name..."}
               onContinue={handleContinueFromSetup}
               canContinue={computed.canContinueFromSetup}

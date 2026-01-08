@@ -1,23 +1,29 @@
 import {
   ArrowLeft,
   User,
-  Users,
   Plus,
   Trash2,
   Edit2,
   Check,
   X,
+  Image as ImageIcon,
   ChevronRight,
-  History,
+  Copy,
+  GitBranch,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import type { CSSProperties } from "react";
+import { useMemo } from "react";
 
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu, MenuSection } from "../../components";
 import { Routes, useNavigationManager } from "../../navigation";
 import { useGroupChatSettingsController } from "./hooks/useGroupChatSettingsController";
 import { SectionHeader, CharacterAvatar, QuickChip, PersonaOption } from "./components/settings";
+import { processBackgroundImage } from "../../../core/utils/image";
+import { storageBridge } from "../../../core/storage/files";
+import React, { useState } from "react";
 
 // Main Component
 // ============================================================================
@@ -33,6 +39,7 @@ export function GroupChatSettingsPage() {
     groupCharacters,
     availableCharacters,
     currentPersonaDisplay,
+    messageCount,
     ui,
     setEditingName,
     setNameDraft,
@@ -44,8 +51,67 @@ export function GroupChatSettingsPage() {
     handleAddCharacter,
     handleRemoveCharacter,
     getParticipationPercent,
-    participationStats
+    participationStats,
   } = useGroupChatSettingsController(groupSessionId);
+
+  const [backgroundImagePath, setBackgroundImagePath] = useState(
+    session?.backgroundImagePath || "",
+  );
+  const [savingBackground, setSavingBackground] = useState(false);
+  const [showCloneOptions, setShowCloneOptions] = useState(false);
+  const [showBranchOptions, setShowBranchOptions] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const [branching, setBranching] = useState(false);
+
+  // Sync backgroundImagePath with session when it changes
+  React.useEffect(() => {
+    if (session?.backgroundImagePath !== undefined) {
+      setBackgroundImagePath(session.backgroundImagePath || "");
+    }
+  }, [session?.backgroundImagePath]);
+
+  const handleBackgroundImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !groupSessionId) return;
+
+    const input = event.target;
+    setSavingBackground(true);
+    void processBackgroundImage(file)
+      .then(async (dataUrl: string) => {
+        setBackgroundImagePath(dataUrl);
+        await storageBridge.groupSessionUpdateBackgroundImage(groupSessionId, dataUrl);
+      })
+      .catch((error: unknown) => {
+        console.warn("Failed to process background image", error);
+      })
+      .finally(() => {
+        input.value = "";
+        setSavingBackground(false);
+      });
+  };
+
+  const handleRemoveBackground = async () => {
+    if (!groupSessionId) return;
+    setSavingBackground(true);
+    try {
+      setBackgroundImagePath("");
+      await storageBridge.groupSessionUpdateBackgroundImage(groupSessionId, null);
+    } catch (error) {
+      console.error("Failed to remove background:", error);
+    } finally {
+      setSavingBackground(false);
+    }
+  };
+
+  const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!backgroundImagePath) return undefined;
+    return {
+      backgroundImage: `linear-gradient(rgba(5, 5, 5, 0.25), rgba(5, 5, 5, 0.25)), url(${backgroundImagePath})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    };
+  }, [backgroundImagePath]);
 
   const {
     loading,
@@ -63,6 +129,38 @@ export function GroupChatSettingsPage() {
       backOrReplace(Routes.groupChat(groupSessionId));
     } else {
       backOrReplace(Routes.groupChats);
+    }
+  };
+
+  const handleClone = async (includeMessages: boolean) => {
+    if (!session) return;
+    try {
+      setCloning(true);
+      const newSession = await storageBridge.groupSessionDuplicateWithMessages(
+        session.id,
+        includeMessages,
+        `${session.name} (copy)`,
+      );
+      setShowCloneOptions(false);
+      navigate(Routes.groupChat(newSession.id));
+    } catch (err) {
+      console.error("Failed to clone group:", err);
+    } finally {
+      setCloning(false);
+    }
+  };
+
+  const handleBranch = async (characterId: string) => {
+    if (!session) return;
+    try {
+      setBranching(true);
+      const newSession = await storageBridge.groupSessionBranchToCharacter(session.id, characterId);
+      setShowBranchOptions(false);
+      navigate(`/chat/${newSession.characterId}?sessionId=${newSession.id}`);
+    } catch (err) {
+      console.error("Failed to branch to character:", err);
+    } finally {
+      setBranching(false);
     }
   };
 
@@ -106,9 +204,29 @@ export function GroupChatSettingsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#050505] text-white">
+    <div
+      className="relative flex h-full flex-col text-white overflow-hidden"
+      style={{ backgroundColor: backgroundImagePath ? undefined : "#050505" }}
+    >
+      {/* Fixed background image (does not scroll with content) */}
+      {backgroundImagePath ? (
+        <>
+          <div
+            className="fixed inset-0 -z-10 pointer-events-none"
+            style={chatBackgroundStyle}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 -z-10 pointer-events-none bg-black/30" aria-hidden="true" />
+        </>
+      ) : null}
+
       {/* Header */}
-      <header className="z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-10">
+      <header
+        className={cn(
+          "z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-10",
+          !backgroundImagePath ? "bg-[#050505]" : "",
+        )}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={handleBack}
@@ -132,95 +250,192 @@ export function GroupChatSettingsPage() {
           transition={{ duration: 0.3, ease: "easeOut" }}
           className={spacing.section}
         >
-          {/* Group Name Section */}
+          {/* Group Header Card - Name + Background  */}
           <section className={spacing.item}>
-            <SectionHeader title="Group Name" subtitle="Identify this conversation" />
-            <div className={cn(radius.lg, "border border-white/10 bg-[#0c0d13]/85 p-4")}>
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={nameDraft}
-                    onChange={(e) => setNameDraft(e.target.value)}
-                    className={cn(
-                      "flex-1 rounded-lg border border-white/20 bg-white/5 px-3 py-2",
-                      "text-white placeholder-white/30",
-                      "focus:border-emerald-400/50 focus:outline-none focus:ring-1 focus:ring-emerald-400/30",
-                    )}
-                    placeholder="Enter group name"
-                    autoFocus
+            <div
+              className={cn(
+                radius.lg,
+                "border border-white/10 bg-[#0c0d13]/85 backdrop-blur-sm overflow-hidden",
+              )}
+            >
+              {/* Background Preview */}
+              {backgroundImagePath ? (
+                <div className="relative h-24">
+                  <img
+                    src={backgroundImagePath}
+                    alt="Background"
+                    className="h-full w-full object-cover"
                   />
+                  <div className="absolute inset-0 bg-linear-to-t from-[#0c0d13] to-transparent" />
                   <button
-                    onClick={handleSaveName}
-                    disabled={saving || !nameDraft.trim()}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/20 text-emerald-300 transition hover:bg-emerald-400/30 disabled:opacity-50"
+                    onClick={handleRemoveBackground}
+                    disabled={savingBackground}
+                    className={cn(
+                      "absolute top-2 right-2 flex h-6 w-6 items-center justify-center",
+                      radius.full,
+                      "bg-black/60 text-white/70",
+                      interactive.transition.fast,
+                      "hover:bg-red-500/80 hover:text-white",
+                      "disabled:opacity-50",
+                    )}
+                    aria-label="Remove background"
                   >
-                    <Check size={18} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setNameDraft(session.name);
-                      setEditingName(false);
-                    }}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10"
-                  >
-                    <X size={18} />
+                    <X className="h-3 w-3" />
                   </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setEditingName(true)}
-                  className="flex w-full items-center justify-between text-left group"
-                >
+              ) : null}
+
+              {/* Group Info */}
+              <div className="p-4">
+                {editingName ? (
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10">
-                      <Users className="h-4 w-4 text-white/70" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">{session.name}</p>
-                      <p className="text-xs text-white/50 mt-0.5">Tap to edit</p>
-                    </div>
+                    <input
+                      type="text"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      className={cn(
+                        "flex-1 bg-transparent py-1",
+                        typography.body.size,
+                        typography.body.weight,
+                        "text-white placeholder-white/30",
+                        "border-b border-emerald-400/50 focus:border-emerald-400",
+                        "focus:outline-none transition-colors",
+                      )}
+                      placeholder="Enter group name"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSaveName}
+                      disabled={saving || !nameDraft.trim()}
+                      className={cn(
+                        "flex items-center justify-center",
+                        radius.full,
+                        "bg-emerald-400/20 text-emerald-300",
+                        interactive.transition.default,
+                        "hover:bg-emerald-400/30 disabled:opacity-50",
+                      )}
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setNameDraft(session.name);
+                        setEditingName(false);
+                      }}
+                      className={cn(
+                        "flex items-center justify-center",
+                        radius.full,
+                        "bg-white/10 text-white/60",
+                        interactive.transition.default,
+                        "hover:bg-white/20",
+                      )}
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                  <Edit2 className="h-4 w-4 text-white/40 group-hover:text-white/70 transition" />
-                </button>
-              )}
+                ) : (
+                  <button
+                    onClick={() => setEditingName(true)}
+                    className="flex w-full items-center justify-between text-left group"
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className={cn(
+                          typography.h3.size,
+                          typography.h3.weight,
+                          "text-white truncate",
+                        )}
+                      >
+                        {session.name}
+                      </p>
+                      <p className={cn(typography.caption.size, "text-white/45 mt-0.5")}>
+                        {groupCharacters.length}{" "}
+                        {groupCharacters.length === 1 ? "participant" : "participants"}
+                        <span className="opacity-50 mx-1.5">•</span>
+                        {messageCount} {messageCount === 1 ? "message" : "messages"}
+                      </p>
+                    </div>
+                    <Edit2 className="h-4 w-4 shrink-0 text-white/30 transition-colors group-hover:text-white/60" />
+                  </button>
+                )}
+
+                {/* Background action */}
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 mt-3 py-2 px-3",
+                    radius.md,
+                    "border border-dashed border-white/15 text-white/50",
+                    interactive.transition.default,
+                    "hover:border-white/25 hover:bg-white/5 hover:text-white/70",
+                    savingBackground && "opacity-50 cursor-not-allowed",
+                  )}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  <span className={cn(typography.caption.size)}>
+                    {savingBackground
+                      ? "Uploading..."
+                      : backgroundImagePath
+                        ? "Change background"
+                        : "Add background image"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundImageUpload}
+                    disabled={savingBackground}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
           </section>
 
-          {/* Chat History Section */}
+          {/* Quick Actions
           <section className={spacing.item}>
-            <SectionHeader title="Chat History" subtitle="View and manage conversations" />
-            <button
-              onClick={() => navigate(Routes.groupChatHistory)}
-              className={cn(
-                "group flex w-full items-center justify-between gap-3",
-                radius.lg,
-                "border p-4 text-left",
-                interactive.transition.default,
-                interactive.active.scale,
-                "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={cn(
-                    "flex h-10 w-10 items-center justify-center",
-                    radius.full,
-                    "border border-white/15 bg-white/10",
-                  )}
-                >
-                  <History className="h-4 w-4 text-white/70" />
+            <SectionHeader title="Quick Actions" />
+            <div className={spacing.field}>
+              <button
+                onClick={() => navigate(Routes.groupChatHistory)}
+                className={cn(
+                  "group flex w-full min-h-14 items-center justify-between",
+                  radius.md,
+                  "border p-4 text-left",
+                  interactive.transition.default,
+                  interactive.active.scale,
+                  "border-white/10 bg-[#0c0d13]/85 backdrop-blur-sm hover:border-white/20 hover:bg-white/10",
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center",
+                      radius.full,
+                      "border border-white/15 bg-white/10 text-white/80",
+                    )}
+                  >
+                    <History className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div
+                      className={cn(
+                        typography.overline.size,
+                        typography.overline.weight,
+                        typography.overline.tracking,
+                        typography.overline.transform,
+                        "text-white/50",
+                      )}
+                    >
+                      Chat History
+                    </div>
+                    <div className={cn(typography.bodySmall.size, "text-white truncate")}>
+                      View and manage conversations
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white">View All Group Chats</p>
-                  <p className="text-xs text-white/50 mt-0.5">
-                    Manage history, archive, or start new conversations
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-white/40 group-hover:text-white/70 transition" />
-            </button>
-          </section>
+                <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-colors group-hover:text-white/60" />
+              </button>
+            </div>
+          </section>*/}
 
           {/* Persona Section */}
           <section className={spacing.item}>
@@ -292,7 +507,7 @@ export function GroupChatSettingsPage() {
                         onClick={() => setShowRemoveConfirm(character.id)}
                         disabled={groupCharacters.length <= 2}
                         className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-lg transition",
+                          "flex items-center justify-center rounded-lg transition",
                           groupCharacters.length <= 2
                             ? "text-white/20 cursor-not-allowed"
                             : "text-white/40 hover:text-red-400 hover:bg-red-400/10",
@@ -303,7 +518,7 @@ export function GroupChatSettingsPage() {
                             : "Remove character"
                         }
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </motion.div>
                   );
@@ -316,6 +531,97 @@ export function GroupChatSettingsPage() {
                 A group chat requires at least 2 characters
               </p>
             )}
+          </section>
+
+          {/* Session Management */}
+          <section className={spacing.item}>
+            <SectionHeader
+              title="Session Management"
+              subtitle="Clone or branch this conversation"
+            />
+            <div className={spacing.field}>
+              <button
+                onClick={() => setShowCloneOptions(true)}
+                className={cn(
+                  "group flex w-full min-h-14 items-center justify-between",
+                  radius.md,
+                  "border p-4 text-left",
+                  interactive.transition.default,
+                  interactive.active.scale,
+                  "border-white/10 bg-[#0c0d13]/85 backdrop-blur-sm hover:border-white/20 hover:bg-white/10",
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center",
+                      radius.full,
+                      "border border-white/15 bg-white/10 text-white/80",
+                    )}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div
+                      className={cn(
+                        typography.overline.size,
+                        typography.overline.weight,
+                        typography.overline.tracking,
+                        typography.overline.transform,
+                        "text-white/50",
+                      )}
+                    >
+                      Clone Group
+                    </div>
+                    <div className={cn(typography.bodySmall.size, "text-white truncate")}>
+                      Duplicate this group with or without messages
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-colors group-hover:text-white/60" />
+              </button>
+
+              <button
+                onClick={() => setShowBranchOptions(true)}
+                className={cn(
+                  "group flex w-full min-h-14 items-center justify-between",
+                  radius.md,
+                  "border p-4 text-left",
+                  interactive.transition.default,
+                  interactive.active.scale,
+                  "border-white/10 bg-[#0c0d13]/85 backdrop-blur-sm hover:border-white/20 hover:bg-white/10",
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center",
+                      radius.full,
+                      "border border-white/15 bg-white/10 text-white/80",
+                    )}
+                  >
+                    <GitBranch className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div
+                      className={cn(
+                        typography.overline.size,
+                        typography.overline.weight,
+                        typography.overline.tracking,
+                        typography.overline.transform,
+                        "text-white/50",
+                      )}
+                    >
+                      Branch with Character
+                    </div>
+                    <div className={cn(typography.bodySmall.size, "text-white truncate")}>
+                      Continue as 1-on-1 chat with a character
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-colors group-hover:text-white/60" />
+              </button>
+            </div>
           </section>
 
           {/* Participation Stats */}
@@ -494,6 +800,136 @@ export function GroupChatSettingsPage() {
             </div>
           </div>
         )}
+      </BottomMenu>
+
+      {/* Clone Options Modal */}
+      <BottomMenu
+        isOpen={showCloneOptions}
+        onClose={() => setShowCloneOptions(false)}
+        title="Clone Group"
+      >
+        <MenuSection>
+          <div className={spacing.field}>
+            <button
+              onClick={() => handleClone(true)}
+              disabled={cloning}
+              className={cn(
+                "group flex w-full items-center justify-between p-4",
+                radius.md,
+                "border text-left",
+                interactive.transition.default,
+                interactive.active.scale,
+                "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
+                cloning && "opacity-50 cursor-not-allowed",
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center",
+                    radius.full,
+                    "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+                  )}
+                >
+                  <Copy className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className={cn(typography.body.size, typography.body.weight, "text-white")}>
+                    With messages
+                  </p>
+                  <p className={cn(typography.caption.size, "text-white/50 mt-0.5")}>
+                    Clone everything including chat history
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleClone(false)}
+              disabled={cloning}
+              className={cn(
+                "group flex w-full items-center justify-between p-4",
+                radius.md,
+                "border text-left",
+                interactive.transition.default,
+                interactive.active.scale,
+                "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
+                cloning && "opacity-50 cursor-not-allowed",
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center",
+                    radius.full,
+                    "border border-white/15 bg-white/10 text-white/80",
+                  )}
+                >
+                  <Copy className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className={cn(typography.body.size, typography.body.weight, "text-white")}>
+                    Without messages
+                  </p>
+                  <p className={cn(typography.caption.size, "text-white/50 mt-0.5")}>
+                    Clone setup only (characters, starting scene)
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </MenuSection>
+      </BottomMenu>
+
+      {/* Branch to Character Modal */}
+      <BottomMenu
+        isOpen={showBranchOptions}
+        onClose={() => setShowBranchOptions(false)}
+        title="Branch with Character"
+      >
+        <MenuSection>
+          <p className={cn(typography.bodySmall.size, "text-white/60 mb-3 px-1")}>
+            Select a character to continue as a 1-on-1 conversation. All messages from this group
+            will be converted.
+          </p>
+          <div className={spacing.field}>
+            {groupCharacters.map((character) => (
+              <button
+                key={character.id}
+                onClick={() => handleBranch(character.id)}
+                disabled={branching}
+                className={cn(
+                  "group flex w-full items-center justify-between p-4",
+                  radius.md,
+                  "border text-left",
+                  interactive.transition.default,
+                  interactive.active.scale,
+                  "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
+                  branching && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <CharacterAvatar character={character} size="sm" />
+                  <div className="min-w-0">
+                    <p
+                      className={cn(
+                        typography.body.size,
+                        typography.body.weight,
+                        "text-white truncate",
+                      )}
+                    >
+                      {character.name}
+                    </p>
+                    <p className={cn(typography.caption.size, "text-white/50 mt-0.5 truncate")}>
+                      Continue conversation with {character.name}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-colors group-hover:text-white/60" />
+              </button>
+            ))}
+          </div>
+        </MenuSection>
       </BottomMenu>
     </div>
   );

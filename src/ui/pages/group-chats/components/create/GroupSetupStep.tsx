@@ -1,12 +1,15 @@
 import { motion } from "framer-motion";
-import { MessageSquare, Sparkles, Theater } from "lucide-react";
+import { MessageSquare, Sparkles, Theater, Image as ImageIcon, X } from "lucide-react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../../design-tokens";
+import { processBackgroundImage } from "../../../../../core/utils/image";
 
 interface GroupSetupStepProps {
   chatType: "conversation" | "roleplay";
   onChatTypeChange: (value: "conversation" | "roleplay") => void;
   groupName: string;
   onGroupNameChange: (value: string) => void;
+  backgroundImagePath: string;
+  onBackgroundImageChange: (value: string) => void;
   namePlaceholder: string;
   onContinue: () => void;
   canContinue: boolean;
@@ -17,10 +20,29 @@ export function GroupSetupStep({
   onChatTypeChange,
   groupName,
   onGroupNameChange,
+  backgroundImagePath,
+  onBackgroundImageChange,
   namePlaceholder,
   onContinue,
   canContinue,
 }: GroupSetupStepProps) {
+  const handleBackgroundImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const input = event.target;
+    void processBackgroundImage(file)
+      .then((dataUrl: string) => {
+        onBackgroundImageChange(dataUrl);
+      })
+      .catch((error: unknown) => {
+        console.warn("GroupSetup: failed to process background image", error);
+      })
+      .finally(() => {
+        input.value = "";
+      });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -163,6 +185,76 @@ export function GroupSetupStep({
           {chatType === "conversation"
             ? "Casual group conversation without starting scenes"
             : "Roleplay scenario with starting scene and immersive prompts"}
+        </p>
+      </div>
+
+      {/* Background Image */}
+      <div className={spacing.field}>
+        <label
+          className={cn(
+            typography.label.size,
+            typography.label.weight,
+            typography.label.tracking,
+            "uppercase text-white/70",
+          )}
+        >
+          Chat Background <span className="text-white/40">(Optional)</span>
+        </label>
+
+        <div
+          className={cn(
+            "overflow-hidden border",
+            radius.md,
+            backgroundImagePath
+              ? "border-purple-400/30 bg-purple-400/5"
+              : "border-white/10 bg-black/20",
+          )}
+        >
+          {backgroundImagePath ? (
+            <div className="relative">
+              <img
+                src={backgroundImagePath}
+                alt="Background preview"
+                className="h-24 w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <button
+                onClick={() => onBackgroundImageChange("")}
+                className={cn(
+                  "absolute top-2 right-2 flex h-6 w-6 items-center justify-center border border-white/20 bg-black/50 text-white/70",
+                  radius.full,
+                  interactive.transition.fast,
+                  "active:scale-95 active:bg-black/70",
+                )}
+                aria-label="Remove background image"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <label
+              className={cn(
+                "flex cursor-pointer items-center justify-center gap-2 py-6",
+                interactive.transition.default,
+                "hover:bg-white/5",
+              )}
+            >
+              <ImageIcon className="h-5 w-5 text-white/40" />
+              <span className={cn(typography.body.size, "text-white/50")}>
+                Upload background image
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBackgroundImageUpload}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
+          Set a background image for this group chat
         </p>
       </div>
 

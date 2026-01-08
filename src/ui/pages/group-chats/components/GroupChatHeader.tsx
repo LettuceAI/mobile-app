@@ -1,5 +1,4 @@
-import type { CSSProperties } from "react";
-import { ArrowLeft, Settings, Sparkles } from "lucide-react";
+import { ArrowLeft, Settings, Brain } from "lucide-react";
 
 import type { GroupSession, Character } from "../../../../core/storage/schemas";
 import { cn } from "../../../design-tokens";
@@ -11,15 +10,22 @@ export function GroupChatHeader({
   onBack,
   onSettings,
   onMemories,
+  hasBackgroundImage,
 }: {
   session: GroupSession;
   characters: Character[];
   onBack: () => void;
   onSettings: () => void;
   onMemories: () => void;
+  hasBackgroundImage?: boolean;
 }) {
   return (
-    <header className="border-b border-white/10 px-4 pb-3 pt-3">
+    <header
+      className={cn(
+        "border-b border-white/10 px-4 pb-3 pt-3",
+        hasBackgroundImage && "backdrop-blur-xl",
+      )}
+    >
       <div className="flex items-center">
         <button
           onClick={onBack}
@@ -30,28 +36,27 @@ export function GroupChatHeader({
         </button>
 
         <div className="min-w-0 flex-1 ml-2">
-          <h1 className="truncate text-lg font-bold text-white/90">{session.name}</h1>
+          <h1 className="h1-group-chat truncate text-lg font-bold text-white/90">{session.name}</h1>
           <p className="truncate text-xs text-white/50">{characters.length} characters</p>
         </div>
 
-        <div className="relative flex items-center mr-2">
+        <div className="relative flex items-center mr-3">
           {characters.slice(0, 4).map((char, index) => (
             <CharacterMiniAvatar
               key={char.id}
               character={char}
-              style={{
-                marginLeft: index > 0 ? "-8px" : "0",
-                zIndex: 4 - index,
-              }}
+              index={index}
+              total={Math.min(characters.length, 4)}
             />
           ))}
           {characters.length > 4 && (
             <div
               className={cn(
-                "h-7 w-7 rounded-full",
-                "border-2 border-[#050505] bg-white/20",
+                "h-8 w-8 rounded-full",
+                "bg-linear-to-br from-purple-500/30 to-blue-500/30",
                 "flex items-center justify-center",
-                "text-[10px] font-medium text-white/70",
+                "text-[10px] font-semibold text-white shadow-lg",
+                "ring-1 ring-white/20",
               )}
               style={{ marginLeft: "-8px", zIndex: 0 }}
             >
@@ -62,18 +67,18 @@ export function GroupChatHeader({
 
         <button
           onClick={onMemories}
-          className="flex h-9 w-9 items-center justify-center text-white/70 hover:text-white transition"
+          className="flex items-center justify-center text-white/70 hover:text-white transition"
           aria-label="Memories"
         >
-          <Sparkles size={18} />
+          <Brain size={14} />
         </button>
 
         <button
           onClick={onSettings}
-          className="flex h-9 w-9 items-center justify-center text-white/70 hover:text-white transition"
+          className="flex items-center justify-center text-white/70 hover:text-white transition"
           aria-label="Settings"
         >
-          <Settings size={18} />
+          <Settings size={14} />
         </button>
       </div>
     </header>
@@ -82,26 +87,32 @@ export function GroupChatHeader({
 
 function CharacterMiniAvatar({
   character,
-  style,
+  index,
+  total,
 }: {
   character: Character;
-  style?: CSSProperties;
+  index: number;
+  total: number;
 }) {
   const avatarUrl = useAvatar("character", character.id, character.avatarPath);
 
   return (
     <div
       className={cn(
-        "h-7 w-7 rounded-full overflow-hidden",
-        "border-2 border-[#050505]",
+        "h-8 w-8 rounded-full overflow-hidden",
         "bg-linear-to-br from-white/10 to-white/5",
+        "shadow-lg ring-1 ring-white/20",
+        "transition-transform hover:scale-110 hover:z-50",
       )}
-      style={style}
+      style={{
+        marginLeft: index > 0 ? "-10px" : "0",
+        zIndex: total - index,
+      }}
     >
       {avatarUrl ? (
         <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-white/60">
+        <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-purple-500/40 to-blue-500/40 text-[11px] font-bold text-white">
           {character.name.slice(0, 1).toUpperCase()}
         </div>
       )}

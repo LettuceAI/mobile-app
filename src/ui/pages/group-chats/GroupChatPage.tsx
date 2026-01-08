@@ -1,21 +1,6 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, CSSProperties } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Settings as SettingsIcon,
-  ChevronDown,
-  Loader2,
-  Copy,
-  Trash2,
-  RotateCcw,
-  Edit3,
-  Users,
-  Sparkles,
-  Image,
-  RefreshCw,
-  PenLine,
-  Check,
-} from "lucide-react";
+import { ChevronDown, Loader2, Sparkles, Image, RefreshCw, PenLine, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 
@@ -37,31 +22,30 @@ import type {
   Model,
 } from "../../../core/storage/schemas";
 import { radius, interactive, cn } from "../../design-tokens";
-import { useAvatar } from "../../hooks/useAvatar";
+import { useImageData } from "../../hooks/useImageData";
+
 import { Routes } from "../../navigation";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
-import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
-import { GroupChatFooter, GroupChatMessage, type VariantState } from "./components";
+import {
+  GroupChatFooter,
+  GroupChatHeader,
+  GroupChatMessage,
+  GroupChatMessageActionsBottomSheet,
+  type VariantState,
+} from "./components";
 
 const MESSAGES_PAGE_SIZE = 50;
-
-// ============================================================================
-// Types
-// ============================================================================
 
 interface MessageActionState {
   message: GroupMessage;
   mode: "view" | "edit";
 }
 
-// ============================================================================
-// Main Component
-// ============================================================================
-
 export function GroupChatPage() {
   const { groupSessionId } = useParams<{ groupSessionId: string }>();
   const navigate = useNavigate();
 
+  // State variables
   const [session, setSession] = useState<GroupSession | null>(null);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -70,11 +54,9 @@ export function GroupChatPage() {
   const [_participationStats, setParticipationStats] = useState<GroupParticipation[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [sendingStatus, setSendingStatus] = useState<string | null>(null); // "selecting" | "generating"
+  const [sendingStatus, setSendingStatus] = useState<"selecting" | "generating" | null>(null);
   const [_selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-  // Ref to track the current placeholder message ID for streaming
   const assistantPlaceholderIdRef = useRef<string | null>(null);
-  // Track selected character during generation (for status display)
   const [_selectedCharacterName, setSelectedCharacterName] = useState<string | null>(null);
   const [_selectedCharacterAvatarUrl, setSelectedCharacterAvatarUrl] = useState<string | null>(
     null,
@@ -105,11 +87,28 @@ export function GroupChatPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
+  // Background image theming
+  const backgroundImageData = useImageData(session?.backgroundImagePath);
+
   // Get current persona
   const currentPersona = useMemo(() => {
     if (!session?.personaId) return null;
     return personas.find((p) => p.id === session.personaId) || null;
   }, [session, personas]);
+
+  // Background style
+  const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!backgroundImageData) {
+      return undefined;
+    }
+
+    return {
+      backgroundImage: `linear-gradient(rgba(5, 5, 5, 0.15), rgba(5, 5, 5, 0.15)), url(${backgroundImageData})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    };
+  }, [backgroundImageData]);
 
   // Load session data
   const loadData = useCallback(async () => {
@@ -124,11 +123,6 @@ export function GroupChatPage() {
         storageBridge.groupParticipationStats(groupSessionId),
         readSettings(),
       ]);
-
-      console.log("🔍 Loaded messages:", msgs.length, "messages");
-      console.log("🔍 First message modelId:", msgs[0]?.modelId);
-      console.log("🔍 Last message modelId:", msgs[msgs.length - 1]?.modelId);
-      console.log("🔍 Sample message:", msgs[msgs.length - 1]);
 
       if (!sessionData) {
         setError("Group session not found");
@@ -153,7 +147,6 @@ export function GroupChatPage() {
     loadData();
   }, [loadData]);
 
-  // Auto-dismiss errors after 10 seconds
   useEffect(() => {
     if (!error) return;
 
@@ -164,14 +157,12 @@ export function GroupChatPage() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (isAtBottomRef.current && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Listen for group chat status events
   useEffect(() => {
     if (!groupSessionId) return;
 
@@ -183,7 +174,6 @@ export function GroupChatPage() {
     }>("group_chat_status", (event) => {
       const { sessionId, status, characterId, characterName } = event.payload;
 
-      // Only process events for this session
       if (sessionId !== groupSessionId) return;
 
       if (status === "selecting_character") {
@@ -836,120 +826,128 @@ export function GroupChatPage() {
   }
 
   return (
-    <div
-      className="flex h-screen flex-col overflow-hidden bg-[#050505]"
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
-    >
-      {/* Header */}
-      <div className="relative z-20 shrink-0">
-        <GroupChatHeader
-          session={session}
-          characters={groupCharacters}
-          onBack={() => navigate(Routes.groupChats)}
-          onSettings={() => navigate(Routes.groupChatSettings(session.id))}
-          onMemories={() => navigate(Routes.groupChatMemories(session.id))}
-        />
-      </div>
+    <div className="relative flex h-screen flex-col overflow-hidden">
+      {/* Background layer - covers entire screen */}
+      <div className="absolute inset-0 bg-[#050505]" style={chatBackgroundStyle} />
 
-      {/* Main content area - flex-1 takes remaining space */}
-      <main
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="relative z-10 flex-1 overflow-y-auto"
-      >
-        <div className="space-y-4 px-4 pb-6 pt-4">
-          {messages.length === 0 ? (
-            <div className="flex min-h-[50vh] items-center justify-center">
-              <p className="text-white/30 text-center">
-                Start a conversation with {groupCharacters.map((c) => c.name).join(", ")}
-              </p>
-            </div>
-          ) : (
-            <AnimatePresence initial={false}>
-              {messages.map((message, index) => (
-                <GroupChatMessage
-                  key={message.id}
-                  message={message}
-                  index={index}
-                  messagesLength={messages.length}
-                  heldMessageId={heldMessageId}
-                  regeneratingMessageId={regeneratingMessageId}
-                  sending={sending}
-                  character={getCharacterById(message.speakerCharacterId)}
-                  persona={currentPersona}
-                  getVariantState={getVariantState}
-                  handleVariantDrag={handleVariantDrag}
-                  handleRegenerate={async (msg) => {
-                    await handleRegenerate(msg.id);
-                  }}
-                  onLongPress={(msg) => openMessageActions(msg)}
-                  reasoning={message.reasoning ?? undefined}
-                />
-              ))}
-            </AnimatePresence>
-          )}
-
-          {/* Sending Indicator - only show during selection phase */}
-          {sending && sendingStatus === "selecting" && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 mt-4 text-white/50"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Selecting character...</span>
-            </motion.div>
-          )}
-        </div>
-      </main>
-
-      {/* Scroll to Bottom Button */}
-      <AnimatePresence>
-        {!isAtBottomRef.current && messages.length > 0 && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={scrollToBottom}
-            className={cn(
-              "fixed right-4 z-20",
-              "h-10 w-10 rounded-full",
-              "border border-white/20 bg-[#1a1b23]",
-              "flex items-center justify-center",
-              "text-white/70 hover:text-white",
-              interactive.transition.fast,
-              "bottom-[calc(env(safe-area-inset-bottom)+88px)]",
-            )}
-          >
-            <ChevronDown size={20} />
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      {/* Footer */}
+      {/* Content layer - on top of background */}
       <div
-        className="relative z-10 shrink-0"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        className="relative z-10 flex h-full flex-col"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
-        <GroupChatFooter
-          draft={draft}
-          setDraft={setDraft}
-          error={error}
-          setError={setError}
-          sending={sending}
-          characters={groupCharacters}
-          persona={currentPersona}
-          onSendMessage={handleSend}
-          onContinue={messages.length > 0 ? () => handleContinue() : undefined}
-          onAbort={undefined}
-          hasBackgroundImage={false}
-          pendingAttachments={pendingAttachments}
-          onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}
-          onRemoveAttachment={supportsImageInput ? removePendingAttachment : undefined}
-          onOpenPlusMenu={handleOpenPlusMenu}
-          triggerFileInput={shouldTriggerFileInput}
-          onFileInputTriggered={() => setShouldTriggerFileInput(false)}
-        />
+        {/* Header */}
+        <div className="relative z-20 shrink-0">
+          <GroupChatHeader
+            session={session}
+            characters={groupCharacters}
+            onBack={() => navigate(Routes.groupChats)}
+            onSettings={() => navigate(Routes.groupChatSettings(session.id))}
+            onMemories={() => navigate(Routes.groupChatMemories(session.id))}
+            hasBackgroundImage={!!backgroundImageData}
+          />
+        </div>
+
+        {/* Main content area - flex-1 takes remaining space */}
+        <main
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="relative flex-1 overflow-y-auto px-4 pb-2"
+        >
+          <div className="space-y-4 px-4 pb-6 pt-4">
+            {messages.length === 0 ? (
+              <div className="flex min-h-[50vh] items-center justify-center">
+                <p className="text-white/30 text-center">
+                  Start a conversation with {groupCharacters.map((c) => c.name).join(", ")}
+                </p>
+              </div>
+            ) : (
+              <AnimatePresence initial={false}>
+                {messages.map((message, index) => (
+                  <GroupChatMessage
+                    key={message.id}
+                    message={message}
+                    index={index}
+                    messagesLength={messages.length}
+                    heldMessageId={heldMessageId}
+                    regeneratingMessageId={regeneratingMessageId}
+                    sending={sending}
+                    character={getCharacterById(message.speakerCharacterId)}
+                    persona={currentPersona}
+                    characters={groupCharacters}
+                    getVariantState={getVariantState}
+                    handleVariantDrag={handleVariantDrag}
+                    handleRegenerate={async (msg) => {
+                      await handleRegenerate(msg.id);
+                    }}
+                    onLongPress={(msg) => openMessageActions(msg)}
+                    reasoning={message.reasoning ?? undefined}
+                  />
+                ))}
+              </AnimatePresence>
+            )}
+
+            {/* Sending Indicator - only show during selection phase */}
+            {sending && sendingStatus === "selecting" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 mt-4 text-white/50"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Selecting character...</span>
+              </motion.div>
+            )}
+          </div>
+        </main>
+
+        {/* Scroll to Bottom Button */}
+        <AnimatePresence>
+          {!isAtBottomRef.current && messages.length > 0 && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              onClick={scrollToBottom}
+              className={cn(
+                "fixed right-4 z-20",
+                "h-10 w-10 rounded-full",
+                "border border-white/20 bg-[#1a1b23]",
+                "flex items-center justify-center",
+                "text-white/70 hover:text-white",
+                interactive.transition.fast,
+                "bottom-[calc(env(safe-area-inset-bottom)+88px)]",
+              )}
+            >
+              <ChevronDown size={20} />
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        {/* Footer */}
+        <div
+          className="relative z-20 shrink-0"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <GroupChatFooter
+            draft={draft}
+            setDraft={setDraft}
+            error={error}
+            setError={setError}
+            sending={sending}
+            characters={groupCharacters}
+            persona={currentPersona}
+            onSendMessage={handleSend}
+            onContinue={messages.length > 0 ? () => handleContinue() : undefined}
+            onAbort={undefined}
+            hasBackgroundImage={!!backgroundImageData}
+            pendingAttachments={pendingAttachments}
+            onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}
+            onRemoveAttachment={supportsImageInput ? removePendingAttachment : undefined}
+            onOpenPlusMenu={handleOpenPlusMenu}
+            triggerFileInput={shouldTriggerFileInput}
+            onFileInputTriggered={() => setShouldTriggerFileInput(false)}
+          />
+        </div>
       </div>
 
       {/* Plus Menu - Upload Image & Help Me Reply */}
@@ -1055,7 +1053,7 @@ export function GroupChatPage() {
       </BottomMenu>
 
       {/* Message Actions Bottom Sheet */}
-      <MessageActionsBottomSheet
+      <GroupChatMessageActionsBottomSheet
         messageAction={messageAction}
         actionError={actionError}
         actionStatus={actionStatus}
@@ -1077,474 +1075,7 @@ export function GroupChatPage() {
           }
         }}
         characters={groupCharacters}
-        settings={settings}
       />
     </div>
-  );
-}
-
-// ============================================================================
-// Sub-components
-// ============================================================================
-
-function GroupChatHeader({
-  session,
-  characters,
-  onBack,
-  onSettings,
-  onMemories,
-}: {
-  session: GroupSession;
-  characters: Character[];
-  onBack: () => void;
-  onSettings: () => void;
-  onMemories: () => void;
-}) {
-  return (
-    <header className="border-b border-white/10 px-4 pb-3 pt-3">
-      <div className="flex items-center">
-        <button
-          onClick={onBack}
-          className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
-          aria-label="Back"
-        >
-          <ArrowLeft size={14} strokeWidth={2.5} />
-        </button>
-
-        <div className="min-w-0 flex-1 ml-2">
-          <h1 className="truncate text-lg font-bold text-white/90">{session.name}</h1>
-          <p className="truncate text-xs text-white/50">{characters.length} characters</p>
-        </div>
-
-        {/* Stacked Avatars */}
-        <div className="relative flex items-center mr-2">
-          {characters.slice(0, 4).map((char, index) => (
-            <CharacterMiniAvatar
-              key={char.id}
-              character={char}
-              style={{
-                marginLeft: index > 0 ? "-8px" : "0",
-                zIndex: 4 - index,
-              }}
-            />
-          ))}
-          {characters.length > 4 && (
-            <div
-              className={cn(
-                "h-7 w-7 rounded-full",
-                "border-2 border-[#050505] bg-white/20",
-                "flex items-center justify-center",
-                "text-[10px] font-medium text-white/70",
-              )}
-              style={{ marginLeft: "-8px", zIndex: 0 }}
-            >
-              +{characters.length - 4}
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={onMemories}
-          className="flex h-9 w-9 items-center justify-center text-white/70 hover:text-white transition"
-          aria-label="Memories"
-        >
-          <Sparkles size={18} />
-        </button>
-
-        <button
-          onClick={onSettings}
-          className="flex h-9 w-9 items-center justify-center text-white/70 hover:text-white transition"
-          aria-label="Settings"
-        >
-          <SettingsIcon size={18} />
-        </button>
-      </div>
-    </header>
-  );
-}
-
-function CharacterMiniAvatar({
-  character,
-  style,
-}: {
-  character: Character;
-  style?: React.CSSProperties;
-}) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
-
-  return (
-    <div
-      className={cn(
-        "h-7 w-7 rounded-full overflow-hidden",
-        "border-2 border-[#050505]",
-        "bg-linear-to-br from-white/10 to-white/5",
-      )}
-      style={style}
-    >
-      {avatarUrl ? (
-        <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-white/60">
-          {character.name.slice(0, 1).toUpperCase()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActionRow({
-  icon: Icon,
-  label,
-  onClick,
-  disabled = false,
-  variant = "default",
-  iconBg,
-}: {
-  icon: typeof Copy;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  variant?: "default" | "danger";
-  iconBg?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex w-full items-center gap-3 px-1 py-2.5 transition-all rounded-lg",
-        "hover:bg-white/5 active:bg-white/10",
-        "disabled:opacity-40 disabled:pointer-events-none",
-        variant === "danger" && "hover:bg-red-500/10",
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center justify-center w-8 h-8 rounded-lg",
-          iconBg || "bg-white/10",
-        )}
-      >
-        <Icon size={16} className={cn(variant === "danger" ? "text-red-400" : "text-white")} />
-      </div>
-      <span
-        className={cn(
-          "text-[15px] text-left",
-          variant === "danger" ? "text-red-400" : "text-white/90",
-        )}
-      >
-        {label}
-      </span>
-    </button>
-  );
-}
-
-function MessageActionsBottomSheet({
-  messageAction,
-  actionError,
-  actionStatus,
-  actionBusy,
-  editDraft,
-  setEditDraft,
-  closeMessageActions,
-  setActionError,
-  setActionStatus,
-  handleSaveEdit,
-  handleDeleteMessage,
-  handleRewindToMessage,
-  handleCopyMessage,
-  setMessageAction,
-  onRegenerate,
-  characters,
-  settings,
-}: {
-  messageAction: MessageActionState | null;
-  actionError: string | null;
-  actionStatus: string | null;
-  actionBusy: boolean;
-  editDraft: string;
-  setEditDraft: (value: string) => void;
-  closeMessageActions: () => void;
-  setActionError: (value: string | null) => void;
-  setActionStatus: (value: string | null) => void;
-  handleSaveEdit: () => Promise<void>;
-  handleDeleteMessage: () => Promise<void>;
-  handleRewindToMessage: () => Promise<void>;
-  handleCopyMessage: () => Promise<void>;
-  setMessageAction: (value: MessageActionState | null) => void;
-  onRegenerate: (characterId?: string) => void;
-  characters: Character[];
-  settings: Settings | null;
-}) {
-  const [showCharacterPicker, setShowCharacterPicker] = useState(false);
-
-  const isAssistant = messageAction?.message.role === "assistant";
-
-  // Debug logging for model info
-  if (messageAction && isAssistant) {
-    console.log("[MessageActions] Debug info:", {
-      hasModelId: Boolean(messageAction.message.modelId),
-      modelId: messageAction.message.modelId,
-      hasSettings: Boolean(settings),
-      settingsModelsCount: settings?.models.length,
-      modelFound: settings?.models.find((m) => m.id === messageAction.message.modelId),
-    });
-  }
-
-  return (
-    <>
-      <BottomMenu
-        isOpen={Boolean(messageAction) && !showCharacterPicker}
-        includeExitIcon={false}
-        onClose={closeMessageActions}
-        title={isAssistant ? "Character Message" : "Your Message"}
-      >
-        {messageAction && (
-          <div className="text-white">
-            {/* Model Info (for assistant messages) */}
-            {isAssistant && messageAction.message.modelId && settings && (
-              <div className="mb-4 px-3 py-2 rounded-lg border border-blue-400/20 bg-blue-400/10">
-                <p className="text-[10px] text-blue-300/60 uppercase tracking-wide mb-1">
-                  Generated with
-                </p>
-                <p className="text-xs text-blue-200 font-medium">
-                  {settings.models.find((m) => m.id === messageAction.message.modelId)
-                    ?.displayName || messageAction.message.modelId}
-                </p>
-              </div>
-            )}
-
-            {/* Thinking/Reasoning (for assistant messages) */}
-            {isAssistant && messageAction.message.reasoning && (
-              <div className="mb-4 px-3 py-2 rounded-lg border border-purple-400/20 bg-purple-400/10">
-                <p className="text-[10px] text-purple-300/60 uppercase tracking-wide mb-1">
-                  Thought process
-                </p>
-                <div className="text-xs text-purple-200 italic max-h-40 overflow-y-auto">
-                  <MarkdownRenderer
-                    content={messageAction.message.reasoning}
-                    className="text-xs text-purple-200 **:text-purple-200"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Selection Reasoning (for assistant messages) */}
-            {isAssistant && messageAction.message.selectionReasoning && (
-              <div className="mb-4 px-3 py-2 rounded-lg border border-white/10 bg-white/5">
-                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">
-                  Why this character responded
-                </p>
-                <p className="text-xs text-white/70 italic">
-                  {messageAction.message.selectionReasoning}
-                </p>
-              </div>
-            )}
-
-            {/* Token usage */}
-            {messageAction.message.usage && (
-              <div className="flex items-center gap-2 text-xs text-white/40 mb-4">
-                <span>{messageAction.message.usage.promptTokens ?? 0} in</span>
-                <span>·</span>
-                <span>{messageAction.message.usage.completionTokens ?? 0} out</span>
-                <span>·</span>
-                <span className="text-white/60 font-medium">
-                  {messageAction.message.usage.totalTokens ?? 0} tokens
-                </span>
-              </div>
-            )}
-
-            {/* Status messages */}
-            {actionStatus && (
-              <div className="mb-3 px-3 py-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10">
-                <p className="text-sm text-emerald-200">{actionStatus}</p>
-              </div>
-            )}
-            {actionError && (
-              <div className="mb-3 px-3 py-2 rounded-lg border border-red-400/20 bg-red-400/10">
-                <p className="text-sm text-red-200">{actionError}</p>
-              </div>
-            )}
-
-            {messageAction.mode === "view" ? (
-              <div className="space-y-1">
-                {/* Edit */}
-                <ActionRow
-                  icon={Edit3}
-                  label="Edit"
-                  iconBg="bg-blue-500/20"
-                  onClick={() => {
-                    setActionError(null);
-                    setActionStatus(null);
-                    setMessageAction({ message: messageAction.message, mode: "edit" });
-                    setEditDraft(messageAction.message.content);
-                  }}
-                />
-
-                {/* Copy */}
-                <ActionRow
-                  icon={Copy}
-                  label="Copy"
-                  iconBg="bg-violet-500/20"
-                  onClick={() => void handleCopyMessage()}
-                />
-
-                {/* Regenerate with different character (assistant only) */}
-                {isAssistant && (
-                  <ActionRow
-                    icon={Users}
-                    label="Regenerate with different character"
-                    iconBg="bg-emerald-500/20"
-                    onClick={() => setShowCharacterPicker(true)}
-                  />
-                )}
-
-                {/* Separator */}
-                <div className="h-px bg-white/5 my-2" />
-
-                {/* Rewind */}
-                <ActionRow
-                  icon={RotateCcw}
-                  label="Rewind to here"
-                  iconBg="bg-cyan-500/20"
-                  onClick={() => void handleRewindToMessage()}
-                  disabled={actionBusy}
-                />
-
-                {/* Separator */}
-                <div className="h-px bg-white/5 my-2" />
-
-                {/* Delete */}
-                <ActionRow
-                  icon={Trash2}
-                  label={messageAction.message.isPinned ? "Unpin to delete" : "Delete"}
-                  onClick={() => void handleDeleteMessage()}
-                  disabled={actionBusy || messageAction.message.isPinned}
-                  variant="danger"
-                />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <textarea
-                  value={editDraft}
-                  onChange={(event) => setEditDraft(event.target.value)}
-                  rows={5}
-                  className={cn(
-                    "w-full p-3 text-sm text-white placeholder-white/40",
-                    "border border-white/10 bg-black/30",
-                    "focus:border-white/20 focus:outline-none resize-none",
-                    radius.lg,
-                  )}
-                  placeholder="Edit your message..."
-                  disabled={actionBusy}
-                  autoFocus
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setActionError(null);
-                      setActionStatus(null);
-                      setMessageAction({ message: messageAction.message, mode: "view" });
-                      setEditDraft(messageAction.message.content);
-                    }}
-                    className={cn(
-                      "flex-1 px-4 py-3 text-sm font-medium text-white/70 transition",
-                      "border border-white/10 bg-white/5",
-                      "hover:bg-white/10 hover:text-white",
-                      "active:scale-[0.98]",
-                      radius.lg,
-                    )}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void handleSaveEdit()}
-                    disabled={actionBusy}
-                    className={cn(
-                      "flex-1 px-4 py-3 text-sm font-semibold text-white transition",
-                      "bg-emerald-500",
-                      "hover:bg-emerald-400",
-                      "active:scale-[0.98]",
-                      "disabled:cursor-not-allowed disabled:opacity-50",
-                      radius.lg,
-                    )}
-                  >
-                    {actionBusy ? "Saving..." : "Save"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </BottomMenu>
-
-      {/* Character Picker for Regenerate */}
-      <BottomMenu
-        isOpen={showCharacterPicker}
-        includeExitIcon={false}
-        onClose={() => setShowCharacterPicker(false)}
-        title="Choose Character"
-      >
-        <div className="space-y-2">
-          <p className="text-sm text-white/50 mb-3">
-            Select which character should respond instead:
-          </p>
-          {characters.map((char) => (
-            <CharacterPickerItem
-              key={char.id}
-              character={char}
-              onClick={() => {
-                setShowCharacterPicker(false);
-                onRegenerate(char.id);
-              }}
-            />
-          ))}
-        </div>
-      </BottomMenu>
-    </>
-  );
-}
-
-function CharacterPickerItem({
-  character,
-  onClick,
-}: {
-  character: Character;
-  onClick: () => void;
-}) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
-
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-3 p-3 text-left",
-        radius.lg,
-        "border border-white/10 bg-white/5",
-        "hover:border-white/20 hover:bg-white/10",
-        interactive.transition.fast,
-      )}
-    >
-      <div
-        className={cn(
-          "h-10 w-10 rounded-full overflow-hidden",
-          "bg-linear-to-br from-white/10 to-white/5",
-          "ring-1 ring-white/10",
-        )}
-      >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-bold text-white/60">
-            {character.name.slice(0, 1).toUpperCase()}
-          </div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-white truncate">{character.name}</p>
-        {character.description && (
-          <p className="text-xs text-white/50 truncate">{character.description}</p>
-        )}
-      </div>
-    </button>
   );
 }

@@ -375,7 +375,7 @@ function AppContent() {
             setShowDelayedTooltip(false);
           }}
           position="bottom"
-          className="bottom-[88px] right-4"
+          className="bottom-22 right-4"
         />
       )}
 
