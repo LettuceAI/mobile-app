@@ -163,6 +163,7 @@ jobs:
           RUSTFLAGS: "--cfg DEV_BUILD"
         run: |
           pnpm install
+          pnpm tauri android init --ci --config dev-config.json
           pnpm tauri android build --ci --config dev-config.json
 
       - name: Upload Android artifacts
