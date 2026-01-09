@@ -725,7 +725,7 @@ export const GroupSessionSchema = z.object({
   /** Starting scene for roleplay chats */
   startingScene: SceneSchema.optional().nullable(),
   /** Background image path for the group chat */
-  backgroundImagePath: z.string().optional(),
+  backgroundImagePath: z.string().nullish().optional(),
   /** Manual memories (simple text entries) */
   memories: z.array(z.string()).default([]),
   /** Dynamic memory embeddings with semantic search support */
