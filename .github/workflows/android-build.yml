@@ -231,7 +231,7 @@ jobs:
             "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEY_PASSWORD" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=$ANDROID_KEY_ALIAS" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.password=$ANDROID_KEY_PASSWORD" \
-            pnpm tauri android build --ci --config src-tauri/dev-config.json -- --release
+            pnpm tauri android build --ci --config src-tauri/dev-config.json
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
