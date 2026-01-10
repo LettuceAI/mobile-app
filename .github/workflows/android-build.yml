@@ -211,6 +211,13 @@ jobs:
           path.write_text(text)
           PY
 
+          {
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/keystore.jks"
+            echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASS"
+            echo "ANDROID_KEYSTORE_PASSWORD=$STORE_PASS"
+          } >> "$GITHUB_ENV"
+
       - name: Build Tauri Android app (Dev build)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
@@ -221,12 +228,17 @@ jobs:
           RUST_BACKTRACE: 1
           RUSTFLAGS: "--cfg DEV_BUILD"
         run: |
-          pnpm tauri android build --ci --config dev-config.json
+          env \
+            "ORG_GRADLE_PROJECT_android.injected.signing.store.file=$ANDROID_KEYSTORE_PATH" \
+            "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD" \
+            "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=$ANDROID_KEY_ALIAS" \
+            "ORG_GRADLE_PROJECT_android.injected.signing.key.password=$ANDROID_KEY_PASSWORD" \
+            pnpm tauri android build --ci --config dev-config.json --release
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build
           path: |
-            src-tauri/gen/android/app/build/outputs/**/*.apk
-            src-tauri/gen/android/app/build/outputs/**/*.aab
+            src-tauri/gen/android/app/build/outputs/apk/**/release/*-release.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*-release.aab
