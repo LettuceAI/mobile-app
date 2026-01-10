@@ -13,13 +13,13 @@ import type {
   Model,
   ProviderCredential,
 } from "../../../../core/storage/schemas";
-import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
 import {
-  createDefaultAdvancedModelSettings,
-} from "../../../../core/storage/schemas";
-import {
-  sanitizeAdvancedModelSettings,
-} from "../../../components/AdvancedModelSettingsForm";
+  getProviderCapabilities,
+  toCamel,
+  type ProviderCapabilitiesCamel,
+} from "../../../../core/providers/capabilities";
+import { createDefaultAdvancedModelSettings } from "../../../../core/storage/schemas";
+import { sanitizeAdvancedModelSettings } from "../../../components/AdvancedModelSettingsForm";
 import {
   initialModelEditorState,
   modelEditorReducer,
@@ -38,11 +38,11 @@ type ControllerReturn = {
   handleProviderSelection: (providerId: string, providerLabel: string) => Promise<void>;
   setModelAdvancedDraft: (settings: AdvancedModelSettings) => void;
   toggleOverride: () => void;
-  handleTemperatureChange: (value: number) => void;
-  handleTopPChange: (value: number) => void;
+  handleTemperatureChange: (value: number | null) => void;
+  handleTopPChange: (value: number | null) => void;
   handleMaxTokensChange: (value: number | null) => void;
-  handleFrequencyPenaltyChange: (value: number) => void;
-  handlePresencePenaltyChange: (value: number) => void;
+  handleFrequencyPenaltyChange: (value: number | null) => void;
+  handlePresencePenaltyChange: (value: number | null) => void;
   handleTopKChange: (value: number | null) => void;
   handleReasoningEnabledChange: (value: boolean) => void;
   handleReasoningEffortChange: (value: "low" | "medium" | "high" | null) => void;
@@ -78,7 +78,9 @@ export function useModelEditorController(): ControllerReturn {
         console.warn("[ModelEditor] Failed to load provider capabilities", e);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -119,9 +121,7 @@ export function useModelEditorController(): ControllerReturn {
           }
           nextEditorModel = existing;
           if (existing.advancedModelSettings) {
-            nextDraft = sanitizeAdvancedModelSettings(
-              existing.advancedModelSettings,
-            );
+            nextDraft = sanitizeAdvancedModelSettings(existing.advancedModelSettings);
           }
         }
 
@@ -189,9 +189,7 @@ export function useModelEditorController(): ControllerReturn {
     if (!editorModel) return false;
     const hasProvider =
       providers.find(
-        (p) =>
-          p.providerId === editorModel.providerId &&
-          p.label === editorModel.providerLabel,
+        (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel,
       ) || providers.find((p) => p.providerId === editorModel.providerId);
     return (
       !!editorModel.displayName?.trim() &&
@@ -248,8 +246,8 @@ export function useModelEditorController(): ControllerReturn {
   }, []);
 
   const handleTemperatureChange = useCallback(
-    (value: number) => {
-      const rounded = Number(value.toFixed(2));
+    (value: number | null) => {
+      const rounded = value === null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
       dispatch({
         type: "set_model_advanced_draft",
         payload: {
@@ -262,8 +260,8 @@ export function useModelEditorController(): ControllerReturn {
   );
 
   const handleTopPChange = useCallback(
-    (value: number) => {
-      const rounded = Number(value.toFixed(2));
+    (value: number | null) => {
+      const rounded = value === null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
       dispatch({
         type: "set_model_advanced_draft",
         payload: {
@@ -289,8 +287,8 @@ export function useModelEditorController(): ControllerReturn {
   );
 
   const handleFrequencyPenaltyChange = useCallback(
-    (value: number) => {
-      const rounded = Number(value.toFixed(2));
+    (value: number | null) => {
+      const rounded = value === null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
       dispatch({
         type: "set_model_advanced_draft",
         payload: {
@@ -303,8 +301,8 @@ export function useModelEditorController(): ControllerReturn {
   );
 
   const handlePresencePenaltyChange = useCallback(
-    (value: number) => {
-      const rounded = Number(value.toFixed(2));
+    (value: number | null) => {
+      const rounded = value === null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
       dispatch({
         type: "set_model_advanced_draft",
         payload: {
@@ -405,17 +403,14 @@ export function useModelEditorController(): ControllerReturn {
   }, [dispatch]);
 
   const handleSave = useCallback(async () => {
-    const { editorModel, providers, modelAdvancedDraft } =
-      state;
+    const { editorModel, providers, modelAdvancedDraft } = state;
     if (!editorModel) return;
 
     dispatch({ type: "set_error", payload: null });
 
     const providerCred =
       providers.find(
-        (p) =>
-          p.providerId === editorModel.providerId &&
-          p.label === editorModel.providerLabel,
+        (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel,
       ) || providers.find((p) => p.providerId === editorModel.providerId);
 
     if (!providerCred) {
@@ -426,9 +421,7 @@ export function useModelEditorController(): ControllerReturn {
       return;
     }
 
-    const shouldVerify = ["openai", "anthropic"].includes(
-      providerCred.providerId,
-    );
+    const shouldVerify = ["openai", "anthropic"].includes(providerCred.providerId);
     if (shouldVerify) {
       try {
         dispatch({ type: "set_verifying", payload: true });
@@ -440,19 +433,13 @@ export function useModelEditorController(): ControllerReturn {
 
         let resp: { exists: boolean; error?: string } | undefined;
         try {
-          resp = await invoke<{ exists: boolean; error?: string }>(
-            "verify_model_exists",
-            {
-              providerId: providerCred.providerId,
-              credentialId: providerCred.id,
-              model: name,
-            },
-          );
+          resp = await invoke<{ exists: boolean; error?: string }>("verify_model_exists", {
+            providerId: providerCred.providerId,
+            credentialId: providerCred.id,
+            model: name,
+          });
         } catch (err) {
-          console.warn(
-            "Invoke verify_model_exists failed, treating as undefined:",
-            err,
-          );
+          console.warn("Invoke verify_model_exists failed, treating as undefined:", err);
         }
         if (!resp) {
           dispatch({
@@ -535,9 +522,7 @@ export function useModelEditorController(): ControllerReturn {
 
     const providerCred =
       providers.find(
-        (p) =>
-          p.providerId === editorModel.providerId &&
-          p.label === editorModel.providerLabel,
+        (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel,
       ) || providers.find((p) => p.providerId === editorModel.providerId);
 
     if (!providerCred) {

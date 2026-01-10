@@ -1,10 +1,39 @@
 import { CSSProperties, useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, MessageSquarePlus, Cpu, ChevronRight, Check, History, User, SlidersHorizontal, Edit2, Trash2, Info, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  MessageSquarePlus,
+  Cpu,
+  ChevronRight,
+  Check,
+  History,
+  User,
+  SlidersHorizontal,
+  Edit2,
+  Trash2,
+  Info,
+  Sparkles,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import type { AdvancedModelSettings, Character, Model, Persona, Session } from "../../../core/storage/schemas";
+import type {
+  AdvancedModelSettings,
+  Character,
+  Model,
+  Persona,
+  Session,
+} from "../../../core/storage/schemas";
 import { createDefaultAdvancedModelSettings } from "../../../core/storage/schemas";
-import { readSettings, saveCharacter, createSession, listCharacters, listPersonas, getSessionMeta, saveSession, deletePersona, getSessionMessageCount } from "../../../core/storage/repo";
+import {
+  readSettings,
+  saveCharacter,
+  createSession,
+  listCharacters,
+  listPersonas,
+  getSessionMeta,
+  saveSession,
+  deletePersona,
+  getSessionMessageCount,
+} from "../../../core/storage/repo";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -25,7 +54,9 @@ import { Routes, useNavigationManager } from "../../navigation";
 function isImageLike(value?: string) {
   if (!value) return false;
   const lower = value.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
+  return (
+    lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image")
+  );
 }
 
 interface SettingsButtonProps {
@@ -49,15 +80,17 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
         interactive.active.scale,
         disabled
           ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-          : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10"
+          : "border-white/10 bg-[#0c0d13]/85 text-white hover:border-white/20 hover:bg-white/10",
       )}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <div className={cn(
-          "flex h-10 w-10 items-center justify-center",
-          radius.full,
-          "border border-white/15 bg-white/10 text-white/80"
-        )}>
+        <div
+          className={cn(
+            "flex h-10 w-10 items-center justify-center",
+            radius.full,
+            "border border-white/15 bg-white/10 text-white/80",
+          )}
+        >
           {icon}
         </div>
         <div className="min-w-0 flex-1">
@@ -67,14 +100,12 @@ function SettingsButton({ icon, title, subtitle, onClick, disabled = false }: Se
               typography.overline.weight,
               typography.overline.tracking,
               typography.overline.transform,
-              "text-white/50"
+              "text-white/50",
             )}
           >
             {title}
           </div>
-          <div className={cn(typography.bodySmall.size, "text-white truncate")}>
-            {subtitle}
-          </div>
+          <div className={cn(typography.bodySmall.size, "text-white truncate")}>{subtitle}</div>
         </div>
       </div>
       <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
@@ -124,11 +155,17 @@ function QuickChip({
         interactive.active.scale,
         disabled
           ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-          : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10"
+          : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
       )}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <div className={cn("flex h-10 w-10 items-center justify-center", radius.full, "border border-white/15 bg-white/10 text-white/80")}>
+        <div
+          className={cn(
+            "flex h-10 w-10 items-center justify-center",
+            radius.full,
+            "border border-white/15 bg-white/10 text-white/80",
+          )}
+        >
           {icon}
         </div>
         <div className="min-w-0 flex-1">
@@ -138,7 +175,7 @@ function QuickChip({
               typography.overline.weight,
               typography.overline.tracking,
               typography.overline.transform,
-              "text-white/50"
+              "text-white/50",
             )}
           >
             {label}
@@ -160,7 +197,14 @@ interface PersonaOptionProps {
   onLongPress: () => void;
 }
 
-function PersonaOption({ title, description, isDefault, isSelected, onClick, onLongPress }: PersonaOptionProps) {
+function PersonaOption({
+  title,
+  description,
+  isDefault,
+  isSelected,
+  onClick,
+  onLongPress,
+}: PersonaOptionProps) {
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
   const [isLongPressTriggered, setIsLongPressTriggered] = useState(false);
 
@@ -195,22 +239,28 @@ function PersonaOption({ title, description, isDefault, isSelected, onClick, onL
         interactive.active.scale,
         isSelected
           ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
-          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10",
       )}
       aria-pressed={isSelected}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>{title}</div>
+          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>
+            {title}
+          </div>
           {isDefault && (
-            <span className={cn(
-              "shrink-0 rounded-full border border-blue-400/30 bg-blue-400/10 px-2 text-[10px] font-medium text-blue-200"
-            )}>
+            <span
+              className={cn(
+                "shrink-0 rounded-full border border-blue-400/30 bg-blue-400/10 px-2 text-[10px] font-medium text-blue-200",
+              )}
+            >
               App default
             </span>
           )}
         </div>
-        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>{description}</div>
+        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>
+          {description}
+        </div>
       </div>
 
       <div
@@ -218,7 +268,7 @@ function PersonaOption({ title, description, isDefault, isSelected, onClick, onL
           "flex h-8 w-8 items-center justify-center rounded-full border",
           isSelected
             ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
-            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20"
+            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20",
         )}
         aria-hidden="true"
       >
@@ -235,9 +285,18 @@ interface ModelOptionProps {
   isCharacterDefault: boolean;
   onClick: () => void;
 }
-function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, onClick }: ModelOptionProps) {
+function ModelOption({
+  model,
+  isSelected,
+  isGlobalDefault,
+  isCharacterDefault,
+  onClick,
+}: ModelOptionProps) {
   const defaultBadge = isCharacterDefault
-    ? { label: "Character default", color: "text-emerald-200 border-emerald-400/40 bg-emerald-400/10" }
+    ? {
+        label: "Character default",
+        color: "text-emerald-200 border-emerald-400/40 bg-emerald-400/10",
+      }
     : isGlobalDefault
       ? { label: "App default", color: "text-blue-200 border-blue-400/30 bg-blue-400/10" }
       : null;
@@ -253,25 +312,29 @@ function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, o
         interactive.active.scale,
         isSelected
           ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
-          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10"
+          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10",
       )}
       aria-pressed={isSelected}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>{model.displayName}</div>
+          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>
+            {model.displayName}
+          </div>
           {defaultBadge && (
             <span
               className={cn(
                 "shrink-0 rounded-full border px-2 text-[10px] font-medium",
-                defaultBadge.color
+                defaultBadge.color,
               )}
             >
               {defaultBadge.label}
             </span>
           )}
         </div>
-        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>{model.name}</div>
+        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>
+          {model.name}
+        </div>
       </div>
 
       <div
@@ -280,7 +343,7 @@ function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, o
           "border", // always have border to keep size
           isSelected
             ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
-            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20"
+            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20",
         )}
         aria-hidden="true"
       >
@@ -289,7 +352,6 @@ function ModelOption({ model, isSelected, isGlobalDefault, isCharacterDefault, o
     </button>
   );
 }
-
 
 function ChatSettingsContent({ character }: { character: Character }) {
   const navigate = useNavigate();
@@ -304,10 +366,13 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [showPersonaSelector, setShowPersonaSelector] = useState(false);
-  const [sessionAdvancedSettings, setSessionAdvancedSettings] = useState<AdvancedModelSettings | null>(null);
+  const [sessionAdvancedSettings, setSessionAdvancedSettings] =
+    useState<AdvancedModelSettings | null>(null);
   const [showSessionAdvancedMenu, setShowSessionAdvancedMenu] = useState(false);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
-  const [sessionAdvancedDraft, setSessionAdvancedDraft] = useState<AdvancedModelSettings>(createDefaultAdvancedModelSettings());
+  const [sessionAdvancedDraft, setSessionAdvancedDraft] = useState<AdvancedModelSettings>(
+    createDefaultAdvancedModelSettings(),
+  );
   const [sessionOverrideEnabled, setSessionOverrideEnabled] = useState<boolean>(false);
   const [showPersonaActions, setShowPersonaActions] = useState(false);
   const [selectedPersonaForActions, setSelectedPersonaForActions] = useState<Persona | null>(null);
@@ -331,7 +396,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const loadSession = useCallback(async () => {
     if (!characterId) return;
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('sessionId');
+    const sessionId = urlParams.get("sessionId");
     if (sessionId) {
       try {
         const session = await getSessionMeta(sessionId);
@@ -372,7 +437,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
   }, [currentCharacter?.defaultModelId, globalDefaultModelId]);
 
   const effectiveModelId = getEffectiveModelId();
-  const currentModel = useMemo(() => models.find(m => m.id === effectiveModelId), [models, effectiveModelId]);
+  const currentModel = useMemo(
+    () => models.find((m) => m.id === effectiveModelId),
+    [models, effectiveModelId],
+  );
 
   const baseAdvancedSettings = useMemo(() => {
     return currentModel?.advancedModelSettings ?? createDefaultAdvancedModelSettings();
@@ -392,7 +460,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
     }
   }, [sessionAdvancedSettings, baseAdvancedSettings]);
 
-
   const handleNewChat = async () => {
     if (!characterId || !currentCharacter) return;
 
@@ -400,7 +467,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
       const session = await createSession(
         characterId,
         "New Chat",
-        currentCharacter.scenes && currentCharacter.scenes.length > 0 ? currentCharacter.scenes[0].id : undefined
+        currentCharacter.scenes && currentCharacter.scenes.length > 0
+          ? currentCharacter.scenes[0].id
+          : undefined,
       );
       navigate(`/chat/${characterId}?sessionId=${session.id}`, { replace: true });
     } catch (error) {
@@ -414,7 +483,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     try {
       const updatedCharacter = await saveCharacter({
         ...currentCharacter,
-        defaultModelId: modelId
+        defaultModelId: modelId,
       });
       setCurrentCharacter(updatedCharacter);
 
@@ -457,28 +526,30 @@ function ChatSettingsContent({ character }: { character: Character }) {
     }
   };
 
-  const handleSaveSessionAdvancedSettings = useCallback(async (next: AdvancedModelSettings | null) => {
-    if (!currentSession) {
-      console.warn("Attempted to save session advanced settings without session");
-      return;
-    }
+  const handleSaveSessionAdvancedSettings = useCallback(
+    async (next: AdvancedModelSettings | null) => {
+      if (!currentSession) {
+        console.warn("Attempted to save session advanced settings without session");
+        return;
+      }
 
-    try {
-      const sanitized = next ? sanitizeAdvancedModelSettings(next) : null;
-      const updatedSession: Session = {
-        ...currentSession,
-        advancedModelSettings: sanitized ?? undefined,
-        updatedAt: Date.now(),
-      };
-      await saveSession(updatedSession);
-      setCurrentSession(updatedSession);
-      setSessionAdvancedSettings(sanitized);
-      setShowSessionAdvancedMenu(false);
-
-    } catch (error) {
-      console.error("Failed to save session advanced settings:", error);
-    }
-  }, [currentSession]);
+      try {
+        const sanitized = next ? sanitizeAdvancedModelSettings(next) : null;
+        const updatedSession: Session = {
+          ...currentSession,
+          advancedModelSettings: sanitized ?? undefined,
+          updatedAt: Date.now(),
+        };
+        await saveSession(updatedSession);
+        setCurrentSession(updatedSession);
+        setSessionAdvancedSettings(sanitized);
+        setShowSessionAdvancedMenu(false);
+      } catch (error) {
+        console.error("Failed to save session advanced settings:", error);
+      }
+    },
+    [currentSession],
+  );
 
   const handleToggleSessionVoiceAutoplay = useCallback(async () => {
     if (!currentSession) {
@@ -539,8 +610,6 @@ function ChatSettingsContent({ character }: { character: Character }) {
     );
   }, [currentCharacter, avatarUrl]);
 
-
-
   const advancedDefaultsLabel = useMemo(() => {
     return currentModel?.advancedModelSettings ? "Model defaults" : "App defaults";
   }, [currentModel?.advancedModelSettings]);
@@ -591,14 +660,16 @@ function ChatSettingsContent({ character }: { character: Character }) {
     if (!currentSession) return "Open a chat session to view memory";
     const summary = (currentSession.memorySummary ?? "").trim();
     if (summary) return summary;
-    const memoryCount = currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
+    const memoryCount =
+      currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
     if (memoryCount > 0) return "No summary yet — memories exist for this session";
     return "No memories yet — open to add summary, tags, and history";
   }, [currentSession]);
 
   const memoryMetaLine = useMemo(() => {
     if (!currentSession) return "Session required";
-    const memoryCount = currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
+    const memoryCount =
+      currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
     const toolsCount = currentSession.memoryToolEvents?.length ?? 0;
     const tokenCount = currentSession.memorySummaryTokenCount ?? 0;
     const parts: string[] = [];
@@ -611,7 +682,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const handleBack = () => {
     if (characterId) {
       const urlParams = new URLSearchParams(window.location.search);
-      const sessionId = urlParams.get('sessionId');
+      const sessionId = urlParams.get("sessionId");
       if (sessionId) {
         navigate(Routes.chatSession(characterId, sessionId));
       } else {
@@ -628,10 +699,10 @@ function ChatSettingsContent({ character }: { character: Character }) {
     const currentPersonaId = currentSession?.personaId;
     if (currentPersonaId === "") return "No persona";
     if (!currentPersonaId) {
-      const defaultPersona = personas.find(p => p.isDefault);
+      const defaultPersona = personas.find((p) => p.isDefault);
       return defaultPersona ? `${defaultPersona.title} (default)` : "No persona";
     }
-    const persona = personas.find(p => p.id === currentPersonaId);
+    const persona = personas.find((p) => p.id === currentPersonaId);
     return persona ? persona.title : "Custom persona";
   };
 
@@ -658,7 +729,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
       {/* Fixed background image (does not scroll with content) */}
       {backgroundImageData ? (
         <>
-          <div className="fixed inset-0 -z-10 pointer-events-none" style={chatBackgroundStyle} aria-hidden="true" />
+          <div
+            className="fixed inset-0 -z-10 pointer-events-none"
+            style={chatBackgroundStyle}
+            aria-hidden="true"
+          />
           <div className="fixed inset-0 -z-10 pointer-events-none bg-black/30" aria-hidden="true" />
         </>
       ) : null}
@@ -666,7 +741,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       <header
         className={cn(
           "z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
-          !backgroundImageData ? "bg-[#050505]" : ""
+          !backgroundImageData ? "bg-[#050505]" : "",
         )}
       >
         <div className="flex items-center gap-3">
@@ -680,7 +755,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
             </button>
             <div className="min-w-0 flex-1 text-left">
               <p className="truncate text-xl font-bold text-white/90">Chat Settings</p>
-              <p className="mt-0.5 truncate text-xs text-white/50">Manage conversation preferences</p>
+              <p className="mt-0.5 truncate text-xs text-white/50">
+                Manage conversation preferences
+              </p>
             </div>
           </div>
         </div>
@@ -695,10 +772,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
           className={spacing.section}
         >
           {/* Session Header */}
-          <section className={cn(
-            radius.lg,
-            "border border-white/10 bg-[#0c0d13]/85 p-4 backdrop-blur-sm"
-          )}>
+          <section
+            className={cn(radius.lg, "border border-white/10 bg-[#0c0d13]/85 p-4 backdrop-blur-sm")}
+          >
             <div className="flex items-center gap-3">
               {avatarDisplay}
               <div className="min-w-0 flex-1">
@@ -713,7 +789,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   </p>
                 ) : null}
                 {currentCharacter?.description ? (
-                  <p className={cn(typography.caption.size, "text-gray-400 leading-relaxed line-clamp-2 mt-1")}>
+                  <p
+                    className={cn(
+                      typography.caption.size,
+                      "text-gray-400 leading-relaxed line-clamp-2 mt-1",
+                    )}
+                  >
                     {currentCharacter.description}
                   </p>
                 ) : null}
@@ -739,12 +820,21 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 interactive.active.scale,
                 !currentSession
                   ? "border-white/5 bg-[#0c0d13]/50 opacity-10 cursor-not-allowed"
-                  : cn("border-emerald-400/20 bg-[#0c0d13]/70 hover:border-emerald-400/30", colors.effects.glow)
+                  : cn(
+                      "border-emerald-400/20 bg-[#0c0d13]/70 hover:border-emerald-400/30",
+                      colors.effects.glow,
+                    ),
               )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={cn("flex h-10 w-10 items-center justify-center", radius.full, "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200")}>
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center",
+                      radius.full,
+                      "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+                    )}
+                  >
                     <Sparkles className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
@@ -754,7 +844,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         typography.overline.weight,
                         typography.overline.tracking,
                         typography.overline.transform,
-                        "text-white/50"
+                        "text-white/50",
                       )}
                     >
                       Memory
@@ -766,7 +856,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 </div>
                 <ChevronRight className="mt-1 h-4 w-4 text-white/40 transition-colors group-hover:text-white" />
               </div>
-              <p className={cn(typography.bodySmall.size, "mt-3 text-white/70 leading-relaxed line-clamp-3")}>
+              <p
+                className={cn(
+                  typography.bodySmall.size,
+                  "mt-3 text-white/70 leading-relaxed line-clamp-3",
+                )}
+              >
                 {memorySummaryPreview}
               </p>
             </button>
@@ -801,14 +896,16 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   "flex items-center justify-between gap-3 rounded-xl border px-4 py-3",
                   !currentSession
                     ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-                    : "border-white/10 bg-[#0c0d13]/85"
+                    : "border-white/10 bg-[#0c0d13]/85",
                 )}
               >
                 <div>
                   <p className="text-sm font-semibold text-white">Autoplay voice</p>
                   <p className="mt-1 text-xs text-white/50">
                     {currentSession
-                      ? (currentSession.voiceAutoplay == null ? "Using character default" : "Session override active")
+                      ? currentSession.voiceAutoplay == null
+                        ? "Using character default"
+                        : "Session override active"
                       : "Open a chat session first"}
                   </p>
                 </div>
@@ -823,14 +920,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   />
                   <label
                     htmlFor="session-voice-autoplay"
-                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all ${effectiveVoiceAutoplay
-                      ? 'bg-emerald-500'
-                      : 'bg-white/20'
-                      } ${currentSession ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all ${
+                      effectiveVoiceAutoplay ? "bg-emerald-500" : "bg-white/20"
+                    } ${currentSession ? "cursor-pointer" : "cursor-not-allowed"}`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${effectiveVoiceAutoplay ? 'translate-x-5' : 'translate-x-0.5'
-                        }`}
+                      className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${
+                        effectiveVoiceAutoplay ? "translate-x-5" : "translate-x-0.5"
+                      }`}
                     />
                   </label>
                 </div>
@@ -867,11 +964,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 interactive.active.scale,
                 !currentSession
                   ? "border-white/5 bg-[#0c0d13]/50 opacity-50 cursor-not-allowed"
-                  : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10"
+                  : "border-white/10 bg-[#0c0d13]/85 hover:border-white/20 hover:bg-white/10",
               )}
             >
               <div className="flex items-start gap-3 min-w-0">
-                <div className={cn("flex h-10 w-10 items-center justify-center", radius.full, "border border-white/15 bg-white/10 text-white/80")}>
+                <div
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center",
+                    radius.full,
+                    "border border-white/15 bg-white/10 text-white/80",
+                  )}
+                >
                   <SlidersHorizontal className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
@@ -882,7 +985,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
                         typography.overline.weight,
                         typography.overline.tracking,
                         typography.overline.transform,
-                        "text-white/50 truncate"
+                        "text-white/50 truncate",
                       )}
                     >
                       Advanced Settings
@@ -895,7 +998,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
                           typography.overline.weight,
                           typography.overline.tracking,
                           typography.overline.transform,
-                          sessionAdvancedSettings ? colors.accent.emerald.subtle : "border-white/10 bg-white/5 text-white/60"
+                          sessionAdvancedSettings
+                            ? colors.accent.emerald.subtle
+                            : "border-white/10 bg-white/5 text-white/60",
                         )}
                       >
                         {sessionAdvancedSettings
@@ -944,10 +1049,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       >
         <MenuSection>
           {personas.length === 0 ? (
-            <div className={cn(
-              radius.lg,
-              "border border-amber-500/20 bg-amber-500/10 px-6 py-4"
-            )}>
+            <div className={cn(radius.lg, "border border-amber-500/20 bg-amber-500/10 px-6 py-4")}>
               <p className={cn(typography.bodySmall.size, "text-amber-200")}>
                 No personas available. Create one in settings first.
               </p>
@@ -957,9 +1059,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
               <PersonaOption
                 title="No Persona"
                 description="Disable persona for this conversation"
-                isSelected={currentSession?.personaId === null || currentSession?.personaId === undefined}
+                isSelected={
+                  currentSession?.personaId === null || currentSession?.personaId === undefined
+                }
                 onClick={() => handleChangePersona(null)}
-                onLongPress={() => { }}
+                onLongPress={() => {}}
               />
               {personas.map((persona) => (
                 <PersonaOption
@@ -990,10 +1094,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       >
         <MenuSection>
           {models.length === 0 ? (
-            <div className={cn(
-              radius.lg,
-              "border border-amber-500/20 bg-amber-500/10 px-6 py-4"
-            )}>
+            <div className={cn(radius.lg, "border border-amber-500/20 bg-amber-500/10 px-6 py-4")}>
               <p className={cn(typography.bodySmall.size, "text-amber-200")}>
                 No models available. Please configure a provider in settings first.
               </p>
@@ -1090,18 +1191,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
                   />
                   <label
                     htmlFor="use-as-default"
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${sessionOverrideEnabled
-                      ? 'bg-emerald-500'
-                      : 'bg-white/20'
-                      }`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all ${
+                      sessionOverrideEnabled ? "bg-emerald-500" : "bg-white/20"
+                    }`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${sessionOverrideEnabled ? 'translate-x-5' : 'translate-x-0.5'
-                        }`}
+                      className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${
+                        sessionOverrideEnabled ? "translate-x-5" : "translate-x-0.5"
+                      }`}
                     />
                   </label>
                 </div>
-
               </div>
 
               {/* Advanced Settings Controls */}
@@ -1121,23 +1221,30 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <label className="text-sm font-medium text-white">Temperature</label>
-                        <p className="mt-0.5 text-xs text-white/50">Controls randomness and creativity</p>
+                        <p className="mt-0.5 text-xs text-white/50">
+                          Controls randomness and creativity
+                        </p>
                       </div>
                       <span className="rounded-lg bg-emerald-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-emerald-200">
                         {sessionAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
                       </span>
                     </div>
                     <input
-                      type="range"
+                      type="number"
+                      inputMode="decimal"
                       min={ADVANCED_TEMPERATURE_RANGE.min}
                       max={ADVANCED_TEMPERATURE_RANGE.max}
                       step={0.01}
-                      value={sessionAdvancedDraft.temperature ?? 0.7}
-                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, temperature: Number(e.target.value) })}
-                      className="w-full"
-                      style={{
-                        background: `linear-gradient(to right, rgb(52, 211, 153) 0%, rgb(52, 211, 153) ${((sessionAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.temperature ?? 0.7) / ADVANCED_TEMPERATURE_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                      value={sessionAdvancedDraft.temperature ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSessionAdvancedDraft({
+                          ...sessionAdvancedDraft,
+                          temperature: raw === "" ? null : Number(raw),
+                        });
                       }}
+                      placeholder="0.70"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                     />
                     <div className="mt-2 flex items-center justify-between text-xs text-white/40">
                       <span>0 - Precise</span>
@@ -1157,16 +1264,21 @@ function ChatSettingsContent({ character }: { character: Character }) {
                       </span>
                     </div>
                     <input
-                      type="range"
+                      type="number"
+                      inputMode="decimal"
                       min={ADVANCED_TOP_P_RANGE.min}
                       max={ADVANCED_TOP_P_RANGE.max}
                       step={0.01}
-                      value={sessionAdvancedDraft.topP ?? 1}
-                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, topP: Number(e.target.value) })}
-                      className="w-full"
-                      style={{
-                        background: `linear-gradient(to right, rgb(96, 165, 250) 0%, rgb(96, 165, 250) ${((sessionAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.topP ?? 1) / ADVANCED_TOP_P_RANGE.max) * 100}%, rgba(255,255,255,0.1) 100%)`
+                      value={sessionAdvancedDraft.topP ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSessionAdvancedDraft({
+                          ...sessionAdvancedDraft,
+                          topP: raw === "" ? null : Number(raw),
+                        });
                       }}
+                      placeholder="1.00"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                     />
                     <div className="mt-2 flex items-center justify-between text-xs text-white/40">
                       <span>0 - Focused</span>
@@ -1184,44 +1296,61 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     <div className="flex gap-2 mb-3">
                       <button
                         type="button"
-                        onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: null })}
-                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${!sessionAdvancedDraft.maxOutputTokens
-                          ? 'bg-purple-400/20 text-purple-200'
-                          : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
-                          }`}
+                        onClick={() =>
+                          setSessionAdvancedDraft({
+                            ...sessionAdvancedDraft,
+                            maxOutputTokens: null,
+                          })
+                        }
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          !sessionAdvancedDraft.maxOutputTokens
+                            ? "bg-purple-400/20 text-purple-200"
+                            : "border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10"
+                        }`}
                       >
                         Auto
                       </button>
                       <button
                         type="button"
-                        onClick={() => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: 1024 })}
-                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${sessionAdvancedDraft.maxOutputTokens
-                          ? 'bg-purple-400/20 text-purple-200'
-                          : 'border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10'
-                          }`}
+                        onClick={() =>
+                          setSessionAdvancedDraft({
+                            ...sessionAdvancedDraft,
+                            maxOutputTokens: 1024,
+                          })
+                        }
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          sessionAdvancedDraft.maxOutputTokens
+                            ? "bg-purple-400/20 text-purple-200"
+                            : "border border-white/10 text-white/60 hover:bg-white/5 active:bg-white/10"
+                        }`}
                       >
                         Custom
                       </button>
                     </div>
 
-                    {sessionAdvancedDraft.maxOutputTokens !== null && sessionAdvancedDraft.maxOutputTokens !== undefined && (
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={ADVANCED_MAX_TOKENS_RANGE.min}
-                        max={ADVANCED_MAX_TOKENS_RANGE.max}
-                        value={sessionAdvancedDraft.maxOutputTokens ?? ''}
-                        onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, maxOutputTokens: Number(e.target.value) })}
-                        placeholder="1024"
-                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
-                      />
-                    )}
+                    {sessionAdvancedDraft.maxOutputTokens !== null &&
+                      sessionAdvancedDraft.maxOutputTokens !== undefined && (
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={ADVANCED_MAX_TOKENS_RANGE.min}
+                          max={ADVANCED_MAX_TOKENS_RANGE.max}
+                          value={sessionAdvancedDraft.maxOutputTokens ?? ""}
+                          onChange={(e) =>
+                            setSessionAdvancedDraft({
+                              ...sessionAdvancedDraft,
+                              maxOutputTokens: Number(e.target.value),
+                            })
+                          }
+                          placeholder="1024"
+                          className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                        />
+                      )}
 
                     <p className="mt-2 text-xs text-white/40">
                       {!sessionAdvancedDraft.maxOutputTokens
-                        ? 'Let the model decide the response length'
-                        : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`
-                      }
+                        ? "Let the model decide the response length"
+                        : `Range: ${ADVANCED_MAX_TOKENS_RANGE.min.toLocaleString()} - ${ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}`}
                     </p>
                   </div>
 
@@ -1230,23 +1359,30 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <label className="text-sm font-medium text-white">Frequency Penalty</label>
-                        <p className="mt-0.5 text-xs text-white/50">Reduce repetition of token sequences</p>
+                        <p className="mt-0.5 text-xs text-white/50">
+                          Reduce repetition of token sequences
+                        </p>
                       </div>
                       <span className="rounded-lg bg-orange-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-orange-200">
                         {sessionAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
                       </span>
                     </div>
                     <input
-                      type="range"
+                      type="number"
+                      inputMode="decimal"
                       min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
                       max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
                       step={0.01}
-                      value={sessionAdvancedDraft.frequencyPenalty ?? 0}
-                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, frequencyPenalty: Number(e.target.value) })}
-                      className="w-full"
-                      style={{
-                        background: `linear-gradient(to right, rgb(251, 146, 60) 0%, rgb(251, 146, 60) ${((sessionAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.frequencyPenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                      value={sessionAdvancedDraft.frequencyPenalty ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSessionAdvancedDraft({
+                          ...sessionAdvancedDraft,
+                          frequencyPenalty: raw === "" ? null : Number(raw),
+                        });
                       }}
+                      placeholder="0.00"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                     />
                     <div className="mt-2 flex items-center justify-between text-xs text-white/40">
                       <span>-2 - More Rep.</span>
@@ -1259,23 +1395,30 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <label className="text-sm font-medium text-white">Presence Penalty</label>
-                        <p className="mt-0.5 text-xs text-white/50">Encourage discussing new topics</p>
+                        <p className="mt-0.5 text-xs text-white/50">
+                          Encourage discussing new topics
+                        </p>
                       </div>
                       <span className="rounded-lg bg-pink-400/15 px-2.5 py-1 text-sm font-mono font-semibold text-pink-200">
                         {sessionAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
                       </span>
                     </div>
                     <input
-                      type="range"
+                      type="number"
+                      inputMode="decimal"
                       min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
                       max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
                       step={0.01}
-                      value={sessionAdvancedDraft.presencePenalty ?? 0}
-                      onChange={(e) => setSessionAdvancedDraft({ ...sessionAdvancedDraft, presencePenalty: Number(e.target.value) })}
-                      className="w-full"
-                      style={{
-                        background: `linear-gradient(to right, rgb(244, 114, 182) 0%, rgb(244, 114, 182) ${((sessionAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) ${((sessionAdvancedDraft.presencePenalty ?? 0) + 2) / 4 * 100}%, rgba(255,255,255,0.1) 100%)`
+                      value={sessionAdvancedDraft.presencePenalty ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSessionAdvancedDraft({
+                          ...sessionAdvancedDraft,
+                          presencePenalty: raw === "" ? null : Number(raw),
+                        });
                       }}
+                      placeholder="0.00"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3.5 py-3 text-base text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                     />
                     <div className="mt-2 flex items-center justify-between text-xs text-white/40">
                       <span>-2 - Repeat</span>
@@ -1294,9 +1437,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
                       inputMode="numeric"
                       min={ADVANCED_TOP_K_RANGE.min}
                       max={ADVANCED_TOP_K_RANGE.max}
-                      value={sessionAdvancedDraft.topK ?? ''}
+                      value={sessionAdvancedDraft.topK ?? ""}
                       onChange={(e) => {
-                        const val = e.target.value === '' ? null : Number(e.target.value);
+                        const val = e.target.value === "" ? null : Number(e.target.value);
                         setSessionAdvancedDraft({ ...sessionAdvancedDraft, topK: val });
                       }}
                       placeholder="40"
@@ -1324,7 +1467,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <button
                   type="button"
                   onClick={() =>
-                    handleSaveSessionAdvancedSettings(sessionOverrideEnabled ? sessionAdvancedDraft : null)
+                    handleSaveSessionAdvancedSettings(
+                      sessionOverrideEnabled ? sessionAdvancedDraft : null,
+                    )
                   }
                   className="flex-1 rounded-xl bg-emerald-400/20 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/25 active:scale-[0.99]"
                 >
@@ -1352,8 +1497,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
           <ProviderParameterSupportInfo
             providerId={(() => {
               const effectiveModelId = getEffectiveModelId();
-              const model = models.find(m => m.id === effectiveModelId);
-              return model?.providerId || 'openai';
+              const model = models.find((m) => m.id === effectiveModelId);
+              return model?.providerId || "openai";
             })()}
           />
         </MenuSection>

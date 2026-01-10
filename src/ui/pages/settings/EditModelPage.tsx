@@ -11,7 +11,19 @@ import {
   ADVANCED_REASONING_BUDGET_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
 import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
-import { Loader2, FileText, Info, Settings, Brain, RefreshCw, ChevronDown, Check, Search, ChevronRight, HelpCircle } from "lucide-react";
+import {
+  Loader2,
+  FileText,
+  Info,
+  Settings,
+  Brain,
+  RefreshCw,
+  ChevronDown,
+  Check,
+  Search,
+  ChevronRight,
+  HelpCircle,
+} from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
@@ -83,7 +95,7 @@ export function EditModelPage() {
     }
   }, [showModelSelector]);
 
-  const filteredModels = fetchedModels.filter(m => {
+  const filteredModels = fetchedModels.filter((m) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -96,10 +108,12 @@ export function EditModelPage() {
   // Get reasoning support for the current provider
   const reasoningSupport: ReasoningSupport = editorModel?.providerId
     ? getProviderReasoningSupport(editorModel.providerId)
-    : 'none';
-  const showReasoningSection = reasoningSupport !== 'none';
-  const isAutoReasoning = reasoningSupport === 'auto';
-  const showEffortOptions = reasoningSupport === 'effort' || reasoningSupport === 'dynamic';
+    : "none";
+  const showReasoningSection = reasoningSupport !== "none";
+  const isAutoReasoning = reasoningSupport === "auto";
+  const showEffortOptions = reasoningSupport === "effort" || reasoningSupport === "dynamic";
+  const numberInputClassName =
+    "w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none";
 
   // Register window globals for header save button
   useEffect(() => {
@@ -142,7 +156,7 @@ export function EditModelPage() {
   const toggleScope = (
     key: "inputScopes" | "outputScopes",
     scope: "image" | "audio",
-    enabled: boolean
+    enabled: boolean,
   ) => {
     if (!editorModel) return;
     const current = new Set((editorModel as any)[key] ?? ["text"]);
@@ -188,7 +202,9 @@ export function EditModelPage() {
           )}
 
           <div className="space-y-2">
-            <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model Platform</label>
+            <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+              Model Platform
+            </label>
             {providers.length === 0 ? (
               <div className="rounded-xl border border-orange-400/40 bg-orange-500/10 px-3 py-2 text-sm text-orange-200">
                 No providers configured. Add a provider first.
@@ -205,10 +221,14 @@ export function EditModelPage() {
                       {getProviderIcon(editorModel.providerId)}
                     </div>
                     <span className="truncate">
-                      {providers.find(p => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel)?.label
-                        || editorModel.providerLabel
-                        || editorModel.providerId
-                        || "Select Platform..."}
+                      {providers.find(
+                        (p) =>
+                          p.providerId === editorModel.providerId &&
+                          p.label === editorModel.providerLabel,
+                      )?.label ||
+                        editorModel.providerLabel ||
+                        editorModel.providerId ||
+                        "Select Platform..."}
                     </span>
                   </div>
                   <ChevronDown className="h-4 w-4 text-white/40" />
@@ -221,15 +241,27 @@ export function EditModelPage() {
                 >
                   <MenuSection>
                     {providers.map((prov) => {
-                      const isSelected = prov.providerId === editorModel.providerId && prov.label === editorModel.providerLabel;
+                      const isSelected =
+                        prov.providerId === editorModel.providerId &&
+                        prov.label === editorModel.providerLabel;
                       return (
                         <MenuButton
                           key={prov.id}
                           icon={getProviderIcon(prov.providerId)}
                           title={prov.label || prov.providerId}
                           description={prov.providerId}
-                          color={isSelected ? "from-emerald-500 to-emerald-600" : "from-white/10 to-white/5"}
-                          rightElement={isSelected ? <Check className="h-4 w-4 text-emerald-400" /> : <ChevronRight className="h-4 w-4 text-white/20" />}
+                          color={
+                            isSelected
+                              ? "from-emerald-500 to-emerald-600"
+                              : "from-white/10 to-white/5"
+                          }
+                          rightElement={
+                            isSelected ? (
+                              <Check className="h-4 w-4 text-emerald-400" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-white/20" />
+                            )
+                          }
                           onClick={() => {
                             handleProviderSelection(prov.providerId, prov.label || prov.providerId);
                             setShowPlatformSelector(false);
@@ -248,7 +280,9 @@ export function EditModelPage() {
           {/* 2. MODEL NAME & ID */}
           <div className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Display Name</label>
+              <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+                Display Name
+              </label>
               <input
                 type="text"
                 value={editorModel.displayName}
@@ -260,7 +294,9 @@ export function EditModelPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model ID</label>
+                <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+                  Model ID
+                </label>
                 <div className="flex items-center gap-3">
                   {fetchedModels.length > 0 && (
                     <button
@@ -291,7 +327,9 @@ export function EditModelPage() {
                     className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition hover:bg-black/30 active:scale-[0.99]"
                   >
                     <span className={cn("block truncate", !editorModel.name && "text-white/40")}>
-                      {fetchedModels.find(m => m.id === editorModel.name)?.displayName || editorModel.name || "Select a model..."}
+                      {fetchedModels.find((m) => m.id === editorModel.name)?.displayName ||
+                        editorModel.name ||
+                        "Select a model..."}
                     </span>
                     <ChevronDown className="h-4 w-4 text-white/40" />
                   </button>
@@ -306,7 +344,7 @@ export function EditModelPage() {
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                         <input
                           value={searchQuery}
-                          onChange={e => setSearchQuery(e.target.value)}
+                          onChange={(e) => setSearchQuery(e.target.value)}
                           placeholder="Search models..."
                           className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
                           autoFocus
@@ -315,7 +353,7 @@ export function EditModelPage() {
                     </div>
                     <MenuSection>
                       {filteredModels.length > 0 ? (
-                        filteredModels.map(m => {
+                        filteredModels.map((m) => {
                           const isSelected = m.id === editorModel.name;
                           return (
                             <MenuButton
@@ -324,7 +362,11 @@ export function EditModelPage() {
                               title={m.displayName || m.id}
                               description={m.description || m.id}
                               color="from-emerald-500 to-emerald-600"
-                              rightElement={isSelected ? <Check className="h-4 w-4 text-emerald-400" /> : undefined}
+                              rightElement={
+                                isSelected ? (
+                                  <Check className="h-4 w-4 text-emerald-400" />
+                                ) : undefined
+                              }
                               onClick={() => handleSelectModel(m.id, m.displayName)}
                             />
                           );
@@ -364,13 +406,15 @@ export function EditModelPage() {
                 </div>
                 <div className="text-left">
                   <span className="block text-sm font-semibold text-white">Advanced Settings</span>
-                  <span className="block text-[11px] text-white/40 uppercase tracking-wider">Parameters, Prompt, & Capabilities</span>
+                  <span className="block text-[11px] text-white/40 uppercase tracking-wider">
+                    Parameters, Prompt, & Capabilities
+                  </span>
                 </div>
               </div>
               <ChevronRight
                 className={cn(
                   "h-5 w-5 text-white/20 transition-transform duration-300",
-                  isAdvancedOpen && "rotate-90"
+                  isAdvancedOpen && "rotate-90",
                 )}
               />
             </button>
@@ -383,7 +427,9 @@ export function EditModelPage() {
               >
                 {/* System Prompt Template */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">System Prompt Template</label>
+                  <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+                    System Prompt Template
+                  </label>
                   {loadingTemplates ? (
                     <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
                       <Loader2 className="h-4 w-4 animate-spin text-white/50" />
@@ -397,9 +443,11 @@ export function EditModelPage() {
                         onChange={(e) => handlePromptTemplateChange(e.target.value)}
                         className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 pl-10 text-sm text-white transition focus:border-white/30 focus:outline-none"
                       >
-                        <option value="" className="bg-[#16171d]">Use app default</option>
+                        <option value="" className="bg-[#16171d]">
+                          Use app default
+                        </option>
                         {promptTemplates
-                          .filter(t => t.name !== "App Default")
+                          .filter((t) => t.name !== "App Default")
                           .map((template) => (
                             <option key={template.id} value={template.id} className="bg-[#16171d]">
                               {template.name}
@@ -415,8 +463,12 @@ export function EditModelPage() {
                 <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Capabilities</p>
-                      <p className="mt-1 text-xs text-white/40">Supported input/output modalities</p>
+                      <p className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+                        Capabilities
+                      </p>
+                      <p className="mt-1 text-xs text-white/40">
+                        Supported input/output modalities
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -430,17 +482,25 @@ export function EditModelPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
-                      <p className="text-[10px] font-bold tracking-wider text-white/20 uppercase">Input</p>
+                      <p className="text-[10px] font-bold tracking-wider text-white/20 uppercase">
+                        Input
+                      </p>
                       {["image", "audio"].map((scope) => (
                         <button
                           key={scope}
                           type="button"
-                          onClick={() => toggleScope("inputScopes", scope as any, !editorModel.inputScopes?.includes(scope as any))}
+                          onClick={() =>
+                            toggleScope(
+                              "inputScopes",
+                              scope as any,
+                              !editorModel.inputScopes?.includes(scope as any),
+                            )
+                          }
                           className={cn(
                             "flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition",
                             editorModel.inputScopes?.includes(scope as any)
                               ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                              : "bg-black/20 text-white/40 border border-transparent"
+                              : "bg-black/20 text-white/40 border border-transparent",
                           )}
                         >
                           <span className="capitalize">{scope}</span>
@@ -450,17 +510,25 @@ export function EditModelPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <p className="text-[10px] font-bold tracking-wider text-white/20 uppercase">Output</p>
+                      <p className="text-[10px] font-bold tracking-wider text-white/20 uppercase">
+                        Output
+                      </p>
                       {["image", "audio"].map((scope) => (
                         <button
                           key={scope}
                           type="button"
-                          onClick={() => toggleScope("outputScopes", scope as any, !editorModel.outputScopes?.includes(scope as any))}
+                          onClick={() =>
+                            toggleScope(
+                              "outputScopes",
+                              scope as any,
+                              !editorModel.outputScopes?.includes(scope as any),
+                            )
+                          }
                           className={cn(
                             "flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition",
                             editorModel.outputScopes?.includes(scope as any)
                               ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                              : "bg-black/20 text-white/40 border border-transparent"
+                              : "bg-black/20 text-white/40 border border-transparent",
                           )}
                         >
                           <span className="capitalize">{scope}</span>
@@ -474,7 +542,9 @@ export function EditModelPage() {
                 {/* Parameters */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">Model Parameters</label>
+                    <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+                      Model Parameters
+                    </label>
                     <button
                       type="button"
                       onClick={() => setShowParameterSupport(true)}
@@ -490,8 +560,12 @@ export function EditModelPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="space-y-0.5">
-                            <span className="block text-xs font-medium text-white/70">Temperature</span>
-                            <span className="block text-[10px] text-white/40">Higher = more creative</span>
+                            <span className="block text-xs font-medium text-white/70">
+                              Temperature
+                            </span>
+                            <span className="block text-[10px] text-white/40">
+                              Higher = more creative
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -507,13 +581,18 @@ export function EditModelPage() {
                         </span>
                       </div>
                       <input
-                        type="range"
+                        type="number"
+                        inputMode="decimal"
                         min={ADVANCED_TEMPERATURE_RANGE.min}
                         max={ADVANCED_TEMPERATURE_RANGE.max}
                         step={0.01}
-                        value={modelAdvancedDraft.temperature ?? 0.7}
-                        onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
-                        className="w-full"
+                        value={modelAdvancedDraft.temperature ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          handleTemperatureChange(raw === "" ? null : Number(raw));
+                        }}
+                        placeholder="0.70"
+                        className={numberInputClassName}
                       />
                       <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
                         <span>{ADVANCED_TEMPERATURE_RANGE.min}</span>
@@ -527,7 +606,9 @@ export function EditModelPage() {
                         <div className="flex items-center gap-2">
                           <div className="space-y-0.5">
                             <span className="block text-xs font-medium text-white/70">Top P</span>
-                            <span className="block text-[10px] text-white/40">Lower = more focused</span>
+                            <span className="block text-[10px] text-white/40">
+                              Lower = more focused
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -543,13 +624,18 @@ export function EditModelPage() {
                         </span>
                       </div>
                       <input
-                        type="range"
+                        type="number"
+                        inputMode="decimal"
                         min={ADVANCED_TOP_P_RANGE.min}
                         max={ADVANCED_TOP_P_RANGE.max}
                         step={0.01}
-                        value={modelAdvancedDraft.topP ?? 1}
-                        onChange={(e) => handleTopPChange(parseFloat(e.target.value))}
-                        className="w-full"
+                        value={modelAdvancedDraft.topP ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          handleTopPChange(raw === "" ? null : Number(raw));
+                        }}
+                        placeholder="1.00"
+                        className={numberInputClassName}
                       />
                       <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
                         <span>{ADVANCED_TOP_P_RANGE.min}</span>
@@ -562,8 +648,12 @@ export function EditModelPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="space-y-0.5">
-                            <span className="block text-xs font-medium text-white/70">Max Output Tokens</span>
-                            <span className="block text-[10px] text-white/40">Limit response length</span>
+                            <span className="block text-xs font-medium text-white/70">
+                              Max Output Tokens
+                            </span>
+                            <span className="block text-[10px] text-white/40">
+                              Limit response length
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -575,20 +665,32 @@ export function EditModelPage() {
                           </button>
                         </div>
                         <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
-                          {modelAdvancedDraft.maxOutputTokens?.toLocaleString() ?? "Auto"}
+                          {modelAdvancedDraft.maxOutputTokens
+                            ? modelAdvancedDraft.maxOutputTokens.toLocaleString()
+                            : "Auto"}
                         </span>
                       </div>
                       <input
-                        type="range"
-                        min={0}
+                        type="number"
+                        inputMode="numeric"
+                        min={ADVANCED_MAX_TOKENS_RANGE.min}
                         max={ADVANCED_MAX_TOKENS_RANGE.max}
                         step={1}
-                        value={modelAdvancedDraft.maxOutputTokens ?? 0}
-                        onChange={(e) => handleMaxTokensChange(e.target.value === "0" ? null : parseInt(e.target.value))}
-                        className="w-full"
+                        value={modelAdvancedDraft.maxOutputTokens || ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const next = raw === "" ? null : Number(raw);
+                          handleMaxTokensChange(
+                            next === null || !Number.isFinite(next) || next === 0
+                              ? null
+                              : Math.trunc(next),
+                          );
+                        }}
+                        placeholder="Auto"
+                        className={numberInputClassName}
                       />
                       <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
-                        <span>Auto (0)</span>
+                        <span>Auto</span>
                         <span>{ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}</span>
                       </div>
                     </div>
@@ -599,8 +701,12 @@ export function EditModelPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="space-y-0.5">
-                              <span className="block text-xs font-medium text-white/70">Frequency Penalty</span>
-                              <span className="block text-[10px] text-white/40">Reduce word repetition</span>
+                              <span className="block text-xs font-medium text-white/70">
+                                Frequency Penalty
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Reduce word repetition
+                              </span>
                             </div>
                             <button
                               type="button"
@@ -616,13 +722,18 @@ export function EditModelPage() {
                           </span>
                         </div>
                         <input
-                          type="range"
+                          type="number"
+                          inputMode="decimal"
                           min={ADVANCED_FREQUENCY_PENALTY_RANGE.min}
                           max={ADVANCED_FREQUENCY_PENALTY_RANGE.max}
                           step={0.01}
-                          value={modelAdvancedDraft.frequencyPenalty ?? 0}
-                          onChange={(e) => handleFrequencyPenaltyChange(parseFloat(e.target.value))}
-                          className="w-full"
+                          value={modelAdvancedDraft.frequencyPenalty ?? ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            handleFrequencyPenaltyChange(raw === "" ? null : Number(raw));
+                          }}
+                          placeholder="0.00"
+                          className={numberInputClassName}
                         />
                         <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
                           <span>{ADVANCED_FREQUENCY_PENALTY_RANGE.min}</span>
@@ -634,8 +745,12 @@ export function EditModelPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="space-y-0.5">
-                              <span className="block text-xs font-medium text-white/70">Presence Penalty</span>
-                              <span className="block text-[10px] text-white/40">Encourage new topics</span>
+                              <span className="block text-xs font-medium text-white/70">
+                                Presence Penalty
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Encourage new topics
+                              </span>
                             </div>
                             <button
                               type="button"
@@ -651,13 +766,18 @@ export function EditModelPage() {
                           </span>
                         </div>
                         <input
-                          type="range"
+                          type="number"
+                          inputMode="decimal"
                           min={ADVANCED_PRESENCE_PENALTY_RANGE.min}
                           max={ADVANCED_PRESENCE_PENALTY_RANGE.max}
                           step={0.01}
-                          value={modelAdvancedDraft.presencePenalty ?? 0}
-                          onChange={(e) => handlePresencePenaltyChange(parseFloat(e.target.value))}
-                          className="w-full"
+                          value={modelAdvancedDraft.presencePenalty ?? ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            handlePresencePenaltyChange(raw === "" ? null : Number(raw));
+                          }}
+                          placeholder="0.00"
+                          className={numberInputClassName}
                         />
                         <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
                           <span>{ADVANCED_PRESENCE_PENALTY_RANGE.min}</span>
@@ -672,7 +792,9 @@ export function EditModelPage() {
                         <div className="flex items-center gap-2">
                           <div className="space-y-0.5">
                             <span className="block text-xs font-medium text-white/70">Top K</span>
-                            <span className="block text-[10px] text-white/40">Sample from top K tokens</span>
+                            <span className="block text-[10px] text-white/40">
+                              Sample from top K tokens
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -684,20 +806,30 @@ export function EditModelPage() {
                           </button>
                         </div>
                         <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
-                          {modelAdvancedDraft.topK ?? "Auto"}
+                          {modelAdvancedDraft.topK ? modelAdvancedDraft.topK : "Auto"}
                         </span>
                       </div>
                       <input
-                        type="range"
-                        min={0}
+                        type="number"
+                        inputMode="numeric"
+                        min={ADVANCED_TOP_K_RANGE.min}
                         max={ADVANCED_TOP_K_RANGE.max}
                         step={1}
-                        value={modelAdvancedDraft.topK ?? 0}
-                        onChange={(e) => handleTopKChange(e.target.value === "0" ? null : parseInt(e.target.value))}
-                        className="w-full"
+                        value={modelAdvancedDraft.topK || ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const next = raw === "" ? null : Number(raw);
+                          handleTopKChange(
+                            next === null || !Number.isFinite(next) || next === 0
+                              ? null
+                              : Math.trunc(next),
+                          );
+                        }}
+                        placeholder="Auto"
+                        className={numberInputClassName}
                       />
                       <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
-                        <span>Auto (0)</span>
+                        <span>Auto</span>
                         <span>{ADVANCED_TOP_K_RANGE.max}</span>
                       </div>
                     </div>
@@ -708,7 +840,9 @@ export function EditModelPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Brain size={14} className="text-amber-400" />
-                            <label className="text-xs font-medium text-white/70">Reasoning (Thinking)</label>
+                            <label className="text-xs font-medium text-white/70">
+                              Reasoning (Thinking)
+                            </label>
                             <button
                               type="button"
                               onClick={() => openDocs("models", "reasoning-mode")}
@@ -726,14 +860,22 @@ export function EditModelPage() {
                                 onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
                                 className="sr-only"
                               />
-                              <span className={cn(
-                                "inline-block h-full w-full rounded-full transition-colors duration-200",
-                                modelAdvancedDraft.reasoningEnabled ? "bg-amber-500" : "bg-white/10"
-                              )} />
-                              <span className={cn(
-                                "absolute h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-200",
-                                modelAdvancedDraft.reasoningEnabled ? "translate-x-4.5" : "translate-x-1"
-                              )} />
+                              <span
+                                className={cn(
+                                  "inline-block h-full w-full rounded-full transition-colors duration-200",
+                                  modelAdvancedDraft.reasoningEnabled
+                                    ? "bg-amber-500"
+                                    : "bg-white/10",
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  "absolute h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-200",
+                                  modelAdvancedDraft.reasoningEnabled
+                                    ? "translate-x-4.5"
+                                    : "translate-x-1",
+                                )}
+                              />
                             </label>
                           )}
                         </div>
@@ -742,47 +884,68 @@ export function EditModelPage() {
                           <div className="space-y-6 pl-2 border-l border-white/10">
                             {showEffortOptions && (
                               <div className="space-y-3">
-                                <span className="text-[10px] font-bold text-white/30 uppercase">Reasoning Effort</span>
+                                <span className="text-[10px] font-bold text-white/30 uppercase">
+                                  Reasoning Effort
+                                </span>
                                 <div className="grid grid-cols-4 gap-2">
-                                  {([null, 'low', 'medium', 'high'] as const).map((level) => (
+                                  {([null, "low", "medium", "high"] as const).map((level) => (
                                     <button
-                                      key={level || 'auto'}
+                                      key={level || "auto"}
                                       type="button"
                                       onClick={() => handleReasoningEffortChange(level)}
                                       className={cn(
                                         "rounded-lg py-1.5 text-[10px] font-bold uppercase transition",
                                         modelAdvancedDraft.reasoningEffort === level
                                           ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                          : "bg-white/5 text-white/30 border border-transparent hover:text-white/50"
+                                          : "bg-white/5 text-white/30 border border-transparent hover:text-white/50",
                                       )}
                                     >
-                                      {level || 'auto'}
+                                      {level || "auto"}
                                     </button>
                                   ))}
                                 </div>
                               </div>
                             )}
 
-                            {(reasoningSupport === 'budget-only' || reasoningSupport === 'dynamic') && (
+                            {(reasoningSupport === "budget-only" ||
+                              reasoningSupport === "dynamic") && (
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-bold text-white/30 uppercase">Budget Tokens</span>
+                                  <span className="text-[10px] font-bold text-white/30 uppercase">
+                                    Budget Tokens
+                                  </span>
                                   <span className="font-mono text-xs text-amber-400">
-                                    {modelAdvancedDraft.reasoningBudgetTokens?.toLocaleString() || "Auto"}
+                                    {modelAdvancedDraft.reasoningBudgetTokens
+                                      ? modelAdvancedDraft.reasoningBudgetTokens.toLocaleString()
+                                      : "Auto"}
                                   </span>
                                 </div>
                                 <input
-                                  type="range"
+                                  type="number"
+                                  inputMode="numeric"
                                   min={ADVANCED_REASONING_BUDGET_RANGE.min}
                                   max={ADVANCED_REASONING_BUDGET_RANGE.max}
                                   step={1024}
-                                  value={modelAdvancedDraft.reasoningBudgetTokens || 8192}
-                                  onChange={(e) => handleReasoningBudgetChange(parseInt(e.target.value))}
-                                  className="w-full"
+                                  value={modelAdvancedDraft.reasoningBudgetTokens || ""}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const next = raw === "" ? null : Number(raw);
+                                    handleReasoningBudgetChange(
+                                      next === null || !Number.isFinite(next) || next === 0
+                                        ? null
+                                        : Math.trunc(next),
+                                    );
+                                  }}
+                                  placeholder="Auto"
+                                  className={numberInputClassName}
                                 />
                                 <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
-                                  <span>{ADVANCED_REASONING_BUDGET_RANGE.min.toLocaleString()}</span>
-                                  <span>{ADVANCED_REASONING_BUDGET_RANGE.max.toLocaleString()}</span>
+                                  <span>
+                                    {ADVANCED_REASONING_BUDGET_RANGE.min.toLocaleString()}
+                                  </span>
+                                  <span>
+                                    {ADVANCED_REASONING_BUDGET_RANGE.max.toLocaleString()}
+                                  </span>
                                 </div>
                               </div>
                             )}
@@ -797,7 +960,6 @@ export function EditModelPage() {
           </div>
 
           <div className="h-px bg-white/5" />
-
         </motion.div>
       </main>
 
@@ -808,10 +970,9 @@ export function EditModelPage() {
         title="Parameter Support"
       >
         <div className="px-4 pb-8">
-          <ProviderParameterSupportInfo providerId={editorModel?.providerId || 'openai'} />
+          <ProviderParameterSupportInfo providerId={editorModel?.providerId || "openai"} />
         </div>
       </BottomMenu>
-
     </div>
   );
 }
