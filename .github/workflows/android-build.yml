@@ -163,13 +163,11 @@ jobs:
             exit 1
           fi
 
-          base64 -d <<< "$ANDROID_KEY_BASE64" > "$RUNNER_TEMP/keystore.jks"
+          base64 -d <<< "$ANDROID_KEY_BASE64" > "$RUNNER_TEMP/upload-keystore.jks"
 
           cat > src-tauri/gen/android/keystore.properties << EOF
-          keyAlias=$ANDROID_KEY_ALIAS
-          keyPassword=$KEY_PASS
-          storePassword=$STORE_PASS
-          storeFile=$RUNNER_TEMP/keystore.jks
+          keyAlias=upload
+          storeFile=$RUNNER_TEMP/upload-keystore.jks
           password=$STORE_PASS
           EOF
 
@@ -211,7 +209,7 @@ jobs:
           PY
 
           {
-            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/keystore.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload-keystore.jks"
             echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
             echo "ANDROID_KEY_PASSWORD=$KEY_PASS"
           } >> "$GITHUB_ENV"
@@ -229,7 +227,7 @@ jobs:
           env \
             "ORG_GRADLE_PROJECT_android.injected.signing.store.file=$ANDROID_KEYSTORE_PATH" \
             "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEY_PASSWORD" \
-            "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=$ANDROID_KEY_ALIAS" \
+            "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=upload" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.password=$ANDROID_KEY_PASSWORD" \
             pnpm tauri android build --ci --config src-tauri/dev-config.json --apk true --aab false
 
