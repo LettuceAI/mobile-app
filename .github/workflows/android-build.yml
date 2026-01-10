@@ -231,12 +231,13 @@ jobs:
             "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEY_PASSWORD" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=$ANDROID_KEY_ALIAS" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.password=$ANDROID_KEY_PASSWORD" \
-            pnpm tauri android build --ci --config src-tauri/dev-config.json
+            pnpm tauri android build --ci --config src-tauri/dev-config.json --apk true --aab false
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build
+          if-no-files-found: error
           path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/release/*-release.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*-release.aab
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
