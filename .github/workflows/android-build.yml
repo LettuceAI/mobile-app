@@ -62,17 +62,6 @@ jobs:
             i686-linux-android \
             x86_64-linux-android
 
-      - name: Setup Android signing
-        working-directory: src-tauri/gen/android
-        run: |
-          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" > keystore.properties
-          echo "password=${{ secrets.ANDROID_KEY_PASSWORD }}" >> keystore.properties
-
-          # Rebuild the keystore file from base64
-          base64 -d <<< "${{ secrets.ANDROID_KEY_BASE64 }}" > "$RUNNER_TEMP/keystore.jks"
-
-          echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
-
       - name: Provide Android AR/RANLIB shims for OpenSSL
         run: |
           NDK="${{ steps.setup-ndk.outputs.ndk-path }}"
@@ -152,6 +141,76 @@ jobs:
           }
           EOF
 
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Init Android project (Dev build)
+        run: |
+          rm -rf src-tauri/gen/android
+          pnpm tauri android init --ci --config dev-config.json
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          STORE_PASS="${ANDROID_KEYSTORE_PASSWORD:-$ANDROID_KEY_PASSWORD}"
+          KEY_PASS="${ANDROID_KEY_PASSWORD:-$STORE_PASS}"
+
+          if [ -z "$ANDROID_KEY_BASE64" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$STORE_PASS" ]; then
+            echo "Missing Android signing secrets."
+            exit 1
+          fi
+
+          base64 -d <<< "$ANDROID_KEY_BASE64" > "$RUNNER_TEMP/keystore.jks"
+
+          cat > src-tauri/gen/android/keystore.properties << EOF
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$KEY_PASS
+          storePassword=$STORE_PASS
+          storeFile=$RUNNER_TEMP/keystore.jks
+          password=$STORE_PASS
+          EOF
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path("src-tauri/gen/android/app/build.gradle.kts")
+          text = path.read_text()
+
+          key_block = """            val keyPasswordValue = (keystoreProperties["keyPassword"] as String?)
+                  ?: (keystoreProperties["password"] as String?)
+              val storePasswordValue = (keystoreProperties["storePassword"] as String?)
+                  ?: (keystoreProperties["password"] as String?)
+
+              keyPassword = keyPasswordValue
+                  ?: throw GradleException("Missing keystore key password")"""
+
+          text, key_count = re.subn(
+              r'^\\s*keyPassword\\s*=\\s*keystoreProperties\\["password"\\]\\s+as\\s+String\\s*$',
+              key_block,
+              text,
+              flags=re.M,
+          )
+
+          text, store_count = re.subn(
+              r'^\\s*storePassword\\s*=\\s*keystoreProperties\\["password"\\]\\s+as\\s+String\\s*$',
+              '            storePassword = storePasswordValue\\n'
+              '                ?: throw GradleException("Missing keystore store password")',
+              text,
+              flags=re.M,
+          )
+
+          if key_count == 0 or store_count == 0:
+              print("Signing config patch: no changes applied", file=sys.stderr)
+
+          path.write_text(text)
+          PY
+
       - name: Build Tauri Android app (Dev build)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
@@ -159,112 +218,9 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/keystore.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           RUST_BACKTRACE: 1
           RUSTFLAGS: "--cfg DEV_BUILD"
         run: |
-          pnpm install
-          rm -rf src-tauri/gen/android
-          pnpm tauri android init --ci --config dev-config.json
-          cat > src-tauri/gen/android/app/build.gradle.kts <<'EOF'
-          import java.util.Properties
-          import java.io.FileInputStream
-
-          plugins {
-              id("com.android.application")
-              id("org.jetbrains.kotlin.android")
-              id("rust")
-          }
-
-          val tauriProperties = Properties().apply {
-              val propFile = file("tauri.properties")
-              if (propFile.exists()) {
-                  propFile.inputStream().use { load(it) }
-              }
-          }
-
-          android {
-              compileSdk = 36
-              namespace = "com.lettuceai.app"
-              defaultConfig {
-                  manifestPlaceholders["usesCleartextTraffic"] = "false"
-                  applicationId = "com.lettuceai.app"
-                  minSdk = 24
-                  targetSdk = 36
-                  versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
-                  versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
-              }
-
-              signingConfigs {
-                  create("release") {
-                      val storePath = System.getenv("ANDROID_KEYSTORE_PATH")
-                      val storePass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                      val keyAliasEnv = System.getenv("ANDROID_KEY_ALIAS")
-                      val keyPassEnv = System.getenv("ANDROID_KEY_PASSWORD")
-
-                      if (storePath == null || storePass == null || keyAliasEnv == null || keyPassEnv == null) {
-                          throw GradleException("Missing Android signing environment variables")
-                      }
-
-                      storeFile = file(storePath)
-                      storePassword = storePass
-                      keyAlias = keyAliasEnv
-                      keyPassword = keyPassEnv
-                  }
-              }
-
-              buildTypes {
-                  getByName("debug") {
-                      manifestPlaceholders["usesCleartextTraffic"] = "true"
-                      isDebuggable = true
-                      isJniDebuggable = true
-                      isMinifyEnabled = false
-                      packaging {
-                          jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
-                          jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
-                          jniLibs.keepDebugSymbols.add("*/x86/*.so")
-                          jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
-                      }
-                  }
-                  getByName("release") {
-                      isMinifyEnabled = true
-                      signingConfig = signingConfigs.getByName("release")
-                      proguardFiles(
-                          *fileTree(".") { include("**/*.pro") }
-                              .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
-                              .toList().toTypedArray()
-                      )
-                  }
-              }
-
-              kotlinOptions {
-                  jvmTarget = "1.8"
-              }
-
-              buildFeatures {
-                  buildConfig = true
-              }
-          }
-
-          rust {
-              rootDirRel = "../../../"
-          }
-
-          dependencies {
-              implementation("androidx.webkit:webkit:1.14.0")
-              implementation("androidx.appcompat:appcompat:1.7.1")
-              implementation("androidx.activity:activity-ktx:1.10.1")
-              implementation("com.google.android.material:material:1.12.0")
-              testImplementation("junit:junit:4.13.2")
-              androidTestImplementation("androidx.test.ext:junit:1.1.4")
-              androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
-          }
-
-          apply(from = "tauri.build.gradle.kts")
-          EOF
           pnpm tauri android build --ci --config dev-config.json
 
       - name: Upload Android artifacts
