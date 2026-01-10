@@ -1,7 +1,20 @@
-import { Edit3, Copy, RotateCcw, Trash2, Pin, PinOff, Brain, GitBranch, Users, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Edit3,
+  Copy,
+  RotateCcw,
+  Trash2,
+  Pin,
+  PinOff,
+  Brain,
+  GitBranch,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { BottomMenu } from "../../../components/BottomMenu";
-import type { StoredMessage } from "../../../../core/storage/schemas";
+import type { StoredMessage, Settings, Model } from "../../../../core/storage/schemas";
 import { cn, radius } from "../../../design-tokens";
+import { readSettings } from "../../../../core/storage/repo";
 
 interface MessageActionState {
   message: StoredMessage;
@@ -27,6 +40,7 @@ interface MessageActionsBottomSheetProps {
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   setMessageAction: (value: MessageActionState | null) => void;
   characterMemoryType?: string | null;
+  characterDefaultModelId?: string | null;
 }
 
 // Action row component
@@ -36,7 +50,7 @@ function ActionRow({
   onClick,
   disabled = false,
   variant = "default",
-  iconBg
+  iconBg,
 }: {
   icon: LucideIcon;
   label: string;
@@ -53,21 +67,23 @@ function ActionRow({
         "flex w-full items-center gap-3 px-1 py-2.5 transition-all rounded-lg",
         "hover:bg-white/5 active:bg-white/10",
         "disabled:opacity-40 disabled:pointer-events-none",
-        variant === "danger" && "hover:bg-red-500/10"
+        variant === "danger" && "hover:bg-red-500/10",
       )}
     >
-      <div className={cn(
-        "flex items-center justify-center w-8 h-8 rounded-lg",
-        iconBg || "bg-white/10"
-      )}>
-        <Icon size={16} className={cn(
-          variant === "danger" ? "text-red-400" : "text-white"
-        )} />
+      <div
+        className={cn(
+          "flex items-center justify-center w-8 h-8 rounded-lg",
+          iconBg || "bg-white/10",
+        )}
+      >
+        <Icon size={16} className={cn(variant === "danger" ? "text-red-400" : "text-white")} />
       </div>
-      <span className={cn(
-        "text-[15px] text-left",
-        variant === "danger" ? "text-red-400" : "text-white/90"
-      )}>
+      <span
+        className={cn(
+          "text-[15px] text-left",
+          variant === "danger" ? "text-red-400" : "text-white/90",
+        )}
+      >
         {label}
       </span>
     </button>
@@ -93,13 +109,42 @@ export function MessageActionsBottomSheet({
   handleTogglePin,
   setMessageAction,
   characterMemoryType,
+  characterDefaultModelId,
 }: MessageActionsBottomSheetProps) {
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [modelName, setModelName] = useState<string | null>(null);
 
-  const canEdit = messageAction?.message.role === "assistant" || (() => {
-    const userMessages = messages.filter(m => m.role === "user" && !m.id.startsWith("placeholder"));
-    const latestUserMessage = userMessages[userMessages.length - 1];
-    return latestUserMessage?.id === messageAction?.message.id;
-  })();
+  const canEdit =
+    messageAction?.message.role === "assistant" ||
+    (() => {
+      const userMessages = messages.filter(
+        (m) => m.role === "user" && !m.id.startsWith("placeholder"),
+      );
+      const latestUserMessage = userMessages[userMessages.length - 1];
+      return latestUserMessage?.id === messageAction?.message.id;
+    })();
+
+  useEffect(() => {
+    readSettings().then(setSettings).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const messageModelId =
+      messageAction && "modelId" in messageAction.message
+        ? (messageAction.message as { modelId?: string | null }).modelId
+        : null;
+    const resolvedModelId =
+      messageModelId ?? characterDefaultModelId ?? settings?.defaultModelId ?? null;
+
+    if (resolvedModelId && settings) {
+      const model = settings.models.find((m: Model) => m.id === resolvedModelId);
+      setModelName(model ? model.displayName : resolvedModelId);
+    } else {
+      setModelName(null);
+    }
+  }, [messageAction, settings, characterDefaultModelId]);
+
+  const modelLabel = modelName ?? (settings ? "Unknown model" : "Loading model...");
 
   const handleCopy = async () => {
     if (!messageAction) return;
@@ -121,14 +166,22 @@ export function MessageActionsBottomSheet({
     >
       {messageAction && (
         <div className="text-white">
-          {/* Token usage - minimal */}
+          {/* Token usage */}
           {messageAction.message.usage && (
-            <div className="flex items-center gap-2 text-xs text-white/40 mb-4">
-              <span>{messageAction.message.usage.promptTokens ?? 0} in</span>
-              <span>·</span>
-              <span>{messageAction.message.usage.completionTokens ?? 0} out</span>
-              <span>·</span>
-              <span className="text-white/60 font-medium">{messageAction.message.usage.totalTokens ?? 0} tokens</span>
+            <div className="flex items-center gap-x-3 text-xs text-white/40 mb-4">
+              <div className="flex items-center gap-2 border-r border-white/10 pr-3">
+                <span title="Prompt Tokens">↓{messageAction.message.usage.promptTokens ?? 0}</span>
+                <span title="Completion Tokens">
+                  ↑{messageAction.message.usage.completionTokens ?? 0}
+                </span>
+              </div>
+              <div className="flex-1">
+                <span className="text-white/60">{modelLabel}</span>
+              </div>
+              <div className="tabular-nums">
+                {(messageAction.message.usage.totalTokens ?? 0).toLocaleString()}{" "}
+                <span className="text-[12px] uppercase opacity-50">total</span>
+              </div>
             </div>
           )}
 
@@ -162,7 +215,10 @@ export function MessageActionsBottomSheet({
                         const score = match ? parseFloat(match[1]) : null;
                         const text = match ? match[3] : ref;
                         return (
-                          <div key={idx} className="bg-black/20 rounded p-2 text-xs border border-emerald-500/10">
+                          <div
+                            key={idx}
+                            className="bg-black/20 rounded p-2 text-xs border border-emerald-500/10"
+                          >
                             {score !== null && (
                               <div className="text-[10px] font-bold text-emerald-400 mb-1">
                                 Match: {(score * 100).toFixed(0)}%
@@ -212,7 +268,8 @@ export function MessageActionsBottomSheet({
               <div className="h-px bg-white/5 my-2" />
 
               {/* Chat flow actions */}
-              {(messageAction.message.role === "assistant" || messageAction.message.role === "user") && (
+              {(messageAction.message.role === "assistant" ||
+                messageAction.message.role === "user") && (
                 <ActionRow
                   icon={RotateCcw}
                   label="Rewind to here"
@@ -259,7 +316,7 @@ export function MessageActionsBottomSheet({
                   "w-full p-3 text-sm text-white placeholder-white/40",
                   "border border-white/10 bg-black/30",
                   "focus:border-white/20 focus:outline-none resize-none",
-                  radius.lg
+                  radius.lg,
                 )}
                 placeholder="Edit your message..."
                 disabled={actionBusy}
@@ -278,7 +335,7 @@ export function MessageActionsBottomSheet({
                     "border border-white/10 bg-white/5",
                     "hover:bg-white/10 hover:text-white",
                     "active:scale-[0.98]",
-                    radius.lg
+                    radius.lg,
                   )}
                 >
                   Cancel
@@ -292,7 +349,7 @@ export function MessageActionsBottomSheet({
                     "hover:bg-emerald-400",
                     "active:scale-[0.98]",
                     "disabled:cursor-not-allowed disabled:opacity-50",
-                    radius.lg
+                    radius.lg,
                   )}
                 >
                   {actionBusy ? "Saving..." : "Save"}

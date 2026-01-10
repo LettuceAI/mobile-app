@@ -180,8 +180,6 @@ export function ChatConversationPage() {
     };
   }, [handleSessionUpdate]);
 
-
-
   useEffect(() => {
     setSessionForHeader(chatController.session);
   }, [chatController.session]);
@@ -863,28 +861,31 @@ export function ChatConversationPage() {
     setShowPlusMenu(true);
   }, []);
 
-  const handleHelpMeReply = useCallback(async (mode: 'new' | 'enrich') => {
-    if (!session?.id) return;
+  const handleHelpMeReply = useCallback(
+    async (mode: "new" | "enrich") => {
+      if (!session?.id) return;
 
-    // Close other menus and show result menu with loading state immediately
-    setShowChoiceMenu(false);
-    setShowPlusMenu(false);
-    setGeneratedReply(null);
-    setHelpMeReplyError(null);
-    setGeneratingReply(true);
-    setShowResultMenu(true);
+      // Close other menus and show result menu with loading state immediately
+      setShowChoiceMenu(false);
+      setShowPlusMenu(false);
+      setGeneratedReply(null);
+      setHelpMeReplyError(null);
+      setGeneratingReply(true);
+      setShowResultMenu(true);
 
-    try {
-      const currentDraft = mode === 'enrich' && draft.trim() ? draft : undefined;
-      const result = await generateUserReply(session.id, currentDraft);
-      setGeneratedReply(result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setHelpMeReplyError(message);
-    } finally {
-      setGeneratingReply(false);
-    }
-  }, [session?.id, draft]);
+      try {
+        const currentDraft = mode === "enrich" && draft.trim() ? draft : undefined;
+        const result = await generateUserReply(session.id, currentDraft);
+        setGeneratedReply(result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setHelpMeReplyError(message);
+      } finally {
+        setGeneratingReply(false);
+      }
+    },
+    [session?.id, draft],
+  );
 
   const handleUseReply = useCallback(() => {
     if (generatedReply) {
@@ -907,7 +908,7 @@ export function ChatConversationPage() {
       setShowChoiceMenu(true);
     } else {
       // No draft - generate directly
-      void handleHelpMeReply('new');
+      void handleHelpMeReply("new");
     }
   }, [draft, handleHelpMeReply]);
 
@@ -1233,16 +1234,16 @@ export function ChatConversationPage() {
             const displayContent = replacePlaceholders(message.content, charName, personaName);
             const eventHandlers = actionable
               ? {
-                onMouseDown: handlePressStart(message),
-                onMouseMove: handlePressMove,
-                onMouseUp: handlePressEnd,
-                onMouseLeave: handlePressEnd,
-                onTouchStart: handlePressStart(message),
-                onTouchMove: handlePressMove,
-                onTouchEnd: handlePressEnd,
-                onTouchCancel: handlePressEnd,
-                onContextMenu: handleContextMenu(message),
-              }
+                  onMouseDown: handlePressStart(message),
+                  onMouseMove: handlePressMove,
+                  onMouseUp: handlePressEnd,
+                  onMouseLeave: handlePressEnd,
+                  onTouchStart: handlePressStart(message),
+                  onTouchMove: handlePressMove,
+                  onTouchEnd: handlePressEnd,
+                  onTouchCancel: handlePressEnd,
+                  onContextMenu: handleContextMenu(message),
+                }
               : {};
 
             return (
@@ -1353,6 +1354,7 @@ export function ChatConversationPage() {
         handleTogglePin={chatController.handleTogglePin}
         setMessageAction={setMessageAction}
         characterMemoryType={character?.memoryType}
+        characterDefaultModelId={character?.defaultModelId ?? null}
       />
 
       {/* Character Selection for Branch */}
@@ -1397,18 +1399,10 @@ export function ChatConversationPage() {
       </BottomMenu>
 
       {/* Plus Menu - Upload Image | Help Me Reply */}
-      <BottomMenu
-        isOpen={showPlusMenu}
-        onClose={() => setShowPlusMenu(false)}
-        title="Add Content"
-      >
+      <BottomMenu isOpen={showPlusMenu} onClose={() => setShowPlusMenu(false)} title="Add Content">
         <div className="space-y-2">
           {supportsImageInput && (
-            <MenuButton
-              icon={Image}
-              title="Upload Image"
-              onClick={handlePlusMenuImageUpload}
-            />
+            <MenuButton icon={Image} title="Upload Image" onClick={handlePlusMenuImageUpload} />
           )}
           <MenuButton
             icon={Sparkles}
@@ -1433,13 +1427,13 @@ export function ChatConversationPage() {
             icon={PenLine}
             title="Use my text as base"
             description="Expand and improve your draft"
-            onClick={() => handleHelpMeReply('enrich')}
+            onClick={() => handleHelpMeReply("enrich")}
           />
           <MenuButton
             icon={Sparkles}
             title="Write something new"
             description="Generate a fresh reply"
-            onClick={() => handleHelpMeReply('new')}
+            onClick={() => handleHelpMeReply("new")}
           />
         </div>
       </BottomMenu>
@@ -1464,20 +1458,20 @@ export function ChatConversationPage() {
               <p className="text-red-400 text-sm">{helpMeReplyError}</p>
             </div>
           ) : generatedReply ? (
-            <div className={cn(
-              "bg-white/5 border border-white/10 p-4",
-              radius.lg,
-              "max-h-[40vh] overflow-y-auto"
-            )}>
-              <p className="text-white/90 text-sm whitespace-pre-wrap">
-                {generatedReply}
-              </p>
+            <div
+              className={cn(
+                "bg-white/5 border border-white/10 p-4",
+                radius.lg,
+                "max-h-[40vh] overflow-y-auto",
+              )}
+            >
+              <p className="text-white/90 text-sm whitespace-pre-wrap">{generatedReply}</p>
             </div>
           ) : null}
 
           <div className="flex gap-3">
             <button
-              onClick={() => handleHelpMeReply(draft.trim() ? 'enrich' : 'new')}
+              onClick={() => handleHelpMeReply(draft.trim() ? "enrich" : "new")}
               disabled={generatingReply}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 py-3 px-4",
@@ -1539,7 +1533,7 @@ export function ChatConversationPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div >
+    </div>
   );
 }
 
