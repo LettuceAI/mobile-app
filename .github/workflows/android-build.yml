@@ -89,7 +89,7 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           VERSION="0.1.${{ github.run_number }}-dev.$SHORT_SHA"
 
-          cat > dev-config.json << EOF
+          cat > src-tauri/dev-config.json << EOF
           {
             "\$schema": "https://schema.tauri.app/config/2",
             "productName": "lettuceai-dev",
@@ -147,7 +147,7 @@ jobs:
       - name: Init Android project (Dev build)
         run: |
           rm -rf src-tauri/gen/android
-          pnpm tauri android init --ci --config dev-config.json
+          pnpm tauri android init --ci --config src-tauri/dev-config.json
 
       - name: Configure Android signing
         env:
@@ -233,7 +233,7 @@ jobs:
             "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=$ANDROID_KEY_ALIAS" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.password=$ANDROID_KEY_PASSWORD" \
-            pnpm tauri android build --ci --config dev-config.json --release
+            pnpm tauri android build --ci --config src-tauri/dev-config.json -- --release
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
