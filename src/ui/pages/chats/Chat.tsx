@@ -865,7 +865,6 @@ export function ChatConversationPage() {
     async (mode: "new" | "enrich") => {
       if (!session?.id) return;
 
-      // Close other menus and show result menu with loading state immediately
       setShowChoiceMenu(false);
       setShowPlusMenu(false);
       setGeneratedReply(null);
