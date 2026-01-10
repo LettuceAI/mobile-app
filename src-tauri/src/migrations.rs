@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 23;
+pub const CURRENT_MIGRATION_VERSION: u32 = 29;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -269,7 +269,67 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         version = 23;
     }
 
-    // Finalize
+    if version < 24 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v23 -> v24: Add memory columns to group_sessions",
+        );
+        migrate_v23_to_v24(app)?;
+        version = 24;
+    }
+
+    if version < 25 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v24 -> v25: Add archived column to group_sessions",
+        );
+        migrate_v24_to_v25(app)?;
+        version = 25;
+    }
+
+    if version < 26 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v25 -> v26: Add group session memory tool events",
+        );
+        migrate_v25_to_v26(app)?;
+        version = 26;
+    }
+
+    if version < 27 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v26 -> v27: Add model_id to group messages",
+        );
+        migrate_v26_to_v27(app)?;
+        version = 27;
+    }
+
+    if version < 28 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v27 -> v28: Add chat_type and starting_scene to group_sessions",
+        );
+        migrate_v27_to_v28(app)?;
+        version = 28;
+    }
+
+    if version < 29 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v28 -> v29: Add background_image_path to group_sessions",
+        );
+        migrate_v28_to_v29(app)?;
+        version = 29;
+    }
+
+    // Update the stored version
     set_migration_version(app, version)?;
 
     log_info(
@@ -998,6 +1058,152 @@ fn migrate_v12_to_v13(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn migrate_v26_to_v27(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if model_id column exists in group_messages
+    let mut has_model_id_messages = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_messages)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "model_id" {
+            has_model_id_messages = true;
+            break;
+        }
+    }
+
+    // Add model_id column to group_messages
+    if !has_model_id_messages {
+        let _ = conn.execute("ALTER TABLE group_messages ADD COLUMN model_id TEXT", []);
+    }
+
+    // Check if model_id column exists in group_message_variants
+    let mut has_model_id_variants = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_message_variants)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "model_id" {
+            has_model_id_variants = true;
+            break;
+        }
+    }
+
+    // Add model_id column to group_message_variants
+    if !has_model_id_variants {
+        let _ = conn.execute(
+            "ALTER TABLE group_message_variants ADD COLUMN model_id TEXT",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+fn migrate_v28_to_v29(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if background_image_path column exists in group_sessions
+    let mut has_background_image_path = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "background_image_path" {
+            has_background_image_path = true;
+            break;
+        }
+    }
+
+    // Add background_image_path column to group_sessions
+    if !has_background_image_path {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN background_image_path TEXT",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+fn migrate_v27_to_v28(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if chat_type column exists in group_sessions
+    let mut has_chat_type = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "chat_type" {
+            has_chat_type = true;
+            break;
+        }
+    }
+
+    // Add chat_type column to group_sessions
+    if !has_chat_type {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN chat_type TEXT NOT NULL DEFAULT 'conversation'",
+            [],
+        );
+    }
+
+    // Check if starting_scene column exists in group_sessions
+    let mut has_starting_scene = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "starting_scene" {
+            has_starting_scene = true;
+            break;
+        }
+    }
+
+    // Add starting_scene column to group_sessions
+    if !has_starting_scene {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN starting_scene TEXT",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
 /// Migration v13 -> v14: add model_type column to models table
 fn migrate_v13_to_v14(app: &AppHandle) -> Result<(), String> {
     use crate::storage_manager::db::open_db;
@@ -1625,6 +1831,139 @@ fn migrate_v22_to_v23(app: &AppHandle) -> Result<(), String> {
         "ALTER TABLE usage_records ADD COLUMN finish_reason TEXT",
         [],
     );
+
+    Ok(())
+}
+
+/// Migration v23 -> v24: Add memory columns to group_sessions
+fn migrate_v23_to_v24(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check for existing columns
+    let mut has_memories = false;
+    let mut has_memory_embeddings = false;
+    let mut has_memory_summary = false;
+    let mut has_memory_summary_token_count = false;
+
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        match name.as_str() {
+            "memories" => has_memories = true,
+            "memory_embeddings" => has_memory_embeddings = true,
+            "memory_summary" => has_memory_summary = true,
+            "memory_summary_token_count" => has_memory_summary_token_count = true,
+            _ => {}
+        }
+    }
+
+    // Add memories column (manual memories - array of strings)
+    if !has_memories {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN memories TEXT NOT NULL DEFAULT '[]'",
+            [],
+        );
+    }
+
+    // Add memory_embeddings column (dynamic memories with embeddings)
+    if !has_memory_embeddings {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN memory_embeddings TEXT NOT NULL DEFAULT '[]'",
+            [],
+        );
+    }
+
+    // Add memory_summary column (compressed summary for context)
+    if !has_memory_summary {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN memory_summary TEXT NOT NULL DEFAULT ''",
+            [],
+        );
+    }
+
+    // Add memory_summary_token_count column
+    if !has_memory_summary_token_count {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN memory_summary_token_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+fn migrate_v24_to_v25(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if archived column exists
+    let mut has_archived = false;
+
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "archived" {
+            has_archived = true;
+            break;
+        }
+    }
+
+    // Add archived column
+    if !has_archived {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+fn migrate_v25_to_v26(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    // Check if memory_tool_events column exists
+    let mut has_memory_tool_events = false;
+
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(group_sessions)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "memory_tool_events" {
+            has_memory_tool_events = true;
+            break;
+        }
+    }
+
+    // Add memory_tool_events column
+    if !has_memory_tool_events {
+        let _ = conn.execute(
+            "ALTER TABLE group_sessions ADD COLUMN memory_tool_events TEXT NOT NULL DEFAULT '[]'",
+            [],
+        );
+    }
 
     Ok(())
 }

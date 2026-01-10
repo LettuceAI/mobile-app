@@ -1,4 +1,4 @@
-import { Brain, User, BookOpen, Loader2, Sparkles } from "lucide-react";
+import { Brain, User, BookOpen, Loader2, Sparkles, Users } from "lucide-react";
 import { BottomMenu, MenuButton, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -74,6 +74,17 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             onClick={() => {
               onClose();
               navigate("/create/persona");
+            }}
+          />
+
+          <MenuButton
+            icon={Users}
+            title="Create Group Chat"
+            description="Chat with multiple characters at once"
+            color="from-emerald-500 to-emerald-600"
+            onClick={() => {
+              onClose();
+              navigate("/group-chats/new");
             }}
           />
 

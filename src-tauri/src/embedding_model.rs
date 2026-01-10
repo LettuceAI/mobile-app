@@ -410,7 +410,6 @@ pub async fn delete_embedding_model(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-use ndarray::Array2;
 use ort::{
     inputs,
     session::{builder::GraphOptimizationLevel, Session},
@@ -421,9 +420,7 @@ use tokenizers::Tokenizer;
 const EMBEDDING_DIM: usize = 512;
 
 async fn ensure_ort_init() -> Result<(), String> {
-    if ort::init().with_name("lettuce-embedding").commit().is_err() {
-        return Err("Failed to initialize ONNX Runtime".to_string());
-    }
+    let _ = ort::init().with_name("lettuce-embedding").commit();
     Ok(())
 }
 
@@ -494,17 +491,11 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     let input_ids_i64: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
     let attention_mask_i64: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
 
-    // ndarray tensors with shape [1, seq_len]
-    let input_ids_array = Array2::from_shape_vec((1, seq_len), input_ids_i64)
-        .map_err(|e| format!("Failed to create input_ids array: {}", e))?;
-
-    let attention_mask_array = Array2::from_shape_vec((1, seq_len), attention_mask_i64)
-        .map_err(|e| format!("Failed to create attention_mask array: {}", e))?;
-
-    let input_ids_value = Value::from_array(input_ids_array)
+    // Create tensors using (shape, data) tuple format for ort
+    let input_ids_value = Value::from_array(([1, seq_len], input_ids_i64))
         .map_err(|e| format!("Failed to create input_ids tensor: {}", e))?;
 
-    let attention_mask_value = Value::from_array(attention_mask_array)
+    let attention_mask_value = Value::from_array(([1, seq_len], attention_mask_i64))
         .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
 
     let outputs = session

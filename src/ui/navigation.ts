@@ -17,7 +17,11 @@ export const Routes = {
     const query = params.toString();
     return query ? `/chat/${characterId}/settings?${query}` : `/chat/${characterId}/settings`;
   },
-  chatMemories: (characterId: string, sessionId?: string | null, extra?: Record<string, string | null>) => {
+  chatMemories: (
+    characterId: string,
+    sessionId?: string | null,
+    extra?: Record<string, string | null>,
+  ) => {
     const params = new URLSearchParams();
     if (sessionId) params.set("sessionId", sessionId);
     if (extra) {
@@ -34,7 +38,11 @@ export const Routes = {
     const query = params.toString();
     return query ? `/chat/${characterId}/search?${query}` : `/chat/${characterId}/search`;
   },
-  chatSession: (characterId: string, sessionId?: string | null, extra?: Record<string, string | null>) => {
+  chatSession: (
+    characterId: string,
+    sessionId?: string | null,
+    extra?: Record<string, string | null>,
+  ) => {
     const params = new URLSearchParams();
     if (sessionId) params.set("sessionId", sessionId);
     if (extra) {
@@ -52,6 +60,13 @@ export const Routes = {
   settingsImageGeneration: "/settings/image-generation",
   characterLorebook: (characterId: string) => `/settings/characters/${characterId}/lorebook`,
   sync: "/settings/sync",
+  // Group Chat routes
+  groupChats: "/group-chats",
+  groupChatsNew: "/group-chats/new",
+  groupChat: (groupSessionId: string) => `/group-chats/${groupSessionId}`,
+  groupChatSettings: (groupSessionId: string) => `/group-chats/${groupSessionId}/settings`,
+  groupChatMemories: (groupSessionId: string) => `/group-chats/${groupSessionId}/memories`,
+  groupChatHistory: "/group-chats/history",
 } as const;
 
 export type BackMapping = {
@@ -61,12 +76,27 @@ export type BackMapping = {
 
 // Shared back stack mappings for settings/chat screens.
 export const BACK_MAPPINGS: BackMapping[] = [
-  { match: (p) => p.includes("/settings/models") && p.includes("view=advanced"), target: Routes.settingsModels },
+  {
+    match: (p) => p.includes("/settings/models") && p.includes("view=advanced"),
+    target: Routes.settingsModels,
+  },
   { match: (p) => p.startsWith("/settings/models/"), target: Routes.settingsModels },
   { match: (p) => p.startsWith("/settings/image-generation"), target: Routes.settings },
   { match: (p) => p.startsWith("/settings/providers/"), target: "/settings/providers" },
   { match: (p) => p.startsWith("/settings/prompts/new"), target: "/settings/prompts" },
   { match: (p) => p.startsWith("/settings/prompts/"), target: "/settings/prompts" },
+  // Group chat back navigation
+  {
+    match: (p) => p.startsWith("/group-chats/") && p.includes("/settings"),
+    target: Routes.groupChats,
+  },
+  {
+    match: (p) => p.startsWith("/group-chats/") && p.includes("/memories"),
+    target: Routes.groupChats,
+  },
+  { match: (p) => p === "/group-chats/history", target: Routes.groupChats },
+  { match: (p) => p.startsWith("/group-chats/new"), target: Routes.groupChats },
+  { match: (p) => p.match(/^\/group-chats\/[^/]+$/) !== null, target: Routes.groupChats },
   { match: (p) => p.startsWith("/settings/advanced/memory"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-download"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-test"), target: "/settings/advanced" },
@@ -120,7 +150,7 @@ export function useNavigationManager() {
     (path: string, options?: NavOptions) => {
       navigate(path, { replace: options?.replace });
     },
-    [navigate]
+    [navigate],
   );
 
   const back = useCallback(() => {
@@ -140,38 +170,42 @@ export function useNavigationManager() {
         go(fallbackPath, { replace: true });
       }
     },
-    [back, go]
+    [back, go],
   );
 
   const toModelsList = useCallback(
     (options?: NavOptions) => go(Routes.settingsModels, options),
-    [go]
+    [go],
   );
 
   const toNewModel = useCallback(
     (options?: NavOptions) => go(Routes.settingsModelsNew, options),
-    [go]
+    [go],
   );
 
   const toEditModel = useCallback(
     (modelId: string, options?: NavOptions) => go(Routes.settingsModel(modelId), options),
-    [go]
+    [go],
   );
 
   const toChatSettings = useCallback(
     (characterId: string, options?: NavOptions) => go(Routes.chatSettings(characterId), options),
-    [go]
+    [go],
   );
 
   const toChatHistory = useCallback(
     (characterId: string, options?: NavOptions) => go(Routes.chatHistory(characterId), options),
-    [go]
+    [go],
   );
 
   const toChatSession = useCallback(
-    (characterId: string, sessionId?: string | null, extra?: Record<string, string | null>, options?: NavOptions) =>
-      go(Routes.chatSession(characterId, sessionId, extra), options),
-    [go]
+    (
+      characterId: string,
+      sessionId?: string | null,
+      extra?: Record<string, string | null>,
+      options?: NavOptions,
+    ) => go(Routes.chatSession(characterId, sessionId, extra), options),
+    [go],
   );
 
   return {

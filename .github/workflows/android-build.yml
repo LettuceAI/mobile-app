@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: "lts/*"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -32,8 +32,8 @@ jobs:
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -44,7 +44,7 @@ jobs:
         with:
           ndk-version: ${{ env.NDK_VERSION }}
           link-to-sdk: true
-      
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -53,7 +53,6 @@ jobs:
             pkg-config \
             libssl-dev \
             perl
-
 
       - name: Install Android Rust targets
         run: |
@@ -96,17 +95,177 @@ jobs:
             sudo ln -sf "$TOOLCHAIN/llvm-ranlib" "/usr/local/bin/${triple}-ranlib"
           done
 
-      - name: Build Tauri Android app
+      - name: Create dev config override
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          VERSION="0.1.${{ github.run_number }}-dev.$SHORT_SHA"
+
+          cat > dev-config.json << EOF
+          {
+            "\$schema": "https://schema.tauri.app/config/2",
+            "productName": "lettuceai-dev",
+            "version": "$VERSION",
+            "identifier": "dev.lettuceai.app",
+            "build": {
+              "beforeDevCommand": "npm run dev",
+              "devUrl": "http://localhost:1420",
+              "beforeBuildCommand": "npm run build",
+              "frontendDist": "../dist"
+            },
+            "app": {
+              "windows": [
+                {
+                  "title": "LettuceAI (Dev)",
+                  "width": 1100,
+                  "height": 720,
+                  "minHeight": 600,
+                  "minWidth": 900,
+                  "transparent": true
+                }
+              ],
+              "security": {
+                "csp": null,
+                "assetProtocol": {
+                  "enable": true,
+                  "scope": [
+                    "\$APPDATA/**"
+                  ]
+                }
+              }
+            },
+            "bundle": {
+              "active": true,
+              "targets": "all",
+              "icon": [
+                "icons/32x32.png",
+                "icons/128x128.png",
+                "icons/128x128@2x.png",
+                "icons/icon.icns",
+                "icons/icon.ico"
+              ],
+              "resources": [
+                "./feedback_sounds/fail.mp3",
+                "./feedback_sounds/send.mp3",
+                "./feedback_sounds/success.mp3"
+              ]
+            }
+          }
+          EOF
+
+      - name: Build Tauri Android app (Dev build)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           RUST_BACKTRACE: 1
+          RUSTFLAGS: "--cfg DEV_BUILD"
         run: |
           pnpm install
-          pnpm tauri android build --ci
+          rm -rf src-tauri/gen/android
+          pnpm tauri android init --ci --config dev-config.json
+          cat > src-tauri/gen/android/app/build.gradle.kts <<'EOF'
+          import java.util.Properties
+          import java.io.FileInputStream
+
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("rust")
+          }
+
+          val tauriProperties = Properties().apply {
+              val propFile = file("tauri.properties")
+              if (propFile.exists()) {
+                  propFile.inputStream().use { load(it) }
+              }
+          }
+
+          android {
+              compileSdk = 36
+              namespace = "com.lettuceai.app"
+              defaultConfig {
+                  manifestPlaceholders["usesCleartextTraffic"] = "false"
+                  applicationId = "com.lettuceai.app"
+                  minSdk = 24
+                  targetSdk = 36
+                  versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
+                  versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+              }
+
+              signingConfigs {
+                  create("release") {
+                      val storePath = System.getenv("ANDROID_KEYSTORE_PATH")
+                      val storePass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      val keyAliasEnv = System.getenv("ANDROID_KEY_ALIAS")
+                      val keyPassEnv = System.getenv("ANDROID_KEY_PASSWORD")
+
+                      if (storePath == null || storePass == null || keyAliasEnv == null || keyPassEnv == null) {
+                          throw GradleException("Missing Android signing environment variables")
+                      }
+
+                      storeFile = file(storePath)
+                      storePassword = storePass
+                      keyAlias = keyAliasEnv
+                      keyPassword = keyPassEnv
+                  }
+              }
+
+              buildTypes {
+                  getByName("debug") {
+                      manifestPlaceholders["usesCleartextTraffic"] = "true"
+                      isDebuggable = true
+                      isJniDebuggable = true
+                      isMinifyEnabled = false
+                      packaging {
+                          jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+                          jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
+                          jniLibs.keepDebugSymbols.add("*/x86/*.so")
+                          jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
+                      }
+                  }
+                  getByName("release") {
+                      isMinifyEnabled = true
+                      signingConfig = signingConfigs.getByName("release")
+                      proguardFiles(
+                          *fileTree(".") { include("**/*.pro") }
+                              .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
+                              .toList().toTypedArray()
+                      )
+                  }
+              }
+
+              kotlinOptions {
+                  jvmTarget = "1.8"
+              }
+
+              buildFeatures {
+                  buildConfig = true
+              }
+          }
+
+          rust {
+              rootDirRel = "../../../"
+          }
+
+          dependencies {
+              implementation("androidx.webkit:webkit:1.14.0")
+              implementation("androidx.appcompat:appcompat:1.7.1")
+              implementation("androidx.activity:activity-ktx:1.10.1")
+              implementation("com.google.android.material:material:1.12.0")
+              testImplementation("junit:junit:4.13.2")
+              androidTestImplementation("androidx.test.ext:junit:1.1.4")
+              androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
+          }
+
+          apply(from = "tauri.build.gradle.kts")
+          EOF
+          pnpm tauri android build --ci --config dev-config.json
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4

@@ -22,6 +22,8 @@ pub enum PromptType {
     DynamicMemoryPrompt,
     DynamicSummaryPrompt,
     HelpMeReplyPrompt,
+    GroupChatPrompt,
+    GroupChatRoleplayPrompt,
 }
 
 pub fn get_base_prompt(prompt_type: PromptType) -> String {
@@ -30,6 +32,10 @@ pub fn get_base_prompt(prompt_type: PromptType) -> String {
         PromptType::DynamicMemoryPrompt => prompt_engine::default_dynamic_memory_prompt(),
         PromptType::DynamicSummaryPrompt => prompt_engine::default_dynamic_summary_prompt(),
         PromptType::HelpMeReplyPrompt => prompt_engine::default_help_me_reply_prompt(),
+        PromptType::GroupChatPrompt => prompt_engine::default_group_chat_system_prompt_template(),
+        PromptType::GroupChatRoleplayPrompt => {
+            prompt_engine::default_group_chat_roleplay_prompt_template()
+        }
     }
 }
 

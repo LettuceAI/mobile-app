@@ -11,6 +11,8 @@ pub const APP_DEFAULT_TEMPLATE_ID: &str = "prompt_app_default";
 pub const APP_DYNAMIC_SUMMARY_TEMPLATE_ID: &str = "prompt_app_dynamic_summary";
 pub const APP_DYNAMIC_MEMORY_TEMPLATE_ID: &str = "prompt_app_dynamic_memory";
 pub const APP_HELP_ME_REPLY_TEMPLATE_ID: &str = "prompt_app_help_me_reply";
+pub const APP_GROUP_CHAT_TEMPLATE_ID: &str = "prompt_app_group_chat";
+pub const APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID: &str = "prompt_app_group_chat_roleplay";
 const APP_DEFAULT_TEMPLATE_NAME: &str = "App Default";
 const APP_DYNAMIC_SUMMARY_TEMPLATE_NAME: &str = "Dynamic Memory: Summarizer";
 const APP_DYNAMIC_MEMORY_TEMPLATE_NAME: &str = "Dynamic Memory: Memory Manager";
@@ -35,6 +37,24 @@ pub fn get_required_variables(template_id: &str) -> Vec<String> {
             "{{persona.name}}".to_string(),
             "{{persona.desc}}".to_string(),
             "{{current_draft}}".to_string(),
+        ],
+        APP_GROUP_CHAT_TEMPLATE_ID => vec![
+            "{{char.name}}".to_string(),
+            "{{char.desc}}".to_string(),
+            "{{persona.name}}".to_string(),
+            "{{persona.desc}}".to_string(),
+            "{{group_characters}}".to_string(),
+        ],
+        APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID => vec![
+            "{{scene}}".to_string(),
+            "{{scene_direction}}".to_string(),
+            "{{char.name}}".to_string(),
+            "{{char.desc}}".to_string(),
+            "{{persona.name}}".to_string(),
+            "{{persona.desc}}".to_string(),
+            "{{group_characters}}".to_string(),
+            "{{context_summary}}".to_string(),
+            "{{key_memories}}".to_string(),
         ],
         _ => vec![],
     }
@@ -365,5 +385,21 @@ pub fn get_help_me_reply_prompt(app: &AppHandle) -> String {
     match get_template(app, APP_HELP_ME_REPLY_TEMPLATE_ID) {
         Ok(Some(template)) => template.content,
         _ => get_base_prompt(PromptType::HelpMeReplyPrompt),
+    }
+}
+
+/// Get the Group Chat template from DB, falling back to default if not found
+pub fn get_group_chat_prompt(app: &AppHandle) -> String {
+    match get_template(app, APP_GROUP_CHAT_TEMPLATE_ID) {
+        Ok(Some(template)) => template.content,
+        _ => get_base_prompt(PromptType::GroupChatPrompt),
+    }
+}
+
+/// Get the Group Chat Roleplay template from DB, falling back to default if not found
+pub fn get_group_chat_roleplay_prompt(app: &AppHandle) -> String {
+    match get_template(app, APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID) {
+        Ok(Some(template)) => template.content,
+        _ => get_base_prompt(PromptType::GroupChatRoleplayPrompt),
     }
 }

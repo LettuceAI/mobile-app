@@ -469,6 +469,73 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           FOREIGN KEY(provider_id) REFERENCES audio_providers(id) ON DELETE CASCADE
         );
 
+        -- Group chat sessions (multi-character conversations)
+        CREATE TABLE IF NOT EXISTS group_sessions (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          character_ids TEXT NOT NULL DEFAULT '[]',
+          persona_id TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          archived INTEGER NOT NULL DEFAULT 0,
+          chat_type TEXT NOT NULL DEFAULT 'conversation',
+          starting_scene TEXT,
+          memories TEXT NOT NULL DEFAULT '[]',
+          memory_embeddings TEXT NOT NULL DEFAULT '[]',
+          memory_summary TEXT NOT NULL DEFAULT '',
+          memory_summary_token_count INTEGER NOT NULL DEFAULT 0,
+          memory_tool_events TEXT NOT NULL DEFAULT '[]',
+          FOREIGN KEY(persona_id) REFERENCES personas(id) ON DELETE SET NULL
+        );
+
+        -- Group chat participation tracking (per-character stats)
+        CREATE TABLE IF NOT EXISTS group_participation (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          character_id TEXT NOT NULL,
+          speak_count INTEGER NOT NULL DEFAULT 0,
+          last_spoke_turn INTEGER,
+          last_spoke_at INTEGER,
+          FOREIGN KEY(session_id) REFERENCES group_sessions(id) ON DELETE CASCADE
+        );
+
+        -- Group chat messages (with speaker tracking)
+        CREATE TABLE IF NOT EXISTS group_messages (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          speaker_character_id TEXT,
+          turn_number INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          prompt_tokens INTEGER,
+          completion_tokens INTEGER,
+          total_tokens INTEGER,
+          selected_variant_id TEXT,
+          is_pinned INTEGER NOT NULL DEFAULT 0,
+          attachments TEXT NOT NULL DEFAULT '[]',
+          reasoning TEXT,
+          selection_reasoning TEXT,
+          model_id TEXT,
+          FOREIGN KEY(session_id) REFERENCES group_sessions(id) ON DELETE CASCADE
+        );
+
+        -- Group message variants (for regeneration)
+        CREATE TABLE IF NOT EXISTS group_message_variants (
+          id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          content TEXT NOT NULL,
+          speaker_character_id TEXT,
+          created_at INTEGER NOT NULL,
+          prompt_tokens INTEGER,
+          completion_tokens INTEGER,
+          total_tokens INTEGER,
+          reasoning TEXT,
+          selection_reasoning TEXT,
+          model_id TEXT,
+          FOREIGN KEY(message_id) REFERENCES group_messages(id) ON DELETE CASCADE
+        );
+
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_sessions_character ON sessions(character_id);
         CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
@@ -483,6 +550,12 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         CREATE INDEX IF NOT EXISTS idx_secrets_service ON secrets(service);
         CREATE INDEX IF NOT EXISTS idx_prompt_templates_scope ON prompt_templates(scope);
         CREATE INDEX IF NOT EXISTS idx_model_pricing_cached_at ON model_pricing_cache(cached_at);
+        CREATE INDEX IF NOT EXISTS idx_group_sessions_updated ON group_sessions(updated_at);
+        CREATE INDEX IF NOT EXISTS idx_group_participation_session ON group_participation(session_id);
+        CREATE INDEX IF NOT EXISTS idx_group_messages_session ON group_messages(session_id);
+        CREATE INDEX IF NOT EXISTS idx_group_messages_turn ON group_messages(session_id, turn_number);
+        CREATE INDEX IF NOT EXISTS idx_group_messages_speaker ON group_messages(speaker_character_id);
+        CREATE INDEX IF NOT EXISTS idx_group_message_variants_message ON group_message_variants(message_id);
       "#,
     )
     .map_err(|e| e.to_string())?;

@@ -13,6 +13,10 @@ pub enum UsageOperationType {
     MemoryManager,
     AICreator,
     ReplyHelper,
+    GroupChatMessage,
+    GroupChatRegenerate,
+    GroupChatContinue,
+    GroupChatDecisionMaker,
 }
 
 impl UsageOperationType {
@@ -25,6 +29,10 @@ impl UsageOperationType {
             "memory_manager" => Some(Self::MemoryManager),
             "ai_creator" | "ai creator" => Some(Self::AICreator),
             "reply_helper" => Some(Self::ReplyHelper),
+            "group_chat_message" | "group_chat" => Some(Self::GroupChatMessage),
+            "group_chat_regenerate" => Some(Self::GroupChatRegenerate),
+            "group_chat_continue" => Some(Self::GroupChatContinue),
+            "group_chat_decision_maker" | "decision_maker" => Some(Self::GroupChatDecisionMaker),
             _ => None,
         }
     }
@@ -38,6 +46,10 @@ impl UsageOperationType {
             Self::MemoryManager => "memory_manager",
             Self::AICreator => "ai_creator",
             Self::ReplyHelper => "reply_helper",
+            Self::GroupChatMessage => "group_chat_message",
+            Self::GroupChatRegenerate => "group_chat_regenerate",
+            Self::GroupChatContinue => "group_chat_continue",
+            Self::GroupChatDecisionMaker => "group_chat_decision_maker",
         }
     }
 }

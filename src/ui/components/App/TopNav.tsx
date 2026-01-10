@@ -1,7 +1,15 @@
-
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Filter, Search, Settings, Plus, Check, Loader2, HelpCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Filter,
+  Search,
+  Settings,
+  Plus,
+  Check,
+  Loader2,
+  HelpCircle,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { typography, interactive, cn } from "../../design-tokens";
 import { openDocs } from "../../../core/utils/docs";
@@ -25,57 +33,82 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
       match: (path: string) => boolean;
       title: string;
     }> = [
-        { match: p => p === "/settings/providers", title: "Providers" },
-        { match: p => p.includes("view=advanced"), title: "Response Style" },
-        { match: p => p === "/settings/models" || p.startsWith("/settings/models/"), title: "Models" },
-        { match: p => p === "/settings/security", title: "Security" },
-        { match: p => p === "/settings/accessibility", title: "Accessibility" },
-        { match: p => p === "/settings/reset", title: "Reset" },
-        { match: p => p === "/settings/backup", title: "Backup & Restore" },
-        { match: p => p === "/settings/usage", title: "Usage Analytics" },
-        { match: p => p === "/settings/changelog", title: "Changelog" },
-        { match: p => p === "/settings/prompts/new", title: "Create Template" },
-        { match: p => p.startsWith("/settings/prompts/"), title: "Edit Template" },
-        { match: p => p === "/settings/prompts", title: "Prompt Templates" },
-        { match: p => p === "/settings/developer", title: "Developer" },
-        { match: p => p === "/settings/advanced", title: "Advanced" },
-        { match: p => p === "/settings/characters", title: "Characters" },
-        { match: p => p.includes("/lorebook"), title: "Lorebooks" },
-        { match: p => p === "/settings/personas", title: "Personas" },
-        { match: p => p === "/settings/advanced/memory", title: "Dynamic Memory" },
-        { match: p => p.startsWith("/settings/personas/") && p.endsWith("/edit"), title: "Edit Persona" },
-        { match: p => p.startsWith("/settings/characters/") && p.endsWith("/edit"), title: "Edit Character" },
-        { match: p => p === "/settings/sync", title: "Sync" },
-        { match: p => p.startsWith("/settings"), title: "Settings" },
-        { match: p => p.startsWith("/create"), title: "Create" },
-        { match: p => p.startsWith("/onboarding"), title: "Setup" },
-        { match: p => p.startsWith("/welcome"), title: "Welcome" },
-        { match: p => p.startsWith("/chat/"), title: "Conversation" },
-        { match: p => p === "/library", title: "Library" },
-      ];
+      { match: (p) => p === "/settings/providers", title: "Providers" },
+      { match: (p) => p.includes("view=advanced"), title: "Response Style" },
+      {
+        match: (p) => p === "/settings/models" || p.startsWith("/settings/models/"),
+        title: "Models",
+      },
+      { match: (p) => p === "/settings/security", title: "Security" },
+      { match: (p) => p === "/settings/accessibility", title: "Accessibility" },
+      { match: (p) => p === "/settings/reset", title: "Reset" },
+      { match: (p) => p === "/settings/backup", title: "Backup & Restore" },
+      { match: (p) => p === "/settings/usage", title: "Usage Analytics" },
+      { match: (p) => p === "/settings/changelog", title: "Changelog" },
+      { match: (p) => p === "/settings/prompts/new", title: "Create Template" },
+      { match: (p) => p.startsWith("/settings/prompts/"), title: "Edit Template" },
+      { match: (p) => p === "/settings/prompts", title: "Prompt Templates" },
+      { match: (p) => p === "/settings/developer", title: "Developer" },
+      { match: (p) => p === "/settings/advanced", title: "Advanced" },
+      { match: (p) => p === "/settings/characters", title: "Characters" },
+      { match: (p) => p.includes("/lorebook"), title: "Lorebooks" },
+      { match: (p) => p === "/settings/personas", title: "Personas" },
+      { match: (p) => p === "/settings/advanced/memory", title: "Dynamic Memory" },
+      {
+        match: (p) => p.startsWith("/settings/personas/") && p.endsWith("/edit"),
+        title: "Edit Persona",
+      },
+      {
+        match: (p) => p.startsWith("/settings/characters/") && p.endsWith("/edit"),
+        title: "Edit Character",
+      },
+      { match: (p) => p === "/settings/sync", title: "Sync" },
+      { match: (p) => p.startsWith("/settings"), title: "Settings" },
+      { match: (p) => p.startsWith("/create"), title: "Create" },
+      { match: (p) => p.startsWith("/onboarding"), title: "Setup" },
+      { match: (p) => p.startsWith("/welcome"), title: "Welcome" },
+      { match: (p) => p.startsWith("/chat/"), title: "Conversation" },
+      { match: (p) => p === "/library", title: "Library" },
+      { match: (p) => p === "/group-chats", title: "Group Chats" },
+      { match: (p) => p.startsWith("/group-chats/"), title: "Group Chat" },
+    ];
 
-    const rule = rules.find(r => r.match(basePath));
+    const rule = rules.find((r) => r.match(basePath));
     return rule?.title ?? "Chats";
   }, [basePath, titleOverride]);
-
 
   const showBackButton = useMemo(() => {
     if (basePath.startsWith("/settings/") || basePath === "/settings") return true;
     if (basePath.startsWith("/create/")) return true;
     if (basePath.startsWith("/library/lorebooks")) return true;
+    if (basePath === "/group-chats/new") return true;
     return false;
   }, [basePath]);
 
   const showFilterButton = useMemo(() => {
-    return basePath === "/settings/usage" || basePath === "/settings/changelog" || basePath === "/library";
+    return (
+      basePath === "/settings/usage" ||
+      basePath === "/settings/changelog" ||
+      basePath === "/library"
+    );
   }, [basePath]);
 
   const showSearchButton = useMemo(() => {
-    return basePath === "/chat" || basePath === "/" || basePath === "/library";
+    return (
+      basePath === "/chat" ||
+      basePath === "/" ||
+      basePath === "/library" ||
+      basePath === "/group-chats"
+    );
   }, [basePath]);
 
   const showSettingsButton = useMemo(() => {
-    return basePath === "/chat" || basePath === "/" || basePath === "/library";
+    return (
+      basePath === "/chat" ||
+      basePath === "/" ||
+      basePath === "/library" ||
+      basePath === "/group-chats"
+    );
   }, [basePath]);
 
   const showAddButton = useMemo(() => {
@@ -90,10 +123,20 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
   // Map paths to docs keys for contextual help
   const docsKeyForPath = useMemo(() => {
     if (basePath === "/settings/providers") return "providers";
-    if (basePath === "/settings/models" || basePath.startsWith("/settings/models/")) return "models";
-    if (basePath === "/settings/prompts" || basePath.startsWith("/settings/prompts/")) return "systemPrompts";
-    if (basePath === "/settings/characters" || (basePath.startsWith("/settings/characters/") && basePath.endsWith("/edit"))) return "characters";
-    if (basePath === "/settings/personas" || (basePath.startsWith("/settings/personas/") && basePath.endsWith("/edit"))) return "personas";
+    if (basePath === "/settings/models" || basePath.startsWith("/settings/models/"))
+      return "models";
+    if (basePath === "/settings/prompts" || basePath.startsWith("/settings/prompts/"))
+      return "systemPrompts";
+    if (
+      basePath === "/settings/characters" ||
+      (basePath.startsWith("/settings/characters/") && basePath.endsWith("/edit"))
+    )
+      return "characters";
+    if (
+      basePath === "/settings/personas" ||
+      (basePath.startsWith("/settings/personas/") && basePath.endsWith("/edit"))
+    )
+      return "personas";
     if (basePath === "/settings/accessibility") return "accessibility";
     if (basePath === "/settings/sync") return "sync";
     if (basePath === "/settings/advanced/memory") return "memorySystem";
@@ -107,10 +150,19 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     return basePath.startsWith("/settings");
   }, [basePath]);
 
-  const isCharacterEdit = useMemo(() => /^\/settings\/characters\/[^/]+\/edit$/.test(basePath), [basePath]);
-  const isPersonaEdit = useMemo(() => /^\/settings\/personas\/[^/]+\/edit$/.test(basePath), [basePath]);
-  const isModelEdit = useMemo(() => /^\/settings\/models\/[^/]+$/.test(basePath) && basePath !== '/settings/models/new', [basePath]);
-  const isModelNew = useMemo(() => basePath === '/settings/models/new', [basePath]);
+  const isCharacterEdit = useMemo(
+    () => /^\/settings\/characters\/[^/]+\/edit$/.test(basePath),
+    [basePath],
+  );
+  const isPersonaEdit = useMemo(
+    () => /^\/settings\/personas\/[^/]+\/edit$/.test(basePath),
+    [basePath],
+  );
+  const isModelEdit = useMemo(
+    () => /^\/settings\/models\/[^/]+$/.test(basePath) && basePath !== "/settings/models/new",
+    [basePath],
+  );
+  const isModelNew = useMemo(() => basePath === "/settings/models/new", [basePath]);
   const showSaveButton = isCharacterEdit || isPersonaEdit || isModelEdit || isModelNew;
 
   // Track save button state from window globals
@@ -126,18 +178,18 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
       if (isCharacterEdit) {
         const newCanSave = !!globalWindow.__saveCharacterCanSave;
         const newIsSaving = !!globalWindow.__saveCharacterSaving;
-        setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
-        setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+        setCanSave((prev) => (prev !== newCanSave ? newCanSave : prev));
+        setIsSaving((prev) => (prev !== newIsSaving ? newIsSaving : prev));
       } else if (isPersonaEdit) {
         const newCanSave = !!globalWindow.__savePersonaCanSave;
         const newIsSaving = !!globalWindow.__savePersonaSaving;
-        setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
-        setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+        setCanSave((prev) => (prev !== newCanSave ? newCanSave : prev));
+        setIsSaving((prev) => (prev !== newIsSaving ? newIsSaving : prev));
       } else if (isModelEdit || isModelNew) {
         const newCanSave = !!globalWindow.__saveModelCanSave;
         const newIsSaving = !!globalWindow.__saveModelSaving;
-        setCanSave(prev => prev !== newCanSave ? newCanSave : prev);
-        setIsSaving(prev => prev !== newIsSaving ? newIsSaving : prev);
+        setCanSave((prev) => (prev !== newCanSave ? newCanSave : prev));
+        setIsSaving((prev) => (prev !== newIsSaving ? newIsSaving : prev));
       }
     };
 
@@ -196,13 +248,18 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
       className="fixed top-0 left-0 right-0 z-30 border-b border-white/10 backdrop-blur-md bg-[#0F0F0F]/80"
       style={{
         paddingTop: "calc(env(safe-area-inset-top) + 12px)",
-        paddingBottom: "12px"
+        paddingBottom: "12px",
       }}
     >
       <div className="relative mx-auto flex w-full max-w-md lg:max-w-none items-center justify-between px-3 lg:px-8 h-10">
         {/* Left side: */}
         <div className="flex items-center gap-1 overflow-hidden h-full">
-          <div className={cn("flex items-center justify-center shrink-0", showBackButton ? "w-10" : "w-0")}>
+          <div
+            className={cn(
+              "flex items-center justify-center shrink-0",
+              showBackButton ? "w-10" : "w-0",
+            )}
+          >
             <AnimatePresence mode="wait" initial={false}>
               {showBackButton && (
                 <motion.button
@@ -216,7 +273,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                     "flex items-center justify-center rounded-full p-2",
                     "text-white/70 hover:text-white hover:bg-white/10",
                     interactive.transition.fast,
-                    interactive.active.scale
+                    interactive.active.scale,
                   )}
                   aria-label="Go back"
                 >
@@ -234,7 +291,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
             className={cn(
               typography.h1.size,
               "font-bold text-white tracking-tight truncate leading-none",
-              isCenteredTitle && "absolute left-1/2 -translate-x-1/2 w-auto"
+              isCenteredTitle && "absolute left-1/2 -translate-x-1/2 w-auto",
             )}
           >
             {title}
@@ -249,7 +306,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                 "flex items-center justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
-                interactive.active.scale
+                interactive.active.scale,
               )}
               aria-label="Search"
             >
@@ -263,7 +320,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                 "flex items-center justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
-                interactive.active.scale
+                interactive.active.scale,
               )}
               aria-label="Settings"
             >
@@ -277,7 +334,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                 "flex items-center justify-center rounded-full",
                 "text-white/80 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
-                interactive.active.scale
+                interactive.active.scale,
               )}
               aria-label="Help"
             >
@@ -291,7 +348,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                 "flex items-center justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
-                interactive.active.scale
+                interactive.active.scale,
               )}
               aria-label="Add"
             >
@@ -305,7 +362,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                 "flex items-center justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
-                interactive.active.scale
+                interactive.active.scale,
               )}
               aria-label="Open filters"
             >
@@ -320,7 +377,10 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                   globalWindow.__saveCharacter();
                 } else if (isPersonaEdit && typeof globalWindow.__savePersona === "function") {
                   globalWindow.__savePersona();
-                } else if ((isModelEdit || isModelNew) && typeof globalWindow.__saveModel === "function") {
+                } else if (
+                  (isModelEdit || isModelNew) &&
+                  typeof globalWindow.__saveModel === "function"
+                ) {
                   globalWindow.__saveModel();
                 }
               }}
@@ -330,15 +390,11 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                 interactive.transition.fast,
                 canSave && !isSaving
                   ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 hover:bg-emerald-500/30"
-                  : "bg-white/5 border border-white/10 text-white/40 cursor-not-allowed"
+                  : "bg-white/5 border border-white/10 text-white/40 cursor-not-allowed",
               )}
               aria-label="Save"
             >
-              {isSaving ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Check size={14} />
-              )}
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               <span className="text-xs font-medium">Save</span>
             </button>
           )}

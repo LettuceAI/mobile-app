@@ -400,7 +400,7 @@ fn default_memory_type() -> String {
     "manual".to_string()
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Persona {
     pub id: String,

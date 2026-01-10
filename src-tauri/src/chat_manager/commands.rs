@@ -7,6 +7,11 @@ use crate::chat_manager::storage::{get_base_prompt, PromptType};
 use crate::embedding_model;
 use crate::utils::{log_error, log_info, log_warn, now_millis};
 
+use super::dynamic_memory::{
+    context_enrichment_enabled, dynamic_cold_threshold, dynamic_decay_rate,
+    dynamic_hot_memory_token_budget, dynamic_max_entries, dynamic_min_similarity,
+    dynamic_window_size, generate_memory_id, MEMORY_ID_SPACE,
+};
 use super::prompt_engine;
 use super::prompts;
 use super::prompts::{APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID};
@@ -32,9 +37,6 @@ use crate::utils::emit_debug;
 const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
 const FALLBACK_MAX_OUTPUT_TOKENS: u32 = 4096;
-const FALLBACK_DYNAMIC_WINDOW: u32 = 20;
-const FALLBACK_DYNAMIC_MAX_ENTRIES: u32 = 50;
-const MEMORY_ID_SPACE: u64 = 1_000_000;
 
 /// Determines if dynamic memory is currently active for this character.
 /// Returns true ONLY if BOTH conditions are met:
@@ -74,52 +76,12 @@ fn append_image_directive_instructions(
     return system_prompt;
 }
 
-fn dynamic_window_size(settings: &Settings) -> usize {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.summary_message_interval.max(1))
-        .unwrap_or(FALLBACK_DYNAMIC_WINDOW) as usize
-}
-
 fn manual_window_size(settings: &Settings) -> usize {
     settings
         .advanced_settings
         .as_ref()
         .and_then(|a| a.manual_mode_context_window)
         .unwrap_or(50) as usize
-}
-
-fn dynamic_max_entries(settings: &Settings) -> usize {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.max_entries.max(1))
-        .unwrap_or(FALLBACK_DYNAMIC_MAX_ENTRIES) as usize
-}
-
-const FALLBACK_MIN_SIMILARITY: f32 = 0.35;
-
-fn dynamic_min_similarity(settings: &Settings) -> f32 {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.min_similarity_threshold)
-        .unwrap_or(FALLBACK_MIN_SIMILARITY)
-}
-
-const FALLBACK_HOT_MEMORY_TOKEN_BUDGET: u32 = 2000;
-
-fn dynamic_hot_memory_token_budget(settings: &Settings) -> u32 {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.hot_memory_token_budget)
-        .unwrap_or(FALLBACK_HOT_MEMORY_TOKEN_BUDGET)
 }
 
 /// Calculate total tokens used by hot (non-cold) memories
@@ -177,36 +139,6 @@ fn enforce_hot_memory_budget(app: &AppHandle, session: &mut Session, budget: u32
     }
 
     demoted_count
-}
-
-const FALLBACK_DECAY_RATE: f32 = 0.08;
-const FALLBACK_COLD_THRESHOLD: f32 = 0.3;
-
-fn dynamic_decay_rate(settings: &Settings) -> f32 {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.decay_rate)
-        .unwrap_or(FALLBACK_DECAY_RATE)
-}
-
-fn dynamic_cold_threshold(settings: &Settings) -> f32 {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.cold_threshold)
-        .unwrap_or(FALLBACK_COLD_THRESHOLD)
-}
-
-fn context_enrichment_enabled(settings: &Settings) -> bool {
-    settings
-        .advanced_settings
-        .as_ref()
-        .and_then(|a| a.dynamic_memory.as_ref())
-        .map(|dm| dm.context_enrichment_enabled)
-        .unwrap_or(true) // Default to enabled (v2 users get this by default)
 }
 
 /// Apply importance decay to all hot, unpinned memories.
@@ -298,11 +230,6 @@ fn conversation_count(messages: &[StoredMessage]) -> usize {
         .iter()
         .filter(|m| m.role == "user" || m.role == "assistant")
         .count()
-}
-
-fn generate_memory_id() -> String {
-    let now = now_millis().unwrap_or(0);
-    format!("{:06}", now % MEMORY_ID_SPACE)
 }
 
 /// Build an enriched query from the last 2 messages for better memory retrieval.
@@ -1239,7 +1166,7 @@ pub async fn chat_completion(
             "chat_completion",
             format!(
                 "empty response from provider: has_reasoning={}, reasoning_len={}, raw_len={}, has_sse_marker={}, preview_start={}",
-                has_reasoning, 
+                has_reasoning,
                 reasoning_len,
                 raw_len,
                 has_sse_marker,
@@ -2620,7 +2547,7 @@ pub async fn retry_dynamic_memory(
         .ok_or_else(|| "Session not found".to_string())?;
 
     let character = context.find_character(&session.character_id)?;
-    
+
     // Run the memory cycle with optional model override
     process_dynamic_memory_cycle_with_model(
         &app,
@@ -2635,10 +2562,7 @@ pub async fn retry_dynamic_memory(
 }
 
 #[tauri::command]
-pub async fn trigger_dynamic_memory(
-    app: AppHandle,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn trigger_dynamic_memory(app: AppHandle, session_id: String) -> Result<(), String> {
     log_info(
         &app,
         "dynamic_memory",
@@ -2650,7 +2574,7 @@ pub async fn trigger_dynamic_memory(
         .ok_or_else(|| "Session not found".to_string())?;
 
     let character = context.find_character(&session.character_id)?;
-    
+
     // Run the memory cycle with default settings, but force=true
     process_dynamic_memory_cycle_with_model(
         &app,
@@ -2671,7 +2595,8 @@ async fn process_dynamic_memory_cycle(
     character: &super::types::Character,
 ) -> Result<(), String> {
     // Delegate to the version with model override, using None for defaults, and force=false
-    process_dynamic_memory_cycle_with_model(app, session, settings, character, None, false, false).await
+    process_dynamic_memory_cycle_with_model(app, session, settings, character, None, false, false)
+        .await
 }
 
 /// Process dynamic memory cycle with optional model override.
@@ -2795,15 +2720,13 @@ async fn process_dynamic_memory_cycle_with_model(
             );
             id.to_string()
         }
-        None => {
-            match advanced.summarisation_model_id.as_ref() {
-                Some(id) => id.clone(),
-                None => {
-                    log_warn(app, "dynamic_memory", "summarisation model not configured");
-                    return Err("Summarisation model not configured".to_string());
-                }
+        None => match advanced.summarisation_model_id.as_ref() {
+            Some(id) => id.clone(),
+            None => {
+                log_warn(app, "dynamic_memory", "summarisation model not configured");
+                return Err("Summarisation model not configured".to_string());
             }
-        }
+        },
     };
 
     let (summary_model, summary_provider) =
@@ -2819,7 +2742,11 @@ async fn process_dynamic_memory_cycle_with_model(
     session.memory_status = Some("processing".to_string());
     session.memory_error = None;
     if let Err(e) = save_session(app, session) {
-        log_warn(app, "dynamic_memory", format!("failed to save session state: {}", e));
+        log_warn(
+            app,
+            "dynamic_memory",
+            format!("failed to save session state: {}", e),
+        );
     }
 
     log_info(
@@ -2948,12 +2875,15 @@ async fn process_dynamic_memory_cycle_with_model(
     session.memory_error = None;
     session.updated_at = now_millis()?;
     save_session(app, session)?;
-    
+
     if update_default_on_success && model_id_override.is_some() {
         log_info(
             app,
             "dynamic_memory",
-            format!("updating default summarisation model to: {}", summarisation_model_id),
+            format!(
+                "updating default summarisation model to: {}",
+                summarisation_model_id
+            ),
         );
         if let Err(err) = update_summarisation_model_setting(app, &summarisation_model_id) {
             log_warn(
@@ -2963,7 +2893,7 @@ async fn process_dynamic_memory_cycle_with_model(
             );
         }
     }
-    
+
     let _ = app.emit("dynamic-memory:success", json!({ "sessionId": session.id }));
     log_info(
         app,
@@ -2981,28 +2911,28 @@ async fn process_dynamic_memory_cycle_with_model(
 
 fn update_summarisation_model_setting(app: &AppHandle, model_id: &str) -> Result<(), String> {
     use crate::storage_manager::settings::{internal_read_settings, settings_set_advanced};
-    
-    let settings_json = internal_read_settings(app)?
-        .ok_or_else(|| "Settings not found".to_string())?;
-    
+
+    let settings_json =
+        internal_read_settings(app)?.ok_or_else(|| "Settings not found".to_string())?;
+
     let settings_value: serde_json::Value = serde_json::from_str(&settings_json)
         .map_err(|e| format!("Failed to parse settings: {}", e))?;
-    
+
     let mut advanced = settings_value
         .get("advancedSettings")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    
+
     if let Some(obj) = advanced.as_object_mut() {
         obj.insert(
             "summarisationModelId".to_string(),
             serde_json::Value::String(model_id.to_string()),
         );
     }
-    
+
     let advanced_json = serde_json::to_string(&advanced)
         .map_err(|e| format!("Failed to serialize advanced settings: {}", e))?;
-    
+
     settings_set_advanced(app.clone(), advanced_json)?;
     Ok(())
 }
