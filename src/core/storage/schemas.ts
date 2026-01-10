@@ -711,6 +711,18 @@ export const SceneSchema = z.object({
 });
 export type Scene = z.infer<typeof SceneSchema>;
 
+export const DynamicMemorySettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  summaryMessageInterval: z.number().min(1).default(20),
+  maxEntries: z.number().min(10).max(200).default(50),
+  minSimilarityThreshold: z.number().min(0).max(1).default(0.35),
+  hotMemoryTokenBudget: z.number().min(500).max(10000).default(2000),
+  decayRate: z.number().min(0.01).max(0.3).default(0.08),
+  coldThreshold: z.number().min(0.1).max(0.5).default(0.3),
+  contextEnrichmentEnabled: z.boolean().default(true),
+});
+export type DynamicMemorySettings = z.infer<typeof DynamicMemorySettingsSchema>;
+
 export const GroupSessionSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -953,18 +965,8 @@ export const SettingsSchema = z.object({
       creationHelperModelId: z.string().optional(),
       manualModeContextWindow: z.number().optional(),
       embeddingMaxTokens: z.number().optional(), // 1024, 2048, or 4096
-      dynamicMemory: z
-        .object({
-          enabled: z.boolean().default(false),
-          summaryMessageInterval: z.number().min(1).default(20),
-          maxEntries: z.number().min(10).max(200).default(50),
-          minSimilarityThreshold: z.number().min(0).max(1).default(0.35),
-          hotMemoryTokenBudget: z.number().min(500).max(10000).default(2000),
-          decayRate: z.number().min(0.01).max(0.3).default(0.08),
-          coldThreshold: z.number().min(0.1).max(0.5).default(0.3),
-          contextEnrichmentEnabled: z.boolean().default(true), // v2 exclusive: use last 2 messages for retrieval
-        })
-        .optional(),
+      dynamicMemory: DynamicMemorySettingsSchema.optional(),
+      groupDynamicMemory: DynamicMemorySettingsSchema.optional(),
       accessibility: AccessibilitySettingsSchema.optional(),
     })
     .optional(),

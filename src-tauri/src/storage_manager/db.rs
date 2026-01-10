@@ -480,6 +480,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           archived INTEGER NOT NULL DEFAULT 0,
           chat_type TEXT NOT NULL DEFAULT 'conversation',
           starting_scene TEXT,
+          background_image_path TEXT,
           memories TEXT NOT NULL DEFAULT '[]',
           memory_embeddings TEXT NOT NULL DEFAULT '[]',
           memory_summary TEXT NOT NULL DEFAULT '',

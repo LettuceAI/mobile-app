@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use super::types::Settings;
+use super::types::{DynamicMemorySettings, Settings};
 
 // ============================================================================
 // Shared Memory Entry Trait
@@ -205,6 +205,45 @@ pub fn context_enrichment_enabled(settings: &Settings) -> bool {
         .and_then(|a| a.dynamic_memory.as_ref())
         .map(|dm| dm.context_enrichment_enabled)
         .unwrap_or(true) // Default to enabled
+}
+
+/// Resolve the effective dynamic memory settings, applying optional overrides.
+pub fn effective_dynamic_memory_settings(
+    settings: &Settings,
+    overrides: Option<&DynamicMemorySettings>,
+) -> DynamicMemorySettings {
+    if let Some(custom) = overrides {
+        return custom.clone();
+    }
+
+    if let Some(dynamic) = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+    {
+        return dynamic.clone();
+    }
+
+    DynamicMemorySettings {
+        enabled: false,
+        summary_message_interval: FALLBACK_DYNAMIC_WINDOW,
+        max_entries: FALLBACK_DYNAMIC_MAX_ENTRIES,
+        min_similarity_threshold: FALLBACK_MIN_SIMILARITY,
+        hot_memory_token_budget: FALLBACK_HOT_MEMORY_TOKEN_BUDGET,
+        decay_rate: FALLBACK_DECAY_RATE,
+        cold_threshold: FALLBACK_COLD_THRESHOLD,
+        context_enrichment_enabled: true,
+    }
+}
+
+/// Resolve effective dynamic memory settings for group chats.
+pub fn effective_group_dynamic_memory_settings(settings: &Settings) -> DynamicMemorySettings {
+    let overrides = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.group_dynamic_memory.as_ref());
+
+    effective_dynamic_memory_settings(settings, overrides)
 }
 
 // ============================================================================

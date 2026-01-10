@@ -1,172 +1,604 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  CheckCircle,
+  XCircle,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  AlertTriangle,
+  ChevronDown,
+  Search,
+  Cpu,
+  Zap,
+} from "lucide-react";
 import { storageBridge } from "../../../core/storage/files";
-import { cn } from "../../design-tokens";
+import { cn, interactive } from "../../design-tokens";
 
-export function EmbeddingTestPage() {
-    const [testStatus, setTestStatus] = useState<"idle" | "testing" | "passed" | "failed">("idle");
-    const [testResults, setTestResults] = useState<{
-        success: boolean;
-        message: string;
-        scores: Array<{
-            pairName: string;
-            textA: string;
-            textB: string;
-            similarityScore: number;
-            expected: string;
-        }>;
-    } | null>(null);
-    const [error, setError] = useState<string | null>(null);
+type TestStatus = "idle" | "testing" | "passed" | "failed";
 
-    const runTest = async () => {
-        setTestStatus("testing");
-        setError(null);
-        setTestResults(null);
-
-        try {
-            const results = await storageBridge.runEmbeddingTest();
-            setTestResults(results);
-
-            if (results.success) {
-                setTestStatus("passed");
-            } else {
-                setTestStatus("failed");
-            }
-        } catch (err) {
-            setTestStatus("failed");
-            setError(err instanceof Error ? err.message : String(err));
-        }
-    };
-
-    // Run test automatically on mount
-    useEffect(() => {
-        runTest();
-    }, []);
-
-    return (
-        <div className="flex min-h-screen flex-col">
-            <main className="flex-1 px-4 pb-24 pt-6">
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mx-auto w-full max-w-2xl space-y-6"
-                >
-
-                    {/* Test Status Card */}
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-                        <div className="mb-6 flex justify-center">
-                            {testStatus === "testing" && (
-                                <div className="flex h-20 w-20 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-500/10">
-                                    <Loader2 className="h-10 w-10 text-yellow-400 animate-spin" />
-                                </div>
-                            )}
-                            {testStatus === "passed" && (
-                                <div className="flex h-20 w-20 items-center justify-center rounded-full border border-green-400/20 bg-green-500/10">
-                                    <CheckCircle className="h-10 w-10 text-green-400" />
-                                </div>
-                            )}
-                            {testStatus === "failed" && (
-                                <div className="flex h-20 w-20 items-center justify-center rounded-full border border-red-400/20 bg-red-500/10">
-                                    <XCircle className="h-10 w-10 text-red-400" />
-                                </div>
-                            )}
-                        </div>
-
-                        <h2 className="text-xl font-semibold text-white mb-2">
-                            {testStatus === "testing" && "Running Tests..."}
-                            {testStatus === "passed" && "Verification Passed"}
-                            {testStatus === "failed" && "Verification Failed"}
-                        </h2>
-
-                        <p className="text-white/60 max-w-md mx-auto">
-                            {testStatus === "testing" && "Calculating embeddings and similarity scores for test phrases..."}
-                            {testStatus === "passed" && "The model is correctly identifying semantic similarities."}
-                            {testStatus === "failed" && "The model produced unexpected results. It may be corrupted or incompatible."}
-                        </p>
-
-                        {testStatus !== "testing" && (
-                            <button
-                                onClick={runTest}
-                                className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20 transition-colors"
-                            >
-                                <RefreshCw className="h-4 w-4" />
-                                Run Test Again
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Detailed Results */}
-                    {testResults && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="space-y-4"
-                        >
-                            <h3 className="text-lg font-medium text-white px-1">Detailed Results</h3>
-
-                            <div className="space-y-3">
-                                {testResults.scores.map((score, idx) => (
-                                    <div key={idx} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-white/80">{score.pairName}</span>
-                                            <span className={cn(
-                                                "text-lg font-bold",
-                                                score.similarityScore > 0.6 ? "text-green-400" : "text-yellow-400"
-                                            )}>
-                                                {(score.similarityScore * 100).toFixed(1)}%
-                                            </span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-white/50 bg-black/20 rounded-lg p-3 mb-2">
-                                            <div>
-                                                <span className="block uppercase tracking-wider opacity-50 mb-1">Text A</span>
-                                                "{score.textA}"
-                                            </div>
-                                            <div>
-                                                <span className="block uppercase tracking-wider opacity-50 mb-1">Text B</span>
-                                                "{score.textB}"
-                                            </div>
-                                        </div>
-
-                                        <div className="text-xs text-white/40 flex items-center gap-2">
-                                            <Info className="h-3 w-3" />
-                                            Expected Result: {score.expected}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* Error Message */}
-                    {error && (
-                        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-red-200 text-sm">
-                            <p className="font-medium mb-1">Error Occurred</p>
-                            {error}
-                        </div>
-                    )}
-                </motion.div>
-            </main>
-        </div>
-    );
+interface ScoreResult {
+  pairName: string;
+  textA: string;
+  textB: string;
+  similarityScore: number;
+  expected: string;
+  passed: boolean;
+  category: string;
 }
 
-function Info({ className }: { className?: string }) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={className}
+interface ModelInfo {
+  version: string;
+  maxTokens: number;
+  embeddingDimensions: number;
+}
+
+interface TestResults {
+  success: boolean;
+  message: string;
+  scores: ScoreResult[];
+  modelInfo: ModelInfo;
+}
+
+const CATEGORY_INFO: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  semantic: {
+    label: "Semantic Similarity",
+    color: "blue",
+    icon: <Sparkles className="h-3.5 w-3.5" />,
+  },
+  dissimilar: {
+    label: "Dissimilarity Check",
+    color: "orange",
+    icon: <AlertTriangle className="h-3.5 w-3.5" />,
+  },
+  roleplay: {
+    label: "Roleplay Context",
+    color: "purple",
+    icon: <Zap className="h-3.5 w-3.5" />,
+  },
+};
+
+function getCategoryStyles(category: string, type: "badge" | "border") {
+  const info = CATEGORY_INFO[category] || CATEGORY_INFO.semantic;
+  if (type === "badge") {
+    switch (info.color) {
+      case "blue":
+        return "border-blue-400/30 bg-blue-500/10 text-blue-300";
+      case "orange":
+        return "border-orange-400/30 bg-orange-500/10 text-orange-300";
+      case "purple":
+        return "border-purple-400/30 bg-purple-500/10 text-purple-300";
+      default:
+        return "border-white/20 bg-white/10 text-white/70";
+    }
+  }
+  return "";
+}
+
+function SimilarityBar({ score, passed }: { score: number; passed: boolean }) {
+  const percentage = Math.round(score * 100);
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className={cn("h-full rounded-full", passed ? "bg-emerald-500" : "bg-red-500")}
+        />
+      </div>
+      <span
+        className={cn(
+          "text-sm font-bold tabular-nums w-14 text-right",
+          passed ? "text-emerald-400" : "text-red-400",
+        )}
+      >
+        {percentage}%
+      </span>
+    </div>
+  );
+}
+
+function TestResultCard({
+  result,
+  isExpanded,
+  onToggle,
+}: {
+  result: ScoreResult;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const categoryInfo = CATEGORY_INFO[result.category] || CATEGORY_INFO.semantic;
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border overflow-hidden transition-all",
+        result.passed ? "border-white/10 bg-white/5" : "border-red-500/30 bg-red-500/5",
+      )}
+    >
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+      >
+        <div
+          className={cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+            result.passed ? "bg-emerald-500/20" : "bg-red-500/20",
+          )}
         >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 16v-4" />
-            <path d="M12 8h.01" />
-        </svg>
-    );
+          {result.passed ? (
+            <CheckCircle className="h-4 w-4 text-emerald-400" />
+          ) : (
+            <XCircle className="h-4 w-4 text-red-400" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-white truncate">{result.pairName}</span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium",
+                getCategoryStyles(result.category, "badge"),
+              )}
+            >
+              {categoryInfo.icon}
+              {categoryInfo.label}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={cn(
+              "text-lg font-bold tabular-nums",
+              result.passed ? "text-emerald-400" : "text-red-400",
+            )}
+          >
+            {Math.round(result.similarityScore * 100)}%
+          </span>
+          <ChevronDown
+            className={cn("h-4 w-4 text-white/40 transition-transform", isExpanded && "rotate-180")}
+          />
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-black/30 rounded-lg p-3">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 block mb-1.5">
+                    Text A
+                  </span>
+                  <p className="text-xs text-white/70 leading-relaxed">"{result.textA}"</p>
+                </div>
+                <div className="bg-black/30 rounded-lg p-3">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 block mb-1.5">
+                    Text B
+                  </span>
+                  <p className="text-xs text-white/70 leading-relaxed">"{result.textB}"</p>
+                </div>
+              </div>
+
+              <SimilarityBar score={result.similarityScore} passed={result.passed} />
+
+              <div className="text-xs text-white/50">
+                <span className="text-white/30">Expected:</span> {result.expected}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export function EmbeddingTestPage() {
+  const [testStatus, setTestStatus] = useState<TestStatus>("idle");
+  const [testResults, setTestResults] = useState<TestResults | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
+  const [showAllResults, setShowAllResults] = useState(false);
+
+  // Custom comparison state
+  const [customTextA, setCustomTextA] = useState("");
+  const [customTextB, setCustomTextB] = useState("");
+  const [customScore, setCustomScore] = useState<number | null>(null);
+  const [comparingCustom, setComparingCustom] = useState(false);
+  const [customError, setCustomError] = useState<string | null>(null);
+
+  const runTest = async () => {
+    setTestStatus("testing");
+    setError(null);
+    setTestResults(null);
+    setExpandedCards(new Set());
+
+    try {
+      const results = await storageBridge.runEmbeddingTest();
+      setTestResults(results);
+      setTestStatus(results.success ? "passed" : "failed");
+
+      // Auto-expand failed tests
+      const failedIndices = new Set<number>();
+      results.scores.forEach((score, idx) => {
+        if (!score.passed) failedIndices.add(idx);
+      });
+      setExpandedCards(failedIndices);
+    } catch (err) {
+      setTestStatus("failed");
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const compareCustom = async () => {
+    if (!customTextA.trim() || !customTextB.trim()) {
+      setCustomError("Please enter both texts to compare");
+      return;
+    }
+
+    setComparingCustom(true);
+    setCustomError(null);
+    setCustomScore(null);
+
+    try {
+      const score = await storageBridge.compareCustomTexts(customTextA, customTextB);
+      setCustomScore(score);
+    } catch (err) {
+      setCustomError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setComparingCustom(false);
+    }
+  };
+
+  const toggleCard = (idx: number) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+      return next;
+    });
+  };
+
+  // Run test automatically on mount
+  useEffect(() => {
+    runTest();
+  }, []);
+
+  // Categorize results
+  const categorizedResults = testResults?.scores.reduce(
+    (acc, score, idx) => {
+      const cat = score.category || "semantic";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push({ ...score, originalIndex: idx });
+      return acc;
+    },
+    {} as Record<string, (ScoreResult & { originalIndex: number })[]>,
+  );
+
+  const passedCount = testResults?.scores.filter((s) => s.passed).length ?? 0;
+  const totalCount = testResults?.scores.length ?? 0;
+  const failedCount = totalCount - passedCount;
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <main className="flex-1 px-4 pb-24 pt-4">
+        <div className="mx-auto w-full max-w-2xl space-y-6">
+          {/* Test Status Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-white/10 bg-white/5 p-6"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4">
+                {testStatus === "testing" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blue-400/30 bg-blue-500/10">
+                    <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
+                  </div>
+                )}
+                {testStatus === "passed" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10">
+                    <CheckCircle className="h-8 w-8 text-emerald-400" />
+                  </div>
+                )}
+                {testStatus === "failed" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-400/30 bg-red-500/10">
+                    <XCircle className="h-8 w-8 text-red-400" />
+                  </div>
+                )}
+              </div>
+
+              <h2 className="text-lg font-semibold text-white mb-1">
+                {testStatus === "testing" && "Running Tests..."}
+                {testStatus === "passed" && "All Tests Passed"}
+                {testStatus === "failed" && (error ? "Test Error" : "Some Tests Failed")}
+              </h2>
+
+              {testResults && (
+                <div className="flex items-center gap-4 mt-2 mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                    <span className="text-sm text-emerald-400 font-medium">
+                      {passedCount} passed
+                    </span>
+                  </div>
+                  {failedCount > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <XCircle className="h-4 w-4 text-red-400" />
+                      <span className="text-sm text-red-400 font-medium">{failedCount} failed</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <p className="text-sm text-white/60 max-w-md">
+                {testStatus === "testing" &&
+                  "Computing embeddings and comparing similarity scores..."}
+                {testStatus === "passed" &&
+                  "The embedding model is correctly identifying semantic relationships."}
+                {testStatus === "failed" &&
+                  (error ||
+                    "Some tests produced unexpected results. Consider reinstalling the model.")}
+              </p>
+
+              {testStatus === "failed" && failedCount >= 4 && !error && (
+                <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-red-200">Model May Be Corrupted</p>
+                      <p className="text-xs text-red-200/70 mt-1">
+                        {failedCount} or more tests failed. The embedding model may be corrupted or
+                        incompatible. We recommend reinstalling it.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {testStatus !== "testing" && (
+                <button
+                  onClick={runTest}
+                  className={cn(
+                    "mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium",
+                    "border border-white/10 bg-white/5 text-white",
+                    interactive.transition.fast,
+                    "hover:bg-white/10",
+                  )}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Run Tests Again
+                </button>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Model Info */}
+          {testResults?.modelInfo && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="rounded-xl border border-white/10 bg-white/5 p-4"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10">
+                  <Cpu className="h-4 w-4 text-white/70" />
+                </div>
+                <span className="text-sm font-medium text-white">Model Information</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-black/30 rounded-lg p-3 text-center">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 block mb-1">
+                    Version
+                  </span>
+                  <span className="text-sm font-semibold text-white">
+                    {testResults.modelInfo.version}
+                  </span>
+                </div>
+                <div className="bg-black/30 rounded-lg p-3 text-center">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 block mb-1">
+                    Max Tokens
+                  </span>
+                  <span className="text-sm font-semibold text-white">
+                    {testResults.modelInfo.maxTokens.toLocaleString()}
+                  </span>
+                </div>
+                <div className="bg-black/30 rounded-lg p-3 text-center">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 block mb-1">
+                    Dimensions
+                  </span>
+                  <span className="text-sm font-semibold text-white">
+                    {testResults.modelInfo.embeddingDimensions}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Detailed Results */}
+          {testResults && categorizedResults && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
+                  Test Results
+                </h3>
+                <button
+                  onClick={() => setShowAllResults(!showAllResults)}
+                  className="text-xs text-white/50 hover:text-white/70 transition-colors"
+                >
+                  {showAllResults ? "Collapse All" : "Expand All"}
+                </button>
+              </div>
+
+              {Object.entries(categorizedResults).map(([category, results]) => {
+                const categoryInfo = CATEGORY_INFO[category] || CATEGORY_INFO.semantic;
+                const categoryPassed = results.every((r) => r.passed);
+
+                return (
+                  <div key={category} className="space-y-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-medium",
+                          getCategoryStyles(category, "badge"),
+                        )}
+                      >
+                        {categoryInfo.icon}
+                        {categoryInfo.label}
+                      </span>
+                      <span className="text-[10px] text-white/40">
+                        {results.filter((r) => r.passed).length}/{results.length} passed
+                      </span>
+                      {categoryPassed && (
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-400 ml-auto" />
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {results.map((result) => (
+                        <TestResultCard
+                          key={result.originalIndex}
+                          result={result}
+                          isExpanded={showAllResults || expandedCards.has(result.originalIndex)}
+                          onToggle={() => toggleCard(result.originalIndex)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </motion.div>
+          )}
+          
+          {/* Custom Comparison */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="rounded-xl border border-white/10 bg-white/5 p-4"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-400/30 bg-blue-500/10">
+                <Search className="h-4 w-4 text-blue-400" />
+              </div>
+              <div>
+                <span className="text-sm font-medium text-white block">Custom Comparison</span>
+                <span className="text-[11px] text-white/45">
+                  Test similarity between any two texts
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/40 block mb-1.5">
+                  First Text
+                </label>
+                <textarea
+                  value={customTextA}
+                  onChange={(e) => setCustomTextA(e.target.value)}
+                  placeholder="Enter the first text to compare..."
+                  rows={2}
+                  className={cn(
+                    "w-full rounded-lg border border-white/10 bg-black/30",
+                    "px-3 py-2 text-sm text-white placeholder-white/30",
+                    "focus:border-white/20 focus:outline-none resize-none",
+                  )}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/40 block mb-1.5">
+                  Second Text
+                </label>
+                <textarea
+                  value={customTextB}
+                  onChange={(e) => setCustomTextB(e.target.value)}
+                  placeholder="Enter the second text to compare..."
+                  rows={2}
+                  className={cn(
+                    "w-full rounded-lg border border-white/10 bg-black/30",
+                    "px-3 py-2 text-sm text-white placeholder-white/30",
+                    "focus:border-white/20 focus:outline-none resize-none",
+                  )}
+                />
+              </div>
+
+              <button
+                onClick={compareCustom}
+                disabled={comparingCustom || !customTextA.trim() || !customTextB.trim()}
+                className={cn(
+                  "w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium",
+                  "border border-blue-500/30 bg-blue-500/10 text-blue-200",
+                  interactive.transition.fast,
+                  "hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed",
+                )}
+              >
+                {comparingCustom ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Comparing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4" />
+                    Compare Texts
+                  </>
+                )}
+              </button>
+
+              {customError && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                  {customError}
+                </div>
+              )}
+
+              {customScore !== null && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="rounded-lg border border-white/10 bg-black/30 p-4"
+                >
+                  <div className="text-center mb-3">
+                    <span className="text-3xl font-bold text-white">
+                      {Math.round(customScore * 100)}%
+                    </span>
+                    <span className="text-sm text-white/50 ml-1">similarity</span>
+                  </div>
+                  <SimilarityBar score={customScore} passed={customScore > 0.5} />
+                  <p className="text-xs text-white/40 text-center mt-3">
+                    {customScore > 0.7
+                      ? "Very high similarity - texts are semantically very similar"
+                      : customScore > 0.5
+                        ? "Moderate similarity - texts share some common meaning"
+                        : customScore > 0.3
+                          ? "Low similarity - texts have limited overlap"
+                          : "Very low similarity - texts appear unrelated"}
+                  </p>
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
+          
+        </div>
+      </main>
+    </div>
+  );
 }

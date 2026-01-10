@@ -563,6 +563,15 @@ pub struct TestResult {
     success: bool,
     message: String,
     scores: Vec<ScoreComparison>,
+    model_info: ModelTestInfo,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelTestInfo {
+    version: String,
+    max_tokens: u32,
+    embedding_dimensions: usize,
 }
 
 #[derive(serde::Serialize)]
@@ -573,74 +582,174 @@ pub struct ScoreComparison {
     text_b: String,
     similarity_score: f32,
     expected: String,
+    passed: bool,
+    category: String,
 }
 
 #[tauri::command]
 pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
-    let anchor_text = "The quick brown fox jumps over the dog";
-    let positive_text = "A fast fox leaps over a canine";
-    let negative_text = "Planetary motion relies on gravity and mass";
+    println!("Starting comprehensive embedding test...");
 
-    println!("Starting embedding test...");
+    // Test cases organized by category
+    let test_cases: Vec<(&str, &str, &str, &str, f32, &str)> = vec![
+        // Semantic similarity tests
+        (
+            "Semantic: Animal Description",
+            "The quick brown fox jumps over the lazy dog",
+            "A fast fox leaps over a sleepy canine",
+            "semantic",
+            0.6,
+            "High similarity expected - same meaning, different words",
+        ),
+        (
+            "Semantic: Weather",
+            "It's raining heavily outside today",
+            "There's a big storm with lots of precipitation",
+            "semantic",
+            0.5,
+            "High similarity expected - related weather concepts",
+        ),
+        (
+            "Semantic: Greeting",
+            "Hello, how are you doing today?",
+            "Hi there, how's it going?",
+            "semantic",
+            0.6,
+            "High similarity expected - same intent",
+        ),
+        // Dissimilar tests (should have low scores)
+        (
+            "Dissimilar: Fox vs Physics",
+            "The quick brown fox jumps over the lazy dog",
+            "Quantum mechanics describes subatomic particle behavior",
+            "dissimilar",
+            0.5,
+            "Low similarity expected - unrelated topics",
+        ),
+        (
+            "Dissimilar: Food vs Technology",
+            "I love eating pizza with extra cheese",
+            "The computer crashed and lost all my files",
+            "dissimilar",
+            0.5,
+            "Low similarity expected - unrelated topics",
+        ),
+        // Roleplay-relevant tests
+        (
+            "Roleplay: Emotional State",
+            "She felt a wave of sadness wash over her",
+            "Her heart ached with sorrow and grief",
+            "roleplay",
+            0.55,
+            "High similarity expected - same emotional content",
+        ),
+        (
+            "Roleplay: Action Description",
+            "He drew his sword and charged at the enemy",
+            "The warrior unsheathed his blade and rushed forward to attack",
+            "roleplay",
+            0.55,
+            "High similarity expected - same action described differently",
+        ),
+        (
+            "Roleplay: Setting",
+            "The tavern was dimly lit with flickering candles",
+            "Candlelight cast shadows across the dark inn",
+            "roleplay",
+            0.5,
+            "High similarity expected - similar scene description",
+        ),
+    ];
 
-    println!("Embedding anchor text...");
-    let anchor_emb = compute_embedding(app.clone(), anchor_text.to_string())
-        .await
-        .map_err(|e| format!("Failed to embed anchor: {}", e))?;
+    let mut scores: Vec<ScoreComparison> = Vec::new();
+    let mut all_passed = true;
+    let mut embedding_dim = 0;
 
-    println!("Embedding positive text...");
-    let positive_emb = compute_embedding(app.clone(), positive_text.to_string())
-        .await
-        .map_err(|e| format!("Failed to embed positive text: {}", e))?;
+    for (name, text_a, text_b, category, threshold, expected_desc) in test_cases {
+        println!("Testing: {}", name);
 
-    println!("Embedding negative text...");
-    let negative_emb = compute_embedding(app.clone(), negative_text.to_string())
-        .await
-        .map_err(|e| format!("Failed to embed negative text: {}", e))?;
+        let emb_a = compute_embedding(app.clone(), text_a.to_string())
+            .await
+            .map_err(|e| format!("Failed to embed '{}': {}", name, e))?;
 
-    println!("Calculating similarities...");
+        if embedding_dim == 0 {
+            embedding_dim = emb_a.len();
+        }
 
-    let pos_score = cosine_similarity(&anchor_emb, &positive_emb);
-    let neg_score = cosine_similarity(&anchor_emb, &negative_emb);
+        let emb_b = compute_embedding(app.clone(), text_b.to_string())
+            .await
+            .map_err(|e| format!("Failed to embed '{}': {}", name, e))?;
 
-    // 4. Analyze Results
-    // We expect the positive score to be significantly higher than the negative score.
-    // For standard embedding models:
-    // - High similarity is usually > 0.7 or 0.8
-    // - Low similarity is usually < 0.3 or 0.4
+        let similarity = cosine_similarity(&emb_a, &emb_b);
 
-    let passed = pos_score > neg_score && pos_score > 0.6;
+        let passed = if category == "dissimilar" {
+            similarity < threshold
+        } else {
+            similarity >= threshold
+        };
 
-    let message = if passed {
+        if !passed {
+            all_passed = false;
+        }
+
+        scores.push(ScoreComparison {
+            pair_name: name.to_string(),
+            text_a: text_a.to_string(),
+            text_b: text_b.to_string(),
+            similarity_score: similarity,
+            expected: expected_desc.to_string(),
+            passed,
+            category: category.to_string(),
+        });
+    }
+
+    // Get model info
+    let model_info = get_embedding_model_info(app.clone())?;
+
+    let passed_count = scores.iter().filter(|s| s.passed).count();
+    let total_count = scores.len();
+
+    let message = if all_passed {
         format!(
-            "Test PASSED: Model correctly identified similarity. (Positive: {:.4} > Negative: {:.4})",
-            pos_score, neg_score
+            "All {} tests passed! The embedding model is working correctly.",
+            total_count
         )
     } else {
         format!(
-            "Test FAILED: Scores were unexpected. (Positive: {:.4}, Negative: {:.4})",
-            pos_score, neg_score
+            "{}/{} tests passed. Some results were unexpected - the model may need reinstallation.",
+            passed_count, total_count
         )
     };
 
     Ok(TestResult {
-        success: passed,
+        success: all_passed,
         message,
-        scores: vec![
-            ScoreComparison {
-                pair_name: "Positive Match".to_string(),
-                text_a: anchor_text.to_string(),
-                text_b: positive_text.to_string(),
-                similarity_score: pos_score,
-                expected: "High (> 0.6)".to_string(),
-            },
-            ScoreComparison {
-                pair_name: "Negative Match".to_string(),
-                text_a: anchor_text.to_string(),
-                text_b: negative_text.to_string(),
-                similarity_score: neg_score,
-                expected: "Low (< positive score)".to_string(),
-            },
-        ],
+        scores,
+        model_info: ModelTestInfo {
+            version: model_info.version.unwrap_or_else(|| "unknown".to_string()),
+            max_tokens: model_info.max_tokens,
+            embedding_dimensions: embedding_dim,
+        },
     })
+}
+
+#[tauri::command]
+pub async fn compare_custom_texts(
+    app: AppHandle,
+    text_a: String,
+    text_b: String,
+) -> Result<f32, String> {
+    if text_a.trim().is_empty() || text_b.trim().is_empty() {
+        return Err("Both texts must be non-empty".to_string());
+    }
+
+    let emb_a = compute_embedding(app.clone(), text_a)
+        .await
+        .map_err(|e| format!("Failed to embed first text: {}", e))?;
+
+    let emb_b = compute_embedding(app.clone(), text_b)
+        .await
+        .map_err(|e| format!("Failed to embed second text: {}", e))?;
+
+    Ok(cosine_similarity(&emb_a, &emb_b))
 }

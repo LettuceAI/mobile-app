@@ -124,7 +124,7 @@ export function useGroupChatSettingsController(groupSessionId?: string) {
         setUi({ saving: false });
       }
     },
-    [session, setUi],
+    [session],
   );
 
   const handleAddCharacter = useCallback(

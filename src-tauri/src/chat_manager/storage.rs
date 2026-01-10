@@ -83,6 +83,7 @@ fn default_settings() -> Settings {
             creation_helper_enabled: None,
             creation_helper_model_id: None,
             dynamic_memory: None,
+            group_dynamic_memory: None,
             manual_mode_context_window: None,
             embedding_max_tokens: None,
             accessibility: Some(AccessibilitySettings {

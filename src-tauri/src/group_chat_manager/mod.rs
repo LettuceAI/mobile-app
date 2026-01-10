@@ -20,10 +20,8 @@ use crate::usage::add_usage_record;
 use crate::usage::tracking::{RequestUsage, UsageFinishReason, UsageOperationType};
 
 use crate::chat_manager::dynamic_memory::{
-    apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled,
-    dynamic_cold_threshold, dynamic_decay_rate, dynamic_hot_memory_token_budget,
-    dynamic_max_entries, dynamic_min_similarity, dynamic_window_size, enforce_hot_memory_budget,
-    ensure_pinned_hot, generate_memory_id, is_dynamic_memory_enabled, mark_memories_accessed,
+    apply_memory_decay, calculate_hot_memory_tokens, effective_group_dynamic_memory_settings,
+    enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id, mark_memories_accessed,
     normalize_query_text, promote_cold_memories, search_cold_memory_indices_by_keyword,
     select_relevant_memory_indices, trim_memories_to_max,
 };
@@ -38,7 +36,9 @@ use crate::chat_manager::storage::{load_personas, load_settings, select_model};
 use crate::chat_manager::tooling::{
     parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition,
 };
-use crate::chat_manager::types::{Character, Model, Persona, ProviderCredential, Settings};
+use crate::chat_manager::types::{
+    Character, DynamicMemorySettings, Model, Persona, ProviderCredential, Settings,
+};
 use crate::embedding_model;
 use crate::models::calculate_request_cost;
 use crate::storage_manager::db::{now_ms, SwappablePool};
@@ -327,6 +327,14 @@ fn conversation_window(messages: &[GroupMessage], limit: usize) -> Vec<GroupMess
     convo
 }
 
+fn manual_window_size(settings: &Settings) -> usize {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.manual_mode_context_window)
+        .unwrap_or(50) as usize
+}
+
 fn push_group_memory_event(session: &mut GroupSession, event: Value) {
     session.memory_tool_events.push(event);
     if session.memory_tool_events.len() > 50 {
@@ -459,7 +467,9 @@ async fn process_group_dynamic_memory_cycle(
     settings: &Settings,
     pool: &State<'_, SwappablePool>,
 ) -> Result<(), String> {
-    if !is_dynamic_memory_enabled(settings) {
+    let dynamic_settings = effective_group_dynamic_memory_settings(settings);
+
+    if !dynamic_settings.enabled {
         log_info(
             app,
             "group_dynamic_memory",
@@ -468,7 +478,7 @@ async fn process_group_dynamic_memory_cycle(
         return Ok(());
     }
 
-    let window_size = dynamic_window_size(settings);
+    let window_size = dynamic_settings.summary_message_interval.max(1) as usize;
     let conn = pool.get_connection()?;
 
     // Load recent messages
@@ -550,8 +560,8 @@ async fn process_group_dynamic_memory_cycle(
         );
     }
 
-    let decay_rate = dynamic_decay_rate(settings);
-    let cold_threshold = dynamic_cold_threshold(settings);
+    let decay_rate = dynamic_settings.decay_rate;
+    let cold_threshold = dynamic_settings.cold_threshold;
     let (decayed, demoted) =
         apply_memory_decay(&mut session.memory_embeddings, decay_rate, cold_threshold);
     if decayed > 0 || !demoted.is_empty() {
@@ -692,6 +702,7 @@ async fn process_group_dynamic_memory_cycle(
         &api_key,
         session,
         settings,
+        &dynamic_settings,
         &summary,
         &convo_window,
     )
@@ -738,7 +749,7 @@ async fn process_group_dynamic_memory_cycle(
         );
     }
 
-    let token_budget = dynamic_hot_memory_token_budget(settings);
+    let token_budget = dynamic_settings.hot_memory_token_budget;
     let demoted = enforce_hot_memory_budget(&mut session.memory_embeddings, token_budget);
     if !demoted.is_empty() {
         log_info(
@@ -753,7 +764,7 @@ async fn process_group_dynamic_memory_cycle(
     }
 
     // Enforce max entries
-    let max_entries = dynamic_max_entries(settings);
+    let max_entries = dynamic_settings.max_entries.max(1) as usize;
     let trimmed = trim_memories_to_max(&mut session.memory_embeddings, max_entries);
     if trimmed > 0 {
         log_info(
@@ -951,11 +962,12 @@ async fn run_group_memory_tool_update(
     api_key: &str,
     session: &mut GroupSession,
     settings: &Settings,
+    dynamic_settings: &DynamicMemorySettings,
     summary: &str,
     convo_window: &[GroupMessage],
 ) -> Result<Vec<Value>, String> {
     let tool_config = build_memory_tool_config();
-    let max_entries = dynamic_max_entries(settings);
+    let max_entries = dynamic_settings.max_entries.max(1) as usize;
 
     let mut messages_for_api = Vec::new();
     let system_role = crate::chat_manager::request_builder::system_role_for(provider_cred);
@@ -978,7 +990,7 @@ async fn run_group_memory_tool_update(
     }
 
     let current_tokens = calculate_hot_memory_tokens(&session.memory_embeddings);
-    let token_budget = dynamic_hot_memory_token_budget(settings);
+    let token_budget = dynamic_settings.hot_memory_token_budget;
 
     let rendered = base_template
         .replace("{{max_entries}}", &max_entries.to_string())
@@ -2106,31 +2118,38 @@ async fn generate_character_response(
     let (model, cred) = select_model(settings, &character)?;
     let api_key = resolve_api_key(app, cred, "group_chat")?;
 
-    // Retrieve relevant memories for context using dynamic memory settings
-    let min_similarity = dynamic_min_similarity(settings);
-    let fixed = ensure_pinned_hot(&mut context.session.memory_embeddings);
-    if fixed > 0 {
-        log_info(
+    let dynamic_settings = effective_group_dynamic_memory_settings(settings);
+    let dynamic_enabled = dynamic_settings.enabled;
+
+    let retrieved_memories = if dynamic_enabled {
+        // Retrieve relevant memories for context using dynamic memory settings
+        let min_similarity = dynamic_settings.min_similarity_threshold;
+        let fixed = ensure_pinned_hot(&mut context.session.memory_embeddings);
+        if fixed > 0 {
+            log_info(
+                app,
+                "group_dynamic_memory",
+                format!("Restored {} pinned memories to hot", fixed),
+            );
+        }
+
+        let search_query = if dynamic_settings.context_enrichment_enabled {
+            build_enriched_query(&context.recent_messages)
+        } else {
+            context.user_message.clone()
+        };
+
+        select_relevant_memories(
             app,
-            "group_dynamic_memory",
-            format!("Restored {} pinned memories to hot", fixed),
-        );
-    }
-
-    let search_query = if context_enrichment_enabled(settings) {
-        build_enriched_query(&context.recent_messages)
+            &context.session,
+            &search_query,
+            5, // limit
+            min_similarity,
+        )
+        .await
     } else {
-        context.user_message.clone()
+        Vec::new()
     };
-
-    let retrieved_memories = select_relevant_memories(
-        app,
-        &context.session,
-        &search_query,
-        5, // limit
-        min_similarity,
-    )
-    .await;
 
     // Mark retrieved memories as accessed and promote cold ones
     if !retrieved_memories.is_empty() {
@@ -2148,7 +2167,7 @@ async fn generate_character_response(
                 retrieved_memories.len(),
                 promoted,
                 accessed,
-                context_enrichment_enabled(settings)
+                dynamic_settings.context_enrichment_enabled
             ),
         );
     }
@@ -2173,11 +2192,27 @@ async fn generate_character_response(
 
     // Apply conversation window limit for dynamic memory (like normal chat)
     // This ensures we only send the last N messages to the LLM based on dynamic_window_size
-    let messages_for_generation = if is_dynamic_memory_enabled(settings) {
-        let window_size = dynamic_window_size(settings);
+    let messages_for_generation = if dynamic_settings.enabled {
+        let window_size = dynamic_settings.summary_message_interval.max(1) as usize;
         conversation_window(&context.recent_messages, window_size)
     } else {
-        context.recent_messages.clone()
+        let manual_window = manual_window_size(settings).max(1);
+        let recent_messages = if context.recent_messages.len() >= manual_window {
+            context.recent_messages.clone()
+        } else {
+            match load_recent_group_messages(&conn, &context.session.id, manual_window as i32) {
+                Ok(messages) => messages,
+                Err(err) => {
+                    log_warn(
+                        app,
+                        "group_chat",
+                        format!("Failed to load manual window messages: {}", err),
+                    );
+                    context.recent_messages.clone()
+                }
+            }
+        };
+        conversation_window(&recent_messages, manual_window)
     };
 
     let api_messages = build_messages_for_api(
@@ -2599,12 +2634,13 @@ pub async fn group_chat_send(
         ),
     );
 
-    if is_dynamic_memory_enabled(&settings) {
-        let conn = pool.get_connection()?;
-        let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
-        let mut updated_session: GroupSession =
-            serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+    let conn = pool.get_connection()?;
+    let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
+    let mut updated_session: GroupSession =
+        serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+    let dynamic_settings = effective_group_dynamic_memory_settings(&settings);
 
+    if dynamic_settings.enabled {
         if let Err(e) =
             process_group_dynamic_memory_cycle(&app, &mut updated_session, &settings, &pool).await
         {
@@ -2639,6 +2675,16 @@ pub async fn group_chat_retry_dynamic_memory(
     let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
     let mut session: GroupSession =
         serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+    let dynamic_settings = effective_group_dynamic_memory_settings(&settings);
+
+    if !dynamic_settings.enabled {
+        log_info(
+            &app,
+            "group_chat_retry_dynamic_memory",
+            "dynamic memory disabled for group; skipping manual retry".to_string(),
+        );
+        return Ok(());
+    }
 
     process_group_dynamic_memory_cycle(&app, &mut session, &settings, &pool).await
 }

@@ -227,6 +227,7 @@ pub fn run() {
             embedding_model::compute_embedding,
             embedding_model::initialize_embedding_model,
             embedding_model::run_embedding_test,
+            embedding_model::compare_custom_texts,
             embedding_model::delete_embedding_model,
             image_generator::commands::generate_image,
             logger::log_to_file,

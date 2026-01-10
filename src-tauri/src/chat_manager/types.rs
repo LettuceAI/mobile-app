@@ -112,6 +112,8 @@ pub struct AdvancedSettings {
     #[serde(default)]
     pub dynamic_memory: Option<DynamicMemorySettings>,
     #[serde(default)]
+    pub group_dynamic_memory: Option<DynamicMemorySettings>,
+    #[serde(default)]
     pub manual_mode_context_window: Option<u32>,
     /// Max token capacity for embedding model (1024, 2048, or 4096)
     #[serde(default)]

@@ -110,8 +110,17 @@ export const storageBridge = {
         textB: string;
         similarityScore: number;
         expected: string;
+        passed: boolean;
+        category: string;
       }>;
+      modelInfo: {
+        version: string;
+        maxTokens: number;
+        embeddingDimensions: number;
+      };
     }>("run_embedding_test"),
+  compareCustomTexts: (textA: string, textB: string) =>
+    invoke<number>("compare_custom_texts", { textA, textB }),
   deleteEmbeddingModel: () => invoke("delete_embedding_model") as Promise<void>,
 
   providerUpsert: (cred: unknown) =>
