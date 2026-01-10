@@ -746,6 +746,10 @@ export const GroupSessionSchema = z.object({
         id: z.string().optional(),
         windowStart: z.number().int().optional(),
         summary: z.string().optional(),
+        error: z.string().optional(),
+        status: z.string().optional(),
+        stage: z.string().optional(),
+        windowMessageIds: z.array(z.string()).optional(),
         actions: z
           .array(
             z.object({
@@ -1081,7 +1085,11 @@ export const SessionSchema = z.object({
         id: z.string(),
         windowStart: z.number().int(),
         windowEnd: z.number().int(),
+        windowMessageIds: z.array(z.string()).optional(),
         summary: z.string(),
+        error: z.string().optional(),
+        status: z.string().optional(),
+        stage: z.string().optional(),
         actions: z.array(
           z.object({
             name: z.string(),

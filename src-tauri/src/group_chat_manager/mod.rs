@@ -20,9 +20,12 @@ use crate::usage::add_usage_record;
 use crate::usage::tracking::{RequestUsage, UsageFinishReason, UsageOperationType};
 
 use crate::chat_manager::dynamic_memory::{
-    context_enrichment_enabled, dynamic_cold_threshold, dynamic_decay_rate,
-    dynamic_hot_memory_token_budget, dynamic_max_entries, dynamic_min_similarity,
-    dynamic_window_size, generate_memory_id, is_dynamic_memory_enabled,
+    apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled,
+    dynamic_cold_threshold, dynamic_decay_rate, dynamic_hot_memory_token_budget,
+    dynamic_max_entries, dynamic_min_similarity, dynamic_window_size, enforce_hot_memory_budget,
+    ensure_pinned_hot, generate_memory_id, is_dynamic_memory_enabled, mark_memories_accessed,
+    normalize_query_text, promote_cold_memories, search_cold_memory_indices_by_keyword,
+    select_relevant_memory_indices, trim_memories_to_max,
 };
 use crate::chat_manager::prompts::{
     self, APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
@@ -279,131 +282,6 @@ async fn record_decision_maker_usage(
     }
 }
 
-// ============================================================================
-// Memory Management Functions
-// ============================================================================
-
-/// Calculate total tokens used by hot (non-cold) memories
-fn calculate_hot_memory_tokens(session: &GroupSession) -> u32 {
-    session
-        .memory_embeddings
-        .iter()
-        .filter(|m| !m.is_cold)
-        .map(|m| m.token_count as u32)
-        .sum()
-}
-
-/// Enforce the hot memory token budget by demoting oldest memories to cold storage.
-fn enforce_hot_memory_budget(app: &AppHandle, session: &mut GroupSession, budget: u32) -> usize {
-    let mut current_tokens = calculate_hot_memory_tokens(session);
-
-    if current_tokens <= budget {
-        return 0;
-    }
-
-    // Sort hot memories by last_accessed_at (oldest first) for demotion
-    let mut hot_indices: Vec<(usize, i64)> = session
-        .memory_embeddings
-        .iter()
-        .enumerate()
-        .filter(|(_, m)| !m.is_cold && !m.is_pinned)
-        .map(|(i, m)| (i, m.last_accessed_at))
-        .collect();
-
-    hot_indices.sort_by_key(|(_, accessed)| *accessed);
-
-    let mut demoted_count = 0;
-
-    for (idx, _) in hot_indices {
-        if current_tokens <= budget {
-            break;
-        }
-
-        let memory = &mut session.memory_embeddings[idx];
-        let tokens_freed = memory.token_count as u32;
-        memory.is_cold = true;
-        current_tokens = current_tokens.saturating_sub(tokens_freed);
-        demoted_count += 1;
-
-        log_info(
-            app,
-            "group_dynamic_memory",
-            format!(
-                "Demoted memory {} to cold storage (freed {} tokens)",
-                memory.id, tokens_freed
-            ),
-        );
-    }
-
-    demoted_count
-}
-
-/// Apply importance decay to all hot, unpinned memories.
-/// Memories that fall below cold_threshold are demoted to cold storage.
-fn apply_memory_decay(
-    app: &AppHandle,
-    session: &mut GroupSession,
-    decay_rate: f32,
-    cold_threshold: f32,
-) -> (usize, usize) {
-    let mut decayed = 0;
-    let mut demoted = 0;
-
-    for mem in session.memory_embeddings.iter_mut() {
-        if mem.is_cold || mem.is_pinned {
-            continue;
-        }
-
-        mem.importance_score = (mem.importance_score - decay_rate).max(0.0);
-        decayed += 1;
-
-        if mem.importance_score < cold_threshold {
-            mem.is_cold = true;
-            demoted += 1;
-            log_info(
-                app,
-                "group_dynamic_memory",
-                format!(
-                    "Memory {} demoted to cold (score: {:.2} < threshold: {:.2})",
-                    mem.id, mem.importance_score, cold_threshold
-                ),
-            );
-        }
-    }
-
-    (decayed, demoted)
-}
-
-/// Promote cold memories to hot (called when they match a keyword search)
-fn promote_cold_memories(app: &AppHandle, session: &mut GroupSession, memory_ids: &[String]) {
-    let now = now_millis().unwrap_or_default();
-    for mem in session.memory_embeddings.iter_mut() {
-        if memory_ids.contains(&mem.id) && mem.is_cold {
-            mem.is_cold = false;
-            mem.importance_score = 0.7;
-            mem.last_accessed_at = now as i64;
-            mem.access_count += 1;
-            log_info(
-                app,
-                "group_dynamic_memory",
-                format!("Promoted cold memory {} to hot", mem.id),
-            );
-        }
-    }
-}
-
-/// Update last_accessed_at and boost importance_score for retrieved memories
-fn mark_memories_accessed(session: &mut GroupSession, memory_ids: &[String]) {
-    let now = now_millis().unwrap_or_default();
-    for mem in session.memory_embeddings.iter_mut() {
-        if memory_ids.contains(&mem.id) {
-            mem.last_accessed_at = now as i64;
-            mem.access_count += 1;
-            mem.importance_score = 1.0;
-        }
-    }
-}
-
 fn format_memories_with_ids(session: &GroupSession) -> Vec<String> {
     session
         .memory_embeddings
@@ -449,24 +327,62 @@ fn conversation_window(messages: &[GroupMessage], limit: usize) -> Vec<GroupMess
     convo
 }
 
+fn push_group_memory_event(session: &mut GroupSession, event: Value) {
+    session.memory_tool_events.push(event);
+    if session.memory_tool_events.len() > 50 {
+        let excess = session.memory_tool_events.len() - 50;
+        session.memory_tool_events.drain(0..excess);
+    }
+}
+
+fn record_group_dynamic_memory_error(
+    app: &AppHandle,
+    session: &mut GroupSession,
+    pool: &State<'_, SwappablePool>,
+    error: &str,
+    stage: &str,
+    window_start: usize,
+    window_end: usize,
+    window_message_ids: &[String],
+    summary: Option<&str>,
+) {
+    log_error(
+        app,
+        "group_dynamic_memory",
+        format!("{} failed: {}", stage, error),
+    );
+
+    let event = json!({
+        "id": Uuid::new_v4().to_string(),
+        "windowStart": window_start,
+        "windowEnd": window_end,
+        "windowMessageIds": window_message_ids,
+        "summary": summary.unwrap_or_default(),
+        "actions": [],
+        "error": error,
+        "status": "error",
+        "stage": stage,
+        "createdAt": now_millis().unwrap_or_default(),
+    });
+    push_group_memory_event(session, event);
+
+    if let Err(save_err) = save_group_session_memories(app, session, pool) {
+        log_error(
+            app,
+            "group_dynamic_memory",
+            format!("failed to persist error state: {}", save_err),
+        );
+    }
+
+    let _ = app.emit(
+        "group-dynamic-memory:error",
+        json!({ "sessionId": session.id, "error": error, "stage": stage }),
+    );
+}
+
 // ============================================================================
 // Memory Retrieval
 // ============================================================================
-
-/// Compute cosine similarity between two embedding vectors
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() || a.is_empty() {
-        return 0.0;
-    }
-    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let denom = norm_a * norm_b;
-    if denom == 0.0 {
-        return 0.0;
-    }
-    dot / denom
-}
 
 /// Select relevant memories from a group session using semantic search
 async fn select_relevant_memories(
@@ -493,74 +409,41 @@ async fn select_relevant_memories(
             }
         };
 
-    // Only search hot (non-cold) memories
-    let mut scored: Vec<(f32, &MemoryEmbedding)> = session
-        .memory_embeddings
-        .iter()
-        .filter(|m| !m.embedding.is_empty() && !m.is_cold)
-        .map(|m| (cosine_similarity(&query_embedding, &m.embedding), m))
-        .collect();
-    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let hot_indices = select_relevant_memory_indices(
+        &query_embedding,
+        &session.memory_embeddings,
+        limit,
+        min_similarity,
+    );
 
-    let hot_results: Vec<MemoryEmbedding> = scored
-        .into_iter()
-        .take(limit)
-        .filter(|(score, _)| *score >= min_similarity)
-        .map(|(_, m)| m.clone())
-        .collect();
+    let mut hot_results = Vec::new();
+    for (idx, _score) in hot_indices {
+        if let Some(mem) = session.memory_embeddings.get(idx) {
+            hot_results.push(mem.clone());
+        }
+    }
 
-    // If hot results are empty, try keyword search on cold memories
     if hot_results.is_empty() {
-        let matches = search_memories_by_keyword(session, query, limit);
-        if !matches.is_empty() {
+        let normalized_query = normalize_query_text(query);
+        let cold_indices = search_cold_memory_indices_by_keyword(
+            &session.memory_embeddings,
+            &normalized_query,
+            limit,
+        );
+        if !cold_indices.is_empty() {
             log_info(
                 app,
                 "group_memory_retrieval",
-                format!("Found {} memories via keyword search", matches.len()),
+                format!("Found {} memories via keyword search", cold_indices.len()),
             );
         }
-        return matches;
+        return cold_indices
+            .into_iter()
+            .filter_map(|idx| session.memory_embeddings.get(idx).cloned())
+            .collect();
     }
 
     hot_results
-}
-
-/// Search memories using simple keyword matching (fallback for cold memories)
-fn search_memories_by_keyword(
-    session: &GroupSession,
-    query: &str,
-    limit: usize,
-) -> Vec<MemoryEmbedding> {
-    let query_lower = query.to_lowercase();
-    // Extract keywords (words 3+ chars)
-    let keywords: Vec<&str> = query_lower
-        .split_whitespace()
-        .filter(|w| w.len() >= 3)
-        .collect();
-
-    if keywords.is_empty() {
-        return Vec::new();
-    }
-
-    let mut matches: Vec<(usize, MemoryEmbedding)> = session
-        .memory_embeddings
-        .iter()
-        .filter_map(|m| {
-            let text_lower = m.text.to_lowercase();
-            let match_count = keywords
-                .iter()
-                .filter(|kw| text_lower.contains(*kw))
-                .count();
-            if match_count > 0 {
-                Some((match_count, m.clone()))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    matches.sort_by(|a, b| b.0.cmp(&a.0));
-    matches.into_iter().take(limit).map(|(_, m)| m).collect()
 }
 
 /// Format memories as a string block for injection into prompts
@@ -595,6 +478,8 @@ async fn process_group_dynamic_memory_cycle(
 
     let total_convo = conversation_count(&messages);
     let convo_window = conversation_window(&messages, window_size);
+    let window_start = total_convo.saturating_sub(window_size);
+    let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
 
     log_info(
         app,
@@ -656,53 +541,101 @@ async fn process_group_dynamic_memory_cycle(
     }
 
     // Apply importance decay
+    let pinned_fixed = ensure_pinned_hot(&mut session.memory_embeddings);
+    if pinned_fixed > 0 {
+        log_info(
+            app,
+            "group_dynamic_memory",
+            format!("Restored {} pinned memories to hot", pinned_fixed),
+        );
+    }
+
     let decay_rate = dynamic_decay_rate(settings);
     let cold_threshold = dynamic_cold_threshold(settings);
-    let (decayed, demoted) = apply_memory_decay(app, session, decay_rate, cold_threshold);
-    if decayed > 0 || demoted > 0 {
+    let (decayed, demoted) =
+        apply_memory_decay(&mut session.memory_embeddings, decay_rate, cold_threshold);
+    if decayed > 0 || !demoted.is_empty() {
         log_info(
             app,
             "group_dynamic_memory",
             format!(
                 "Memory decay applied: {} decayed, {} demoted to cold",
-                decayed, demoted
+                decayed,
+                demoted.len()
             ),
         );
     }
 
     // Get summarisation model
     let Some(advanced) = settings.advanced_settings.as_ref() else {
-        log_info(
+        record_group_dynamic_memory_error(
             app,
-            "group_dynamic_memory",
-            "no advanced settings; skipping",
+            session,
+            pool,
+            "Advanced settings missing",
+            "settings",
+            window_start,
+            total_convo,
+            &window_message_ids,
+            None,
         );
-        return Ok(());
+        return Err("Advanced settings missing".to_string());
     };
 
     let summarisation_model_id = match advanced.summarisation_model_id.as_ref() {
         Some(id) => id.clone(),
         None => {
-            log_warn(
+            record_group_dynamic_memory_error(
                 app,
-                "group_dynamic_memory",
-                "summarisation model not configured",
+                session,
+                pool,
+                "Summarisation model not configured",
+                "summary_model",
+                window_start,
+                total_convo,
+                &window_message_ids,
+                None,
             );
-            return Ok(());
+            return Err("Summarisation model not configured".to_string());
         }
     };
 
     let (summary_model, summary_provider) =
-        find_model_and_credential(settings, &summarisation_model_id).ok_or_else(|| {
-            log_error(
-                app,
-                "group_dynamic_memory",
-                "summarisation model unavailable",
-            );
-            "Summarisation model unavailable".to_string()
-        })?;
+        match find_model_and_credential(settings, &summarisation_model_id) {
+            Some(found) => found,
+            None => {
+                record_group_dynamic_memory_error(
+                    app,
+                    session,
+                    pool,
+                    "Summarisation model unavailable",
+                    "summary_model",
+                    window_start,
+                    total_convo,
+                    &window_message_ids,
+                    None,
+                );
+                return Err("Summarisation model unavailable".to_string());
+            }
+        };
 
-    let api_key = resolve_api_key(app, summary_provider, "group_dynamic_memory")?;
+    let api_key = match resolve_api_key(app, summary_provider, "group_dynamic_memory") {
+        Ok(key) => key,
+        Err(err) => {
+            record_group_dynamic_memory_error(
+                app,
+                session,
+                pool,
+                &err,
+                "summary_api_key",
+                window_start,
+                total_convo,
+                &window_message_ids,
+                None,
+            );
+            return Err(err);
+        }
+    };
 
     let _ = app.emit(
         "group-dynamic-memory:processing",
@@ -727,14 +660,16 @@ async fn process_group_dynamic_memory_cycle(
     {
         Ok(s) => s,
         Err(err) => {
-            log_error(
+            record_group_dynamic_memory_error(
                 app,
-                "group_dynamic_memory",
-                format!("summarization failed: {}", err),
-            );
-            let _ = app.emit(
-                "group-dynamic-memory:error",
-                json!({ "sessionId": session.id, "error": err }),
+                session,
+                pool,
+                &err,
+                "summarization",
+                window_start,
+                total_convo,
+                &window_message_ids,
+                None,
             );
             return Err(err);
         }
@@ -750,7 +685,7 @@ async fn process_group_dynamic_memory_cycle(
     );
 
     // Run memory tool update
-    let _actions = match run_group_memory_tool_update(
+    let actions = match run_group_memory_tool_update(
         app,
         summary_provider,
         summary_model,
@@ -772,10 +707,17 @@ async fn process_group_dynamic_memory_cycle(
             session.memory_summary = summary;
             session.memory_summary_token_count =
                 crate::tokenizer::count_tokens(app, &session.memory_summary).unwrap_or(0) as i32;
-            let _ = save_group_session_memories(app, session, pool);
-            let _ = app.emit(
-                "group-dynamic-memory:error",
-                json!({ "sessionId": session.id, "error": err }),
+            let summary_snapshot = session.memory_summary.clone();
+            record_group_dynamic_memory_error(
+                app,
+                session,
+                pool,
+                &err,
+                "memory_tools",
+                window_start,
+                total_convo,
+                &window_message_ids,
+                Some(summary_snapshot.as_str()),
             );
             return Ok(());
         }
@@ -787,37 +729,81 @@ async fn process_group_dynamic_memory_cycle(
         crate::tokenizer::count_tokens(app, &session.memory_summary).unwrap_or(0) as i32;
 
     // Enforce token budget
+    let pinned_fixed = ensure_pinned_hot(&mut session.memory_embeddings);
+    if pinned_fixed > 0 {
+        log_info(
+            app,
+            "group_dynamic_memory",
+            format!("Restored {} pinned memories to hot", pinned_fixed),
+        );
+    }
+
     let token_budget = dynamic_hot_memory_token_budget(settings);
-    let demoted = enforce_hot_memory_budget(app, session, token_budget);
-    if demoted > 0 {
+    let demoted = enforce_hot_memory_budget(&mut session.memory_embeddings, token_budget);
+    if !demoted.is_empty() {
         log_info(
             app,
             "group_dynamic_memory",
             format!(
                 "Demoted {} memories to cold storage (budget: {} tokens)",
-                demoted, token_budget
+                demoted.len(),
+                token_budget
             ),
         );
     }
 
     // Enforce max entries
     let max_entries = dynamic_max_entries(settings);
-    if session.memory_embeddings.len() > max_entries {
-        let excess = session.memory_embeddings.len() - max_entries;
-        session.memory_embeddings.drain(0..excess);
+    let trimmed = trim_memories_to_max(&mut session.memory_embeddings, max_entries);
+    if trimmed > 0 {
+        log_info(
+            app,
+            "group_dynamic_memory",
+            format!(
+                "Trimmed {} memories to enforce max_entries={}",
+                trimmed, max_entries
+            ),
+        );
     }
+    if session.memory_embeddings.len() > max_entries {
+        log_warn(
+            app,
+            "group_dynamic_memory",
+            format!(
+                "Pinned memories exceed max_entries (count={}, max={})",
+                session.memory_embeddings.len(),
+                max_entries
+            ),
+        );
+    }
+
+    session.memories = session
+        .memory_embeddings
+        .iter()
+        .map(|m| m.text.clone())
+        .collect();
 
     // Record this memory cycle with windowEnd tracking (like normal chat)
     let memory_event = json!({
-        "type": "memory_cycle",
+        "id": Uuid::new_v4().to_string(),
+        "windowStart": window_start,
         "windowEnd": total_convo,
-        "timestamp": crate::utils::now_millis().unwrap_or(0),
-        "memoriesCount": session.memory_embeddings.len(),
+        "windowMessageIds": window_message_ids,
+        "summary": session.memory_summary,
+        "actions": actions,
+        "status": "complete",
+        "createdAt": crate::utils::now_millis().unwrap_or(0),
     });
-    session.memory_tool_events.push(memory_event);
+    push_group_memory_event(session, memory_event);
 
     // Save session memories
-    save_group_session_memories(app, session, pool)?;
+    if let Err(err) = save_group_session_memories(app, session, pool) {
+        let _ = app.emit(
+            "group-dynamic-memory:error",
+            json!({ "sessionId": session.id, "error": err, "stage": "save_session" }),
+        );
+        return Err(err);
+    }
 
     let _ = app.emit(
         "group-dynamic-memory:success",
@@ -982,7 +968,16 @@ async fn run_group_memory_tool_update(
             "You maintain long-term memories for this group chat. Use tools to add or delete concise factual memories about the conversation and characters. Keep the list tidy and capped at {{max_entries}} entries. When finished, call the done tool.".to_string()
         });
 
-    let current_tokens = calculate_hot_memory_tokens(session);
+    let pinned_fixed = ensure_pinned_hot(&mut session.memory_embeddings);
+    if pinned_fixed > 0 {
+        log_info(
+            app,
+            "group_dynamic_memory",
+            format!("Restored {} pinned memories to hot", pinned_fixed),
+        );
+    }
+
+    let current_tokens = calculate_hot_memory_tokens(&session.memory_embeddings);
     let token_budget = dynamic_hot_memory_token_budget(settings);
 
     let rendered = base_template
@@ -1111,6 +1106,7 @@ async fn run_group_memory_tool_update(
                         "arguments": call.arguments,
                         "memoryId": mem_id,
                         "timestamp": now_millis().unwrap_or_default(),
+                        "updatedMemories": format_memories_with_ids(session),
                     }));
 
                     log_info(
@@ -1130,18 +1126,13 @@ async fn run_group_memory_tool_update(
                                 .iter()
                                 .position(|m| m.id == sanitized)
                         } else {
-                            session.memories.iter().position(|m| m == text).or_else(|| {
-                                session
-                                    .memory_embeddings
-                                    .iter()
-                                    .position(|m| m.text == text)
-                            })
+                            session
+                                .memory_embeddings
+                                .iter()
+                                .position(|m| m.text == text)
                         };
 
                     if let Some(idx) = target_idx {
-                        if idx < session.memories.len() {
-                            session.memories.remove(idx);
-                        }
                         if idx < session.memory_embeddings.len() {
                             let removed = session.memory_embeddings.remove(idx);
                             log_info(
@@ -1154,6 +1145,7 @@ async fn run_group_memory_tool_update(
                             "name": "delete_memory",
                             "arguments": call.arguments,
                             "timestamp": now_millis().unwrap_or_default(),
+                            "updatedMemories": format_memories_with_ids(session),
                         }));
                     } else {
                         log_warn(
@@ -1346,6 +1338,7 @@ fn save_group_session_memories(
     group_session_update_memories_internal(
         &conn,
         &session.id,
+        &session.memories,
         &session.memory_embeddings,
         Some(&session.memory_summary),
         session.memory_summary_token_count,
@@ -2115,6 +2108,15 @@ async fn generate_character_response(
 
     // Retrieve relevant memories for context using dynamic memory settings
     let min_similarity = dynamic_min_similarity(settings);
+    let fixed = ensure_pinned_hot(&mut context.session.memory_embeddings);
+    if fixed > 0 {
+        log_info(
+            app,
+            "group_dynamic_memory",
+            format!("Restored {} pinned memories to hot", fixed),
+        );
+    }
+
     let search_query = if context_enrichment_enabled(settings) {
         build_enriched_query(&context.recent_messages)
     } else {
@@ -2133,14 +2135,19 @@ async fn generate_character_response(
     // Mark retrieved memories as accessed and promote cold ones
     if !retrieved_memories.is_empty() {
         let memory_ids: Vec<String> = retrieved_memories.iter().map(|m| m.id.clone()).collect();
-        promote_cold_memories(app, &mut context.session, &memory_ids);
-        mark_memories_accessed(&mut context.session, &memory_ids);
+        let now = now_millis().unwrap_or_default();
+        let promoted =
+            promote_cold_memories(&mut context.session.memory_embeddings, &memory_ids, now);
+        let accessed =
+            mark_memories_accessed(&mut context.session.memory_embeddings, &memory_ids, now);
         log_info(
             app,
             "group_chat",
             format!(
-                "Retrieved and marked {} memories as accessed (query enrichment: {})",
+                "Retrieved {} memories (promoted={}, accessed={}, query_enriched={})",
                 retrieved_memories.len(),
+                promoted,
+                accessed,
                 context_enrichment_enabled(settings)
             ),
         );

@@ -11,10 +11,7 @@ import {
   getGroupSession,
 } from "../../../../core/storage/repo";
 import { storageBridge } from "../../../../core/storage/files";
-import {
-  initUi,
-  uiReducer,
-} from "../reducers/groupChatMemoriesReducer";
+import { initUi, uiReducer } from "../reducers/groupChatMemoriesReducer";
 
 type MemoryItem = {
   text: string;
@@ -214,6 +211,8 @@ export function useGroupChatMemoriesController(groupSessionId?: string) {
         });
         const u3 = await listen("group-dynamic-memory:error", (e: any) => {
           if (e.payload?.sessionId === session.id) {
+            const message = e.payload?.error || "Group memory cycle failed";
+            dispatch({ type: "SET_ACTION_ERROR", value: message });
             dispatch({ type: "SET_MEMORY_STATUS", value: "idle" });
             void reload();
           }

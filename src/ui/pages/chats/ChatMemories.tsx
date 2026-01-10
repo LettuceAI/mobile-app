@@ -2,13 +2,55 @@ import { useEffect, useMemo, useReducer, useState, useCallback } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Clock, ChevronDown, ChevronUp, Search, Bot, User, Trash2, Edit2, Check, Plus, Pin, MessageSquare, AlertTriangle, X, RefreshCw, Snowflake, Flame, Cpu } from "lucide-react";
+import {
+  ArrowLeft,
+  Sparkles,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Bot,
+  User,
+  Trash2,
+  Edit2,
+  Check,
+  Plus,
+  Pin,
+  MessageSquare,
+  AlertTriangle,
+  X,
+  RefreshCw,
+  Snowflake,
+  Flame,
+  Cpu,
+} from "lucide-react";
 import type { Character, Session, StoredMessage, Model } from "../../../core/storage/schemas";
-import { addMemory, removeMemory, updateMemory, getSessionMeta, listPinnedMessages, listSessionPreviews, listCharacters, saveSession, setMemoryColdState, toggleMessagePin, toggleMemoryPin, readSettings } from "../../../core/storage/repo";
+import {
+  addMemory,
+  removeMemory,
+  updateMemory,
+  getSessionMeta,
+  listPinnedMessages,
+  listSessionPreviews,
+  listCharacters,
+  saveSession,
+  setMemoryColdState,
+  toggleMessagePin,
+  toggleMemoryPin,
+  readSettings,
+} from "../../../core/storage/repo";
 
 import { storageBridge } from "../../../core/storage/files";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
-import { typography, radius, cn, interactive, spacing, colors, components } from "../../design-tokens";
+import {
+  typography,
+  radius,
+  cn,
+  interactive,
+  spacing,
+  colors,
+  components,
+} from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
 import { BottomMenu, MenuSection } from "../../components/BottomMenu";
 
@@ -150,7 +192,14 @@ function SectionHeader({
       <div className="min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           {Icon ? <Icon size={16} className="text-white/40" /> : null}
-          <h2 className={cn(typography.h2.size, typography.h2.weight, colors.text.primary, "truncate")}>
+          <h2
+            className={cn(
+              typography.h2.size,
+              typography.h2.weight,
+              colors.text.primary,
+              "truncate",
+            )}
+          >
             {title}
           </h2>
         </div>
@@ -198,7 +247,9 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
 
       if (targetSession) {
         setSession(targetSession);
-        const pinned = await listPinnedMessages(targetSession.id).catch(() => [] as StoredMessage[]);
+        const pinned = await listPinnedMessages(targetSession.id).catch(
+          () => [] as StoredMessage[],
+        );
         setPinnedMessages(pinned);
       } else {
         setError("Session not found");
@@ -216,65 +267,89 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
     void load();
   }, [load]);
 
-  return { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload: load };
+  return {
+    session,
+    setSession,
+    pinnedMessages,
+    setPinnedMessages,
+    character,
+    loading,
+    error,
+    reload: load,
+  };
 }
 
 function useMemoryActions(session: Session | null, setSession: (s: Session) => void) {
-  const handleAdd = useCallback(async (memory: string) => {
-    if (!session) return;
+  const handleAdd = useCallback(
+    async (memory: string) => {
+      if (!session) return;
 
-    try {
-      const updated = await addMemory(session.id, memory);
-      if (updated) setSession(updated);
-    } catch (err: any) {
-      throw err;
-    }
-  }, [session, setSession]);
+      try {
+        const updated = await addMemory(session.id, memory);
+        if (updated) setSession(updated);
+      } catch (err: any) {
+        throw err;
+      }
+    },
+    [session, setSession],
+  );
 
-  const handleRemove = useCallback(async (index: number) => {
-    if (!session) return;
+  const handleRemove = useCallback(
+    async (index: number) => {
+      if (!session) return;
 
-    try {
-      const updated = await removeMemory(session.id, index);
-      if (updated) setSession(updated);
-    } catch (err: any) {
-      throw err;
-    }
-  }, [session, setSession]);
+      try {
+        const updated = await removeMemory(session.id, index);
+        if (updated) setSession(updated);
+      } catch (err: any) {
+        throw err;
+      }
+    },
+    [session, setSession],
+  );
 
-  const handleUpdate = useCallback(async (index: number, memory: string) => {
-    if (!session) return;
+  const handleUpdate = useCallback(
+    async (index: number, memory: string) => {
+      if (!session) return;
 
-    try {
-      const updated = await updateMemory(session.id, index, memory);
-      if (updated) setSession(updated);
-    } catch (err: any) {
-      throw err;
-    }
-  }, [session, setSession]);
+      try {
+        const updated = await updateMemory(session.id, index, memory);
+        if (updated) setSession(updated);
+      } catch (err: any) {
+        throw err;
+      }
+    },
+    [session, setSession],
+  );
 
-  const handleSaveSummary = useCallback(async (summary: string) => {
-    if (!session) return;
+  const handleSaveSummary = useCallback(
+    async (summary: string) => {
+      if (!session) return;
 
-    try {
-      const updated: Session = { ...session, memorySummary: summary };
-      await saveSession(updated);
-      setSession(updated);
-    } catch (err: any) {
-      throw err;
-    }
-  }, [session, setSession]);
+      try {
+        const updated: Session = { ...session, memorySummary: summary };
+        await saveSession(updated);
+        setSession(updated);
+      } catch (err: any) {
+        throw err;
+      }
+    },
+    [session, setSession],
+  );
 
-  const handleTogglePin = useCallback(async (index: number) => {
-    if (!session) return;
+  const handleTogglePin = useCallback(
+    async (index: number) => {
+      if (!session) return;
 
-    try {
-      const updated = await toggleMemoryPin(session.id, index);
-      if (updated) setSession(updated);
-    } catch (err: any) {
-      throw err;
-    }
-  }, [session, setSession]);
+      try {
+        const updated = await toggleMemoryPin(session.id, index);
+        if (updated) setSession(updated);
+      } catch (err: any) {
+        throw err;
+      }
+    },
+    [session, setSession],
+  );
 
   return { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin };
 }
@@ -292,11 +367,16 @@ function UpdatedMemoriesList({ memories }: { memories: string[] }) {
           "flex w-full items-center justify-between",
           components.listItem.base,
           "px-3 py-2",
-          interactive.hover.brightness
+          interactive.hover.brightness,
         )}
       >
         <div className="flex items-center gap-2">
-          <div className={cn("h-1.5 w-1.5 rounded-full", isOpen ? "bg-emerald-400" : "bg-emerald-400/50")} />
+          <div
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              isOpen ? "bg-emerald-400" : "bg-emerald-400/50",
+            )}
+          />
           <span className={cn(typography.caption.size, colors.text.secondary, "font-medium")}>
             Updated Memory State ({memories.length})
           </span>
@@ -311,17 +391,8 @@ function UpdatedMemoriesList({ memories }: { memories: string[] }) {
       {isOpen && (
         <div className={cn("mt-2 space-y-2 pl-1", spacing.tight)}>
           {memories.map((m, i) => (
-            <div
-              key={i}
-              className={cn(
-                radius.sm,
-                colors.accent.emerald.subtle,
-                "px-3 py-2",
-              )}
-            >
-              <p className={cn(typography.caption.size, "leading-relaxed")}>
-                {m}
-              </p>
+            <div key={i} className={cn(radius.sm, colors.accent.emerald.subtle, "px-3 py-2")}>
+              <p className={cn(typography.caption.size, "leading-relaxed")}>{m}</p>
             </div>
           ))}
         </div>
@@ -333,10 +404,7 @@ function UpdatedMemoriesList({ memories }: { memories: string[] }) {
 function ToolLog({ events }: { events: MemoryToolEvent[] }) {
   if (!events.length) {
     return (
-      <div className={cn(
-        components.card.base,
-        "px-6 py-8 text-center"
-      )}>
+      <div className={cn(components.card.base, "px-6 py-8 text-center")}>
         <p className={cn(typography.bodySmall.size, colors.text.tertiary)}>
           No tool calls captured yet. Tool calls appear when AI manages memories in dynamic mode.
         </p>
@@ -347,13 +415,7 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
   return (
     <div className={cn(spacing.item, "space-y-3")}>
       {events.map((event) => (
-        <div
-          key={event.id}
-          className={cn(
-            components.card.base,
-            "p-4 space-y-3"
-          )}
-        >
+        <div key={event.id} className={cn(components.card.base, "p-4 space-y-3")}>
           {/* Event Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -369,13 +431,19 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
 
           {/* Summary */}
           {event.summary && (
-            <div className={cn(
-              radius.md,
-              "border border-blue-400/20 bg-blue-400/10 px-3 py-3"
-            )}>
-              <p className={cn(typography.bodySmall.size, "text-blue-200/90")}>
-                {event.summary}
-              </p>
+            <div className={cn(radius.md, "border border-blue-400/20 bg-blue-400/10 px-3 py-3")}>
+              <p className={cn(typography.bodySmall.size, "text-blue-200/90")}>{event.summary}</p>
+            </div>
+          )}
+
+          {event.error && (
+            <div className={cn(radius.md, "border border-red-400/20 bg-red-400/10 px-3 py-3")}>
+              <p className={cn(typography.bodySmall.size, "text-red-200/90")}>{event.error}</p>
+              {event.stage && (
+                <p className={cn(typography.caption.size, "mt-1 text-red-200/70")}>
+                  Stage: {event.stage}
+                </p>
+              )}
             </div>
           )}
 
@@ -388,17 +456,15 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
               {event.actions.map((action, idx) => (
                 <div
                   key={idx}
-                  className={cn(
-                    radius.md,
-                    "border border-white/5 bg-black/20 p-3",
-                    spacing.field
-                  )}
+                  className={cn(radius.md, "border border-white/5 bg-black/20 p-3", spacing.field)}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={cn(
-                      typography.bodySmall.size,
-                      "font-semibold uppercase tracking-wide text-emerald-300"
-                    )}>
+                    <span
+                      className={cn(
+                        typography.bodySmall.size,
+                        "font-semibold uppercase tracking-wide text-emerald-300",
+                      )}
+                    >
                       {action.name}
                     </span>
                     {action.timestamp && (
@@ -409,11 +475,10 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
                   </div>
 
                   {action.arguments && (
-                    <div className={cn(
-                      radius.sm,
-                      "bg-black/40 p-3 overflow-x-auto"
-                    )}>
-                      <pre className={cn(typography.caption.size, colors.text.secondary, "font-mono")}>
+                    <div className={cn(radius.sm, "bg-black/40 p-3 overflow-x-auto")}>
+                      <pre
+                        className={cn(typography.caption.size, colors.text.secondary, "font-mono")}
+                      >
                         {JSON.stringify(action.arguments, null, 2)}
                       </pre>
                     </div>
@@ -437,28 +502,43 @@ export function ChatMemoriesPage() {
   const { characterId } = useParams();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("sessionId");
-  const { session, setSession, pinnedMessages, setPinnedMessages, character, loading, error, reload } = useSessionData(characterId, sessionId);
-  const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } = useMemoryActions(session, (s) => setSession(s));
+  const {
+    session,
+    setSession,
+    pinnedMessages,
+    setPinnedMessages,
+    character,
+    loading,
+    error,
+    reload,
+  } = useSessionData(characterId, sessionId);
+  const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } =
+    useMemoryActions(session, (s) => setSession(s));
   const [ui, dispatch] = useReducer(uiReducer, searchParams.get("error"), initUi);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [allModels, setAllModels] = useState<Model[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
 
-
-  const handleSetColdState = useCallback(async (memoryIndex: number, isCold: boolean) => {
-    if (!session?.id) return;
-    dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: memoryIndex });
-    try {
-      const updated = await setMemoryColdState(session.id, memoryIndex, isCold);
-      if (updated) setSession(updated);
-      dispatch({ type: "SET_ACTION_ERROR", value: null });
-    } catch (err: any) {
-      console.error("Failed to update memory temperature:", err);
-      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to update memory temperature" });
-    } finally {
-      dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: null });
-    }
-  }, [session?.id, setSession]);
+  const handleSetColdState = useCallback(
+    async (memoryIndex: number, isCold: boolean) => {
+      if (!session?.id) return;
+      dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: memoryIndex });
+      try {
+        const updated = await setMemoryColdState(session.id, memoryIndex, isCold);
+        if (updated) setSession(updated);
+        dispatch({ type: "SET_ACTION_ERROR", value: null });
+      } catch (err: any) {
+        console.error("Failed to update memory temperature:", err);
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          value: err?.message || "Failed to update memory temperature",
+        });
+      } finally {
+        dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: null });
+      }
+    },
+    [session?.id, setSession],
+  );
 
   useEffect(() => {
     if (!session?.id) return;
@@ -468,17 +548,22 @@ export function ChatMemoriesPage() {
       try {
         const u1 = await listen("dynamic-memory:processing", (e: any) => {
           if (e.payload?.sessionId === session.id) {
+            dispatch({ type: "SET_MEMORY_STATUS", value: "processing" });
             void reload();
           }
         });
         const u2 = await listen("dynamic-memory:success", (e: any) => {
           if (e.payload?.sessionId === session.id) {
             dispatch({ type: "SET_PENDING_REFRESH", value: true });
+            dispatch({ type: "SET_MEMORY_STATUS", value: "idle" });
             void reload();
           }
         });
         const u3 = await listen("dynamic-memory:error", (e: any) => {
           if (e.payload?.sessionId === session.id) {
+            const message = e.payload?.error || "Dynamic memory failed";
+            dispatch({ type: "SET_ACTION_ERROR", value: message });
+            dispatch({ type: "SET_MEMORY_STATUS", value: "failed" });
             void reload();
           }
         });
@@ -490,7 +575,7 @@ export function ChatMemoriesPage() {
 
     setup();
     return () => {
-      unlisteners.forEach(u => u());
+      unlisteners.forEach((u) => u());
     };
   }, [session?.id, reload]);
 
@@ -511,7 +596,7 @@ export function ChatMemoriesPage() {
         const cycleStr = `${event.windowStart}-${event.windowEnd}`;
         if (event.actions) {
           event.actions.forEach((action: any) => {
-            if (action.name === 'create_memory') {
+            if (action.name === "create_memory") {
               if (action.memoryId) {
                 map.set(action.memoryId, cycleStr);
               }
@@ -528,44 +613,64 @@ export function ChatMemoriesPage() {
   }, [session?.memoryToolEvents]);
 
   const memoryItems = useMemo(() => {
+    if (session?.memoryEmbeddings && session.memoryEmbeddings.length > 0) {
+      return session.memoryEmbeddings.map((emb, index) => {
+        const id = emb.id || `mem-${index}`;
+        const isAi = id.length <= 6;
+        const tokenCount = emb.tokenCount || 0;
+
+        let cycle = cycleMap.map.get(id);
+        if (!cycle && cycleMap.textMap.has(emb.text)) {
+          cycle = cycleMap.textMap.get(emb.text);
+        }
+
+        return {
+          text: emb.text,
+          index,
+          isAi,
+          id,
+          tokenCount,
+          isCold: emb.isCold ?? false,
+          importanceScore: emb.importanceScore ?? 1.0,
+          createdAt: emb.createdAt ?? 0,
+          lastAccessedAt: emb.lastAccessedAt ?? 0,
+          isPinned: emb.isPinned ?? false,
+          cycle,
+        };
+      });
+    }
+
     if (!session?.memories) return [];
     return session.memories.map((text, index) => {
-      const emb = session.memoryEmbeddings?.[index];
-      const id = emb?.id || `mem-${index}`;
-      const isAi = id.length <= 6;
-      const tokenCount = emb?.tokenCount || 0;
-
-      let cycle = cycleMap.map.get(id);
-      if (!cycle && cycleMap.textMap.has(text)) {
-        cycle = cycleMap.textMap.get(text);
-      }
+      const id = `mem-${index}`;
+      let cycle = cycleMap.textMap.get(text);
 
       return {
         text,
         index,
-        isAi,
+        isAi: false,
         id,
-        tokenCount,
-        isCold: emb?.isCold ?? false,
-        importanceScore: emb?.importanceScore ?? 1.0,
-        createdAt: emb?.createdAt ?? 0,
-        lastAccessedAt: emb?.lastAccessedAt ?? 0,
-        isPinned: emb?.isPinned ?? false,
-        cycle
+        tokenCount: 0,
+        isCold: false,
+        importanceScore: 1.0,
+        createdAt: 0,
+        lastAccessedAt: 0,
+        isPinned: false,
+        cycle,
       };
     });
   }, [session, cycleMap]);
 
   const filteredMemories = useMemo(() => {
     if (!ui.searchTerm.trim()) return memoryItems;
-    return memoryItems.filter(item =>
-      item.text.toLowerCase().includes(ui.searchTerm.toLowerCase())
+    return memoryItems.filter((item) =>
+      item.text.toLowerCase().includes(ui.searchTerm.toLowerCase()),
     );
   }, [memoryItems, ui.searchTerm]);
 
   const stats = useMemo(() => {
     const total = memoryItems.length;
-    const ai = memoryItems.filter(m => m.isAi).length;
+    const ai = memoryItems.filter((m) => m.isAi).length;
     const user = total - ai;
     const totalMemoryTokens = memoryItems.reduce((sum, m) => sum + m.tokenCount, 0);
     const summaryTokens = session?.memorySummaryTokenCount || 0;
@@ -579,22 +684,28 @@ export function ChatMemoriesPage() {
     setPinnedMessages(pinned);
   }, [session?.id, setPinnedMessages]);
 
-  const handleUnpin = useCallback(async (messageId: string) => {
-    if (!session) return;
-    try {
-      await toggleMessagePin(session.id, messageId);
-      await refreshPinnedMessages();
-      dispatch({ type: "SET_ACTION_ERROR", value: null });
-    } catch (err: any) {
-      console.error("Failed to unpin message:", err);
-      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to unpin message" });
-    }
-  }, [session, refreshPinnedMessages]);
+  const handleUnpin = useCallback(
+    async (messageId: string) => {
+      if (!session) return;
+      try {
+        await toggleMessagePin(session.id, messageId);
+        await refreshPinnedMessages();
+        dispatch({ type: "SET_ACTION_ERROR", value: null });
+      } catch (err: any) {
+        console.error("Failed to unpin message:", err);
+        dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to unpin message" });
+      }
+    },
+    [session, refreshPinnedMessages],
+  );
 
-  const handleScrollToMessage = useCallback((messageId: string) => {
-    const extra = messageId ? { jumpToMessage: messageId } : undefined;
-    go(Routes.chatSession(characterId!, session?.id || undefined, extra));
-  }, [go, characterId, session?.id]);
+  const handleScrollToMessage = useCallback(
+    (messageId: string) => {
+      const extra = messageId ? { jumpToMessage: messageId } : undefined;
+      go(Routes.chatSession(characterId!, session?.id || undefined, extra));
+    },
+    [go, characterId, session?.id],
+  );
 
   const handleAddNew = useCallback(async () => {
     const trimmed = ui.newMemory.trim();
@@ -621,21 +732,24 @@ export function ChatMemoriesPage() {
     dispatch({ type: "CANCEL_EDIT" });
   }, []);
 
-  const saveEdit = useCallback(async (index: number) => {
-    const trimmed = ui.editingValue.trim();
-    if (!trimmed || trimmed === memoryItems[index]?.text) {
-      dispatch({ type: "CANCEL_EDIT" });
-      return;
-    }
-    try {
-      await handleUpdate(index, trimmed);
-      dispatch({ type: "CANCEL_EDIT" });
-      dispatch({ type: "SET_ACTION_ERROR", value: null });
-    } catch (err: any) {
-      console.error("Failed to update memory:", err);
-      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to update memory" });
-    }
-  }, [handleUpdate, memoryItems, ui.editingValue]);
+  const saveEdit = useCallback(
+    async (index: number) => {
+      const trimmed = ui.editingValue.trim();
+      if (!trimmed || trimmed === memoryItems[index]?.text) {
+        dispatch({ type: "CANCEL_EDIT" });
+        return;
+      }
+      try {
+        await handleUpdate(index, trimmed);
+        dispatch({ type: "CANCEL_EDIT" });
+        dispatch({ type: "SET_ACTION_ERROR", value: null });
+      } catch (err: any) {
+        console.error("Failed to update memory:", err);
+        dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to update memory" });
+      }
+    },
+    [handleUpdate, memoryItems, ui.editingValue],
+  );
 
   const handleSaveSummaryClick = useCallback(async () => {
     if (ui.summaryDraft === session?.memorySummary) return;
@@ -649,8 +763,6 @@ export function ChatMemoriesPage() {
       dispatch({ type: "SET_IS_SAVING_SUMMARY", value: false });
     }
   }, [handleSaveSummary, session?.memorySummary, ui.summaryDraft]);
-
-
 
   // Model selection for retry
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -676,33 +788,36 @@ export function ChatMemoriesPage() {
     if (!modelSearchQuery) return allModels;
     const query = modelSearchQuery.toLowerCase();
     return allModels.filter(
-      (m) => m.name.toLowerCase().includes(query) || m.displayName.toLowerCase().includes(query)
+      (m) => m.name.toLowerCase().includes(query) || m.displayName.toLowerCase().includes(query),
     );
   }, [allModels, modelSearchQuery]);
 
-  const handleRetryWithModel = useCallback(async (modelId?: string) => {
-    if (!session?.id) return;
-    setRetryingWithModel(true);
-    setShowModelSelector(false);
-    dispatch({ type: "SET_RETRY_STATUS", value: "retrying" });
-    try {
-      // If modelId is provided, we use it and update default
-      // If not, it's a simple retry with existing settings
-      await storageBridge.retryDynamicMemory(session.id, modelId, modelId ? true : undefined);
-      dispatch({ type: "SET_RETRY_STATUS", value: "success" });
-      dispatch({ type: "SET_PENDING_REFRESH", value: true });
-      window.setTimeout(() => {
+  const handleRetryWithModel = useCallback(
+    async (modelId?: string) => {
+      if (!session?.id) return;
+      setRetryingWithModel(true);
+      setShowModelSelector(false);
+      dispatch({ type: "SET_RETRY_STATUS", value: "retrying" });
+      try {
+        // If modelId is provided, we use it and update default
+        // If not, it's a simple retry with existing settings
+        await storageBridge.retryDynamicMemory(session.id, modelId, modelId ? true : undefined);
+        dispatch({ type: "SET_RETRY_STATUS", value: "success" });
+        dispatch({ type: "SET_PENDING_REFRESH", value: true });
+        window.setTimeout(() => {
+          dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
+          void reload();
+        }, 3000);
+      } catch (err: any) {
+        console.error("Failed to retry memory processing:", err);
         dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
         void reload();
-      }, 3000);
-    } catch (err: any) {
-      console.error("Failed to retry memory processing:", err);
-      dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
-      void reload();
-    } finally {
-      setRetryingWithModel(false);
-    }
-  }, [session?.id, reload]);
+      } finally {
+        setRetryingWithModel(false);
+      }
+    },
+    [session?.id, reload],
+  );
 
   const handleDismissError = useCallback(async () => {
     if (!session?.id || !session) return;
@@ -718,7 +833,6 @@ export function ChatMemoriesPage() {
   const handleRetry = useCallback(async () => {
     await handleRetryWithModel();
   }, [handleRetryWithModel]);
-
 
   const handleRefresh = useCallback(async () => {
     if (!session?.id) return;
@@ -737,7 +851,10 @@ export function ChatMemoriesPage() {
       await storageBridge.triggerDynamicMemory(sessionId);
       dispatch({ type: "SET_ACTION_ERROR", value: null });
     } catch (err: any) {
-      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to trigger memory processing" });
+      dispatch({
+        type: "SET_ACTION_ERROR",
+        value: err?.message || "Failed to trigger memory processing",
+      });
     }
   }, [sessionId]);
 
@@ -751,14 +868,21 @@ export function ChatMemoriesPage() {
 
   if (error || !session || !character) {
     return (
-      <div className={cn("flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center", colors.surface.base)}>
+      <div
+        className={cn(
+          "flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center",
+          colors.surface.base,
+        )}
+      >
         <p className={cn("text-sm", colors.text.secondary)}>{error || "Session not found"}</p>
         <button
-          onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
+          onClick={() =>
+            backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)
+          }
           className={cn(
             components.button.primary,
             components.button.sizes.md,
-            "bg-white/5 text-white hover:bg-white/10"
+            "bg-white/5 text-white hover:bg-white/10",
           )}
         >
           Go back
@@ -770,11 +894,20 @@ export function ChatMemoriesPage() {
   return (
     <div className={cn("flex min-h-screen flex-col", colors.surface.base, colors.text.primary)}>
       {/* Header */}
-      <header className={cn("border-b border-white/10 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 sticky top-0 z-20", "bg-[#050505]")}>
+      <header
+        className={cn(
+          "border-b border-white/10 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 sticky top-0 z-20",
+          "bg-[#050505]",
+        )}
+      >
         <div className="flex items-center gap-3">
           <div className="flex flex-1 items-center min-w-0">
             <button
-              onClick={() => backOrReplace(characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat)}
+              onClick={() =>
+                backOrReplace(
+                  characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat,
+                )
+              }
               className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
               aria-label="Go back"
             >
@@ -787,11 +920,13 @@ export function ChatMemoriesPage() {
           </div>
           <div className="flex shrink-0 items-center gap-2 ml-auto">
             {session.memoryStatus === "processing" && (
-              <div className={cn(
-                radius.full,
-                "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
-                "border-blue-500/30 bg-blue-500/15 text-blue-200"
-              )}>
+              <div
+                className={cn(
+                  radius.full,
+                  "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+                  "border-blue-500/30 bg-blue-500/15 text-blue-200",
+                )}
+              >
                 Processing
               </div>
             )}
@@ -801,25 +936,34 @@ export function ChatMemoriesPage() {
 
       <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* Error Banner */}
-        {(ui.actionError || session.memoryError || ui.retryStatus !== "idle" || session.memoryStatus === "processing") && (
+        {(ui.actionError ||
+          session.memoryError ||
+          ui.retryStatus !== "idle" ||
+          session.memoryStatus === "processing") && (
           <div className="px-3 pt-3">
-            {(ui.retryStatus === "retrying" || session.memoryStatus === "processing") ? (
-              <div className={cn(
-                radius.md,
-                "bg-blue-500/10 border border-blue-500/20 p-3 flex items-center gap-3 animate-pulse"
-              )}>
+            {ui.retryStatus === "retrying" || session.memoryStatus === "processing" ? (
+              <div
+                className={cn(
+                  radius.md,
+                  "bg-blue-500/10 border border-blue-500/20 p-3 flex items-center gap-3 animate-pulse",
+                )}
+              >
                 <RefreshCw className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
                 <div className="flex-1 text-sm text-blue-200">
                   <p className="font-semibold">
-                    {session.memoryStatus === "processing" ? "AI is organizing memories..." : "Retrying Memory Cycle..."}
+                    {session.memoryStatus === "processing"
+                      ? "AI is organizing memories..."
+                      : "Retrying Memory Cycle..."}
                   </p>
                 </div>
               </div>
             ) : ui.retryStatus === "success" ? (
-              <div className={cn(
-                radius.md,
-                "bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3"
-              )}>
+              <div
+                className={cn(
+                  radius.md,
+                  "bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3",
+                )}
+              >
                 <Check className="h-5 w-5 text-emerald-400 shrink-0" />
                 <div className="flex-1 text-sm text-emerald-200">
                   <p className="font-semibold">Memory Cycle Processed Successfully!</p>
@@ -831,11 +975,13 @@ export function ChatMemoriesPage() {
                   <X size={16} />
                 </button>
               </div>
-            ) : (ui.actionError || session.memoryError) ? (
-              <div className={cn(
-                radius.md,
-                "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3"
-              )}>
+            ) : ui.actionError || session.memoryError ? (
+              <div
+                className={cn(
+                  radius.md,
+                  "bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3",
+                )}
+              >
                 <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
                 <div className="flex-1 text-sm text-red-200">
                   <div className="flex items-start justify-between">
@@ -881,10 +1027,12 @@ export function ChatMemoriesPage() {
 
         {ui.pendingRefresh && ui.memoryStatus !== "processing" && (
           <div className="px-3 pt-3">
-            <div className={cn(
-              radius.md,
-              "bg-white/5 border border-white/10 p-3 flex items-center justify-between gap-3"
-            )}>
+            <div
+              className={cn(
+                radius.md,
+                "bg-white/5 border border-white/10 p-3 flex items-center justify-between gap-3",
+              )}
+            >
               <div className={cn(typography.bodySmall.size, colors.text.secondary)}>
                 New memory updates available
               </div>
@@ -897,7 +1045,7 @@ export function ChatMemoriesPage() {
                   radius.full,
                   "border border-white/15 bg-white/10 text-white/80",
                   interactive.transition.fast,
-                  interactive.active.scale
+                  interactive.active.scale,
                 )}
               >
                 Refresh
@@ -908,7 +1056,6 @@ export function ChatMemoriesPage() {
 
         {ui.activeTab === "memories" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
-
             {/* Context Summary */}
             {isDynamic && (
               <div>
@@ -919,12 +1066,14 @@ export function ChatMemoriesPage() {
                   right={
                     <div className="flex items-center gap-2">
                       {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 ? (
-                        <span className={cn(
-                          typography.caption.size,
-                          "inline-flex items-center gap-1 px-2 py-0.5",
-                          radius.full,
-                          "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                        )}>
+                        <span
+                          className={cn(
+                            typography.caption.size,
+                            "inline-flex items-center gap-1 px-2 py-0.5",
+                            radius.full,
+                            "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+                          )}
+                        >
                           {session.memorySummaryTokenCount.toLocaleString()} tokens
                         </span>
                       ) : null}
@@ -939,7 +1088,7 @@ export function ChatMemoriesPage() {
                             "border border-emerald-400/30 bg-emerald-400/15 text-emerald-200",
                             "disabled:opacity-50",
                             interactive.transition.fast,
-                            interactive.active.scale
+                            interactive.active.scale,
                           )}
                         >
                           {ui.isSavingSummary ? "Saving..." : "Save"}
@@ -948,11 +1097,13 @@ export function ChatMemoriesPage() {
                     </div>
                   }
                 />
-                <div className={cn(
-                  components.card.base,
-                  "border-emerald-400/20 bg-emerald-400/5",
-                  "w-full p-4 text-left"
-                )}>
+                <div
+                  className={cn(
+                    components.card.base,
+                    "border-emerald-400/20 bg-emerald-400/5",
+                    "w-full p-4 text-left",
+                  )}
+                >
                   <textarea
                     value={ui.summaryDraft}
                     onChange={(e) => dispatch({ type: "SET_SUMMARY_DRAFT", value: e.target.value })}
@@ -961,7 +1112,7 @@ export function ChatMemoriesPage() {
                       "w-full resize-none bg-transparent focus:outline-none",
                       typography.bodySmall.size,
                       "text-emerald-50/90",
-                      "placeholder-emerald-200/30 leading-relaxed"
+                      "placeholder-emerald-200/30 leading-relaxed",
                     )}
                     placeholder="AI will generate a summary of the conversation context here..."
                   />
@@ -973,28 +1124,38 @@ export function ChatMemoriesPage() {
             <div>
               <SectionHeader
                 icon={Bot}
-                title={ui.searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"}
-                subtitle={ui.searchTerm.trim() ? "Filtered by your search" : "Create, search, edit, and delete memories"}
+                title={
+                  ui.searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"
+                }
+                subtitle={
+                  ui.searchTerm.trim()
+                    ? "Filtered by your search"
+                    : "Create, search, edit, and delete memories"
+                }
                 right={
                   <div className="flex items-center gap-2">
-                    <span className={cn(
-                      typography.caption.size,
-                      "inline-flex items-center gap-1 px-2 py-0.5",
-                      radius.full,
-                      "border bg-white/5",
-                      colors.border.subtle,
-                      colors.text.secondary
-                    )}>
+                    <span
+                      className={cn(
+                        typography.caption.size,
+                        "inline-flex items-center gap-1 px-2 py-0.5",
+                        radius.full,
+                        "border bg-white/5",
+                        colors.border.subtle,
+                        colors.text.secondary,
+                      )}
+                    >
                       AI {stats.ai}
                     </span>
-                    <span className={cn(
-                      typography.caption.size,
-                      "inline-flex items-center gap-1 px-2 py-0.5",
-                      radius.full,
-                      "border bg-white/5",
-                      colors.border.subtle,
-                      colors.text.secondary
-                    )}>
+                    <span
+                      className={cn(
+                        typography.caption.size,
+                        "inline-flex items-center gap-1 px-2 py-0.5",
+                        radius.full,
+                        "border bg-white/5",
+                        colors.border.subtle,
+                        colors.text.secondary,
+                      )}
+                    >
                       You {stats.user}
                     </span>
                   </div>
@@ -1004,7 +1165,12 @@ export function ChatMemoriesPage() {
               {/* Search Bar */}
               {memoryItems.length > 0 && (
                 <div className="relative mb-3">
-                  <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4", colors.text.tertiary)} />
+                  <Search
+                    className={cn(
+                      "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4",
+                      colors.text.tertiary,
+                    )}
+                  />
                   <input
                     type="text"
                     value={ui.searchTerm}
@@ -1014,7 +1180,7 @@ export function ChatMemoriesPage() {
                       "w-full pl-10 pr-10 py-2.5",
                       components.input.base,
                       radius.lg,
-                      "text-sm text-white placeholder-white/40"
+                      "text-sm text-white placeholder-white/40",
                     )}
                   />
                   {ui.searchTerm.trim().length > 0 && (
@@ -1025,7 +1191,7 @@ export function ChatMemoriesPage() {
                         "absolute right-3 top-1/2 -translate-y-1/2",
                         colors.text.tertiary,
                         "hover:text-white",
-                        interactive.transition.fast
+                        interactive.transition.fast,
                       )}
                       aria-label="Clear search"
                     >
@@ -1036,19 +1202,21 @@ export function ChatMemoriesPage() {
               )}
 
               {/* Add New Memory */}
-              <div className={cn(
-                components.card.base,
-                "w-full p-4 text-left",
-                interactive.transition.default,
-                "mb-4"
-              )}>
+              <div
+                className={cn(
+                  components.card.base,
+                  "w-full p-4 text-left",
+                  interactive.transition.default,
+                  "mb-4",
+                )}
+              >
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
                     <textarea
                       value={ui.newMemory}
                       onChange={(e) => dispatch({ type: "SET_NEW_MEMORY", value: e.target.value })}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
+                        if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
                           handleAddNew();
                         }
@@ -1059,7 +1227,7 @@ export function ChatMemoriesPage() {
                         "w-full resize-none bg-transparent focus:outline-none",
                         typography.bodySmall.size,
                         colors.text.primary,
-                        "placeholder-white/40 leading-relaxed"
+                        "placeholder-white/40 leading-relaxed",
                       )}
                     />
                   </div>
@@ -1072,7 +1240,7 @@ export function ChatMemoriesPage() {
                       "border border-emerald-400/40 bg-emerald-500/20 text-emerald-100",
                       "hover:bg-emerald-500/30 disabled:opacity-30 disabled:pointer-events-none",
                       interactive.transition.default,
-                      interactive.active.scale
+                      interactive.active.scale,
                     )}
                     aria-label="Add memory"
                   >
@@ -1099,9 +1267,7 @@ export function ChatMemoriesPage() {
                     {ui.searchTerm ? "No matching memories" : "No memories yet"}
                   </h3>
                   {!ui.searchTerm && (
-                    <p className="text-center text-sm text-white/50">
-                      Add your first memory above
-                    </p>
+                    <p className="text-center text-sm text-white/50">Add your first memory above</p>
                   )}
                 </div>
               ) : (
@@ -1120,19 +1286,18 @@ export function ChatMemoriesPage() {
                             ? "border-white/20 bg-white/3"
                             : expanded
                               ? "border-white/10 bg-white/2"
-                              : "border-white/6 bg-white/2 hover:border-white/10 hover:bg-white/3"
+                              : "border-white/6 bg-white/2 hover:border-white/10 hover:bg-white/3",
                         )}
                       >
-                        <div className={cn(
-                          "absolute left-0 top-0 bottom-0 w-0.75",
-                          item.isAi ? "bg-blue-400/60" : "bg-emerald-400/60"
-                        )} />
-
                         <div
                           className={cn(
-                            "pl-5 pr-4 py-4",
-                            !isEditing && "cursor-pointer"
+                            "absolute left-0 top-0 bottom-0 w-0.75",
+                            item.isAi ? "bg-blue-400/60" : "bg-emerald-400/60",
                           )}
+                        />
+
+                        <div
+                          className={cn("pl-5 pr-4 py-4", !isEditing && "cursor-pointer")}
                           onClick={() => {
                             if (isEditing) return;
                             dispatch({ type: "TOGGLE_EXPANDED", index: item.index });
@@ -1156,16 +1321,20 @@ export function ChatMemoriesPage() {
                                 ) : (
                                   <User className="h-4 w-4 text-emerald-400" />
                                 )}
-                                <span className={cn(
-                                  "text-xs font-semibold uppercase tracking-wider",
-                                  item.isAi ? "text-blue-400" : "text-emerald-400"
-                                )}>
+                                <span
+                                  className={cn(
+                                    "text-xs font-semibold uppercase tracking-wider",
+                                    item.isAi ? "text-blue-400" : "text-emerald-400",
+                                  )}
+                                >
                                   Editing {item.isAi ? "AI Memory" : "Your Note"}
                                 </span>
                               </div>
                               <textarea
                                 value={ui.editingValue}
-                                onChange={(e) => dispatch({ type: "SET_EDIT_VALUE", value: e.target.value })}
+                                onChange={(e) =>
+                                  dispatch({ type: "SET_EDIT_VALUE", value: e.target.value })
+                                }
                                 rows={4}
                                 className={cn(
                                   "w-full p-3",
@@ -1173,7 +1342,7 @@ export function ChatMemoriesPage() {
                                   "border border-white/10 bg-black/30",
                                   "text-sm text-white/90 resize-none leading-relaxed",
                                   "focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10",
-                                  "placeholder:text-white/30"
+                                  "placeholder:text-white/30",
                                 )}
                                 placeholder="Enter memory content..."
                                 autoFocus
@@ -1187,7 +1356,7 @@ export function ChatMemoriesPage() {
                                     "border border-white/10 bg-white/5",
                                     "text-sm font-medium text-white/60",
                                     "transition-all hover:border-white/15 hover:bg-white/8 hover:text-white/80",
-                                    "active:scale-[0.98]"
+                                    "active:scale-[0.98]",
                                   )}
                                 >
                                   Cancel
@@ -1200,7 +1369,7 @@ export function ChatMemoriesPage() {
                                     "border border-emerald-400/30 bg-emerald-500/15",
                                     "text-sm font-semibold text-emerald-200",
                                     "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25",
-                                    "active:scale-[0.98]"
+                                    "active:scale-[0.98]",
                                   )}
                                 >
                                   <Check size={14} />
@@ -1219,16 +1388,18 @@ export function ChatMemoriesPage() {
                                   ) : (
                                     <User className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                                   )}
-                                  <span className={cn(
-                                    "text-[11px] font-semibold uppercase tracking-wider",
-                                    item.isAi ? "text-blue-400/90" : "text-emerald-400/90"
-                                  )}>
+                                  <span
+                                    className={cn(
+                                      "text-[11px] font-semibold uppercase tracking-wider",
+                                      item.isAi ? "text-blue-400/90" : "text-emerald-400/90",
+                                    )}
+                                  >
                                     {item.isAi ? "AI Memory" : "Your Note"}
                                   </span>
 
                                   {/* Status badges */}
-                                  {isDynamic && (
-                                    item.isCold ? (
+                                  {isDynamic &&
+                                    (item.isCold ? (
                                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-300/80 border border-blue-500/20">
                                         Cold
                                       </span>
@@ -1236,8 +1407,7 @@ export function ChatMemoriesPage() {
                                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-300/80 border border-amber-500/20">
                                         Hot {item.importanceScore.toFixed(1)}
                                       </span>
-                                    )
-                                  )}
+                                    ))}
                                   {item.isPinned && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-pink-500/10 text-pink-300/80 border border-pink-500/20">
                                       <Pin size={8} />
@@ -1247,10 +1417,12 @@ export function ChatMemoriesPage() {
                                 </div>
 
                                 {/* Action Buttons */}
-                                <div className={cn(
-                                  "flex items-center gap-1.5 shrink-0",
-                                  "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                                )}>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-1.5 shrink-0",
+                                    "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
+                                  )}
+                                >
                                   {isDynamic && (
                                     <button
                                       type="button"
@@ -1267,9 +1439,11 @@ export function ChatMemoriesPage() {
                                           : "bg-amber-500/15 text-amber-300/90",
                                         "transition-all hover:bg-white/10 hover:text-white/80",
                                         "disabled:opacity-60 disabled:pointer-events-none",
-                                        "active:scale-95"
+                                        "active:scale-95",
                                       )}
-                                      aria-label={item.isCold ? "Mark memory as hot" : "Mark memory as cold"}
+                                      aria-label={
+                                        item.isCold ? "Mark memory as hot" : "Mark memory as cold"
+                                      }
                                       title={item.isCold ? "Set hot" : "Set cold"}
                                     >
                                       {ui.memoryTempBusy === item.index ? (
@@ -1290,7 +1464,10 @@ export function ChatMemoriesPage() {
                                         dispatch({ type: "SET_ACTION_ERROR", value: null });
                                       } catch (err: any) {
                                         console.error("Failed to toggle pin:", err);
-                                        dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to toggle pin" });
+                                        dispatch({
+                                          type: "SET_ACTION_ERROR",
+                                          value: err?.message || "Failed to toggle pin",
+                                        });
                                       }
                                     }}
                                     className={cn(
@@ -1300,7 +1477,7 @@ export function ChatMemoriesPage() {
                                         ? "bg-pink-500/20 text-pink-400"
                                         : "bg-white/5 text-white/50",
                                       "transition-all hover:bg-pink-500/20 hover:text-pink-400",
-                                      "active:scale-95"
+                                      "active:scale-95",
                                     )}
                                     aria-label={item.isPinned ? "Unpin memory" : "Pin memory"}
                                   >
@@ -1317,7 +1494,7 @@ export function ChatMemoriesPage() {
                                       radius.lg,
                                       "bg-white/5 text-white/50",
                                       "transition-all hover:bg-white/10 hover:text-white/80",
-                                      "active:scale-95"
+                                      "active:scale-95",
                                     )}
                                     aria-label="Edit memory"
                                   >
@@ -1330,10 +1507,16 @@ export function ChatMemoriesPage() {
                                       try {
                                         await handleRemove(item.index);
                                         dispatch({ type: "SET_ACTION_ERROR", value: null });
-                                        dispatch({ type: "SHIFT_EXPANDED_AFTER_DELETE", index: item.index });
+                                        dispatch({
+                                          type: "SHIFT_EXPANDED_AFTER_DELETE",
+                                          index: item.index,
+                                        });
                                       } catch (err: any) {
                                         console.error("Failed to remove memory:", err);
-                                        dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to remove memory" });
+                                        dispatch({
+                                          type: "SET_ACTION_ERROR",
+                                          value: err?.message || "Failed to remove memory",
+                                        });
                                       }
                                     }}
                                     className={cn(
@@ -1341,7 +1524,7 @@ export function ChatMemoriesPage() {
                                       radius.lg,
                                       "bg-red-500/10 text-red-400/70",
                                       "transition-all hover:bg-red-500/20 hover:text-red-400",
-                                      "active:scale-95"
+                                      "active:scale-95",
                                     )}
                                     aria-label="Delete memory"
                                   >
@@ -1351,10 +1534,12 @@ export function ChatMemoriesPage() {
                               </div>
 
                               {/* Memory Content */}
-                              <p className={cn(
-                                "text-[13px] text-white/75 leading-[1.6]",
-                                expanded ? "whitespace-pre-wrap" : "line-clamp-2"
-                              )}>
+                              <p
+                                className={cn(
+                                  "text-[13px] text-white/75 leading-[1.6]",
+                                  expanded ? "whitespace-pre-wrap" : "line-clamp-2",
+                                )}
+                              >
                                 {item.text}
                               </p>
 
@@ -1364,19 +1549,21 @@ export function ChatMemoriesPage() {
                                   {item.tokenCount > 0 && (
                                     <span>{item.tokenCount.toLocaleString()} tokens</span>
                                   )}
-                                  {item.cycle && (
-                                    <span>Cycle {item.cycle}</span>
-                                  )}
+                                  {item.cycle && <span>Cycle {item.cycle}</span>}
                                   {item.lastAccessedAt > 0 && (
-                                    <span>Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}</span>
+                                    <span>
+                                      Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}
+                                    </span>
                                   )}
                                 </div>
 
                                 {/* Expand hint */}
-                                <div className={cn(
-                                  "flex items-center gap-1 text-[10px] text-white/30 transition-colors",
-                                  "group-hover:text-white/40"
-                                )}>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-1 text-[10px] text-white/30 transition-colors",
+                                    "group-hover:text-white/40",
+                                  )}
+                                >
                                   {expanded ? (
                                     <>
                                       <ChevronUp size={12} />
@@ -1399,7 +1586,6 @@ export function ChatMemoriesPage() {
                 </div>
               )}
             </div>
-
           </div>
         ) : ui.activeTab === "tools" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
@@ -1416,20 +1602,25 @@ export function ChatMemoriesPage() {
                       radius.md,
                       "border px-2 py-1 flex items-center gap-1.5 transition-all active:scale-95",
                       "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50",
-                      typography.caption.size
+                      typography.caption.size,
                     )}
                   >
-                    <Cpu size={12} className={cn(session?.memoryStatus === "processing" && "animate-pulse")} />
+                    <Cpu
+                      size={12}
+                      className={cn(session?.memoryStatus === "processing" && "animate-pulse")}
+                    />
                     Run Process
                   </button>
-                  <span className={cn(
-                    typography.caption.size,
-                    "inline-flex items-center gap-1 px-2 py-0.5",
-                    radius.full,
-                    "border bg-white/5",
-                    colors.border.subtle,
-                    colors.text.secondary
-                  )}>
+                  <span
+                    className={cn(
+                      typography.caption.size,
+                      "inline-flex items-center gap-1 px-2 py-0.5",
+                      radius.full,
+                      "border bg-white/5",
+                      colors.border.subtle,
+                      colors.text.secondary,
+                    )}
+                  >
                     {(session.memoryToolEvents?.length ?? 0).toLocaleString()}
                   </span>
                 </div>
@@ -1444,27 +1635,24 @@ export function ChatMemoriesPage() {
               title="Pinned Messages"
               subtitle="Always included in context"
               right={
-                <span className={cn(
-                  typography.caption.size,
-                  "inline-flex items-center gap-1 px-2 py-0.5",
-                  radius.full,
-                  "border bg-white/5",
-                  colors.border.subtle,
-                  colors.text.secondary
-                )}>
+                <span
+                  className={cn(
+                    typography.caption.size,
+                    "inline-flex items-center gap-1 px-2 py-0.5",
+                    radius.full,
+                    "border bg-white/5",
+                    colors.border.subtle,
+                    colors.text.secondary,
+                  )}
+                >
                   {pinnedMessages.length.toLocaleString()}
                 </span>
               }
             />
             {pinnedMessages.length === 0 ? (
-              <div className={cn(
-                components.card.base,
-                "px-6 py-8 text-center"
-              )}>
+              <div className={cn(components.card.base, "px-6 py-8 text-center")}>
                 <Pin className="mx-auto mb-3 h-12 w-12 text-white/20" />
-                <h3 className="mb-1 text-lg font-medium text-white">
-                  No pinned messages
-                </h3>
+                <h3 className="mb-1 text-lg font-medium text-white">No pinned messages</h3>
                 <p className="text-center text-sm text-white/50">
                   Pin important messages from the chat to always include them in the AI's context
                 </p>
@@ -1483,21 +1671,27 @@ export function ChatMemoriesPage() {
                         components.card.base,
                         components.card.interactive,
                         "w-full p-4",
-                        isUser ? "border-emerald-400/30" : isAssistant ? "border-blue-400/30" : "border-white/10"
+                        isUser
+                          ? "border-emerald-400/30"
+                          : isAssistant
+                            ? "border-blue-400/30"
+                            : "border-white/10",
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center",
-                          radius.full,
-                          "border text-white/70",
-                          interactive.transition.default,
-                          isUser
-                            ? "border-emerald-400/30 bg-emerald-400/10"
-                            : isAssistant
-                              ? "border-blue-400/30 bg-blue-400/10"
-                              : "border-white/10 bg-white/5"
-                        )}>
+                        <div
+                          className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center",
+                            radius.full,
+                            "border text-white/70",
+                            interactive.transition.default,
+                            isUser
+                              ? "border-emerald-400/30 bg-emerald-400/10"
+                              : isAssistant
+                                ? "border-blue-400/30 bg-blue-400/10"
+                                : "border-white/10 bg-white/5",
+                          )}
+                        >
                           {isUser ? (
                             <User className="h-4 w-4 text-emerald-400" />
                           ) : isAssistant ? (
@@ -1508,22 +1702,30 @@ export function ChatMemoriesPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={cn(
-                              typography.caption.size,
-                              "font-semibold uppercase tracking-wide",
-                              isUser ? "text-emerald-400" : isAssistant ? "text-blue-400" : colors.text.tertiary
-                            )}>
+                            <span
+                              className={cn(
+                                typography.caption.size,
+                                "font-semibold uppercase tracking-wide",
+                                isUser
+                                  ? "text-emerald-400"
+                                  : isAssistant
+                                    ? "text-blue-400"
+                                    : colors.text.tertiary,
+                              )}
+                            >
                               {isUser ? "User" : isAssistant ? "Assistant" : msg.role}
                             </span>
                             <span className={cn(typography.caption.size, colors.text.disabled)}>
                               {timestamp}
                             </span>
                           </div>
-                          <p className={cn(
-                            typography.bodySmall.size,
-                            colors.text.secondary,
-                            "leading-relaxed whitespace-pre-wrap wrap-break-word"
-                          )}>
+                          <p
+                            className={cn(
+                              typography.bodySmall.size,
+                              colors.text.secondary,
+                              "leading-relaxed whitespace-pre-wrap wrap-break-word",
+                            )}
+                          >
                             {msg.content}
                           </p>
                         </div>
@@ -1535,7 +1737,7 @@ export function ChatMemoriesPage() {
                             typography.caption.size,
                             "font-medium flex items-center gap-1.5",
                             colors.text.tertiary,
-                            "hover:text-white transition-colors"
+                            "hover:text-white transition-colors",
                           )}
                         >
                           <MessageSquare size={12} />
@@ -1547,7 +1749,7 @@ export function ChatMemoriesPage() {
                             typography.caption.size,
                             "font-medium flex items-center gap-1.5",
                             colors.text.tertiary,
-                            "hover:text-amber-400 transition-colors"
+                            "hover:text-amber-400 transition-colors",
                           )}
                         >
                           <Pin size={12} />
@@ -1564,19 +1766,17 @@ export function ChatMemoriesPage() {
       </main>
 
       {/* Bottom Tab Bar */}
-      <div className={cn(
-        "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
-        colors.glass.strong
-      )}>
-        <div className={cn(
-          radius.lg,
-          "grid grid-cols-3 gap-2 p-1",
-          colors.surface.elevated
-        )}>
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
+          colors.glass.strong,
+        )}
+      >
+        <div className={cn(radius.lg, "grid grid-cols-3 gap-2 p-1", colors.surface.elevated)}>
           {[
             { id: "memories" as const, icon: Bot, label: "Memories" },
             { id: "pinned" as const, icon: Pin, label: "Pinned" },
-            { id: "tools" as const, icon: Clock, label: "Activity" }
+            { id: "tools" as const, icon: Clock, label: "Activity" },
           ].map(({ id, icon: Icon, label }) => (
             <button
               key={id}
@@ -1587,7 +1787,7 @@ export function ChatMemoriesPage() {
                 interactive.active.scale,
                 ui.activeTab === id
                   ? "bg-white/10 text-white"
-                  : cn(colors.text.tertiary, "hover:text-white")
+                  : cn(colors.text.tertiary, "hover:text-white"),
               )}
             >
               <Icon size={16} />
@@ -1608,7 +1808,14 @@ export function ChatMemoriesPage() {
       >
         <MenuSection className="pb-0">
           <div className="px-4 py-3">
-            <div className={cn("relative flex items-center", radius.md, "bg-white/5 border", colors.border.subtle)}>
+            <div
+              className={cn(
+                "relative flex items-center",
+                radius.md,
+                "bg-white/5 border",
+                colors.border.subtle,
+              )}
+            >
               <Search className="absolute left-3 h-4 w-4 text-white/30" />
               <input
                 type="text"
@@ -1654,7 +1861,7 @@ export function ChatMemoriesPage() {
                     disabled={retryingWithModel}
                     className={cn(
                       "group relative flex w-full flex-col gap-1 px-4 py-3 transition",
-                      isSelected ? "bg-white/5" : "hover:bg-white/5"
+                      isSelected ? "bg-white/5" : "hover:bg-white/5",
                     )}
                   >
                     <div className="flex items-center gap-3">
@@ -1663,7 +1870,12 @@ export function ChatMemoriesPage() {
                       </div>
                       <div className="min-w-0 flex-1 text-left">
                         <div className="flex items-center gap-2">
-                          <span className={cn(typography.body.size, "font-semibold text-white truncate")}>
+                          <span
+                            className={cn(
+                              typography.body.size,
+                              "font-semibold text-white truncate",
+                            )}
+                          >
                             {model.displayName}
                           </span>
                           {isSelected && (
@@ -1672,7 +1884,9 @@ export function ChatMemoriesPage() {
                             </span>
                           )}
                         </div>
-                        <p className={cn(typography.caption.size, colors.text.tertiary, "truncate")}>
+                        <p
+                          className={cn(typography.caption.size, colors.text.tertiary, "truncate")}
+                        >
                           {model.providerLabel} • {model.name}
                         </p>
                       </div>

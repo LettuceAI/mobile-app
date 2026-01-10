@@ -586,7 +586,7 @@ pub fn group_session_archive(
     pool: State<'_, SwappablePool>,
 ) -> Result<(), String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     conn.execute(
         "UPDATE group_sessions SET archived = ?1, updated_at = ?2 WHERE id = ?3",
@@ -605,7 +605,7 @@ pub fn group_session_update_title(
     pool: State<'_, SwappablePool>,
 ) -> Result<(), String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     conn.execute(
         "UPDATE group_sessions SET name = ?1, updated_at = ?2 WHERE id = ?3",
@@ -630,7 +630,7 @@ pub fn group_session_duplicate(
     let source = read_group_session(&conn, &source_id)?
         .ok_or_else(|| "Source session not found".to_string())?;
 
-    let now = now_ms();
+    let now = now_ms() as i64;
     let new_id = Uuid::new_v4().to_string();
     let name = new_name.unwrap_or_else(|| format!("{} (copy)", source.name));
     let character_ids_json =
@@ -711,7 +711,7 @@ pub fn group_session_duplicate_with_messages(
     let source = read_group_session(&conn, &source_id)?
         .ok_or_else(|| "Source session not found".to_string())?;
 
-    let now = now_ms();
+    let now = now_ms() as i64;
     let new_id = Uuid::new_v4().to_string();
     let name = new_name.unwrap_or_else(|| format!("{} (copy)", source.name));
     let character_ids_json =
@@ -981,7 +981,7 @@ pub fn group_session_branch_to_character(
         }
     }
 
-    let now = now_ms();
+    let now = now_ms() as i64;
     let new_session_id = Uuid::new_v4().to_string();
     let name = new_name.unwrap_or_else(|| format!("{} - {}", source.name, character_name));
 
@@ -1081,7 +1081,7 @@ pub fn group_session_create(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
     let id = Uuid::new_v4().to_string();
 
     let character_ids: Vec<String> =
@@ -1186,7 +1186,7 @@ pub fn group_session_update(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     let character_ids: Vec<String> =
         serde_json::from_str(&character_ids_json).map_err(|e| e.to_string())?;
@@ -1224,7 +1224,7 @@ pub fn group_session_add_character(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     // Get current character_ids
     let session =
@@ -1259,7 +1259,7 @@ pub fn group_session_remove_character(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     // Get current character_ids
     let session =
@@ -1299,7 +1299,7 @@ pub fn group_session_update_starting_scene(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     conn.execute(
         "UPDATE group_sessions SET starting_scene = ?1, updated_at = ?2 WHERE id = ?3",
@@ -1320,7 +1320,7 @@ pub fn group_session_update_background_image(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     conn.execute(
         "UPDATE group_sessions SET background_image_path = ?1, updated_at = ?2 WHERE id = ?3",
@@ -1341,7 +1341,7 @@ pub fn group_session_update_chat_type(
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
-    let now = now_ms();
+    let now = now_ms() as i64;
 
     // Validate chat_type
     if chat_type != "conversation" && chat_type != "roleplay" {
@@ -1693,20 +1693,23 @@ pub fn group_session_update_manual_memories(
 pub fn group_session_update_memories_internal(
     conn: &Connection,
     session_id: &str,
+    memories: &[String],
     memory_embeddings: &[MemoryEmbedding],
     memory_summary: Option<&str>,
     memory_summary_token_count: i32,
     memory_tool_events: &[serde_json::Value],
 ) -> Result<(), String> {
     let now = now_ms();
+    let memories_json = serde_json::to_string(memories).map_err(|e| e.to_string())?;
     let memory_embeddings_json =
         serde_json::to_string(memory_embeddings).map_err(|e| e.to_string())?;
     let memory_tool_events_json =
         serde_json::to_string(memory_tool_events).map_err(|e| e.to_string())?;
 
     conn.execute(
-        "UPDATE group_sessions SET memory_embeddings = ?1, memory_summary = ?2, memory_summary_token_count = ?3, memory_tool_events = ?4, updated_at = ?5 WHERE id = ?6",
+        "UPDATE group_sessions SET memories = ?1, memory_embeddings = ?2, memory_summary = ?3, memory_summary_token_count = ?4, memory_tool_events = ?5, updated_at = ?6 WHERE id = ?7",
         params![
+            memories_json,
             memory_embeddings_json,
             memory_summary.unwrap_or(""),
             memory_summary_token_count,
@@ -1952,15 +1955,22 @@ pub fn group_session_toggle_memory_pin(
     let mut memory_embeddings: Vec<MemoryEmbedding> =
         serde_json::from_str(&current_embeddings_json).unwrap_or_else(|_| vec![]);
 
+    let now = now_ms() as i64;
+
     // Toggle pin at index if valid
     if memory_index < memory_embeddings.len() {
-        memory_embeddings[memory_index].is_pinned = !memory_embeddings[memory_index].is_pinned;
+        let next_pinned = !memory_embeddings[memory_index].is_pinned;
+        memory_embeddings[memory_index].is_pinned = next_pinned;
+        if next_pinned {
+            memory_embeddings[memory_index].is_cold = false;
+            memory_embeddings[memory_index].importance_score = 1.0;
+            memory_embeddings[memory_index].last_accessed_at = now;
+        }
     }
 
     // Save back
     let new_embeddings_json =
         serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
-    let now = now_ms();
 
     conn.execute(
         "UPDATE group_sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
@@ -2001,16 +2011,25 @@ pub fn group_session_set_memory_cold_state(
     let mut memory_embeddings: Vec<MemoryEmbedding> =
         serde_json::from_str(&current_embeddings_json).unwrap_or_else(|_| vec![]);
 
+    let now = now_ms() as i64;
+
     // Set cold state at index if valid
     if memory_index < memory_embeddings.len() {
+        if memory_embeddings[memory_index].is_pinned && is_cold {
+            return Err("Pinned memories cannot be moved to cold storage".to_string());
+        }
         memory_embeddings[memory_index].is_cold = is_cold;
+        if is_cold {
+            memory_embeddings[memory_index].importance_score = 0.0;
+        } else {
+            memory_embeddings[memory_index].importance_score = 1.0;
+            memory_embeddings[memory_index].last_accessed_at = now;
+        }
     }
 
     // Save back
     let new_embeddings_json =
         serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
-    let now = now_ms();
-
     conn.execute(
         "UPDATE group_sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
         params![new_embeddings_json, now, &session_id],

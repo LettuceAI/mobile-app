@@ -1751,6 +1751,8 @@ pub fn session_toggle_memory_pin(
     let mut memory_embeddings: Vec<JsonValue> =
         serde_json::from_str(&current_embeddings_json).unwrap_or_else(|_| vec![]);
 
+    let now = now_ms() as i64;
+
     // Toggle pin status at index
     if memory_index < memory_embeddings.len() {
         if let Some(obj) = memory_embeddings
@@ -1761,14 +1763,18 @@ pub fn session_toggle_memory_pin(
                 .get("isPinned")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            obj.insert("isPinned".into(), JsonValue::Bool(!current_pinned));
+            let next_pinned = !current_pinned;
+            obj.insert("isPinned".into(), JsonValue::Bool(next_pinned));
+            if next_pinned {
+                obj.insert("isCold".into(), JsonValue::Bool(false));
+                obj.insert("importanceScore".into(), JsonValue::from(1.0));
+                obj.insert("lastAccessedAt".into(), JsonValue::from(now));
+            }
         }
 
         // Save back
         let new_embeddings_json =
             serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
-        let now = now_ms() as i64;
-
         conn.execute(
             "UPDATE sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
             params![new_embeddings_json, now, &session_id],
@@ -1837,6 +1843,14 @@ pub fn session_set_memory_cold_state(
         .get_mut(memory_index)
         .and_then(|v| v.as_object_mut())
     {
+        let is_pinned = obj
+            .get("isPinned")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if is_pinned && is_cold {
+            return Err("Pinned memories cannot be moved to cold storage".to_string());
+        }
+
         obj.insert("isCold".into(), JsonValue::Bool(is_cold));
         if is_cold {
             obj.insert("importanceScore".into(), JsonValue::from(0.0));
