@@ -154,10 +154,9 @@ jobs:
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          STORE_PASS="${ANDROID_KEYSTORE_PASSWORD:-$ANDROID_KEY_PASSWORD}"
-          KEY_PASS="${ANDROID_KEY_PASSWORD:-$STORE_PASS}"
+          STORE_PASS="${ANDROID_KEY_PASSWORD}"
+          KEY_PASS="${ANDROID_KEY_PASSWORD}"
 
           if [ -z "$ANDROID_KEY_BASE64" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$STORE_PASS" ]; then
             echo "Missing Android signing secrets."
@@ -215,7 +214,6 @@ jobs:
             echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/keystore.jks"
             echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
             echo "ANDROID_KEY_PASSWORD=$KEY_PASS"
-            echo "ANDROID_KEYSTORE_PASSWORD=$STORE_PASS"
           } >> "$GITHUB_ENV"
 
       - name: Build Tauri Android app (Dev build)
@@ -230,7 +228,7 @@ jobs:
         run: |
           env \
             "ORG_GRADLE_PROJECT_android.injected.signing.store.file=$ANDROID_KEYSTORE_PATH" \
-            "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD" \
+            "ORG_GRADLE_PROJECT_android.injected.signing.store.password=$ANDROID_KEY_PASSWORD" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=$ANDROID_KEY_ALIAS" \
             "ORG_GRADLE_PROJECT_android.injected.signing.key.password=$ANDROID_KEY_PASSWORD" \
             pnpm tauri android build --ci --config src-tauri/dev-config.json -- --release
