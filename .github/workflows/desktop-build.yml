@@ -144,7 +144,7 @@ jobs:
       - name: Create dev config override
         run: |
           $SHORT_SHA = "${{ github.sha }}".Substring(0, 7)
-          $VERSION = "0.1.${{ github.run_number }}-dev.$SHORT_SHA"
+          $VERSION = "0.1.${{ github.run_number }}"
 
           $devConfig = @"
           {
