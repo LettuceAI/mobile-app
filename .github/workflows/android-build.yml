@@ -184,3 +184,4 @@ jobs:
           path: |
             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
             src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            !src-tauri/gen/android/app/build/outputs/apk/**/*-unsigned.apk
