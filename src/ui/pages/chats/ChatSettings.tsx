@@ -34,6 +34,7 @@ import {
   deletePersona,
   getSessionMessageCount,
 } from "../../../core/storage/repo";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -281,6 +282,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     useState<AdvancedModelSettings | null>(null);
   const [showSessionAdvancedMenu, setShowSessionAdvancedMenu] = useState(false);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [sessionAdvancedDraft, setSessionAdvancedDraft] = useState<AdvancedModelSettings>(
     createDefaultAdvancedModelSettings(),
   );
@@ -360,6 +362,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     return currentCharacter?.defaultModelId || globalDefaultModelId || null;
   }, [currentCharacter?.defaultModelId, globalDefaultModelId]);
 
+  const selectedModelId = currentCharacter?.defaultModelId ?? null;
   const effectiveModelId = getEffectiveModelId();
   const currentModel = useMemo(
     () => models.find((m) => m.id === effectiveModelId),
@@ -401,7 +404,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     }
   };
 
-  const handleChangeModel = async (modelId: string) => {
+  const handleChangeModel = async (modelId: string | null) => {
     if (!characterId) return;
 
     try {
@@ -999,33 +1002,93 @@ function ChatSettingsContent({ character }: { character: Character }) {
       {/* Model Selection */}
       <BottomMenu
         isOpen={showModelSelector}
-        onClose={() => setShowModelSelector(false)}
+        onClose={() => {
+          setShowModelSelector(false);
+          setModelSearchQuery("");
+        }}
         title="Select Model"
         includeExitIcon={false}
         location="bottom"
       >
-        <MenuSection>
-          {models.length === 0 ? (
-            <div className={cn(radius.lg, "border border-amber-500/20 bg-amber-500/10 px-6 py-4")}>
-              <p className={cn(typography.bodySmall.size, "text-amber-200")}>
-                No models available. Please configure a provider in settings first.
-              </p>
-            </div>
-          ) : (
-            <div className={spacing.field}>
-              {models.map((model) => (
-                <ModelOption
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={modelSearchQuery}
+              onChange={(e) => setModelSearchQuery(e.target.value)}
+              placeholder="Search models..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+            />
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            <button
+              onClick={() => {
+                void handleChangeModel(null);
+                setShowModelSelector(false);
+                setModelSearchQuery("");
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                !selectedModelId
+                  ? "border-emerald-400/40 bg-emerald-400/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10",
+              )}
+            >
+              <Cpu className="h-5 w-5 text-white/40" />
+              <span className="text-sm text-white">Use global default model</span>
+              {!selectedModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
+            </button>
+            {models
+              .filter((model) => {
+                if (!modelSearchQuery) return true;
+                const q = modelSearchQuery.toLowerCase();
+                return (
+                  model.displayName?.toLowerCase().includes(q) ||
+                  model.name?.toLowerCase().includes(q)
+                );
+              })
+              .map((model) => (
+                <button
                   key={model.id}
-                  model={model}
-                  isSelected={model.id === effectiveModelId}
-                  isGlobalDefault={model.id === globalDefaultModelId}
-                  isCharacterDefault={model.id === currentCharacter?.defaultModelId}
-                  onClick={() => handleChangeModel(model.id)}
-                />
+                  onClick={() => {
+                    void handleChangeModel(model.id);
+                    setShowModelSelector(false);
+                    setModelSearchQuery("");
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                    selectedModelId === model.id
+                      ? "border-emerald-400/40 bg-emerald-400/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10",
+                  )}
+                >
+                  {getProviderIcon(model.providerId)}
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate text-sm text-white">
+                      {model.displayName || model.name}
+                    </span>
+                    <span className="block truncate text-xs text-white/40">{model.name}</span>
+                  </div>
+                  {selectedModelId === model.id && (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                  )}
+                </button>
               ))}
-            </div>
-          )}
-        </MenuSection>
+          </div>
+        </div>
       </BottomMenu>
 
       {/* Persona Actions */}
