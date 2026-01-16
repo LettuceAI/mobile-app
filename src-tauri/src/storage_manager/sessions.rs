@@ -1160,6 +1160,16 @@ pub fn messages_delete_after(
     };
 
     let to_delete = &ids[(pos + 1)..];
+    log_info(
+        &app,
+        "messages_delete_after",
+        format!(
+            "Rewinding session {} after message {} (deleting {} messages)",
+            session_id,
+            message_id,
+            to_delete.len()
+        ),
+    );
     for id in to_delete {
         tx.execute(
             "DELETE FROM messages WHERE id = ? AND session_id = ?",

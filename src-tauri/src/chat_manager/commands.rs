@@ -1800,6 +1800,17 @@ pub async fn chat_continue(
         }),
     );
 
+    let stored_total_messages = session.messages.len();
+    let stored_convo_messages = conversation_count(&session.messages);
+    log_info(
+        &app,
+        "chat_continue",
+        format!(
+            "stored message counts before continue total={} convo={} (no [CONTINUE] prompt persisted)",
+            stored_total_messages, stored_convo_messages
+        ),
+    );
+
     let character = match context.find_character(&character_id) {
         Ok(found) => found,
         Err(err) => {
@@ -2253,9 +2264,10 @@ pub async fn chat_continue(
         &app,
         "chat_continue",
         format!(
-            "assistant continuation saved message_id={} total_messages={} request_id={:?}",
+            "assistant continuation saved message_id={} total_messages={} convo_messages={} request_id={:?}",
             assistant_message.id.as_str(),
             session.messages.len(),
+            conversation_count(&session.messages),
             &request_id
         ),
     );
@@ -2521,6 +2533,19 @@ async fn process_dynamic_memory_cycle_with_model(
     update_default_on_success: bool,
     force: bool,
 ) -> Result<(), String> {
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "starting cycle: session_id={} force={} model_override={} update_default={} embeddings={} events={}",
+            session.id,
+            force,
+            model_id_override.unwrap_or("none"),
+            update_default_on_success,
+            session.memory_embeddings.len(),
+            session.memory_tool_events.len()
+        ),
+    );
     let Some(advanced) = settings.advanced_settings.as_ref() else {
         log_info(
             app,
@@ -2550,30 +2575,51 @@ async fn process_dynamic_memory_cycle_with_model(
     }
 
     let window_size = dynamic.summary_message_interval.max(1) as usize;
+    let total_messages = session.messages.len();
     let total_convo_at_start = conversation_count(&session.messages);
     let convo_window = conversation_window(&session.messages, window_size);
     log_info(
         app,
         "dynamic_memory",
         format!(
-            "snapshot taken: window_size={} total_convo_at_start={} convo_window_count={}",
+            "snapshot taken: window_size={} total_convo_at_start={} total_messages={} non_convo_messages={} convo_window_count={}",
             window_size,
             total_convo_at_start,
+            total_messages,
+            total_messages.saturating_sub(total_convo_at_start),
             convo_window.len()
         ),
     );
     if convo_window.is_empty() {
-        log_warn(app, "dynamic_memory", "no messages in window; skipping");
+        log_warn(
+            app,
+            "dynamic_memory",
+            format!(
+                "no messages in window; skipping (total_convo_at_start={})",
+                total_convo_at_start
+            ),
+        );
         return Ok(());
     }
 
     // For retry or manual trigger, skip the window end check or minimum size check
     if model_id_override.is_none() && !force {
-        let last_window_end = session
+        let mut last_window_end = session
             .memory_tool_events
             .last()
             .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
             .unwrap_or(0) as usize;
+        if total_convo_at_start < last_window_end {
+            log_info(
+                app,
+                "dynamic_memory",
+                format!(
+                    "conversation shrank (total_convo_at_start={} < last_window_end={}); resetting window end",
+                    total_convo_at_start, last_window_end
+                ),
+            );
+            last_window_end = 0;
+        }
         log_info(
             app,
             "dynamic_memory",
@@ -2587,19 +2633,24 @@ async fn process_dynamic_memory_cycle_with_model(
             log_info(
                 app,
                 "dynamic_memory",
-                "no new messages since last run; skipping",
+                format!(
+                    "no new messages since last run; skipping (total_convo_at_start={} last_window_end={})",
+                    total_convo_at_start, last_window_end
+                ),
             );
             return Ok(());
         }
 
         if total_convo_at_start - last_window_end < window_size {
+            let next_window_end = last_window_end + window_size;
             log_info(
                 app,
                 "dynamic_memory",
                 format!(
-                    "not enough new messages since last run (needed {}, got {})",
+                    "not enough new messages since last run (needed {}, got {}, next_window_end={})",
                     window_size,
-                    total_convo_at_start - last_window_end
+                    total_convo_at_start - last_window_end,
+                    next_window_end
                 ),
             );
             return Ok(());
@@ -2716,6 +2767,15 @@ async fn process_dynamic_memory_cycle_with_model(
             return Err(err);
         }
     };
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "summary generated: length={} chars tokens={}",
+            summary.len(),
+            crate::tokenizer::count_tokens(app, &summary).unwrap_or(0)
+        ),
+    );
 
     log_info(
         app,
@@ -2828,9 +2888,10 @@ async fn process_dynamic_memory_cycle_with_model(
         app,
         "dynamic_memory",
         format!(
-            "dynamic memory cycle complete: events={}, memories={}, windowEnd={}",
+            "dynamic memory cycle complete: events={}, memories={}, embeddings={}, windowEnd={}",
             session.memory_tool_events.len(),
             session.memories.len(),
+            session.memory_embeddings.len(),
             total_convo_at_start
         ),
     );

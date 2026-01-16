@@ -488,6 +488,16 @@ async fn process_group_dynamic_memory_cycle(
     settings: &Settings,
     pool: &State<'_, SwappablePool>,
 ) -> Result<(), String> {
+    log_info(
+        app,
+        "group_dynamic_memory",
+        format!(
+            "starting cycle: session_id={} embeddings={} events={}",
+            session.id,
+            session.memory_embeddings.len(),
+            session.memory_tool_events.len()
+        ),
+    );
     let dynamic_settings = effective_group_dynamic_memory_settings(settings);
 
     if !dynamic_settings.enabled {
@@ -507,6 +517,7 @@ async fn process_group_dynamic_memory_cycle(
         group_sessions::group_messages_list_internal(&conn, &session.id, 100, None, None)?;
     let messages: Vec<GroupMessage> = serde_json::from_str(&messages_json).unwrap_or_default();
 
+    let total_messages = messages.len();
     let total_convo = conversation_count(&messages);
     let convo_window = conversation_window(&messages, window_size);
     let window_start = total_convo.saturating_sub(window_size);
@@ -516,9 +527,11 @@ async fn process_group_dynamic_memory_cycle(
         app,
         "group_dynamic_memory",
         format!(
-            "snapshot: window_size={} total_convo={} convo_window_count={}",
+            "snapshot: window_size={} total_convo={} total_messages={} non_convo_messages={} convo_window_count={}",
             window_size,
             total_convo,
+            total_messages,
+            total_messages.saturating_sub(total_convo),
             convo_window.len()
         ),
     );
@@ -527,18 +540,32 @@ async fn process_group_dynamic_memory_cycle(
         log_warn(
             app,
             "group_dynamic_memory",
-            "no messages in window; skipping",
+            format!(
+                "no messages in window; skipping (total_convo={})",
+                total_convo
+            ),
         );
         return Ok(());
     }
 
     // Check if enough new messages since last run (match normal chat behavior)
     // Use last_window_end from memory_tool_events to track progress
-    let last_window_end = session
+    let mut last_window_end = session
         .memory_tool_events
         .last()
         .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
         .unwrap_or(0) as usize;
+    if total_convo < last_window_end {
+        log_info(
+            app,
+            "group_dynamic_memory",
+            format!(
+                "conversation shrank (total_convo={} < last_window_end={}); resetting window end",
+                total_convo, last_window_end
+            ),
+        );
+        last_window_end = 0;
+    }
 
     log_info(
         app,
@@ -553,19 +580,24 @@ async fn process_group_dynamic_memory_cycle(
         log_info(
             app,
             "group_dynamic_memory",
-            "no new messages since last run; skipping",
+            format!(
+                "no new messages since last run; skipping (total_convo={} last_window_end={})",
+                total_convo, last_window_end
+            ),
         );
         return Ok(());
     }
 
     if total_convo - last_window_end < window_size {
+        let next_window_end = last_window_end + window_size;
         log_info(
             app,
             "group_dynamic_memory",
             format!(
-                "not enough new messages since last run (needed {}, got {})",
+                "not enough new messages since last run (needed {}, got {}, next_window_end={})",
                 window_size,
-                total_convo - last_window_end
+                total_convo - last_window_end,
+                next_window_end
             ),
         );
         return Ok(());
@@ -706,12 +738,14 @@ async fn process_group_dynamic_memory_cycle(
         }
     };
 
+    let summary_tokens = crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
     log_info(
         app,
         "group_dynamic_memory",
         format!(
-            "summary length={} chars; invoking memory tools",
-            summary.len()
+            "summary generated: length={} chars tokens={}; invoking memory tools",
+            summary.len(),
+            summary_tokens
         ),
     );
 
@@ -846,8 +880,9 @@ async fn process_group_dynamic_memory_cycle(
         app,
         "group_dynamic_memory",
         format!(
-            "dynamic memory cycle complete: memories={}, windowEnd={}",
+            "dynamic memory cycle complete: memories={}, events={}, windowEnd={}",
             session.memory_embeddings.len(),
+            session.memory_tool_events.len(),
             total_convo
         ),
     );

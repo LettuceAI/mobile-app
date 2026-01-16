@@ -4,6 +4,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use super::db::{now_ms, SwappablePool};
+use crate::utils::log_info;
 
 // ============================================================================
 // Internal Functions (for use by group_chat_manager)
@@ -1501,23 +1502,34 @@ pub fn group_message_upsert(
 
 #[tauri::command]
 pub fn group_message_delete(
+    app: tauri::AppHandle,
     session_id: String,
     message_id: String,
     pool: State<'_, SwappablePool>,
 ) -> Result<(), String> {
     let conn = pool.get_connection()?;
 
-    conn.execute(
+    let deleted = conn.execute(
         "DELETE FROM group_messages WHERE id = ?1 AND session_id = ?2",
         params![message_id, session_id],
     )
     .map_err(|e| e.to_string())?;
+
+    log_info(
+        &app,
+        "group_message_delete",
+        format!(
+            "Deleting group message {} from session {} (deleted={})",
+            message_id, session_id, deleted
+        ),
+    );
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn group_messages_delete_after(
+    app: tauri::AppHandle,
     session_id: String,
     message_id: String,
     pool: State<'_, SwappablePool>,
@@ -1534,11 +1546,20 @@ pub fn group_messages_delete_after(
         .map_err(|e| e.to_string())?;
 
     // Delete all messages with higher turn number
-    conn.execute(
+    let deleted = conn.execute(
         "DELETE FROM group_messages WHERE session_id = ?1 AND turn_number > ?2",
         params![session_id, turn_number],
     )
     .map_err(|e| e.to_string())?;
+
+    log_info(
+        &app,
+        "group_messages_delete_after",
+        format!(
+            "Rewinding group session {} after message {} (deleted={})",
+            session_id, message_id, deleted
+        ),
+    );
 
     Ok(())
 }
