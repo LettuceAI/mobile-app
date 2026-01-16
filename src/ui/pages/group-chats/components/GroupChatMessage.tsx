@@ -8,6 +8,7 @@ import type {
   Character,
   Persona,
 } from "../../../../core/storage/schemas";
+import type { ThemeColors } from "../../../../core/utils/imageAnalysis";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { useSessionAttachments } from "../../../hooks/useSessionAttachment";
@@ -29,6 +30,7 @@ export interface GroupChatMessageProps {
   character?: Character;
   persona?: Persona | null;
   characters?: Character[];
+  theme: ThemeColors;
   getVariantState: (message: GroupMessage) => VariantState;
   handleVariantDrag: (messageId: string, offsetX: number) => void;
   handleRegenerate: (message: GroupMessage) => Promise<void>;
@@ -226,6 +228,7 @@ function GroupChatMessageInner({
   character,
   persona,
   characters = [],
+  theme,
   getVariantState,
   handleVariantDrag,
   handleRegenerate,
@@ -458,154 +461,141 @@ function GroupChatMessageInner({
         </div>
       )}
 
-      <div
-        className={cn("flex flex-col max-w-[82%]", computed.isUser ? "items-end" : "items-start")}
+      <motion.div
+        initial={computed.shouldAnimate ? { opacity: 0, y: 4 } : false}
+        animate={computed.shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
+        transition={animTransition}
+        className={cn(
+          "max-w-[82%] px-4 py-2.5 leading-relaxed",
+          radius.lg,
+          typography.body.size,
+          message.role === "user"
+            ? cn(
+                `ml-auto ${theme.userBg} ${theme.userText} border ${theme.userBorder}`,
+                heldMessageId === message.id && "ring-2 ring-emerald-400/50",
+              )
+            : cn(
+                `border ${theme.assistantBg} ${theme.assistantText}`,
+                heldMessageId === message.id ? "border-white/30" : theme.assistantBorder,
+              ),
+        )}
+        {...eventHandlers}
+        {...dragProps}
       >
-        {/* Speaker Name */}
-        {!computed.isUser && character && (
-          <span className="text-xs font-medium text-white/50 mb-1 px-1">{character.name}</span>
+        {/* Pin indicator */}
+        {message.isPinned && (
+          <motion.div
+            className="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-blue-500/40 bg-blue-500/20 shadow-lg"
+            initial={{ scale: 0, rotate: -45 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          >
+            <Pin size={12} className="text-blue-300" />
+          </motion.div>
         )}
 
-        <motion.div
-          initial={computed.shouldAnimate ? { opacity: 0, y: 4 } : false}
-          animate={computed.shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
-          transition={animTransition}
-          className={cn(
-            "relative px-4 py-2.5 leading-relaxed",
-            radius.lg,
-            typography.body.size,
-            message.role === "user"
-              ? cn(
-                  "ml-auto bg-emerald-500/20 text-emerald-100 border border-emerald-400/30",
-                  heldMessageId === message.id && "ring-2 ring-emerald-400/50",
-                )
-              : cn(
-                  "border bg-white/5 text-white/90",
-                  heldMessageId === message.id ? "border-white/30" : "border-white/10",
-                ),
-            "select-none",
-          )}
-          {...eventHandlers}
-          {...dragProps}
-        >
-          {/* Pin indicator */}
-          {message.isPinned && (
-            <motion.div
-              className="absolute -top-2 -right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-blue-500/40 bg-blue-500/20 shadow-lg"
-              initial={{ scale: 0, rotate: -45 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            >
-              <Pin size={12} className="text-blue-300" />
-            </motion.div>
-          )}
+        {/* Thinking/Reasoning section - shown even during typing indicator */}
+        {computed.isAssistant && reasoning && (
+          <ThinkingSection reasoning={reasoning} isStreaming={computed.isPlaceholder && sending} />
+        )}
 
-          {/* Thinking/Reasoning section - shown even during typing indicator */}
-          {computed.isAssistant && reasoning && (
-            <ThinkingSection
-              reasoning={reasoning}
-              isStreaming={computed.isPlaceholder && sending}
+        {/* Show typing indicator only if no reasoning (reasoning section has its own indicator) */}
+        {computed.showTypingIndicator && !reasoning ? (
+          <TypingIndicator />
+        ) : computed.showTypingIndicator ? null : (
+          <>
+            {/* Display attachments if present (with lazy loading support) */}
+            {loadedAttachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {loadedAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className={cn(
+                      radius.md,
+                      "overflow-hidden border border-white/15",
+                      attachment.data &&
+                        onImageClick &&
+                        "cursor-pointer hover:border-white/30 transition-colors",
+                    )}
+                    onClick={() =>
+                      attachment.data &&
+                      onImageClick?.(attachment.data, attachment.filename || "Attached image")
+                    }
+                  >
+                    {attachment.data ? (
+                      <img
+                        src={attachment.data}
+                        alt={attachment.filename || "Attached image"}
+                        className="max-h-48 max-w-full object-contain"
+                        style={{
+                          maxWidth:
+                            attachment.width && attachment.width > 300
+                              ? 300
+                              : attachment.width || 300,
+                        }}
+                      />
+                    ) : (
+                      // Loading placeholder
+                      <div
+                        className="flex items-center justify-center bg-white/5"
+                        style={{
+                          width: Math.min(attachment.width || 150, 300),
+                          height: Math.min(attachment.height || 100, 192),
+                        }}
+                      >
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <MarkdownRenderer
+              key={message.id + ":" + computed.selectedVariantIndex}
+              content={processedContent}
+              className="text-inherit select-none"
             />
-          )}
+          </>
+        )}
 
-          {/* Show typing indicator only if no reasoning (reasoning section has its own indicator) */}
-          {computed.showTypingIndicator && !reasoning ? (
-            <TypingIndicator />
-          ) : computed.showTypingIndicator ? null : (
-            <>
-              {/* Display attachments if present (with lazy loading support) */}
-              {loadedAttachments.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {loadedAttachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className={cn(
-                        radius.md,
-                        "overflow-hidden border border-white/15",
-                        attachment.data &&
-                          onImageClick &&
-                          "cursor-pointer hover:border-white/30 transition-colors",
-                      )}
-                      onClick={() =>
-                        attachment.data &&
-                        onImageClick?.(attachment.data, attachment.filename || "Attached image")
-                      }
-                    >
-                      {attachment.data ? (
-                        <img
-                          src={attachment.data}
-                          alt={attachment.filename || "Attached image"}
-                          className="max-h-48 max-w-full object-contain"
-                          style={{
-                            maxWidth:
-                              attachment.width && attachment.width > 300
-                                ? 300
-                                : attachment.width || 300,
-                          }}
-                        />
-                      ) : (
-                        // Loading placeholder
-                        <div
-                          className="flex items-center justify-center bg-white/5"
-                          style={{
-                            width: Math.min(attachment.width || 150, 300),
-                            height: Math.min(attachment.height || 100, 192),
-                          }}
-                        >
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <MarkdownRenderer
-                key={message.id + ":" + computed.selectedVariantIndex}
-                content={processedContent}
-                className="text-inherit select-none"
-              />
-            </>
-          )}
-
-          {computed.isAssistant && computed.totalVariants > 1 && (
-            <motion.div
-              className={cn(
-                "mt-2.5 flex items-center justify-between pr-2",
-                typography.caption.size,
-                typography.caption.weight,
-                "uppercase tracking-wider text-white/40",
-              )}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, delay: 0.15 }}
-            >
-              <span className="text-white">
-                Variant {computed.selectedVariantIndex >= 0 ? computed.selectedVariantIndex + 1 : 1}
-                {computed.totalVariants > 0 ? ` / ${computed.totalVariants}` : ""}
-              </span>
-              {regeneratingMessageId === message.id && (
-                <motion.span
-                  className="flex items-center gap-1.5 text-emerald-300"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-300/30 border-t-emerald-300" />
-                  Regenerating
-                </motion.span>
-              )}
-            </motion.div>
-          )}
-        </motion.div>
-      </div>
+        {(computed.isAssistant || computed.isScene) && computed.totalVariants > 1 && (
+          <motion.div
+            className={cn(
+              "mt-2.5 flex items-center justify-between pr-2",
+              typography.caption.size,
+              typography.caption.weight,
+              "uppercase tracking-wider text-white/40",
+            )}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2, delay: 0.15 }}
+          >
+            <span className="text-white">
+              Variant {computed.selectedVariantIndex >= 0 ? computed.selectedVariantIndex + 1 : 1}
+              {computed.totalVariants > 0 ? ` / ${computed.totalVariants}` : ""}
+            </span>
+            {regeneratingMessageId === message.id && (
+              <motion.span
+                className="flex items-center gap-1.5 text-emerald-300"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-300/30 border-t-emerald-300" />
+                Regenerating
+              </motion.span>
+            )}
+          </motion.div>
+        )}
+      </motion.div>
 
       {/* Avatar for user messages (right side) */}
       {message.role === "user" && (
         <MessageAvatar role={message.role} character={character} persona={persona} />
       )}
 
-      {computed.showRegenerateButton && !sending && (
+      {computed.showRegenerateButton && (
         <MessageActions
           disabled={regeneratingMessageId === message.id || sending}
           isRegenerating={regeneratingMessageId === message.id}
@@ -644,6 +634,7 @@ export const GroupChatMessage = React.memo(GroupChatMessageInner, (prev, next) =
     prev.heldMessageId === next.heldMessageId &&
     prev.regeneratingMessageId === next.regeneratingMessageId &&
     prev.sending === next.sending &&
+    prev.theme === next.theme &&
     prev.character?.id === next.character?.id &&
     prev.character?.avatarPath === next.character?.avatarPath &&
     (() => {

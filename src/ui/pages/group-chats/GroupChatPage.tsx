@@ -31,6 +31,11 @@ import type {
 } from "../../../core/storage/schemas";
 import { radius, interactive, cn } from "../../design-tokens";
 import { useImageData } from "../../hooks/useImageData";
+import {
+  getThemeForBackground,
+  isImageLight,
+  type ThemeColors,
+} from "../../../core/utils/imageAnalysis";
 
 import { Routes } from "../../navigation";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
@@ -110,6 +115,7 @@ export function GroupChatPage() {
 
   // Background image theming
   const backgroundImageData = useImageData(session?.backgroundImagePath);
+  const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
 
   // Get current persona
   const currentPersona = useMemo(() => {
@@ -128,6 +134,25 @@ export function GroupChatPage() {
       backgroundSize: "cover",
       backgroundPosition: "center",
       backgroundRepeat: "no-repeat",
+    };
+  }, [backgroundImageData]);
+
+  useEffect(() => {
+    if (!backgroundImageData) {
+      setTheme(getThemeForBackground(false));
+      return;
+    }
+
+    let mounted = true;
+
+    isImageLight(backgroundImageData).then((isLight) => {
+      if (mounted) {
+        setTheme(getThemeForBackground(isLight));
+      }
+    });
+
+    return () => {
+      mounted = false;
     };
   }, [backgroundImageData]);
 
@@ -990,6 +1015,7 @@ export function GroupChatPage() {
                     character={getCharacterById(message.speakerCharacterId)}
                     persona={currentPersona}
                     characters={groupCharacters}
+                    theme={theme}
                     getVariantState={getVariantState}
                     handleVariantDrag={handleVariantDrag}
                     handleRegenerate={async (msg) => {
