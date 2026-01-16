@@ -1556,7 +1556,7 @@ pub fn group_messages_delete_after(
         &app,
         "group_messages_delete_after",
         format!(
-            "Rewinding group session {} after message {} (deleted={})",
+            "Rewinding group session {} after message {} (rows_affected={})",
             session_id, message_id, deleted
         ),
     );
