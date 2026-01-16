@@ -23,6 +23,7 @@ import { useGroupChatSettingsController } from "./hooks/useGroupChatSettingsCont
 import { SectionHeader, CharacterAvatar, QuickChip, PersonaSelector } from "./components/settings";
 import { processBackgroundImage } from "../../../core/utils/image";
 import { storageBridge } from "../../../core/storage/files";
+import { useAvatar } from "../../hooks/useAvatar";
 import React, { useState } from "react";
 
 // Main Component
@@ -36,6 +37,7 @@ export function GroupChatSettingsPage() {
   const {
     session,
     personas,
+    currentPersona,
     groupCharacters,
     availableCharacters,
     currentPersonaDisplay,
@@ -62,6 +64,11 @@ export function GroupChatSettingsPage() {
   const [showBranchOptions, setShowBranchOptions] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [branching, setBranching] = useState(false);
+  const personaAvatarUrl = useAvatar(
+    "persona",
+    currentPersona?.id ?? "",
+    currentPersona?.avatarPath,
+  );
 
   // Sync backgroundImagePath with session when it changes
   React.useEffect(() => {
@@ -441,7 +448,17 @@ export function GroupChatSettingsPage() {
           <section className={spacing.item}>
             <SectionHeader title="Persona" subtitle="Your identity in this conversation" />
             <QuickChip
-              icon={<User className="h-4 w-4" />}
+              icon={
+                personaAvatarUrl ? (
+                  <img
+                    src={personaAvatarUrl}
+                    alt={currentPersona?.title ?? "Persona"}
+                    className="h-full w-full rounded-full object-cover"
+                  />
+                ) : (
+                  <User className="h-4 w-4" />
+                )
+              }
               label="Persona"
               value={currentPersonaDisplay}
               onClick={() => setShowPersonaSelector(true)}

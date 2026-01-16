@@ -288,6 +288,19 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [showPersonaActions, setShowPersonaActions] = useState(false);
   const [selectedPersonaForActions, setSelectedPersonaForActions] = useState<Persona | null>(null);
   const [messageCount, setMessageCount] = useState<number>(0);
+  const personaForAvatar = useMemo(() => {
+    if (!currentSession) return null;
+    if (currentSession.personaDisabled || currentSession.personaId === "") return null;
+    if (currentSession.personaId) {
+      return personas.find((p) => p.id === currentSession.personaId) ?? null;
+    }
+    return personas.find((p) => p.isDefault) ?? null;
+  }, [currentSession, personas]);
+  const personaAvatarUrl = useAvatar(
+    "persona",
+    personaForAvatar?.id ?? "",
+    personaForAvatar?.avatarPath,
+  );
 
   const loadModels = useCallback(async () => {
     try {
@@ -793,7 +806,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
             <SectionHeader title="Quick Settings" subtitle="Most common adjustments" />
             <div className="grid grid-cols-1 gap-2">
               <QuickChip
-                icon={<User className="h-4 w-4" />}
+                icon={
+                  personaAvatarUrl ? (
+                    <img
+                      src={personaAvatarUrl}
+                      alt={personaForAvatar?.title ?? "Persona"}
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )
+                }
                 label="Persona"
                 value={getCurrentPersonaDisplay()}
                 onClick={() => setShowPersonaSelector(true)}
