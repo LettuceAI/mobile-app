@@ -1,4 +1,12 @@
-import { useEffect, useState, useRef, useCallback, useMemo, CSSProperties } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useLayoutEffect,
+  CSSProperties,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronDown, Loader2, Sparkles, Image, RefreshCw, PenLine, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -35,6 +43,7 @@ import {
 } from "./components";
 
 const MESSAGES_PAGE_SIZE = 50;
+const STICKY_BOTTOM_THRESHOLD_PX = 80;
 
 interface MessageActionState {
   message: GroupMessage;
@@ -95,7 +104,9 @@ export function GroupChatPage() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const activeRequestIdRef = useRef<string | null>(null);
+  const isGenerating = sending || regeneratingMessageId !== null;
 
   // Background image theming
   const backgroundImageData = useImageData(session?.backgroundImagePath);
@@ -167,11 +178,18 @@ export function GroupChatPage() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  useEffect(() => {
-    if (isAtBottomRef.current && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-    }
-  }, [messages]);
+  const lastMessageContentLength = messages[messages.length - 1]?.content.length ?? 0;
+
+  const updateIsAtBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return null;
+
+    const { scrollTop, clientHeight, scrollHeight } = container;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - STICKY_BOTTOM_THRESHOLD_PX;
+    isAtBottomRef.current = atBottom;
+    setIsAtBottom((prev) => (prev === atBottom ? prev : atBottom));
+    return scrollTop;
+  }, []);
 
   useEffect(() => {
     if (!groupSessionId) return;
@@ -221,19 +239,40 @@ export function GroupChatPage() {
   }, [groupSessionId, characters]);
 
   const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
-  }, []);
+    updateIsAtBottom();
+  }, [updateIsAtBottom]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (scrollContainerRef.current) {
+      isAtBottomRef.current = true;
+      setIsAtBottom(true);
       scrollContainerRef.current.scrollTo({
         top: scrollContainerRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior,
       });
     }
   }, []);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (isAtBottomRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+      updateIsAtBottom();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [lastMessageContentLength, messages.length, isGenerating, updateIsAtBottom]);
+
+  useEffect(() => {
+    if (!isAtBottom || !isGenerating) return;
+    scrollToBottom("auto");
+  }, [isAtBottom, isGenerating, scrollToBottom]);
 
   const handleSend = useCallback(async () => {
     if (!groupSessionId || !draft.trim() || sending) return;
@@ -928,9 +967,9 @@ export function GroupChatPage() {
         <main
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="relative flex-1 overflow-y-auto px-4 pb-2"
+          className="relative flex-1 overflow-y-auto px-2 pb-2"
         >
-          <div className="space-y-4 px-4 pb-6 pt-4">
+          <div className="space-y-4 pb-6 pt-4">
             {messages.length === 0 ? (
               <div className="flex min-h-[50vh] items-center justify-center">
                 <p className="text-white/30 text-center">
@@ -979,23 +1018,24 @@ export function GroupChatPage() {
 
         {/* Scroll to Bottom Button */}
         <AnimatePresence>
-          {!isAtBottomRef.current && messages.length > 0 && (
+          {!isAtBottom && (
             <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              onClick={scrollToBottom}
+              type="button"
+              aria-label="Scroll to bottom"
+              onClick={() => scrollToBottom("smooth")}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
               className={cn(
-                "fixed right-4 z-20",
-                "h-10 w-10 rounded-full",
-                "border border-white/20 bg-[#1a1b23]",
-                "flex items-center justify-center",
-                "text-white/70 hover:text-white",
-                interactive.transition.fast,
+                "fixed right-3 z-30 flex h-11 w-11 items-center justify-center",
                 "bottom-[calc(env(safe-area-inset-bottom)+88px)]",
+                "border border-white/15 bg-black/40 text-white/80 shadow-lg backdrop-blur-sm",
+                "hover:bg-black/55 active:scale-95",
+                radius.full,
               )}
             >
-              <ChevronDown size={20} />
+              <ChevronDown size={18} />
             </motion.button>
           )}
         </AnimatePresence>
