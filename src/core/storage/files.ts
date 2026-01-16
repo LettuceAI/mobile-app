@@ -61,6 +61,7 @@ export const storageBridge = {
     invoke("settings_set_advanced", {
       advancedJson: advanced == null ? "null" : JSON.stringify(advanced),
     }) as Promise<void>,
+  abortRequest: (requestId: string) => invoke("abort_request", { requestId }) as Promise<void>,
 
   // Embedding model download
   checkEmbeddingModel: () => invoke<boolean>("check_embedding_model"),

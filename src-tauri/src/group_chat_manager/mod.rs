@@ -11,9 +11,10 @@ mod selection;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
+use crate::abort_manager::AbortRegistry;
 use crate::api::{api_request, ApiRequest};
 use crate::models::get_model_pricing;
 use crate::usage::add_usage_record;
@@ -83,6 +84,26 @@ pub struct GroupChatContext {
     pub participation_stats: Vec<GroupParticipation>,
     pub recent_messages: Vec<GroupMessage>,
     pub user_message: String,
+}
+
+struct AbortGuard<'a> {
+    registry: &'a AbortRegistry,
+    request_id: String,
+}
+
+impl<'a> AbortGuard<'a> {
+    fn new(registry: &'a AbortRegistry, request_id: String) -> Self {
+        Self {
+            registry,
+            request_id,
+        }
+    }
+}
+
+impl Drop for AbortGuard<'_> {
+    fn drop(&mut self) {
+        self.registry.unregister(&self.request_id);
+    }
 }
 
 // ============================================================================
@@ -2484,7 +2505,10 @@ pub async fn group_chat_send(
 
     let settings = load_settings(&app)?;
     let conn = pool.get_connection()?;
-
+    let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let abort_registry = app.state::<AbortRegistry>();
+    let mut abort_rx = abort_registry.register(req_id.clone());
+    let _abort_guard = AbortGuard::new(&abort_registry, req_id.clone());
     let mut context = build_selection_context(&conn, &session_id, &user_message)?;
     let user_msg = save_user_message(&conn, &session_id, &user_message)?;
     let mention_result = parse_mentions(&user_message, &context.characters);
@@ -2510,7 +2534,18 @@ pub async fn group_chat_send(
                 true,
             )
         } else {
-            match select_speaker_via_llm(&app, &context, &settings).await {
+            let selection_result = tokio::select! {
+                _ = &mut abort_rx => {
+                    log_warn(
+                        &app,
+                        "group_chat_send",
+                        format!("Request aborted by user for session {}", session_id),
+                    );
+                    return Err("Request aborted by user".to_string());
+                }
+                selection = select_speaker_via_llm(&app, &context, &settings) => selection,
+            };
+            match selection_result {
                 Ok(selection) => {
                     log_info(
                         &app,
@@ -2564,18 +2599,27 @@ pub async fn group_chat_send(
 
     context.recent_messages.push(user_msg);
 
-    let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let response_result = tokio::select! {
+        _ = &mut abort_rx => {
+            log_warn(
+                &app,
+                "group_chat_send",
+                format!("Request aborted by user for session {}", session_id),
+            );
+            return Err("Request aborted by user".to_string());
+        }
+        result = generate_character_response(
+            &app,
+            &mut context,
+            &selected_character_id,
+            &settings,
+            &pool,
+            &req_id,
+            UsageOperationType::GroupChatMessage,
+        ) => result,
+    };
 
-    let (response_content, reasoning, message_usage, model_id_str) = generate_character_response(
-        &app,
-        &mut context,
-        &selected_character_id,
-        &settings,
-        &pool,
-        &req_id,
-        UsageOperationType::GroupChatMessage,
-    )
-    .await?;
+    let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 
     let conn = pool.get_connection()?;
 
@@ -2717,6 +2761,10 @@ pub async fn group_chat_regenerate(
 
     let settings = load_settings(&app)?;
     let conn = pool.get_connection()?;
+    let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let abort_registry = app.state::<AbortRegistry>();
+    let mut abort_rx = abort_registry.register(req_id.clone());
+    let _abort_guard = AbortGuard::new(&abort_registry, req_id.clone());
 
     let (turn_number, original_speaker): (i32, Option<String>) = conn
         .query_row(
@@ -2745,7 +2793,18 @@ pub async fn group_chat_regenerate(
             Some("User forced character selection".to_string()),
         )
     } else {
-        match select_speaker_via_llm(&app, &context, &settings).await {
+        let selection_result = tokio::select! {
+            _ = &mut abort_rx => {
+                log_warn(
+                    &app,
+                    "group_chat_regenerate",
+                    format!("Request aborted by user for session {}", session_id),
+                );
+                return Err("Request aborted by user".to_string());
+            }
+            selection = select_speaker_via_llm(&app, &context, &settings) => selection,
+        };
+        match selection_result {
             Ok(selection) => (selection.character_id, selection.reasoning),
             Err(err) => {
                 log_error(
@@ -2776,18 +2835,27 @@ pub async fn group_chat_regenerate(
         }),
     );
 
-    let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let response_result = tokio::select! {
+        _ = &mut abort_rx => {
+            log_warn(
+                &app,
+                "group_chat_regenerate",
+                format!("Request aborted by user for session {}", session_id),
+            );
+            return Err("Request aborted by user".to_string());
+        }
+        result = generate_character_response(
+            &app,
+            &mut context,
+            &selected_character_id,
+            &settings,
+            &pool,
+            &req_id,
+            UsageOperationType::GroupChatRegenerate,
+        ) => result,
+    };
 
-    let (response_content, reasoning, message_usage, model_id_str) = generate_character_response(
-        &app,
-        &mut context,
-        &selected_character_id,
-        &settings,
-        &pool,
-        &req_id,
-        UsageOperationType::GroupChatRegenerate,
-    )
-    .await?;
+    let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 
     let conn = pool.get_connection()?;
     let now = now_ms();
@@ -2898,6 +2966,10 @@ pub async fn group_chat_continue(
 
     let settings = load_settings(&app)?;
     let conn = pool.get_connection()?;
+    let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let abort_registry = app.state::<AbortRegistry>();
+    let mut abort_rx = abort_registry.register(req_id.clone());
+    let _abort_guard = AbortGuard::new(&abort_registry, req_id.clone());
 
     let mut context = build_selection_context(&conn, &session_id, "")?;
 
@@ -2907,7 +2979,18 @@ pub async fn group_chat_continue(
             Some("User requested specific character".to_string()),
         )
     } else {
-        match select_speaker_via_llm(&app, &context, &settings).await {
+        let selection_result = tokio::select! {
+            _ = &mut abort_rx => {
+                log_warn(
+                    &app,
+                    "group_chat_continue",
+                    format!("Request aborted by user for session {}", session_id),
+                );
+                return Err("Request aborted by user".to_string());
+            }
+            selection = select_speaker_via_llm(&app, &context, &settings) => selection,
+        };
+        match selection_result {
             Ok(selection) => (selection.character_id, selection.reasoning),
             Err(err) => {
                 log_error(
@@ -2938,18 +3021,27 @@ pub async fn group_chat_continue(
         }),
     );
 
-    let req_id = request_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let response_result = tokio::select! {
+        _ = &mut abort_rx => {
+            log_warn(
+                &app,
+                "group_chat_continue",
+                format!("Request aborted by user for session {}", session_id),
+            );
+            return Err("Request aborted by user".to_string());
+        }
+        result = generate_character_response(
+            &app,
+            &mut context,
+            &selected_character_id,
+            &settings,
+            &pool,
+            &req_id,
+            UsageOperationType::GroupChatContinue,
+        ) => result,
+    };
 
-    let (response_content, reasoning, message_usage, model_id_str) = generate_character_response(
-        &app,
-        &mut context,
-        &selected_character_id,
-        &settings,
-        &pool,
-        &req_id,
-        UsageOperationType::GroupChatContinue,
-    )
-    .await?;
+    let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 
     let conn = pool.get_connection()?;
     let message = save_assistant_message(

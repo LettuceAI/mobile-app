@@ -41,6 +41,15 @@ interface MessageActionState {
   mode: "view" | "edit";
 }
 
+const isAbortMessage = (message: string) => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("aborted") ||
+    normalized.includes("cancelled") ||
+    normalized.includes("canceled")
+  );
+};
+
 export function GroupChatPage() {
   const { groupSessionId } = useParams<{ groupSessionId: string }>();
   const navigate = useNavigate();
@@ -86,6 +95,7 @@ export function GroupChatPage() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const activeRequestIdRef = useRef<string | null>(null);
 
   // Background image theming
   const backgroundImageData = useImageData(session?.backgroundImagePath);
@@ -230,6 +240,7 @@ export function GroupChatPage() {
 
     const userMessage = draft.trim();
     const requestId = crypto.randomUUID();
+    activeRequestIdRef.current = requestId;
     setDraft("");
     setSending(true);
     setSendingStatus("selecting");
@@ -310,7 +321,10 @@ export function GroupChatPage() {
               );
             });
           } else if (payload && payload.type === "error" && payload.data?.message) {
-            setError(String(payload.data.message));
+            const message = String(payload.data.message);
+            if (!isAbortMessage(message)) {
+              setError(message);
+            }
           }
         } catch {
           // ignore malformed payloads
@@ -335,8 +349,23 @@ export function GroupChatPage() {
       setMessages(updatedMessages);
       setParticipationStats(response.participationStats);
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (isAbortMessage(errMsg)) {
+        setError(null);
+        try {
+          const updatedMessages = await storageBridge.groupMessagesList(
+            groupSessionId,
+            MESSAGES_PAGE_SIZE,
+          );
+          setMessages(updatedMessages);
+        } catch (loadErr) {
+          console.error("Failed to refresh messages after abort:", loadErr);
+          setMessages((prev) => prev.filter((m) => m.id !== assistantPlaceholderId));
+        }
+        return;
+      }
       console.error("Failed to send message:", err);
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      setError(errMsg || "Failed to send message");
       // Remove optimistic messages on error
       setMessages((prev) =>
         prev.filter((m) => m.id !== userPlaceholderId && m.id !== assistantPlaceholderId),
@@ -344,6 +373,9 @@ export function GroupChatPage() {
     } finally {
       if (unlistenNormalized) unlistenNormalized();
       assistantPlaceholderIdRef.current = null;
+      if (activeRequestIdRef.current === requestId) {
+        activeRequestIdRef.current = null;
+      }
       setSending(false);
       setSendingStatus(null);
       setSelectedCharacterId(null);
@@ -357,6 +389,7 @@ export function GroupChatPage() {
       if (!groupSessionId || regeneratingMessageId) return;
 
       const requestId = crypto.randomUUID();
+      activeRequestIdRef.current = requestId;
       setRegeneratingMessageId(messageId);
       setError(null);
 
@@ -389,7 +422,10 @@ export function GroupChatPage() {
                 ),
               );
             } else if (payload && payload.type === "error" && payload.data?.message) {
-              setError(String(payload.data.message));
+              const message = String(payload.data.message);
+              if (!isAbortMessage(message)) {
+                setError(message);
+              }
             }
           } catch {
             // ignore malformed payloads
@@ -412,7 +448,12 @@ export function GroupChatPage() {
         setParticipationStats(response.participationStats);
       } catch (err) {
         console.error("Failed to regenerate:", err);
-        setError(err instanceof Error ? err.message : "Failed to regenerate");
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (!isAbortMessage(errMsg)) {
+          setError(errMsg || "Failed to regenerate");
+        } else {
+          setError(null);
+        }
         // Reload messages to restore original content on error
         const updatedMessages = await storageBridge.groupMessagesList(
           groupSessionId,
@@ -422,6 +463,9 @@ export function GroupChatPage() {
       } finally {
         if (unlistenNormalized) unlistenNormalized();
         setRegeneratingMessageId(null);
+        if (activeRequestIdRef.current === requestId) {
+          activeRequestIdRef.current = null;
+        }
       }
     },
     [groupSessionId, regeneratingMessageId],
@@ -432,6 +476,7 @@ export function GroupChatPage() {
       if (!groupSessionId || sending) return;
 
       const requestId = crypto.randomUUID();
+      activeRequestIdRef.current = requestId;
       const assistantPlaceholderId = `temp-continue-${Date.now()}`;
 
       setSending(true);
@@ -488,7 +533,10 @@ export function GroupChatPage() {
                 ),
               );
             } else if (payload && payload.type === "error" && payload.data?.message) {
-              setError(String(payload.data.message));
+              const message = String(payload.data.message);
+              if (!isAbortMessage(message)) {
+                setError(message);
+              }
             }
           } catch {
             // ignore malformed payloads
@@ -509,13 +557,31 @@ export function GroupChatPage() {
         setMessages(updatedMessages);
         setParticipationStats(response.participationStats);
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (isAbortMessage(errMsg)) {
+          setError(null);
+          try {
+            const updatedMessages = await storageBridge.groupMessagesList(
+              groupSessionId,
+              MESSAGES_PAGE_SIZE,
+            );
+            setMessages(updatedMessages);
+          } catch (loadErr) {
+            console.error("Failed to refresh messages after abort:", loadErr);
+            setMessages((prev) => prev.filter((m) => m.id !== assistantPlaceholderId));
+          }
+          return;
+        }
         console.error("Failed to continue:", err);
-        setError(err instanceof Error ? err.message : "Failed to continue");
+        setError(errMsg || "Failed to continue");
         // Remove placeholder on error
         setMessages((prev) => prev.filter((m) => m.id !== assistantPlaceholderId));
       } finally {
         if (unlistenNormalized) unlistenNormalized();
         assistantPlaceholderIdRef.current = null;
+        if (activeRequestIdRef.current === requestId) {
+          activeRequestIdRef.current = null;
+        }
         setSending(false);
         setSendingStatus(null);
         setSelectedCharacterId(null);
@@ -525,6 +591,17 @@ export function GroupChatPage() {
     },
     [groupSessionId, sending, messages.length, scrollToBottom],
   );
+
+  const handleAbort = useCallback(async () => {
+    const requestId = activeRequestIdRef.current;
+    if (!requestId) return;
+
+    try {
+      await storageBridge.abortRequest(requestId);
+    } catch (err) {
+      console.error("Failed to abort group chat request:", err);
+    }
+  }, []);
 
   const getCharacterById = useCallback(
     (characterId?: string | null): Character | undefined => {
@@ -938,7 +1015,7 @@ export function GroupChatPage() {
             persona={currentPersona}
             onSendMessage={handleSend}
             onContinue={messages.length > 0 ? () => handleContinue() : undefined}
-            onAbort={undefined}
+            onAbort={handleAbort}
             hasBackgroundImage={!!backgroundImageData}
             pendingAttachments={pendingAttachments}
             onAddAttachment={supportsImageInput ? addPendingAttachment : undefined}
