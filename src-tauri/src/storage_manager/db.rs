@@ -341,6 +341,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           system_prompt TEXT,
           selected_scene_id TEXT,
           persona_id TEXT,
+          persona_disabled INTEGER NOT NULL DEFAULT 0,
           voice_autoplay INTEGER,
           temperature REAL,
           top_p REAL,
@@ -646,16 +647,24 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(sessions)")
         .map_err(|e| e.to_string())?;
     let mut has_session_voice_autoplay = false;
+    let mut has_session_persona_disabled = false;
     let mut rows_sessions = stmt_sessions.query([]).map_err(|e| e.to_string())?;
     while let Some(row) = rows_sessions.next().map_err(|e| e.to_string())? {
         let col_name: String = row.get(1).map_err(|e| e.to_string())?;
-        if col_name == "voice_autoplay" {
-            has_session_voice_autoplay = true;
-            break;
+        match col_name.as_str() {
+            "voice_autoplay" => has_session_voice_autoplay = true,
+            "persona_disabled" => has_session_persona_disabled = true,
+            _ => {}
         }
     }
     if !has_session_voice_autoplay {
         let _ = conn.execute("ALTER TABLE sessions ADD COLUMN voice_autoplay INTEGER", []);
+    }
+    if !has_session_persona_disabled {
+        let _ = conn.execute(
+            "ALTER TABLE sessions ADD COLUMN persona_disabled INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
     }
 
     let mut stmt_sessions_mem = conn

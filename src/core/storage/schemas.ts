@@ -1060,6 +1060,7 @@ export const SessionSchema = z.object({
   title: z.string(),
   selectedSceneId: z.string().uuid().nullish(), // ID of the scene from character.scenes array
   personaId: z.union([z.string().uuid(), z.literal(""), z.null(), z.undefined()]).optional(),
+  personaDisabled: z.boolean().optional().default(false),
   voiceAutoplay: z.boolean().nullable().optional(),
   advancedModelSettings: AdvancedModelSettingsSchema.nullish().optional(),
   memories: z.array(z.string()).default([]),

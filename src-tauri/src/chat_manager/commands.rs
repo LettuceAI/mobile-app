@@ -41,6 +41,17 @@ const FALLBACK_TEMPERATURE: f64 = 0.7;
 const FALLBACK_TOP_P: f64 = 1.0;
 const FALLBACK_MAX_OUTPUT_TOKENS: u32 = 4096;
 
+fn resolve_persona_id<'a>(session: &'a Session, explicit: Option<&'a str>) -> Option<&'a str> {
+    if explicit.is_some() {
+        return explicit;
+    }
+    if session.persona_disabled {
+        Some("")
+    } else {
+        session.persona_id.as_deref()
+    }
+}
+
 /// Determines if dynamic memory is currently active for this character.
 /// Returns true ONLY if BOTH conditions are met:
 /// 1. Global dynamic memory setting is enabled in advanced settings
@@ -532,8 +543,8 @@ pub async fn chat_completion(
         }
     };
 
-    let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
-    let persona = context.choose_persona(effective_persona_id.map(|id| id.as_str()));
+    let effective_persona_id = resolve_persona_id(&session, persona_id.as_deref());
+    let persona = context.choose_persona(effective_persona_id);
 
     emit_debug(
         &app,
@@ -1261,7 +1272,7 @@ pub async fn chat_regenerate(
         }
     };
 
-    let persona = context.choose_persona(None);
+    let persona = context.choose_persona(resolve_persona_id(&session, None));
 
     let (model, provider_cred) = context.select_model(&character)?;
 
@@ -1801,8 +1812,8 @@ pub async fn chat_continue(
         }
     };
 
-    let effective_persona_id = session.persona_id.as_ref().or(persona_id.as_ref());
-    let persona = context.choose_persona(effective_persona_id.map(|id| id.as_str()));
+    let effective_persona_id = resolve_persona_id(&session, persona_id.as_deref());
+    let persona = context.choose_persona(effective_persona_id);
 
     let (model, provider_cred) = context.select_model(&character)?;
 
@@ -2397,6 +2408,7 @@ pub fn render_prompt_preview(
             system_prompt: None,
             selected_scene_id: None,
             persona_id: None,
+            persona_disabled: false,
             voice_autoplay: None,
             advanced_model_settings: None,
             messages: vec![],
@@ -2416,7 +2428,8 @@ pub fn render_prompt_preview(
         }
     };
 
-    let persona = context.choose_persona(persona_id.as_deref());
+    let effective_persona_id = resolve_persona_id(&session, persona_id.as_deref());
+    let persona = context.choose_persona(effective_persona_id);
 
     let rendered =
         prompt_engine::render_with_context(&app, &content, &character, persona, &session, settings);
@@ -3607,7 +3620,7 @@ pub async fn chat_generate_user_reply(
 
     let character = context.find_character(&session.character_id)?;
 
-    let persona = context.choose_persona(session.persona_id.as_ref().map(|id| id.as_str()));
+    let persona = context.choose_persona(resolve_persona_id(&session, None));
 
     let recent_msgs = recent_messages(&session, 10);
 

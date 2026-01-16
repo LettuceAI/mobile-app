@@ -417,9 +417,11 @@ function ChatSettingsContent({ character }: { character: Character }) {
     try {
       console.log("Changing persona to:", personaId);
 
+      const disablePersona = personaId === null;
       const updatedSession = {
         ...currentSession,
-        personaId: personaId === null ? "" : personaId,
+        personaId: disablePersona ? null : personaId,
+        personaDisabled: disablePersona,
         updatedAt: Date.now(),
       };
 
@@ -607,8 +609,8 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const getCurrentPersonaDisplay = () => {
     if (!currentSession) return "Open a chat session first";
 
+    if (currentSession.personaDisabled || currentSession.personaId === "") return "No persona";
     const currentPersonaId = currentSession?.personaId;
-    if (currentPersonaId === "") return "No persona";
     if (!currentPersonaId) {
       const defaultPersona = personas.find((p) => p.isDefault);
       return defaultPersona ? `${defaultPersona.title} (default)` : "No persona";
@@ -616,6 +618,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
     const persona = personas.find((p) => p.id === currentPersonaId);
     return persona ? persona.title : "Custom persona";
   };
+
+  const selectedPersonaId = useMemo(() => {
+    if (!currentSession) return undefined;
+    if (currentSession.personaDisabled || currentSession.personaId === "") return "";
+    if (currentSession.personaId) return currentSession.personaId;
+    const defaultPersona = personas.find((p) => p.isDefault);
+    return defaultPersona?.id;
+  }, [currentSession, personas]);
 
   const getModelDisplay = () => {
     if (!currentModel) return "No model available";
@@ -955,7 +965,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
         isOpen={showPersonaSelector}
         onClose={() => setShowPersonaSelector(false)}
         personas={personas}
-        selectedPersonaId={currentSession?.personaId}
+        selectedPersonaId={selectedPersonaId}
         onSelect={handleChangePersona}
         onLongPress={(persona) => {
           setSelectedPersonaForActions(persona);

@@ -806,6 +806,7 @@ mod tests {
             system_prompt: None,
             selected_scene_id: None,
             persona_id: None,
+            persona_disabled: false,
             voice_autoplay: None,
             advanced_model_settings: None,
             memories: vec![],

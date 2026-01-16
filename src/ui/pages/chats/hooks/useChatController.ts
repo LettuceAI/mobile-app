@@ -18,10 +18,22 @@ import {
   saveSession,
   SETTINGS_UPDATED_EVENT,
   readSettings,
-  toggleMessagePin
+  toggleMessagePin,
 } from "../../../../core/storage/repo";
-import type { Character, Persona, Session, StoredMessage, ImageAttachment } from "../../../../core/storage/schemas";
-import { continueConversation, regenerateAssistantMessage, sendChatTurn, abortMessage, addChatMessageAttachment } from "../../../../core/chat/manager";
+import type {
+  Character,
+  Persona,
+  Session,
+  StoredMessage,
+  ImageAttachment,
+} from "../../../../core/storage/schemas";
+import {
+  continueConversation,
+  regenerateAssistantMessage,
+  sendChatTurn,
+  abortMessage,
+  addChatMessageAttachment,
+} from "../../../../core/chat/manager";
 import { chatReducer, initialChatState, type MessageActionState } from "./chatReducer";
 import { logManager } from "../../../../core/utils/logger";
 import { generateImage, type ImageGenerationRequest } from "../../../../core/image-generation";
@@ -90,7 +102,7 @@ export interface ChatController {
   loadOlderMessages: () => Promise<void>;
   ensureMessageLoaded: (messageId: string) => Promise<void>;
 
-  // Setters 
+  // Setters
   setDraft: (value: string) => void;
   setError: (value: string | null) => void;
   setMessageAction: (value: MessageActionState | null) => void;
@@ -117,7 +129,10 @@ export interface ChatController {
   handleDeleteMessage: (message: StoredMessage) => Promise<void>;
   handleRewindToMessage: (message: StoredMessage) => Promise<void>;
   handleBranchFromMessage: (message: StoredMessage) => Promise<string | null>;
-  handleBranchToCharacter: (message: StoredMessage, targetCharacterId: string) => Promise<{ sessionId: string; characterId: string } | null>;
+  handleBranchToCharacter: (
+    message: StoredMessage,
+    targetCharacterId: string,
+  ) => Promise<{ sessionId: string; characterId: string } | null>;
   handleTogglePin: (message: StoredMessage) => Promise<void>;
   resetMessageActions: () => void;
   initializeLongPressTimer: (id: number | null) => void;
@@ -148,12 +163,19 @@ function createStreamBatcher(dispatch: React.Dispatch<any>) {
           const content = pendingContentByMessage.get(messageId) ?? "";
           return content
             ? {
-              type: "UPDATE_MESSAGE_CONTENT" as const,
-              payload: { messageId, content },
-            }
+                type: "UPDATE_MESSAGE_CONTENT" as const,
+                payload: { messageId, content },
+              }
             : null;
         })
-        .filter((action): action is { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } } => action !== null);
+        .filter(
+          (
+            action,
+          ): action is {
+            type: "UPDATE_MESSAGE_CONTENT";
+            payload: { messageId: string; content: string };
+          } => action !== null,
+        );
 
       if (actions.length === 1) {
         dispatch(actions[0]);
@@ -174,10 +196,7 @@ function createStreamBatcher(dispatch: React.Dispatch<any>) {
         pendingContentByMessage.set(messageId, content);
         messageOrder.push(messageId);
       } else {
-        pendingContentByMessage.set(
-          messageId,
-          pendingContentByMessage.get(messageId)! + content
-        );
+        pendingContentByMessage.set(messageId, pendingContentByMessage.get(messageId)! + content);
       }
       if (rafId === null) {
         rafId = requestAnimationFrame(flush);
@@ -196,7 +215,7 @@ function createStreamBatcher(dispatch: React.Dispatch<any>) {
 
 export function useChatController(
   characterId?: string,
-  options: { sessionId?: string } = {}
+  options: { sessionId?: string } = {},
 ): ChatController {
   const log = logManager({ component: "useChatController" });
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
@@ -262,7 +281,9 @@ export function useChatController(
 
     const providerCreds = settings.providerCredentials;
     const provider =
-      providerCreds.find((p) => p.providerId === firstModel.providerId && p.label === firstModel.providerLabel) ??
+      providerCreds.find(
+        (p) => p.providerId === firstModel.providerId && p.label === firstModel.providerLabel,
+      ) ??
       providerCreds.find((p) => p.providerId === firstModel.providerId) ??
       null;
     if (!provider) return null;
@@ -276,27 +297,30 @@ export function useChatController(
     return cfg;
   }, []);
 
-  const dataUrlFromGeneratedImage = useCallback(async (generated: GeneratedImage): Promise<string> => {
-    if (generated.url && generated.url.startsWith("data:")) {
-      return generated.url;
-    }
+  const dataUrlFromGeneratedImage = useCallback(
+    async (generated: GeneratedImage): Promise<string> => {
+      if (generated.url && generated.url.startsWith("data:")) {
+        return generated.url;
+      }
 
-    const src = generated.url || (generated.filePath ? convertFileSrc(generated.filePath) : null);
-    if (!src) {
-      throw new Error("Generated image has no url or filePath");
-    }
-    const response = await fetch(src);
-    const blob = await response.blob();
+      const src = generated.url || (generated.filePath ? convertFileSrc(generated.filePath) : null);
+      if (!src) {
+        throw new Error("Generated image has no url or filePath");
+      }
+      const response = await fetch(src);
+      const blob = await response.blob();
 
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error("Failed to read image blob"));
-      reader.readAsDataURL(blob);
-    });
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Failed to read image blob"));
+        reader.readAsDataURL(blob);
+      });
 
-    return dataUrl;
-  }, []);
+      return dataUrl;
+    },
+    [],
+  );
 
   const imageInfoFromDataUrl = useCallback(async (dataUrl: string) => {
     const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/);
@@ -313,7 +337,13 @@ export function useChatController(
   }, []);
 
   const parseImageDirectives = useCallback((content: string) => {
-    const directives: Array<{ prompt: string; size?: string; n?: number; quality?: string; style?: string }> = [];
+    const directives: Array<{
+      prompt: string;
+      size?: string;
+      n?: number;
+      quality?: string;
+      style?: string;
+    }> = [];
     IMAGE_DIRECTIVE_RE.lastIndex = 0;
     const clean = content.replace(IMAGE_DIRECTIVE_RE, (_full, jsonStr) => {
       try {
@@ -345,144 +375,162 @@ export function useChatController(
     return { width: w, height: h };
   }, []);
 
-  const runInChatImageGeneration = useCallback(async (assistantMessageId: string) => {
-    if (!state.session || !state.character) return;
-    if (processedImageDirectiveMessagesRef.current.has(assistantMessageId)) return;
+  const runInChatImageGeneration = useCallback(
+    async (assistantMessageId: string) => {
+      if (!state.session || !state.character) return;
+      if (processedImageDirectiveMessagesRef.current.has(assistantMessageId)) return;
 
-    const current = messagesRef.current.find((m) => m.id === assistantMessageId);
-    if (!current) return;
+      const current = messagesRef.current.find((m) => m.id === assistantMessageId);
+      if (!current) return;
 
-    const { cleanContent, directives } = parseImageDirectives(current.content);
-    if (directives.length === 0) return;
+      const { cleanContent, directives } = parseImageDirectives(current.content);
+      if (directives.length === 0) return;
 
-    const cfg = await resolveDefaultImageGenConfig();
-    if (!cfg) return;
+      const cfg = await resolveDefaultImageGenConfig();
+      if (!cfg) return;
 
-    processedImageDirectiveMessagesRef.current.add(assistantMessageId);
+      processedImageDirectiveMessagesRef.current.add(assistantMessageId);
 
-    const placeholderAttachments: ImageAttachment[] = [];
-    for (const directive of directives) {
-      const count = Math.max(1, Math.min(4, directive.n ?? 1));
-      const dims = parseSize(directive.size) ?? parseSize("1024x1024");
-      for (let i = 0; i < count; i++) {
-        placeholderAttachments.push({
-          id: crypto.randomUUID(),
-          data: "",
-          mimeType: "image/webp",
-          width: dims?.width,
-          height: dims?.height,
-        });
+      const placeholderAttachments: ImageAttachment[] = [];
+      for (const directive of directives) {
+        const count = Math.max(1, Math.min(4, directive.n ?? 1));
+        const dims = parseSize(directive.size) ?? parseSize("1024x1024");
+        for (let i = 0; i < count; i++) {
+          placeholderAttachments.push({
+            id: crypto.randomUUID(),
+            data: "",
+            mimeType: "image/webp",
+            width: dims?.width,
+            height: dims?.height,
+          });
+        }
       }
-    }
 
-    const updatedMessage: StoredMessage = {
-      ...current,
-      content: cleanContent,
-      attachments: [...(current.attachments ?? []), ...placeholderAttachments],
-    };
-
-    const updatedMessages = messagesRef.current.map((m) => (m.id === assistantMessageId ? updatedMessage : m));
-    messagesRef.current = updatedMessages;
-
-    const updatedSession: Session = {
-      ...state.session,
-      messages: updatedMessages,
-      updatedAt: Date.now(),
-    };
-
-    dispatch({
-      type: "BATCH",
-      actions: [
-        { type: "SET_MESSAGES", payload: updatedMessages },
-        { type: "SET_SESSION", payload: updatedSession },
-      ],
-    });
-
-    try {
-      sessionOperationRef.current = true;
-      await safeSaveSession(updatedSession);
-      lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
-    } finally {
-      sessionOperationRef.current = false;
-    }
-
-    for (let dIndex = 0, pIndex = 0; dIndex < directives.length; dIndex++) {
-      const directive = directives[dIndex];
-      const n = Math.max(1, Math.min(4, directive.n ?? 1));
-      const placeholdersForDirective = placeholderAttachments.slice(pIndex, pIndex + n);
-      pIndex += n;
-
-      const request: ImageGenerationRequest = {
-        prompt: directive.prompt,
-        model: cfg.modelName,
-        providerId: cfg.providerId,
-        credentialId: cfg.credentialId,
-        size: directive.size ?? "1024x1024",
-        n,
-        quality: directive.quality,
-        style: directive.style,
+      const updatedMessage: StoredMessage = {
+        ...current,
+        content: cleanContent,
+        attachments: [...(current.attachments ?? []), ...placeholderAttachments],
       };
 
+      const updatedMessages = messagesRef.current.map((m) =>
+        m.id === assistantMessageId ? updatedMessage : m,
+      );
+      messagesRef.current = updatedMessages;
+
+      const updatedSession: Session = {
+        ...state.session,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
+      };
+
+      dispatch({
+        type: "BATCH",
+        actions: [
+          { type: "SET_MESSAGES", payload: updatedMessages },
+          { type: "SET_SESSION", payload: updatedSession },
+        ],
+      });
+
       try {
-        const response = await generateImage(request);
-        const images = response.images.slice(0, placeholdersForDirective.length);
-        for (let i = 0; i < images.length; i++) {
-          const placeholderId = placeholdersForDirective[i]?.id;
-          if (!placeholderId) continue;
+        sessionOperationRef.current = true;
+        await safeSaveSession(updatedSession);
+        lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
+      } finally {
+        sessionOperationRef.current = false;
+      }
 
-          const dataUrl = await dataUrlFromGeneratedImage(images[i]);
-          const info = await imageInfoFromDataUrl(dataUrl);
+      for (let dIndex = 0, pIndex = 0; dIndex < directives.length; dIndex++) {
+        const directive = directives[dIndex];
+        const n = Math.max(1, Math.min(4, directive.n ?? 1));
+        const placeholdersForDirective = placeholderAttachments.slice(pIndex, pIndex + n);
+        pIndex += n;
 
-          const updated = await addChatMessageAttachment({
-            sessionId: state.session.id,
-            characterId: state.character.id,
-            messageId: assistantMessageId,
-            role: "assistant",
-            attachmentId: placeholderId,
-            base64Data: dataUrl,
-            mimeType: info.mimeType,
-            width: info.width,
-            height: info.height,
-          });
+        const request: ImageGenerationRequest = {
+          prompt: directive.prompt,
+          model: cfg.modelName,
+          providerId: cfg.providerId,
+          credentialId: cfg.credentialId,
+          size: directive.size ?? "1024x1024",
+          n,
+          quality: directive.quality,
+          style: directive.style,
+        };
 
-          const nextMessages = messagesRef.current.map((m) => (m.id === updated.id ? updated : m));
-          messagesRef.current = nextMessages;
-          dispatch({ type: "SET_MESSAGES", payload: nextMessages });
-        }
-      } catch (err) {
-        console.error("In-chat image generation failed:", err);
-        const ids = new Set(placeholdersForDirective.map((p) => p.id));
-        const currentMsg = messagesRef.current.find((m) => m.id === assistantMessageId);
-        if (currentMsg && ids.size > 0) {
-          const cleanedMessage: StoredMessage = {
-            ...currentMsg,
-            attachments: (currentMsg.attachments ?? []).filter((att) => !ids.has(att.id)),
-          };
-          const nextMessages = messagesRef.current.map((m) => (m.id === cleanedMessage.id ? cleanedMessage : m));
-          messagesRef.current = nextMessages;
-          const updatedSession: Session = {
-            ...state.session,
-            messages: nextMessages,
-            updatedAt: Date.now(),
-          };
-          dispatch({
-            type: "BATCH",
-            actions: [
-              { type: "SET_MESSAGES", payload: nextMessages },
-              { type: "SET_SESSION", payload: updatedSession },
-            ],
-          });
-          try {
-            sessionOperationRef.current = true;
-            await safeSaveSession(updatedSession);
-            lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
-          } finally {
-            sessionOperationRef.current = false;
+        try {
+          const response = await generateImage(request);
+          const images = response.images.slice(0, placeholdersForDirective.length);
+          for (let i = 0; i < images.length; i++) {
+            const placeholderId = placeholdersForDirective[i]?.id;
+            if (!placeholderId) continue;
+
+            const dataUrl = await dataUrlFromGeneratedImage(images[i]);
+            const info = await imageInfoFromDataUrl(dataUrl);
+
+            const updated = await addChatMessageAttachment({
+              sessionId: state.session.id,
+              characterId: state.character.id,
+              messageId: assistantMessageId,
+              role: "assistant",
+              attachmentId: placeholderId,
+              base64Data: dataUrl,
+              mimeType: info.mimeType,
+              width: info.width,
+              height: info.height,
+            });
+
+            const nextMessages = messagesRef.current.map((m) =>
+              m.id === updated.id ? updated : m,
+            );
+            messagesRef.current = nextMessages;
+            dispatch({ type: "SET_MESSAGES", payload: nextMessages });
+          }
+        } catch (err) {
+          console.error("In-chat image generation failed:", err);
+          const ids = new Set(placeholdersForDirective.map((p) => p.id));
+          const currentMsg = messagesRef.current.find((m) => m.id === assistantMessageId);
+          if (currentMsg && ids.size > 0) {
+            const cleanedMessage: StoredMessage = {
+              ...currentMsg,
+              attachments: (currentMsg.attachments ?? []).filter((att) => !ids.has(att.id)),
+            };
+            const nextMessages = messagesRef.current.map((m) =>
+              m.id === cleanedMessage.id ? cleanedMessage : m,
+            );
+            messagesRef.current = nextMessages;
+            const updatedSession: Session = {
+              ...state.session,
+              messages: nextMessages,
+              updatedAt: Date.now(),
+            };
+            dispatch({
+              type: "BATCH",
+              actions: [
+                { type: "SET_MESSAGES", payload: nextMessages },
+                { type: "SET_SESSION", payload: updatedSession },
+              ],
+            });
+            try {
+              sessionOperationRef.current = true;
+              await safeSaveSession(updatedSession);
+              lastKnownSessionTimestampRef.current = updatedSession.updatedAt;
+            } finally {
+              sessionOperationRef.current = false;
+            }
           }
         }
       }
-    }
-  }, [addChatMessageAttachment, dataUrlFromGeneratedImage, imageInfoFromDataUrl, parseImageDirectives, parseSize, resolveDefaultImageGenConfig, state.character, state.session]);
+    },
+    [
+      addChatMessageAttachment,
+      dataUrlFromGeneratedImage,
+      imageInfoFromDataUrl,
+      parseImageDirectives,
+      parseSize,
+      resolveDefaultImageGenConfig,
+      state.character,
+      state.session,
+    ],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -521,8 +569,8 @@ export function useChatController(
           type: "BATCH",
           actions: [
             { type: "SET_LOADING", payload: true },
-            { type: "SET_ERROR", payload: null }
-          ]
+            { type: "SET_ERROR", payload: null },
+          ],
         });
 
         const list = await listCharacters();
@@ -561,7 +609,7 @@ export function useChatController(
           targetSession = await createSession(
             match.id,
             match.name ?? "New chat",
-            match.scenes && match.scenes.length > 0 ? match.scenes[0].id : undefined
+            match.scenes && match.scenes.length > 0 ? match.scenes[0].id : undefined,
           );
         }
 
@@ -570,8 +618,13 @@ export function useChatController(
           orderedMessages = [...targetSession.messages].sort((a, b) => a.createdAt - b.createdAt);
           hasMoreMessagesBeforeRef.current = false;
         } else {
-          const fetched = await listMessages(targetSession.id, { limit: INITIAL_MESSAGE_LIMIT }).catch((err) => {
-            console.warn("ChatController: failed to load recent messages", { sessionId: targetSession?.id, err });
+          const fetched = await listMessages(targetSession.id, {
+            limit: INITIAL_MESSAGE_LIMIT,
+          }).catch((err) => {
+            console.warn("ChatController: failed to load recent messages", {
+              sessionId: targetSession?.id,
+              err,
+            });
             return [] as StoredMessage[];
           });
           orderedMessages = [...fetched].sort((a, b) => a.createdAt - b.createdAt);
@@ -580,13 +633,15 @@ export function useChatController(
         messagesRef.current = orderedMessages;
         const normalizedSession: Session = { ...targetSession, messages: orderedMessages };
 
-        // Load persona: prefer session's personaId, fallback to default
+        // Load persona: prefer session's personaId, fallback to default unless explicitly disabled.
+        const personaDisabled =
+          normalizedSession.personaDisabled || normalizedSession.personaId === "";
         let selectedPersona: Persona | null = null;
-        if (normalizedSession.personaId) {
+        if (!personaDisabled && normalizedSession.personaId) {
           const allPersonas = await listPersonas().catch(() => [] as Persona[]);
-          selectedPersona = allPersonas.find(p => p.id === normalizedSession.personaId) ?? null;
+          selectedPersona = allPersonas.find((p) => p.id === normalizedSession.personaId) ?? null;
         }
-        if (!selectedPersona) {
+        if (!selectedPersona && !personaDisabled) {
           selectedPersona = await getDefaultPersona().catch((err) => {
             console.warn("ChatController: failed to load persona", err);
             return null;
@@ -602,14 +657,17 @@ export function useChatController(
               { type: "SET_CHARACTER", payload: match },
               { type: "SET_PERSONA", payload: selectedPersona },
               { type: "SET_SESSION", payload: normalizedSession },
-              { type: "SET_MESSAGES", payload: orderedMessages }
-            ]
+              { type: "SET_MESSAGES", payload: orderedMessages },
+            ],
           });
         }
       } catch (err) {
         console.error("ChatController: failed to load chat", err);
         if (!cancelled) {
-          dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : String(err) });
+          dispatch({
+            type: "SET_ERROR",
+            payload: err instanceof Error ? err.message : String(err),
+          });
         }
       } finally {
         if (!cancelled) {
@@ -638,39 +696,44 @@ export function useChatController(
     dispatch({ type: "RESET_MESSAGE_ACTIONS" });
   }, []);
 
-  const getVariantState = useCallback((message: StoredMessage): VariantState => {
-    if (isStartingSceneMessage(message)) {
-      if (!state.character || !state.session?.selectedSceneId) {
-        return { variants: [], selectedIndex: -1, total: 0 };
+  const getVariantState = useCallback(
+    (message: StoredMessage): VariantState => {
+      if (isStartingSceneMessage(message)) {
+        if (!state.character || !state.session?.selectedSceneId) {
+          return { variants: [], selectedIndex: -1, total: 0 };
+        }
+
+        const currentSceneIndex = state.character.scenes.findIndex(
+          (s) => s.id === state.session!.selectedSceneId,
+        );
+
+        return {
+          variants: state.character.scenes as any,
+          selectedIndex: currentSceneIndex,
+          total: state.character.scenes.length,
+        };
       }
 
-      const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
-
-      return {
-        variants: state.character.scenes as any,
-        selectedIndex: currentSceneIndex,
-        total: state.character.scenes.length,
-      };
-    }
-
-    const variants = message.variants ?? [];
-    if (variants.length === 0) {
+      const variants = message.variants ?? [];
+      if (variants.length === 0) {
+        return {
+          variants,
+          selectedIndex: -1,
+          total: 0,
+        };
+      }
+      const explicitIndex = message.selectedVariantId
+        ? variants.findIndex((variant) => variant.id === message.selectedVariantId)
+        : -1;
+      const selectedIndex = explicitIndex >= 0 ? explicitIndex : variants.length - 1;
       return {
         variants,
-        selectedIndex: -1,
-        total: 0,
+        selectedIndex,
+        total: variants.length,
       };
-    }
-    const explicitIndex = message.selectedVariantId
-      ? variants.findIndex((variant) => variant.id === message.selectedVariantId)
-      : -1;
-    const selectedIndex = explicitIndex >= 0 ? explicitIndex : variants.length - 1;
-    return {
-      variants,
-      selectedIndex,
-      total: variants.length,
-    };
-  }, [state.character, state.messages, state.session]);
+    },
+    [state.character, state.messages, state.session],
+  );
 
   const loadOlderMessages = useCallback(async () => {
     if (!state.session) return;
@@ -709,14 +772,17 @@ export function useChatController(
     }
   }, [state.session]);
 
-  const ensureMessageLoaded = useCallback(async (messageId: string) => {
-    const maxPages = 20;
-    for (let i = 0; i < maxPages; i++) {
-      if (messagesRef.current.some((m) => m.id === messageId)) return;
-      if (!hasMoreMessagesBeforeRef.current) return;
-      await loadOlderMessages();
-    }
-  }, [loadOlderMessages]);
+  const ensureMessageLoaded = useCallback(
+    async (messageId: string) => {
+      const maxPages = 20;
+      for (let i = 0; i < maxPages; i++) {
+        if (messagesRef.current.some((m) => m.id === messageId)) return;
+        if (!hasMoreMessagesBeforeRef.current) return;
+        await loadOlderMessages();
+      }
+    },
+    [loadOlderMessages],
+  );
 
   const applyVariantSelection = useCallback(
     async (messageId: string, variantId: string) => {
@@ -735,7 +801,9 @@ export function useChatController(
         selectedVariantId: targetVariant.id,
       };
 
-      const updatedMessages = state.messages.map((msg) => (msg.id === messageId ? updatedMessage : msg));
+      const updatedMessages = state.messages.map((msg) =>
+        msg.id === messageId ? updatedMessage : msg,
+      );
       dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
 
       const updatedSession: Session = {
@@ -746,7 +814,10 @@ export function useChatController(
       dispatch({ type: "SET_SESSION", payload: updatedSession });
 
       if (state.messageAction?.message.id === messageId) {
-        dispatch({ type: "SET_MESSAGE_ACTION", payload: { message: updatedMessage, mode: state.messageAction.mode } });
+        dispatch({
+          type: "SET_MESSAGE_ACTION",
+          payload: { message: updatedMessage, mode: state.messageAction.mode },
+        });
       }
 
       try {
@@ -772,7 +843,9 @@ export function useChatController(
       if (isStartingSceneMessage(currentMessage)) {
         if (!state.character || !state.session?.selectedSceneId) return;
 
-        const currentSceneIndex = state.character.scenes.findIndex(s => s.id === state.session!.selectedSceneId);
+        const currentSceneIndex = state.character.scenes.findIndex(
+          (s) => s.id === state.session!.selectedSceneId,
+        );
         if (currentSceneIndex === -1) return;
 
         const nextSceneIndex = direction === "next" ? currentSceneIndex + 1 : currentSceneIndex - 1;
@@ -782,7 +855,8 @@ export function useChatController(
 
         // Get the scene content (variant or original)
         const sceneContent = nextScene.selectedVariantId
-          ? nextScene.variants?.find(v => v.id === nextScene.selectedVariantId)?.content ?? nextScene.content
+          ? (nextScene.variants?.find((v) => v.id === nextScene.selectedVariantId)?.content ??
+            nextScene.content)
           : nextScene.content;
 
         const updatedMessage: StoredMessage = {
@@ -791,7 +865,7 @@ export function useChatController(
         };
 
         const updatedMessages = state.messages.map((msg) =>
-          msg.id === messageId ? updatedMessage : msg
+          msg.id === messageId ? updatedMessage : msg,
         );
 
         const updatedSession: Session = {
@@ -819,18 +893,30 @@ export function useChatController(
 
       // Regular message variant swipe logic (only for assistant messages)
       if (currentMessage.role !== "assistant") return;
-      if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== messageId) return;
+      if (
+        state.messages.length === 0 ||
+        state.messages[state.messages.length - 1]?.id !== messageId
+      )
+        return;
       const variants = currentMessage.variants ?? [];
       if (variants.length <= 1) return;
 
       const variantState = getVariantState(currentMessage);
-      const currentIndex = variantState.selectedIndex >= 0 ? variantState.selectedIndex : variants.length - 1;
+      const currentIndex =
+        variantState.selectedIndex >= 0 ? variantState.selectedIndex : variants.length - 1;
       const nextIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
       if (nextIndex < 0 || nextIndex >= variants.length) return;
       const nextVariant = variants[nextIndex];
       await applyVariantSelection(messageId, nextVariant.id);
     },
-    [applyVariantSelection, getVariantState, state.character, state.messages, state.regeneratingMessageId, state.session],
+    [
+      applyVariantSelection,
+      getVariantState,
+      state.character,
+      state.messages,
+      state.regeneratingMessageId,
+      state.session,
+    ],
   );
 
   const handleVariantDrag = useCallback(
@@ -860,9 +946,12 @@ export function useChatController(
         actions: [
           { type: "SET_SENDING", payload: true },
           { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
-          { type: "SET_MESSAGES", payload: [...state.messages, userPlaceholder, assistantPlaceholder] },
-          { type: "CLEAR_PENDING_ATTACHMENTS" }
-        ]
+          {
+            type: "SET_MESSAGES",
+            payload: [...state.messages, userPlaceholder, assistantPlaceholder],
+          },
+          { type: "CLEAR_PENDING_ATTACHMENTS" },
+        ],
       });
 
       let unlistenNormalized: UnlistenFn | null = null;
@@ -872,14 +961,18 @@ export function useChatController(
         // Only use normalized provider-agnostic stream
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
           try {
-            const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+            const payload =
+              typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
               void triggerTypingHaptic();
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
-                payload: { messageId: assistantPlaceholder.id, reasoning: String(payload.data.text) }
+                payload: {
+                  messageId: assistantPlaceholder.id,
+                  reasoning: String(payload.data.text),
+                },
               });
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
@@ -914,8 +1007,11 @@ export function useChatController(
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
             { type: "SET_MESSAGES", payload: replaced },
-            { type: "TRANSFER_REASONING", payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id } },
-          ]
+            {
+              type: "TRANSFER_REASONING",
+              payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id },
+            },
+          ],
         });
 
         void runInChatImageGeneration(result.assistantMessage.id);
@@ -932,108 +1028,121 @@ export function useChatController(
           type: "BATCH",
           actions: [
             { type: "SET_SENDING", payload: false },
-            { type: "SET_ACTIVE_REQUEST_ID", payload: null }
-          ]
+            { type: "SET_ACTIVE_REQUEST_ID", payload: null },
+          ],
         });
       }
     },
-    [runInChatImageGeneration, state.character, state.persona?.id, state.session, state.pendingAttachments],
+    [
+      runInChatImageGeneration,
+      state.character,
+      state.persona?.id,
+      state.session,
+      state.pendingAttachments,
+    ],
   );
 
-  const handleContinue = useCallback(
-    async () => {
-      if (!state.session || !state.character) return;
-      const requestId = crypto.randomUUID();
+  const handleContinue = useCallback(async () => {
+    if (!state.session || !state.character) return;
+    const requestId = crypto.randomUUID();
 
-      const assistantPlaceholder = createPlaceholderMessage("assistant", "");
+    const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
+    dispatch({
+      type: "BATCH",
+      actions: [
+        { type: "SET_SENDING", payload: true },
+        { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
+        { type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] },
+      ],
+    });
+
+    let unlistenNormalized: UnlistenFn | null = null;
+    const streamBatcher = createStreamBatcher(dispatch);
+
+    try {
+      // Only use normalized provider-agnostic stream
+      unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+        try {
+          const payload =
+            typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+          if (payload && payload.type === "delta" && payload.data?.text) {
+            streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
+            void triggerTypingHaptic();
+          } else if (payload && payload.type === "reasoning" && payload.data?.text) {
+            dispatch({
+              type: "UPDATE_MESSAGE_REASONING",
+              payload: { messageId: assistantPlaceholder.id, reasoning: String(payload.data.text) },
+            });
+          } else if (payload && payload.type === "error" && payload.data?.message) {
+            dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
+          }
+        } catch {
+          // ignore malformed payloads
+        }
+      });
+
+      const result = await continueConversation({
+        sessionId: state.session.id,
+        characterId: state.character.id,
+        personaId: state.persona?.id,
+        stream: true,
+        requestId,
+      });
+
+      const replaced = messagesRef.current.map((msg) => {
+        if (msg.id === assistantPlaceholder.id) return result.assistantMessage;
+        return msg;
+      });
+      messagesRef.current = replaced;
       dispatch({
         type: "BATCH",
         actions: [
-          { type: "SET_SENDING", payload: true },
-          { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
-          { type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] }
-        ]
+          { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
+          { type: "SET_MESSAGES", payload: replaced },
+          // Transfer reasoning from placeholder to real message ID
+          {
+            type: "TRANSFER_REASONING",
+            payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id },
+          },
+        ],
       });
 
-      let unlistenNormalized: UnlistenFn | null = null;
-      const streamBatcher = createStreamBatcher(dispatch);
+      void runInChatImageGeneration(result.assistantMessage.id);
+    } catch (err) {
+      console.error("ChatController: continue failed", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      dispatch({ type: "SET_ERROR", payload: errMsg });
 
-      try {
-        // Only use normalized provider-agnostic stream
-        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
-          try {
-            const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
-            if (payload && payload.type === "delta" && payload.data?.text) {
-              streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
-              void triggerTypingHaptic();
-            } else if (payload && payload.type === "reasoning" && payload.data?.text) {
-              dispatch({
-                type: "UPDATE_MESSAGE_REASONING",
-                payload: { messageId: assistantPlaceholder.id, reasoning: String(payload.data.text) }
-              });
-            } else if (payload && payload.type === "error" && payload.data?.message) {
-              dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
-            }
-          } catch {
-            // ignore malformed payloads
-          }
-        });
-
-        const result = await continueConversation({
-          sessionId: state.session.id,
-          characterId: state.character.id,
-          personaId: state.persona?.id,
-          stream: true,
-          requestId,
-        });
-
-        const replaced = messagesRef.current.map((msg) => {
-          if (msg.id === assistantPlaceholder.id) return result.assistantMessage;
-          return msg;
-        });
-        messagesRef.current = replaced;
-        dispatch({
-          type: "BATCH",
-          actions: [
-            { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
-            { type: "SET_MESSAGES", payload: replaced },
-            // Transfer reasoning from placeholder to real message ID
-            { type: "TRANSFER_REASONING", payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id } },
-          ]
-        });
-
-        void runInChatImageGeneration(result.assistantMessage.id);
-      } catch (err) {
-        console.error("ChatController: continue failed", err);
-        const errMsg = err instanceof Error ? err.message : String(err);
-        dispatch({ type: "SET_ERROR", payload: errMsg });
-
-        const abortedByUser = errMsg.toLowerCase().includes("aborted by user") || errMsg.toLowerCase().includes("cancelled");
-        if (!abortedByUser) {
-          const cleaned = messagesRef.current.filter((msg) => msg.id !== assistantPlaceholder.id);
-          messagesRef.current = cleaned;
-          dispatch({ type: "SET_MESSAGES", payload: cleaned });
-        }
-      } finally {
-        streamBatcher.cancel();
-        if (unlistenNormalized) unlistenNormalized();
-        dispatch({
-          type: "BATCH",
-          actions: [
-            { type: "SET_SENDING", payload: false },
-            { type: "SET_ACTIVE_REQUEST_ID", payload: null }
-          ]
-        });
+      const abortedByUser =
+        errMsg.toLowerCase().includes("aborted by user") ||
+        errMsg.toLowerCase().includes("cancelled");
+      if (!abortedByUser) {
+        const cleaned = messagesRef.current.filter((msg) => msg.id !== assistantPlaceholder.id);
+        messagesRef.current = cleaned;
+        dispatch({ type: "SET_MESSAGES", payload: cleaned });
       }
-    },
-    [runInChatImageGeneration, state.character, state.persona?.id, state.session],
-  );
+    } finally {
+      streamBatcher.cancel();
+      if (unlistenNormalized) unlistenNormalized();
+      dispatch({
+        type: "BATCH",
+        actions: [
+          { type: "SET_SENDING", payload: false },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: null },
+        ],
+      });
+    }
+  }, [runInChatImageGeneration, state.character, state.persona?.id, state.session]);
 
   const handleRegenerate = useCallback(
     async (message: StoredMessage) => {
       if (!state.session) return;
-      if (state.messages.length === 0 || state.messages[state.messages.length - 1]?.id !== message.id) return;
+      if (
+        state.messages.length === 0 ||
+        state.messages[state.messages.length - 1]?.id !== message.id
+      )
+        return;
       if (message.role !== "assistant") return;
       if (state.regeneratingMessageId) return;
 
@@ -1042,9 +1151,12 @@ export function useChatController(
         return;
       }
 
-      const messageInSession = state.messages.find(m => m.id === message.id);
+      const messageInSession = state.messages.find((m) => m.id === message.id);
       if (!messageInSession) {
-        console.error("ChatController: cannot regenerate - message not found in current messages", message.id);
+        console.error(
+          "ChatController: cannot regenerate - message not found in current messages",
+          message.id,
+        );
         return;
       }
 
@@ -1061,9 +1173,11 @@ export function useChatController(
           { type: "SET_HELD_MESSAGE_ID", payload: null },
           {
             type: "SET_MESSAGES",
-            payload: state.messages.map((msg) => (msg.id === message.id ? { ...msg, content: "", reasoning: undefined } : msg))
-          }
-        ]
+            payload: state.messages.map((msg) =>
+              msg.id === message.id ? { ...msg, content: "", reasoning: undefined } : msg,
+            ),
+          },
+        ],
       });
 
       const streamBatcher = createStreamBatcher(dispatch);
@@ -1072,14 +1186,15 @@ export function useChatController(
         // Only use normalized provider-agnostic stream
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
           try {
-            const payload = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+            const payload =
+              typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
               streamBatcher.update(message.id, String(payload.data.text));
               void triggerTypingHaptic();
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
-                payload: { messageId: message.id, reasoning: String(payload.data.text) }
+                payload: { messageId: message.id, reasoning: String(payload.data.text) },
               });
             } else if (payload && payload.type === "error" && payload.data?.message) {
               dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
@@ -1096,14 +1211,16 @@ export function useChatController(
           requestId,
         });
 
-        const replaced = messagesRef.current.map((msg) => (msg.id === message.id ? result.assistantMessage : msg));
+        const replaced = messagesRef.current.map((msg) =>
+          msg.id === message.id ? result.assistantMessage : msg,
+        );
         messagesRef.current = replaced;
         dispatch({
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
-            { type: "SET_MESSAGES", payload: replaced }
-          ]
+            { type: "SET_MESSAGES", payload: replaced },
+          ],
         });
 
         void runInChatImageGeneration(result.assistantMessage.id);
@@ -1111,7 +1228,7 @@ export function useChatController(
         if (state.messageAction?.message.id === message.id) {
           dispatch({
             type: "SET_MESSAGE_ACTION",
-            payload: { message: result.assistantMessage, mode: state.messageAction.mode }
+            payload: { message: result.assistantMessage, mode: state.messageAction.mode },
           });
         }
       } catch (err) {
@@ -1129,8 +1246,8 @@ export function useChatController(
             type: "BATCH",
             actions: [
               { type: "SET_SESSION", payload: { ...meta, messages: ordered } },
-              { type: "SET_MESSAGES", payload: ordered }
-            ]
+              { type: "SET_MESSAGES", payload: ordered },
+            ],
           });
         } else {
           dispatch({ type: "SET_MESSAGES", payload: ordered });
@@ -1143,8 +1260,8 @@ export function useChatController(
           actions: [
             { type: "SET_REGENERATING_MESSAGE_ID", payload: null },
             { type: "SET_ACTIVE_REQUEST_ID", payload: null },
-            { type: "SET_SENDING", payload: false }
-          ]
+            { type: "SET_SENDING", payload: false },
+          ],
         });
       }
     },
@@ -1158,18 +1275,20 @@ export function useChatController(
       await abortMessage(state.activeRequestId);
       log.info("aborted request", state.activeRequestId);
 
-      const messagesWithoutPlaceholders = messagesRef.current.map(msg => {
-        if (msg.id.startsWith('placeholder-')) {
-          if (msg.content.trim().length > 0) {
-            return {
-              ...msg,
-              id: crypto.randomUUID(),
-            };
+      const messagesWithoutPlaceholders = messagesRef.current
+        .map((msg) => {
+          if (msg.id.startsWith("placeholder-")) {
+            if (msg.content.trim().length > 0) {
+              return {
+                ...msg,
+                id: crypto.randomUUID(),
+              };
+            }
+            return null;
           }
-          return null;
-        }
-        return msg;
-      }).filter((msg): msg is StoredMessage => msg !== null);
+          return msg;
+        })
+        .filter((msg): msg is StoredMessage => msg !== null);
 
       const updatedSession: Session = {
         ...state.session,
@@ -1177,7 +1296,14 @@ export function useChatController(
         updatedAt: Date.now(),
       };
 
-      console.log("ChatController: saving session after abort with message IDs:", messagesWithoutPlaceholders.map(m => ({ id: m.id, role: m.role, contentLength: m.content.length })));
+      console.log(
+        "ChatController: saving session after abort with message IDs:",
+        messagesWithoutPlaceholders.map((m) => ({
+          id: m.id,
+          role: m.role,
+          contentLength: m.content.length,
+        })),
+      );
 
       try {
         sessionOperationRef.current = true;
@@ -1188,8 +1314,8 @@ export function useChatController(
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
-            { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
-          ]
+            { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders },
+          ],
         });
         log.info("successfully saved session after abort");
       } catch (saveErr) {
@@ -1204,24 +1330,26 @@ export function useChatController(
         type: "BATCH",
         actions: [
           { type: "SET_SENDING", payload: false },
-          { type: "SET_ACTIVE_REQUEST_ID", payload: null }
-        ]
+          { type: "SET_ACTIVE_REQUEST_ID", payload: null },
+        ],
       });
     } catch (err) {
       log.error("abort failed", err);
       try {
-        const messagesWithoutPlaceholders = state.messages.map(msg => {
-          if (msg.id.startsWith('placeholder-')) {
-            if (msg.content.trim().length > 0) {
-              return {
-                ...msg,
-                id: crypto.randomUUID(),
-              };
+        const messagesWithoutPlaceholders = state.messages
+          .map((msg) => {
+            if (msg.id.startsWith("placeholder-")) {
+              if (msg.content.trim().length > 0) {
+                return {
+                  ...msg,
+                  id: crypto.randomUUID(),
+                };
+              }
+              return null;
             }
-            return null;
-          }
-          return msg;
-        }).filter((msg): msg is StoredMessage => msg !== null);
+            return msg;
+          })
+          .filter((msg): msg is StoredMessage => msg !== null);
 
         const updatedSession: Session = {
           ...state.session!,
@@ -1235,13 +1363,15 @@ export function useChatController(
           type: "BATCH",
           actions: [
             { type: "SET_SESSION", payload: updatedSession },
-            { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders }
-          ]
+            { type: "SET_MESSAGES", payload: messagesWithoutPlaceholders },
+          ],
         });
       } catch (saveErr) {
         log.error("failed to save after abort error", saveErr);
         // Even if everything fails, try to clean up placeholders from UI
-        const cleaned = state.messages.filter(msg => !msg.id.startsWith('placeholder-') || msg.content.trim().length > 0);
+        const cleaned = state.messages.filter(
+          (msg) => !msg.id.startsWith("placeholder-") || msg.content.trim().length > 0,
+        );
         dispatch({ type: "SET_MESSAGES", payload: cleaned });
       } finally {
         sessionOperationRef.current = false;
@@ -1251,8 +1381,8 @@ export function useChatController(
         type: "BATCH",
         actions: [
           { type: "SET_SENDING", payload: false },
-          { type: "SET_ACTIVE_REQUEST_ID", payload: null }
-        ]
+          { type: "SET_ACTIVE_REQUEST_ID", payload: null },
+        ],
       });
     }
   }, [state.activeRequestId, state.session]);
@@ -1269,21 +1399,21 @@ export function useChatController(
       actions: [
         { type: "SET_ACTION_BUSY", payload: true },
         { type: "SET_ACTION_ERROR", payload: null },
-        { type: "SET_ACTION_STATUS", payload: null }
-      ]
+        { type: "SET_ACTION_STATUS", payload: null },
+      ],
     });
     try {
       const updatedMessages = messagesRef.current.map((msg) =>
         msg.id === state.messageAction!.message.id
           ? {
-            ...msg,
-            content: updatedContent,
-            variants: (msg.variants ?? []).map((variant) =>
-              variant.id === (msg.selectedVariantId ?? variant.id)
-                ? { ...variant, content: updatedContent }
-                : variant,
-            ),
-          }
+              ...msg,
+              content: updatedContent,
+              variants: (msg.variants ?? []).map((variant) =>
+                variant.id === (msg.selectedVariantId ?? variant.id)
+                  ? { ...variant, content: updatedContent }
+                  : variant,
+              ),
+            }
           : msg,
       );
       const updatedSession: Session = {
@@ -1299,7 +1429,10 @@ export function useChatController(
       dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
       resetMessageActions();
     } catch (err) {
-      dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+      dispatch({
+        type: "SET_ACTION_ERROR",
+        payload: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       sessionOperationRef.current = false;
       dispatch({ type: "SET_ACTION_BUSY", payload: false });
@@ -1311,7 +1444,10 @@ export function useChatController(
       if (!state.session) return;
 
       if (message.isPinned) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: "Cannot delete pinned message. Unpin it first." });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: "Cannot delete pinned message. Unpin it first.",
+        });
         return;
       }
 
@@ -1324,11 +1460,17 @@ export function useChatController(
         await deleteMessage(state.session.id, message.id);
         const updatedMessages = messagesRef.current.filter((msg) => msg.id !== message.id);
         messagesRef.current = updatedMessages;
-        dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() } });
+        dispatch({
+          type: "SET_SESSION",
+          payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() },
+        });
         dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
         resetMessageActions();
       } catch (err) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: err instanceof Error ? err.message : String(err),
+        });
       } finally {
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
@@ -1347,15 +1489,18 @@ export function useChatController(
       }
 
       const messagesAfter = messagesRef.current.slice(messageIndex + 1);
-      const hasPinnedAfter = messagesAfter.some(msg => msg.isPinned);
+      const hasPinnedAfter = messagesAfter.some((msg) => msg.isPinned);
 
       if (hasPinnedAfter) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: "Cannot rewind: there are pinned messages after this point. Unpin them first." });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: "Cannot rewind: there are pinned messages after this point. Unpin them first.",
+        });
         return;
       }
 
       const confirmed = window.confirm(
-        "Rewind conversation to this message? All messages after this point will be removed."
+        "Rewind conversation to this message? All messages after this point will be removed.",
       );
       if (!confirmed) return;
 
@@ -1367,11 +1512,20 @@ export function useChatController(
         await deleteMessagesAfter(state.session.id, message.id);
         const updatedMessages = messagesRef.current.slice(0, messageIndex + 1);
         messagesRef.current = updatedMessages;
-        dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() } });
-        dispatch({ type: "REWIND_TO_MESSAGE", payload: { messageId: message.id, messages: updatedMessages } });
+        dispatch({
+          type: "SET_SESSION",
+          payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() },
+        });
+        dispatch({
+          type: "REWIND_TO_MESSAGE",
+          payload: { messageId: message.id, messages: updatedMessages },
+        });
         resetMessageActions();
       } catch (err) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: err instanceof Error ? err.message : String(err),
+        });
       } finally {
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
@@ -1392,12 +1546,18 @@ export function useChatController(
 
         if (nextPinned !== null) {
           const updatedMessages = messagesRef.current.map((m) =>
-            m.id === message.id ? { ...m, isPinned: nextPinned } : m
+            m.id === message.id ? { ...m, isPinned: nextPinned } : m,
           );
           messagesRef.current = updatedMessages;
-          dispatch({ type: "SET_SESSION", payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() } });
+          dispatch({
+            type: "SET_SESSION",
+            payload: { ...state.session, messages: updatedMessages, updatedAt: Date.now() },
+          });
           dispatch({ type: "SET_MESSAGES", payload: updatedMessages });
-          dispatch({ type: "SET_ACTION_STATUS", payload: nextPinned ? "Message pinned" : "Message unpinned" });
+          dispatch({
+            type: "SET_ACTION_STATUS",
+            payload: nextPinned ? "Message pinned" : "Message unpinned",
+          });
           setTimeout(() => {
             resetMessageActions();
           }, 1000);
@@ -1405,7 +1565,10 @@ export function useChatController(
           dispatch({ type: "SET_ACTION_ERROR", payload: "Failed to toggle pin" });
         }
       } catch (err) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: err instanceof Error ? err.message : String(err),
+        });
       } finally {
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
       }
@@ -1424,7 +1587,10 @@ export function useChatController(
       try {
         const fullSession = await getSession(state.session.id);
         if (!fullSession) {
-          dispatch({ type: "SET_ACTION_ERROR", payload: "Failed to load full session for branching" });
+          dispatch({
+            type: "SET_ACTION_ERROR",
+            payload: "Failed to load full session for branching",
+          });
           return null;
         }
 
@@ -1436,7 +1602,7 @@ export function useChatController(
 
         const messageCount = messageIndex + 1;
         const confirmed = window.confirm(
-          `Create a new chat branch from this point? The new chat will contain ${messageCount} message${messageCount > 1 ? 's' : ''}.`
+          `Create a new chat branch from this point? The new chat will contain ${messageCount} message${messageCount > 1 ? "s" : ""}.`,
         );
         if (!confirmed) {
           dispatch({ type: "SET_ACTION_BUSY", payload: false });
@@ -1454,7 +1620,10 @@ export function useChatController(
 
         return branchedSession.id;
       } catch (err) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: err instanceof Error ? err.message : String(err),
+        });
         return null;
       } finally {
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
@@ -1464,7 +1633,10 @@ export function useChatController(
   );
 
   const handleBranchToCharacter = useCallback(
-    async (message: StoredMessage, targetCharacterId: string): Promise<{ sessionId: string; characterId: string } | null> => {
+    async (
+      message: StoredMessage,
+      targetCharacterId: string,
+    ): Promise<{ sessionId: string; characterId: string } | null> => {
       if (!state.session) return null;
 
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
@@ -1474,7 +1646,10 @@ export function useChatController(
       try {
         const fullSession = await getSession(state.session.id);
         if (!fullSession) {
-          dispatch({ type: "SET_ACTION_ERROR", payload: "Failed to load full session for branching" });
+          dispatch({
+            type: "SET_ACTION_ERROR",
+            payload: "Failed to load full session for branching",
+          });
           return null;
         }
 
@@ -1487,7 +1662,7 @@ export function useChatController(
         const branchedSession = await createBranchedSessionToCharacter(
           fullSession,
           message.id,
-          targetCharacterId
+          targetCharacterId,
         );
 
         dispatch({ type: "SET_ACTION_STATUS", payload: "Chat branch created! Redirecting..." });
@@ -1498,7 +1673,10 @@ export function useChatController(
 
         return { sessionId: branchedSession.id, characterId: targetCharacterId };
       } catch (err) {
-        dispatch({ type: "SET_ACTION_ERROR", payload: err instanceof Error ? err.message : String(err) });
+        dispatch({
+          type: "SET_ACTION_ERROR",
+          payload: err instanceof Error ? err.message : String(err),
+        });
         return null;
       } finally {
         dispatch({ type: "SET_ACTION_BUSY", payload: false });
@@ -1539,16 +1717,50 @@ export function useChatController(
 
     // Setters
     setDraft: useCallback((value: string) => dispatch({ type: "SET_DRAFT", payload: value }), []),
-    setError: useCallback((value: string | null) => dispatch({ type: "SET_ERROR", payload: value }), []),
-    setMessageAction: useCallback((value: MessageActionState | null) => dispatch({ type: "SET_MESSAGE_ACTION", payload: value }), []),
-    setActionError: useCallback((value: string | null) => dispatch({ type: "SET_ACTION_ERROR", payload: value }), []),
-    setActionStatus: useCallback((value: string | null) => dispatch({ type: "SET_ACTION_STATUS", payload: value }), []),
-    setActionBusy: useCallback((value: boolean) => dispatch({ type: "SET_ACTION_BUSY", payload: value }), []),
-    setEditDraft: useCallback((value: string) => dispatch({ type: "SET_EDIT_DRAFT", payload: value }), []),
-    setHeldMessageId: useCallback((value: string | null) => dispatch({ type: "SET_HELD_MESSAGE_ID", payload: value }), []),
-    setPendingAttachments: useCallback((attachments: ImageAttachment[]) => dispatch({ type: "SET_PENDING_ATTACHMENTS", payload: attachments }), []),
-    addPendingAttachment: useCallback((attachment: ImageAttachment) => dispatch({ type: "ADD_PENDING_ATTACHMENT", payload: attachment }), []),
-    removePendingAttachment: useCallback((attachmentId: string) => dispatch({ type: "REMOVE_PENDING_ATTACHMENT", payload: attachmentId }), []),
+    setError: useCallback(
+      (value: string | null) => dispatch({ type: "SET_ERROR", payload: value }),
+      [],
+    ),
+    setMessageAction: useCallback(
+      (value: MessageActionState | null) =>
+        dispatch({ type: "SET_MESSAGE_ACTION", payload: value }),
+      [],
+    ),
+    setActionError: useCallback(
+      (value: string | null) => dispatch({ type: "SET_ACTION_ERROR", payload: value }),
+      [],
+    ),
+    setActionStatus: useCallback(
+      (value: string | null) => dispatch({ type: "SET_ACTION_STATUS", payload: value }),
+      [],
+    ),
+    setActionBusy: useCallback(
+      (value: boolean) => dispatch({ type: "SET_ACTION_BUSY", payload: value }),
+      [],
+    ),
+    setEditDraft: useCallback(
+      (value: string) => dispatch({ type: "SET_EDIT_DRAFT", payload: value }),
+      [],
+    ),
+    setHeldMessageId: useCallback(
+      (value: string | null) => dispatch({ type: "SET_HELD_MESSAGE_ID", payload: value }),
+      [],
+    ),
+    setPendingAttachments: useCallback(
+      (attachments: ImageAttachment[]) =>
+        dispatch({ type: "SET_PENDING_ATTACHMENTS", payload: attachments }),
+      [],
+    ),
+    addPendingAttachment: useCallback(
+      (attachment: ImageAttachment) =>
+        dispatch({ type: "ADD_PENDING_ATTACHMENT", payload: attachment }),
+      [],
+    ),
+    removePendingAttachment: useCallback(
+      (attachmentId: string) =>
+        dispatch({ type: "REMOVE_PENDING_ATTACHMENT", payload: attachmentId }),
+      [],
+    ),
     clearPendingAttachments: useCallback(() => dispatch({ type: "CLEAR_PENDING_ATTACHMENTS" }), []),
 
     // Actions
@@ -1582,7 +1794,11 @@ export function useChatController(
   };
 }
 
-function createPlaceholderMessage(role: "user" | "assistant", content: string, attachments?: import("../../../../core/storage/schemas").ImageAttachment[]): StoredMessage {
+function createPlaceholderMessage(
+  role: "user" | "assistant",
+  content: string,
+  attachments?: import("../../../../core/storage/schemas").ImageAttachment[],
+): StoredMessage {
   return {
     id: `placeholder-${role}-${crypto.randomUUID()}`,
     role,

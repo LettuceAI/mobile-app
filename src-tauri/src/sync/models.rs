@@ -178,6 +178,7 @@ pub struct Session {
     pub system_prompt: Option<String>,
     pub selected_scene_id: Option<String>,
     pub persona_id: Option<String>,
+    pub persona_disabled: Option<i64>,
     #[serde(default)]
     pub voice_autoplay: Option<i64>,
     pub temperature: Option<f64>,

@@ -341,6 +341,8 @@ pub struct Session {
     #[serde(default)]
     pub persona_id: Option<String>,
     #[serde(default)]
+    pub persona_disabled: bool,
+    #[serde(default)]
     pub voice_autoplay: Option<bool>,
     #[serde(default)]
     pub advanced_model_settings: Option<AdvancedModelSettings>,

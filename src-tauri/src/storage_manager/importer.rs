@@ -371,6 +371,10 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
                 .get("personaId")
                 .and_then(|v| v.as_str())
                 .map(|x| x.to_string());
+            let persona_disabled = s
+                .get("personaDisabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false) as i64;
             let archived = s.get("archived").and_then(|v| v.as_bool()).unwrap_or(false) as i64;
             let created_at = s.get("createdAt").and_then(|v| v.as_i64()).unwrap_or(now);
             let updated_at = s.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(now);
@@ -391,9 +395,9 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
             let top_k = adv.and_then(|v| v.get("topK")).and_then(|v| v.as_i64());
 
             tx.execute(
-                r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, archived, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-                params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, archived, created_at, updated_at],
+                r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, archived, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, archived, created_at, updated_at],
             ).map_err(|e| e.to_string())?;
 
             if let Some(msgs) = s.get("messages").and_then(|v| v.as_array()) {

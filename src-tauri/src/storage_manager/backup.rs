@@ -389,7 +389,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 
     // Get all sessions
     let mut stmt = conn
-        .prepare("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay,
+        .prepare("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, voice_autoplay,
                          temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k,
                          memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events,
                          archived, created_at, updated_at FROM sessions")
@@ -405,21 +405,22 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "system_prompt": r.get::<_, Option<String>>(3)?,
                 "selected_scene_id": r.get::<_, Option<String>>(4)?,
                 "persona_id": r.get::<_, Option<String>>(5)?,
-                "voice_autoplay": r.get::<_, Option<i64>>(6)?.map(|value| value != 0),
-                "temperature": r.get::<_, Option<f64>>(7)?,
-                "top_p": r.get::<_, Option<f64>>(8)?,
-                "max_output_tokens": r.get::<_, Option<i64>>(9)?,
-                "frequency_penalty": r.get::<_, Option<f64>>(10)?,
-                "presence_penalty": r.get::<_, Option<f64>>(11)?,
-                "top_k": r.get::<_, Option<i64>>(12)?,
-                "memories": r.get::<_, String>(13)?,
-                "memory_embeddings": r.get::<_, String>(14)?,
-                "memory_summary": r.get::<_, Option<String>>(15)?,
-                "memory_summary_token_count": r.get::<_, i64>(16)?,
-                "memory_tool_events": r.get::<_, String>(17)?,
-                "archived": r.get::<_, i64>(18)? != 0,
-                "created_at": r.get::<_, i64>(19)?,
-                "updated_at": r.get::<_, i64>(20)?,
+                "persona_disabled": r.get::<_, i64>(6)? != 0,
+                "voice_autoplay": r.get::<_, Option<i64>>(7)?.map(|value| value != 0),
+                "temperature": r.get::<_, Option<f64>>(8)?,
+                "top_p": r.get::<_, Option<f64>>(9)?,
+                "max_output_tokens": r.get::<_, Option<i64>>(10)?,
+                "frequency_penalty": r.get::<_, Option<f64>>(11)?,
+                "presence_penalty": r.get::<_, Option<f64>>(12)?,
+                "top_k": r.get::<_, Option<i64>>(13)?,
+                "memories": r.get::<_, String>(14)?,
+                "memory_embeddings": r.get::<_, String>(15)?,
+                "memory_summary": r.get::<_, Option<String>>(16)?,
+                "memory_summary_token_count": r.get::<_, i64>(17)?,
+                "memory_tool_events": r.get::<_, String>(18)?,
+                "archived": r.get::<_, i64>(19)? != 0,
+                "created_at": r.get::<_, i64>(20)?,
+                "updated_at": r.get::<_, i64>(21)?,
             });
             Ok((id, json))
         })
@@ -1334,11 +1335,11 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     });
 
             conn.execute(
-                "INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, voice_autoplay,
+                "INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, voice_autoplay,
                  temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k,
                  memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events,
                  archived, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
                 params![
                     session_id,
                     character_id,
@@ -1346,6 +1347,9 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     item.get("system_prompt").and_then(|v| v.as_str()),
                     item.get("selected_scene_id").and_then(|v| v.as_str()),
                     item.get("persona_id").and_then(|v| v.as_str()),
+                    item.get("persona_disabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false) as i64,
                     voice_autoplay,
                     item.get("temperature").and_then(|v| v.as_f64()),
                     item.get("top_p").and_then(|v| v.as_f64()),
