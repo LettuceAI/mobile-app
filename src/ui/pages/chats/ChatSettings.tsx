@@ -50,6 +50,7 @@ import {
 } from "../../components/AdvancedModelSettingsForm";
 import { typography, radius, spacing, interactive, cn, colors } from "../../design-tokens";
 import { Routes, useNavigationManager } from "../../navigation";
+import { PersonaSelector } from "../group-chats/components/settings";
 
 function isImageLike(value?: string) {
   if (!value) return false;
@@ -184,96 +185,6 @@ function QuickChip({
         </div>
       </div>
       <ChevronRight className="h-4 w-4 text-gray-500 transition-colors group-hover:text-white" />
-    </button>
-  );
-}
-
-interface PersonaOptionProps {
-  title: string;
-  description: string;
-  isDefault?: boolean;
-  isSelected: boolean;
-  onClick: () => void;
-  onLongPress: () => void;
-}
-
-function PersonaOption({
-  title,
-  description,
-  isDefault,
-  isSelected,
-  onClick,
-  onLongPress,
-}: PersonaOptionProps) {
-  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
-  const [isLongPressTriggered, setIsLongPressTriggered] = useState(false);
-
-  const handleTouchStart = () => {
-    setIsLongPressTriggered(false);
-    const timer = setTimeout(() => {
-      setIsLongPressTriggered(true);
-      onLongPress();
-    }, 500);
-    setLongPressTimer(timer);
-  };
-
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-    if (!isLongPressTriggered) {
-      onClick();
-    }
-  };
-
-  return (
-    <button
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      className={cn(
-        "group relative flex w-full items-center gap-3 justify-between",
-        radius.lg,
-        "p-4 text-left",
-        interactive.transition.default,
-        interactive.active.scale,
-        isSelected
-          ? "border border-emerald-400/40 bg-emerald-400/15 ring-2 ring-emerald-400/30 text-emerald-100"
-          : "border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10",
-      )}
-      aria-pressed={isSelected}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className={cn(typography.body.size, typography.h3.weight, "truncate", "py-0.5")}>
-            {title}
-          </div>
-          {isDefault && (
-            <span
-              className={cn(
-                "shrink-0 rounded-full border border-blue-400/30 bg-blue-400/10 px-2 text-[10px] font-medium text-blue-200",
-              )}
-            >
-              App default
-            </span>
-          )}
-        </div>
-        <div className={cn(typography.caption.size, "mt-1 truncate text-gray-400")}>
-          {description}
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          "flex h-8 w-8 items-center justify-center rounded-full border",
-          isSelected
-            ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
-            : "bg-white/5 border-white/10 text-white/70 group-hover:border-white/20",
-        )}
-        aria-hidden="true"
-      >
-        {isSelected ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
-      </div>
     </button>
   );
 }
@@ -1040,49 +951,17 @@ function ChatSettingsContent({ character }: { character: Character }) {
       </main>
 
       {/* Persona Selection */}
-      <BottomMenu
+      <PersonaSelector
         isOpen={showPersonaSelector}
         onClose={() => setShowPersonaSelector(false)}
-        title="Select Persona"
-        includeExitIcon={false}
-        location="bottom"
-      >
-        <MenuSection>
-          {personas.length === 0 ? (
-            <div className={cn(radius.lg, "border border-amber-500/20 bg-amber-500/10 px-6 py-4")}>
-              <p className={cn(typography.bodySmall.size, "text-amber-200")}>
-                No personas available. Create one in settings first.
-              </p>
-            </div>
-          ) : (
-            <div className={spacing.field}>
-              <PersonaOption
-                title="No Persona"
-                description="Disable persona for this conversation"
-                isSelected={
-                  currentSession?.personaId === null || currentSession?.personaId === undefined
-                }
-                onClick={() => handleChangePersona(null)}
-                onLongPress={() => {}}
-              />
-              {personas.map((persona) => (
-                <PersonaOption
-                  key={persona.id}
-                  title={persona.title}
-                  description={persona.description}
-                  isDefault={persona.isDefault}
-                  isSelected={persona.id === currentSession?.personaId}
-                  onClick={() => handleChangePersona(persona.id)}
-                  onLongPress={() => {
-                    setSelectedPersonaForActions(persona);
-                    setShowPersonaActions(true);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </MenuSection>
-      </BottomMenu>
+        personas={personas}
+        selectedPersonaId={currentSession?.personaId}
+        onSelect={handleChangePersona}
+        onLongPress={(persona) => {
+          setSelectedPersonaForActions(persona);
+          setShowPersonaActions(true);
+        }}
+      />
 
       {/* Model Selection */}
       <BottomMenu

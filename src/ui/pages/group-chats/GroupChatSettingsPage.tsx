@@ -20,7 +20,7 @@ import { typography, radius, spacing, interactive, cn } from "../../design-token
 import { BottomMenu, MenuSection } from "../../components";
 import { Routes, useNavigationManager } from "../../navigation";
 import { useGroupChatSettingsController } from "./hooks/useGroupChatSettingsController";
-import { SectionHeader, CharacterAvatar, QuickChip, PersonaOption } from "./components/settings";
+import { SectionHeader, CharacterAvatar, QuickChip, PersonaSelector } from "./components/settings";
 import { processBackgroundImage } from "../../../core/utils/image";
 import { storageBridge } from "../../../core/storage/files";
 import React, { useState } from "react";
@@ -692,40 +692,13 @@ export function GroupChatSettingsPage() {
       </main>
 
       {/* Persona Selector Modal */}
-      <BottomMenu
+      <PersonaSelector
         isOpen={showPersonaSelector}
         onClose={() => setShowPersonaSelector(false)}
-        title="Select Persona"
-      >
-        <MenuSection>
-          {personas.length === 0 ? (
-            <div className={cn(radius.lg, "border border-amber-500/20 bg-amber-500/10 px-6 py-4")}>
-              <p className={cn(typography.bodySmall.size, "text-amber-200")}>
-                No personas available. Create one in settings first.
-              </p>
-            </div>
-          ) : (
-            <div className={spacing.field}>
-              <PersonaOption
-                title="No Persona"
-                description="Disable persona for this conversation"
-                isSelected={session.personaId === null || session.personaId === undefined}
-                onClick={() => handleChangePersona(null)}
-              />
-              {personas.map((persona) => (
-                <PersonaOption
-                  key={persona.id}
-                  title={persona.title}
-                  description={persona.description}
-                  isDefault={persona.isDefault}
-                  isSelected={persona.id === session.personaId}
-                  onClick={() => handleChangePersona(persona.id)}
-                />
-              ))}
-            </div>
-          )}
-        </MenuSection>
-      </BottomMenu>
+        personas={personas}
+        selectedPersonaId={session.personaId}
+        onSelect={handleChangePersona}
+      />
 
       {/* Add Character Modal */}
       <BottomMenu
