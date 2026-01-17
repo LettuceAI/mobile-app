@@ -6,6 +6,7 @@ use tauri::AppHandle;
 use crate::utils::{log_error, log_info};
 
 const DISCOVERY_BASE_URL: &str = "https://character-tavern.com/api/homepage/cards";
+const CARD_DETAIL_BASE_URL: &str = "https://character-tavern.com/api/character";
 const CARD_IMAGE_BASE_URL: &str = "https://cards.character-tavern.com/cdn-cgi/image";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +63,82 @@ pub struct DiscoverySections {
     pub newest: Vec<DiscoveryCard>,
     pub popular: Vec<DiscoveryCard>,
     pub trending: Vec<DiscoveryCard>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryCardDetail {
+    pub id: String,
+    #[serde(default)]
+    pub origin: Option<String>,
+    pub name: String,
+    #[serde(default)]
+    pub in_chat_name: Option<String>,
+    #[serde(default)]
+    pub author: Option<serde_json::Value>,
+    pub path: String,
+    #[serde(default)]
+    pub tagline: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub is_nsfw: Option<bool>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub has_expression_pack: Option<bool>,
+    #[serde(default)]
+    pub last_updated_at: Option<String>,
+    #[serde(default)]
+    pub visibility: Option<String>,
+    #[serde(default)]
+    pub lorebook_id: Option<String>,
+    #[serde(default)]
+    pub definition_scenario: Option<String>,
+    #[serde(default)]
+    pub definition_personality: Option<String>,
+    #[serde(default)]
+    pub definition_character_description: Option<String>,
+    #[serde(default)]
+    pub definition_first_message: Option<String>,
+    #[serde(default)]
+    pub definition_example_messages: Option<String>,
+    #[serde(default)]
+    pub definition_system_prompt: Option<String>,
+    #[serde(default)]
+    pub definition_post_history_prompt: Option<String>,
+    #[serde(default)]
+    pub token_total: Option<i64>,
+    #[serde(default)]
+    pub token_description: Option<i64>,
+    #[serde(default)]
+    pub token_personality: Option<i64>,
+    #[serde(default)]
+    pub token_scenario: Option<i64>,
+    #[serde(default)]
+    pub token_mes_example: Option<i64>,
+    #[serde(default)]
+    pub token_first_mes: Option<i64>,
+    #[serde(default)]
+    pub token_system_prompt: Option<i64>,
+    #[serde(default)]
+    pub token_post_history_instructions: Option<i64>,
+    #[serde(default)]
+    pub analytics_views: Option<i64>,
+    #[serde(default)]
+    pub analytics_downloads: Option<i64>,
+    #[serde(default)]
+    pub analytics_messages: Option<i64>,
+    #[serde(default)]
+    pub is_oc: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryCardDetailResponse {
+    pub card: DiscoveryCardDetail,
+    #[serde(default)]
+    pub owner_ct_id: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -178,6 +255,30 @@ fn normalize_card_path(raw: &str) -> String {
     encoded.join("/")
 }
 
+fn normalize_detail_path(raw: &str) -> Result<(String, String), String> {
+    let trimmed = raw.trim().trim_start_matches('/');
+    if trimmed.is_empty() {
+        return Err("Card path cannot be empty".to_string());
+    }
+
+    let mut parts = trimmed.splitn(2, '/');
+    let author = parts
+        .next()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| "Card path missing author".to_string())?;
+    let name_raw = parts
+        .next()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| "Card path missing name".to_string())?;
+    let name = name_raw.strip_suffix(".png").unwrap_or(name_raw);
+
+    let author_encoded = urlencoding::encode(author).into_owned();
+    let name_encoded = urlencoding::encode(name).into_owned();
+    Ok((author_encoded, name_encoded))
+}
+
 #[tauri::command]
 pub fn get_card_image(
     path: String,
@@ -202,6 +303,49 @@ pub fn get_card_image(
         "{}/format={},width={},quality={}/{}",
         CARD_IMAGE_BASE_URL, format_value, width_value, quality_value, path
     ))
+}
+
+#[tauri::command]
+pub async fn discovery_fetch_card_detail(
+    app: AppHandle,
+    path: String,
+) -> Result<DiscoveryCardDetailResponse, String> {
+    if path.trim().is_empty() {
+        return Err("Card path cannot be empty".to_string());
+    }
+
+    let url = if path.starts_with("http://") || path.starts_with("https://") {
+        path
+    } else {
+        let (author, name) = normalize_detail_path(&path)?;
+        format!("{}/{}/{}", CARD_DETAIL_BASE_URL, author, name)
+    };
+
+    log_info(
+        &app,
+        "discovery_card_detail",
+        format!("fetching card detail from {}", url),
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        log_error(
+            &app,
+            "discovery_card_detail",
+            format!("detail fetch failed: {} {}", status, text),
+        );
+        return Err(format!(
+            "Discovery detail request failed: {} {}",
+            status, text
+        ));
+    }
+
+    resp.json::<DiscoveryCardDetailResponse>()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 async fn fetch_cards(

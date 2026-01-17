@@ -270,6 +270,7 @@ pub fn run() {
             creation_helper::creation_helper_get_uploaded_image,
             creation_helper::creation_helper_regenerate,
             discovery::get_card_image,
+            discovery::discovery_fetch_card_detail,
             discovery::discovery_fetch_cards,
             discovery::discovery_fetch_sections,
             // Group chat commands
