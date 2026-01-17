@@ -2288,6 +2288,18 @@ pub async fn chat_continue(
     )
     .await;
 
+    if dynamic_memory_enabled {
+        if let Err(err) =
+            process_dynamic_memory_cycle(&app, &mut session, settings, &character).await
+        {
+            log_error(
+                &app,
+                "chat_continue",
+                format!("dynamic memory cycle failed: {}", err),
+            );
+        }
+    }
+
     Ok(ContinueResult {
         session: session.clone(),
         session_id: session.id,
