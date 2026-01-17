@@ -521,9 +521,9 @@ async fn process_group_dynamic_memory_cycle(
     let total_convo = match conn.query_row(
         "SELECT COUNT(1) FROM group_messages WHERE session_id = ?1 AND (role = 'user' OR role = 'assistant')",
         rusqlite::params![&session.id],
-        |row| row.get(0),
+        |row| row.get::<_, i64>(0),
     ) {
-        Ok(count) => count as usize,
+        Ok(count) => count.max(0) as usize,
         Err(err) => {
             log_warn(
                 app,
