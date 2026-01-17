@@ -518,7 +518,21 @@ async fn process_group_dynamic_memory_cycle(
     let messages: Vec<GroupMessage> = serde_json::from_str(&messages_json).unwrap_or_default();
 
     let total_messages = messages.len();
-    let total_convo = conversation_count(&messages);
+    let total_convo = match conn.query_row(
+        "SELECT COUNT(1) FROM group_messages WHERE session_id = ?1 AND (role = 'user' OR role = 'assistant')",
+        rusqlite::params![&session.id],
+        |row| row.get(0),
+    ) {
+        Ok(count) => count as usize,
+        Err(err) => {
+            log_warn(
+                app,
+                "group_dynamic_memory",
+                format!("failed to count conversation messages: {}", err),
+            );
+            conversation_count(&messages)
+        }
+    };
     let convo_window = conversation_window(&messages, window_size);
     let window_start = total_convo.saturating_sub(window_size);
     let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
