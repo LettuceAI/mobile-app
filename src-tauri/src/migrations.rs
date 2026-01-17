@@ -15,6 +15,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     let current_version = get_migration_version(app)?;
 
     if current_version >= CURRENT_MIGRATION_VERSION {
+        migrate_v29_to_v30(app)?;
         log_info(
             app,
             "migrations",
