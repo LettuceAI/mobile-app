@@ -2,6 +2,7 @@ mod abort_manager;
 mod api;
 mod chat_manager;
 mod creation_helper;
+mod discovery;
 mod embedding_model;
 mod error;
 mod group_chat_manager;
@@ -268,6 +269,9 @@ pub fn run() {
             creation_helper::creation_helper_get_images,
             creation_helper::creation_helper_get_uploaded_image,
             creation_helper::creation_helper_regenerate,
+            discovery::get_card_image,
+            discovery::discovery_fetch_cards,
+            discovery::discovery_fetch_sections,
             // Group chat commands
             storage_manager::group_sessions::group_sessions_list,
             storage_manager::group_sessions::group_sessions_list_all,
