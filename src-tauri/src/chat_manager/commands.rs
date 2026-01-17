@@ -34,7 +34,9 @@ use super::types::{
     ChatTurnResult, ContinueResult, MemoryEmbedding, Model, PromptScope, ProviderCredential,
     RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
 };
-use crate::storage_manager::sessions::{messages_upsert_batch, session_upsert_meta};
+use crate::storage_manager::sessions::{
+    messages_upsert_batch, session_conversation_count, session_upsert_meta,
+};
 use crate::utils::emit_debug;
 
 const FALLBACK_TEMPERATURE: f64 = 0.7;
@@ -2576,7 +2578,17 @@ async fn process_dynamic_memory_cycle_with_model(
 
     let window_size = dynamic.summary_message_interval.max(1) as usize;
     let total_messages = session.messages.len();
-    let total_convo_at_start = conversation_count(&session.messages);
+    let total_convo_at_start = match session_conversation_count(app.clone(), session.id.clone()) {
+        Ok(count) => count.max(0) as usize,
+        Err(err) => {
+            log_warn(
+                app,
+                "dynamic_memory",
+                format!("failed to count conversation messages: {}", err),
+            );
+            conversation_count(&session.messages)
+        }
+    };
     let convo_window = conversation_window(&session.messages, window_size);
     log_info(
         app,

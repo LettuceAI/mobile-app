@@ -627,6 +627,21 @@ pub fn session_message_count(app: tauri::AppHandle, session_id: String) -> Resul
     Ok(count)
 }
 
+pub fn session_conversation_count(
+    app: tauri::AppHandle,
+    session_id: String,
+) -> Result<i64, String> {
+    let conn = open_db(&app)?;
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(1) FROM messages WHERE session_id = ? AND (role = 'user' OR role = 'assistant')",
+            params![session_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(count)
+}
+
 #[tauri::command]
 pub fn messages_list(
     app: tauri::AppHandle,
