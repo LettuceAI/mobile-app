@@ -180,24 +180,24 @@ fn normalize_card_path(raw: &str) -> String {
 
 #[tauri::command]
 pub fn get_card_image(
-    id: String,
+    path: String,
     format: Option<String>,
     width: Option<u32>,
     quality: Option<u8>,
 ) -> Result<String, String> {
-    if id.trim().is_empty() {
-        return Err("Card image id cannot be empty".to_string());
+    if path.trim().is_empty() {
+        return Err("Card image path cannot be empty".to_string());
     }
 
-    if id.starts_with("http://") || id.starts_with("https://") {
-        return Ok(id);
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return Ok(path);
     }
 
     let format_value = format.unwrap_or_else(|| "auto".to_string());
     let width_value = width.unwrap_or(400).max(1);
     let quality_value = quality.unwrap_or(80).min(100);
 
-    let path = normalize_card_path(&id);
+    let path = normalize_card_path(&path);
     Ok(format!(
         "{}/format={},width={},quality={}/{}",
         CARD_IMAGE_BASE_URL, format_value, width_value, quality_value, path
