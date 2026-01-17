@@ -3735,7 +3735,11 @@ pub async fn chat_generate_user_reply(
     let base_prompt = prompts::get_help_me_reply_prompt(&app);
 
     let char_name = &character.name;
-    let char_desc = character.description.as_deref().unwrap_or("");
+    let char_desc = character
+        .definition
+        .as_deref()
+        .or(character.description.as_deref())
+        .unwrap_or("");
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("User");
     let persona_desc = persona.map(|p| p.description.as_str()).unwrap_or("");
 

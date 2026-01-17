@@ -725,14 +725,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     {messageCount} messages
                   </p>
                 ) : null}
-                {currentCharacter?.description ? (
+                {currentCharacter?.description || currentCharacter?.definition ? (
                   <p
                     className={cn(
                       typography.caption.size,
                       "text-gray-400 leading-relaxed line-clamp-2 mt-1",
                     )}
                   >
-                    {currentCharacter.description}
+                    {currentCharacter.description || currentCharacter.definition}
                   </p>
                 ) : null}
               </div>

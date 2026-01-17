@@ -498,8 +498,9 @@ fn render_with_context_internal(
 ) -> String {
     let char_name = &character.name;
     let raw_char_desc = character
-        .description
+        .definition
         .as_ref()
+        .or(character.description.as_ref())
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .unwrap_or("");
@@ -726,8 +727,9 @@ fn build_debug_vars(
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
     let raw_char_desc = character
-        .description
+        .definition
         .as_ref()
+        .or(character.description.as_ref())
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .unwrap_or("")

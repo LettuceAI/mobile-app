@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, Check, PenLine, RefreshCw, Image as ImageIcon, Eye } from "lucide-react";
+import {
+  Sparkles,
+  Loader2,
+  Check,
+  PenLine,
+  RefreshCw,
+  Image as ImageIcon,
+  Eye,
+} from "lucide-react";
 import { TopNav } from "../../components/App";
 import { cn, typography, animations, radius, shadows } from "../../design-tokens";
 import { BottomMenu, MenuButton, MenuSection } from "../../components";
@@ -36,6 +44,7 @@ interface ToolResult {
 
 interface DraftCharacter {
   name: string | null;
+  definition?: string | null;
   description: string | null;
   scenes: DraftScene[];
   defaultSceneId: string | null;
@@ -251,7 +260,7 @@ export function CreationHelperPage() {
         .map((ref) => {
           // Include ID in format: [Referenced Character: "Name" (id:abc-123)]
           if (ref.type === "character") {
-            return `[Referenced Character: "${ref.name}" (id:${ref.id})]\n${ref.description || "No description available."}`;
+            return `[Referenced Character: "${ref.name}" (id:${ref.id})]\n${ref.description || "No definition available."}`;
           } else {
             return `[Referenced Persona: "${ref.name}" (id:${ref.id})]\n${ref.description || "No description available."}`;
           }
@@ -300,9 +309,9 @@ export function CreationHelperPage() {
     setSession((prev) =>
       prev
         ? {
-          ...prev,
-          messages: [...prev.messages, userMsg],
-        }
+            ...prev,
+            messages: [...prev.messages, userMsg],
+          }
         : null,
     );
 
@@ -313,10 +322,10 @@ export function CreationHelperPage() {
     const imagesToUpload =
       pendingAttachments.length > 0
         ? pendingAttachments.map((att) => ({
-          id: att.id,
-          data: att.data,
-          mimeType: att.mimeType,
-        }))
+            id: att.id,
+            data: att.data,
+            mimeType: att.mimeType,
+          }))
         : null;
 
     // Clear inputs immediately for better UX
@@ -360,9 +369,9 @@ export function CreationHelperPage() {
       setSession((prev) =>
         prev
           ? {
-            ...prev,
-            messages: prev.messages.filter((m) => m.id !== optimisticId),
-          }
+              ...prev,
+              messages: prev.messages.filter((m) => m.id !== optimisticId),
+            }
           : null,
       );
 
@@ -480,7 +489,8 @@ export function CreationHelperPage() {
   const getToolDisplayName = (toolName: string): string => {
     const names: Record<string, string> = {
       set_character_name: "Set name",
-      set_character_description: "Set description",
+      set_character_definition: "Set definition",
+      set_character_description: "Set definition",
       add_scene: "Add scene",
       update_scene: "Update scene",
       toggle_avatar_gradient: "Toggle gradient",
@@ -530,7 +540,7 @@ export function CreationHelperPage() {
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all",
               "bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10",
-              "active:scale-95"
+              "active:scale-95",
             )}
           >
             <Eye className="h-4 w-4" />
@@ -861,7 +871,9 @@ export function CreationHelperPage() {
                 )}
               </div>
               <div>
-                <h3 className={cn(typography.h2.size, typography.h2.weight, "text-white text-base")}>
+                <h3
+                  className={cn(typography.h2.size, typography.h2.weight, "text-white text-base")}
+                >
                   {selectedTool.result.success ? "Execution Successful" : "Execution Failed"}
                 </h3>
                 <p className="text-white/40 text-[10px] uppercase tracking-wider font-bold">

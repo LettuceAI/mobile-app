@@ -129,17 +129,22 @@ pub fn build_selection_prompt(context: &GroupChatContext) -> String {
         prompt.push_str(&format!("### {}\n", character.name));
         prompt.push_str(&format!("- ID: {}\n", character.id));
 
-        // Include full description if available, otherwise fall back to personality_summary
-        if let Some(desc) = &character.description {
+        // Include definition if available, otherwise fall back to personality_summary
+        if let Some(desc) = character
+            .definition
+            .as_ref()
+            .or(character.description.as_ref())
+        {
             if !desc.is_empty() {
-                prompt.push_str(&format!("- Description: {}\n", desc));
+                prompt.push_str(&format!("- Definition: {}\n", desc));
             }
         }
         if let Some(summary) = &character.personality_summary {
-            // Only add personality summary if it's different from description (i.e., truncated)
+            // Only add personality summary if it's different from definition (i.e., truncated)
             let is_truncated = character
-                .description
+                .definition
                 .as_ref()
+                .or(character.description.as_ref())
                 .map(|d| d.len() > 200)
                 .unwrap_or(false);
             if is_truncated {
@@ -433,18 +438,21 @@ mod tests {
             CharacterInfo {
                 id: "char-1".to_string(),
                 name: "Alice".to_string(),
+                definition: Some("A friendly AI assistant".to_string()),
                 description: Some("A friendly AI assistant".to_string()),
                 personality_summary: Some("Friendly and helpful".to_string()),
             },
             CharacterInfo {
                 id: "char-2".to_string(),
                 name: "Bob Smith".to_string(),
+                definition: Some("A technical expert".to_string()),
                 description: Some("A technical expert".to_string()),
                 personality_summary: Some("Technical and precise".to_string()),
             },
             CharacterInfo {
                 id: "char-3".to_string(),
                 name: "Charlie".to_string(),
+                definition: None,
                 description: None,
                 personality_summary: None,
             },

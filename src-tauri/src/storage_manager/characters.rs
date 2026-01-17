@@ -5,12 +5,12 @@ use super::db::{now_ms, open_db};
 use crate::utils::{log_error, log_info};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
+    let (name, avatar_path, bg_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get::<_, i64>(11)?, r.get::<_, i64>(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get(16)?, r.get(17)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get::<_, i64>(12)?, r.get::<_, i64>(13)?, r.get(14)?, r.get(15)?, r.get(16)?, r.get(17)?, r.get(18)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -90,6 +90,10 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
     }
     if let Some(b) = bg_path {
         root.insert("backgroundImagePath".into(), JsonValue::String(b));
+    }
+    let resolved_definition = definition.or_else(|| description.clone());
+    if let Some(def) = resolved_definition {
+        root.insert("definition".into(), JsonValue::String(def));
     }
     if let Some(d) = description {
         root.insert("description".into(), JsonValue::String(d));
@@ -228,6 +232,11 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .get("description")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let definition = c
+        .get("definition")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| description.clone());
     let default_model_id = c
         .get("defaultModelId")
         .and_then(|v| v.as_str())
@@ -290,13 +299,14 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               avatar_path=excluded.avatar_path,
               background_image_path=excluded.background_image_path,
               description=excluded.description,
+              definition=excluded.definition,
               default_model_id=excluded.default_model_id,
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt,
@@ -309,7 +319,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               custom_text_color=excluded.custom_text_color,
               custom_text_secondary=excluded.custom_text_secondary,
               updated_at=excluded.updated_at"#,
-        params![id, name, avatar_path, bg_path, description, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, now],
+        params![id, name, avatar_path, bg_path, description, definition, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, now],
     ).map_err(|e| e.to_string())?;
 
     // Replace rules

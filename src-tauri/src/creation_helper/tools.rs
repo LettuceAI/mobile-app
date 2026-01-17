@@ -23,17 +23,17 @@ pub fn get_creation_helper_tools() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
-            name: "set_character_description".to_string(),
-            description: Some("Set or update the character's description/personality".to_string()),
+            name: "set_character_definition".to_string(),
+            description: Some("Set or update the character's definition/personality".to_string()),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "description": {
+                    "definition": {
                         "type": "string",
-                        "description": "The character's description, personality, and background"
+                        "description": "The character's definition, personality, and background"
                     }
                 },
-                "required": ["description"]
+                "required": ["definition"]
             }),
         },
         ToolDefinition {
@@ -205,13 +205,13 @@ pub fn get_creation_helper_system_prompt() -> String {
 ## Guidelines
 - Keep responses conversational and helpful
 - Don't ask too many questions at once - 1-2 questions per message is ideal
-- Use tools proactively - set the name as soon as you know it, build the description incrementally
+- Use tools proactively - set the name as soon as you know it, build the definition incrementally
 - For scenes, help them craft engaging opening scenarios
 - If they upload an image, ask if they want to use it as an avatar or background
 
 ## Tools Available
 - set_character_name: Set the name
-- set_character_description: Build/update the description
+- set_character_definition: Build/update the definition
 - add_scene: Add starting scenes (the opening message/situation)
 - update_scene: Modify existing scenes
 - toggle_avatar_gradient: Control the avatar visual style

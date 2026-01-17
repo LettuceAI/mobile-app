@@ -18,6 +18,7 @@ export interface CharacterExportPackage {
 export interface CharacterExportData {
   originalId: string;
   name: string;
+  definition?: string;
   description?: string;
   rules: string[];
   scenes: SceneExport[];

@@ -2,7 +2,12 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Sparkles, User, MessageSquare } from "lucide-react";
 import { typography, radius, interactive, cn } from "../../design-tokens";
-import { saveCharacter, savePersona, createSession, listCharacters } from "../../../core/storage/repo";
+import {
+  saveCharacter,
+  savePersona,
+  createSession,
+  listCharacters,
+} from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 
 export function DeveloperPage() {
@@ -25,6 +30,7 @@ export function DeveloperPage() {
       const now = Date.now();
       const testCharacter: Partial<Character> = {
         name: "Test Character",
+        definition: "A test character created for development purposes.",
         description: "A test character created for development purposes.",
         scenes: [
           {
@@ -32,14 +38,16 @@ export function DeveloperPage() {
             content: "A simple test scene for development",
             createdAt: now,
             variants: [],
-          }
+          },
         ],
       };
 
       await saveCharacter(testCharacter);
       showStatus("✓ Test character created successfully");
     } catch (err) {
-      showError(`Failed to create test character: ${err instanceof Error ? err.message : String(err)}`);
+      showError(
+        `Failed to create test character: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -54,7 +62,9 @@ export function DeveloperPage() {
       await savePersona(testPersona);
       showStatus("✓ Test persona created successfully");
     } catch (err) {
-      showError(`Failed to create test persona: ${err instanceof Error ? err.message : String(err)}`);
+      showError(
+        `Failed to create test persona: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -71,12 +81,14 @@ export function DeveloperPage() {
       const session = await createSession(
         character.id,
         `Test Session - ${new Date().toLocaleTimeString()}`,
-        character.scenes?.[0]?.id
+        character.scenes?.[0]?.id,
       );
 
       showStatus(`✓ Test session created: ${session.id}`);
     } catch (err) {
-      showError(`Failed to create test session: ${err instanceof Error ? err.message : String(err)}`);
+      showError(
+        `Failed to create test session: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -88,6 +100,7 @@ export function DeveloperPage() {
         const now = Date.now();
         const testCharacter: Partial<Character> = {
           name: `Test Character ${i}`,
+          definition: `Test character number ${i} for development.`,
           description: `Test character number ${i} for development.`,
           scenes: [
             {
@@ -95,7 +108,7 @@ export function DeveloperPage() {
               content: `Test scene ${i} content`,
               createdAt: now,
               variants: [],
-            }
+            },
           ],
         };
         await saveCharacter(testCharacter);
@@ -112,7 +125,9 @@ export function DeveloperPage() {
 
       showStatus("✓ Bulk test data created: 3 characters, 2 personas");
     } catch (err) {
-      showError(`Failed to create bulk test data: ${err instanceof Error ? err.message : String(err)}`);
+      showError(
+        `Failed to create bulk test data: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -140,25 +155,29 @@ export function DeveloperPage() {
       <main className={cn("flex-1 overflow-auto px-4 py-6")}>
         {/* Status Messages */}
         {status && (
-          <div className={cn(
-            "mb-4 px-4 py-3",
-            radius.md,
-            "border border-emerald-400/30 bg-emerald-400/10",
-            typography.body.size,
-            "text-emerald-200"
-          )}>
+          <div
+            className={cn(
+              "mb-4 px-4 py-3",
+              radius.md,
+              "border border-emerald-400/30 bg-emerald-400/10",
+              typography.body.size,
+              "text-emerald-200",
+            )}
+          >
             {status}
           </div>
         )}
 
         {error && (
-          <div className={cn(
-            "mb-4 px-4 py-3",
-            radius.md,
-            "border border-red-400/30 bg-red-400/10",
-            typography.body.size,
-            "text-red-200"
-          )}>
+          <div
+            className={cn(
+              "mb-4 px-4 py-3",
+              radius.md,
+              "border border-red-400/30 bg-red-400/10",
+              typography.body.size,
+              "text-red-200",
+            )}
+          >
             {error}
           </div>
         )}
@@ -223,20 +242,11 @@ export function DeveloperPage() {
             Environment Info
           </h2>
 
-          <InfoCard
-            title="Mode"
-            value={import.meta.env.MODE}
-          />
+          <InfoCard title="Mode" value={import.meta.env.MODE} />
 
-          <InfoCard
-            title="Dev Mode"
-            value={import.meta.env.DEV ? "Yes" : "No"}
-          />
+          <InfoCard title="Dev Mode" value={import.meta.env.DEV ? "Yes" : "No"} />
 
-          <InfoCard
-            title="Vite Version"
-            value={import.meta.env.VITE_APP_VERSION || "N/A"}
-          />
+          <InfoCard title="Vite Version" value={import.meta.env.VITE_APP_VERSION || "N/A"} />
         </section>
       </main>
     </div>
@@ -251,17 +261,23 @@ interface ActionButtonProps {
   variant?: "default" | "primary" | "danger";
 }
 
-function ActionButton({ icon, title, description, onClick, variant = "default" }: ActionButtonProps) {
+function ActionButton({
+  icon,
+  title,
+  description,
+  onClick,
+  variant = "default",
+}: ActionButtonProps) {
   const variants = {
     default: "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.08]",
     primary: "border-blue-400/30 bg-blue-400/10 hover:border-blue-400/50 hover:bg-blue-400/20",
-    danger: "border-red-400/30 bg-red-400/10 hover:border-red-400/50 hover:bg-red-400/20"
+    danger: "border-red-400/30 bg-red-400/10 hover:border-red-400/50 hover:bg-red-400/20",
   };
 
   const iconVariants = {
     default: "border-white/10 bg-white/10 text-white/70",
     primary: "border-blue-400/30 bg-blue-400/20 text-blue-200",
-    danger: "border-red-400/30 bg-red-400/20 text-red-200"
+    danger: "border-red-400/30 bg-red-400/20 text-red-200",
   };
 
   return (
@@ -274,33 +290,28 @@ function ActionButton({ icon, title, description, onClick, variant = "default" }
         variants[variant],
         interactive.transition.default,
         interactive.active.scale,
-        interactive.focus.ring
+        interactive.focus.ring,
       )}
     >
       <div className="flex items-center gap-3">
-        <div className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center",
-          radius.md,
-          "border",
-          interactive.transition.default,
-          iconVariants[variant]
-        )}>
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center",
+            radius.md,
+            "border",
+            interactive.transition.default,
+            iconVariants[variant],
+          )}
+        >
           <span className="[&_svg]:h-5 [&_svg]:w-5">{icon}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <div className={cn(
-            "truncate",
-            typography.body.size,
-            typography.body.weight,
-            "text-white"
-          )}>
+          <div
+            className={cn("truncate", typography.body.size, typography.body.weight, "text-white")}
+          >
             {title}
           </div>
-          <div className={cn(
-            "mt-0.5 line-clamp-1",
-            typography.caption.size,
-            "text-white/45"
-          )}>
+          <div className={cn("mt-0.5 line-clamp-1", typography.caption.size, "text-white/45")}>
             {description}
           </div>
         </div>
@@ -316,17 +327,9 @@ interface InfoCardProps {
 
 function InfoCard({ title, value }: InfoCardProps) {
   return (
-    <div className={cn(
-      "px-4 py-3",
-      radius.md,
-      "border border-white/10 bg-white/5"
-    )}>
-      <div className={cn(typography.caption.size, "text-white/50 mb-1")}>
-        {title}
-      </div>
-      <div className={cn(typography.body.size, "text-white font-mono")}>
-        {value}
-      </div>
+    <div className={cn("px-4 py-3", radius.md, "border border-white/10 bg-white/5")}>
+      <div className={cn(typography.caption.size, "text-white/50 mb-1")}>{title}</div>
+      <div className={cn(typography.body.size, "text-white font-mono")}>{value}</div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ interface DraftScene {
 
 interface DraftCharacter {
   name: string | null;
+  definition?: string | null;
   description: string | null;
   scenes: DraftScene[];
   defaultSceneId: string | null;
@@ -38,6 +39,7 @@ export function CharacterPreviewCard({
 }: CharacterPreviewCardProps) {
   const hasAvatar = draft.avatarPath && draft.avatarPath.length > 0;
   const defaultScene = draft.scenes.find((s) => s.id === draft.defaultSceneId) || draft.scenes[0];
+  const previewDescription = draft.description || draft.definition || null;
 
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
@@ -142,10 +144,10 @@ export function CharacterPreviewCard({
         </div>
 
         {/* Description Preview */}
-        {!compact && draft.description && (
+        {!compact && previewDescription && (
           <div className="mt-4">
             <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Description</p>
-            <p className="text-sm text-white/70 line-clamp-3">{draft.description}</p>
+            <p className="text-sm text-white/70 line-clamp-3">{previewDescription}</p>
           </div>
         )}
 

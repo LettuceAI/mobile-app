@@ -223,6 +223,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     name: c.name!,
     avatarPath: c.avatarPath,
     backgroundImagePath: c.backgroundImagePath,
+    definition: c.definition,
     description: c.description,
     scenes,
     defaultSceneId: c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null),

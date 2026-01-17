@@ -128,6 +128,7 @@ pub const MEMORY_ID_SPACE: u64 = 1_000_000;
 // ============================================================================
 
 /// Check if dynamic memory is enabled in settings
+#[allow(dead_code)]
 pub fn is_dynamic_memory_enabled(settings: &Settings) -> bool {
     settings
         .advanced_settings

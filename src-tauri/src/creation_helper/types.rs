@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct DraftCharacter {
     pub name: Option<String>,
+    #[serde(default)]
+    pub definition: Option<String>,
     pub description: Option<String>,
     pub scenes: Vec<DraftScene>,
     pub default_scene_id: Option<String>,

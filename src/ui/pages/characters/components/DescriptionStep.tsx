@@ -18,6 +18,8 @@ import { BottomMenu, MenuSection } from "../../../components/BottomMenu";
 import { getProviderIcon } from "../../../../core/utils/providerIcons";
 
 interface DescriptionStepProps {
+  definition: string;
+  onDefinitionChange: (value: string) => void;
   description: string;
   onDescriptionChange: (value: string) => void;
   models: Model[];
@@ -47,6 +49,8 @@ interface DescriptionStepProps {
 }
 
 export function DescriptionStep({
+  definition,
+  onDefinitionChange,
   description,
   onDescriptionChange,
   models,
@@ -74,7 +78,7 @@ export function DescriptionStep({
   saving,
   error,
 }: DescriptionStepProps) {
-  const wordCount = description.trim().split(/\s+/).filter(Boolean).length;
+  const wordCount = definition.trim().split(/\s+/).filter(Boolean).length;
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
@@ -111,7 +115,7 @@ export function DescriptionStep({
         <p className={cn(typography.body.size, "text-white/50")}>Define personality and behavior</p>
       </div>
 
-      {/* Description Textarea */}
+      {/* Definition Textarea */}
       <div className={spacing.field}>
         <div className="flex items-center justify-between">
           <label
@@ -122,9 +126,9 @@ export function DescriptionStep({
               "uppercase text-white/70",
             )}
           >
-            Description *
+            Definition *
           </label>
-          {description.trim() && (
+          {definition.trim() && (
             <motion.span
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -136,8 +140,8 @@ export function DescriptionStep({
         </div>
         <div className="relative">
           <textarea
-            value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
+            value={definition}
+            onChange={(e) => onDefinitionChange(e.target.value)}
             rows={8}
             placeholder="Describe personality, speaking style, background, knowledge areas..."
             className={cn(
@@ -145,13 +149,13 @@ export function DescriptionStep({
               radius.md,
               interactive.transition.default,
               "focus:bg-black/30 focus:outline-none",
-              description.trim()
+              definition.trim()
                 ? "border-emerald-400/30 focus:border-emerald-400/40"
                 : "border-white/10 focus:border-white/30",
             )}
             autoFocus
           />
-          {description.trim() && (
+          {definition.trim() && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -184,6 +188,40 @@ export function DescriptionStep({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* UI Description */}
+      <div className={spacing.field}>
+        <div className="flex items-center justify-between">
+          <label
+            className={cn(
+              typography.label.size,
+              typography.label.weight,
+              typography.label.tracking,
+              "uppercase text-white/70",
+            )}
+          >
+            Description (UI)
+          </label>
+        </div>
+        <textarea
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          rows={3}
+          placeholder="Short summary shown on cards and lists..."
+          className={cn(
+            "w-full resize-none border bg-black/20 px-4 py-3 text-base leading-relaxed text-white placeholder-white/40 backdrop-blur-xl",
+            radius.md,
+            interactive.transition.default,
+            "focus:bg-black/30 focus:outline-none",
+            description.trim()
+              ? "border-white/20 focus:border-white/40"
+              : "border-white/10 focus:border-white/30",
+          )}
+        />
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
+          Optional short description for the UI; the full definition is used in prompts.
+        </p>
       </div>
 
       {/* Model Selection */}
@@ -420,18 +458,18 @@ export function DescriptionStep({
               >
                 {voiceSelectionValue
                   ? (() => {
-                    if (voiceConfig?.source === "user") {
-                      const v = userVoices.find((uv) => uv.id === voiceConfig.userVoiceId);
-                      return v?.name || "Custom Voice";
-                    }
-                    if (voiceConfig?.source === "provider") {
-                      const pv = providerVoices[voiceConfig.providerId || ""]?.find(
-                        (pv) => pv.voiceId === voiceConfig.voiceId,
-                      );
-                      return pv?.name || "Provider Voice";
-                    }
-                    return "Selected Voice";
-                  })()
+                      if (voiceConfig?.source === "user") {
+                        const v = userVoices.find((uv) => uv.id === voiceConfig.userVoiceId);
+                        return v?.name || "Custom Voice";
+                      }
+                      if (voiceConfig?.source === "provider") {
+                        const pv = providerVoices[voiceConfig.providerId || ""]?.find(
+                          (pv) => pv.voiceId === voiceConfig.voiceId,
+                        );
+                        return pv?.name || "Provider Voice";
+                      }
+                      return "Selected Voice";
+                    })()
                   : "No voice assigned"}
               </span>
             </div>
@@ -455,7 +493,7 @@ export function DescriptionStep({
           className={cn(
             "flex items-center justify-between border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
             radius.md,
-            !voiceConfig && "opacity-50"
+            !voiceConfig && "opacity-50",
           )}
         >
           <div>
@@ -478,7 +516,7 @@ export function DescriptionStep({
               className={cn(
                 "relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all",
                 voiceAutoplay ? "bg-emerald-500" : "bg-white/20",
-                voiceConfig ? "cursor-pointer" : "cursor-not-allowed"
+                voiceConfig ? "cursor-pointer" : "cursor-not-allowed",
               )}
             >
               <span
@@ -524,10 +562,10 @@ export function DescriptionStep({
             interactive.transition.fast,
             canSave
               ? cn(
-                "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
-                shadows.glow,
-                "active:border-emerald-400/60 active:bg-emerald-400/30",
-              )
+                  "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100",
+                  shadows.glow,
+                  "active:border-emerald-400/60 active:bg-emerald-400/30",
+                )
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30",
           )}
         >

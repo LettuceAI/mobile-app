@@ -4,13 +4,22 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
-import { listCharacters, createSession, listSessionPreviews, deleteCharacter } from "../../../core/storage/repo";
+import {
+  listCharacters,
+  createSession,
+  listSessionPreviews,
+  deleteCharacter,
+} from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu } from "../../components";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
-import { exportCharacter, downloadJson, generateExportFilename } from "../../../core/storage/characterTransfer";
+import {
+  exportCharacter,
+  downloadJson,
+  generateExportFilename,
+} from "../../../core/storage/characterTransfer";
 
 export function ChatPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -54,7 +63,6 @@ export function ChatPage() {
     };
   }, []);
 
-
   const startChat = async (character: Character) => {
     try {
       const previews = await listSessionPreviews(character.id, 1).catch(() => []);
@@ -67,7 +75,7 @@ export function ChatPage() {
       const session = await createSession(
         character.id,
         "New Chat",
-        character.scenes && character.scenes.length > 0 ? character.scenes[0].id : undefined
+        character.scenes && character.scenes.length > 0 ? character.scenes[0].id : undefined,
       );
       navigate(`/chat/${character.id}?sessionId=${session.id}`);
     } catch (error) {
@@ -183,7 +191,8 @@ export function ChatPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-white/70">
-            Are you sure you want to delete "{selectedCharacter?.name}"? This will also delete all chat sessions with this character.
+            Are you sure you want to delete "{selectedCharacter?.name}"? This will also delete all
+            chat sessions with this character.
           </p>
           <div className="flex gap-3">
             <button
@@ -210,7 +219,7 @@ export function ChatPage() {
 function CharacterList({
   characters,
   onSelect,
-  onLongPress
+  onLongPress,
 }: {
   characters: Character[];
   onSelect: (character: Character) => void | Promise<void>;
@@ -221,7 +230,7 @@ function CharacterList({
   useEffect(() => {
     if (visibleCount < characters.length) {
       const timer = setTimeout(() => {
-        setVisibleCount(prev => Math.min(prev + 10, characters.length));
+        setVisibleCount((prev) => Math.min(prev + 10, characters.length));
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -254,7 +263,7 @@ function CharacterSkeleton() {
           className={cn(
             "h-16 animate-pulse p-2 pr-4",
             "rounded-full",
-            "border border-white/5 bg-white/5"
+            "border border-white/5 bg-white/5",
           )}
         >
           <div className="flex items-center gap-3">
@@ -272,24 +281,18 @@ function CharacterSkeleton() {
 
 function EmptyState() {
   return (
-    <div className={cn(
-      "p-8 text-center",
-      radius.lg,
-      "border border-dashed border-white/10 bg-white/2"
-    )}>
+    <div
+      className={cn(
+        "p-8 text-center",
+        radius.lg,
+        "border border-dashed border-white/10 bg-white/2",
+      )}
+    >
       <div className={spacing.field}>
-        <h3 className={cn(
-          typography.h3.size,
-          typography.h3.weight,
-          "text-white"
-        )}>
+        <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white")}>
           No characters yet
         </h3>
-        <p className={cn(
-          typography.body.size,
-          typography.body.lineHeight,
-          "text-white/50"
-        )}>
+        <p className={cn(typography.body.size, typography.body.lineHeight, "text-white/50")}>
           Create your first character from the + button below to start chatting
         </p>
       </div>
@@ -300,169 +303,180 @@ function EmptyState() {
 function isImageLike(s?: string) {
   if (!s) return false;
   const lower = s.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
+  return (
+    lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image")
+  );
 }
 
-const CharacterAvatar = memo(({ character, className }: { character: Character, className?: string }) => {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+const CharacterAvatar = memo(
+  ({ character, className }: { character: Character; className?: string }) => {
+    const avatarUrl = useAvatar("character", character.id, character.avatarPath);
 
-  if (avatarUrl && isImageLike(avatarUrl)) {
+    if (avatarUrl && isImageLike(avatarUrl)) {
+      return (
+        <img
+          src={avatarUrl}
+          alt={`${character.name} avatar`}
+          className={cn("h-full w-full object-cover", className)}
+        />
+      );
+    }
+
+    // Fallback: initials with a subtle gradient
+    const initials = character.name.slice(0, 2).toUpperCase();
     return (
-      <img
-        src={avatarUrl}
-        alt={`${character.name} avatar`}
-        className={cn("h-full w-full object-cover", className)}
-      />
-    );
-  }
-
-  // Fallback: initials with a subtle gradient
-  const initials = character.name.slice(0, 2).toUpperCase();
-  return (
-    <div
-      className={cn(
-        "flex h-full w-full items-center justify-center",
-        "bg-linear-to-br from-white/20 to-white/5",
-        className
-      )}
-    >
-      <span className="text-lg font-bold text-white/80">{initials}</span>
-    </div>
-  );
-});
-
-CharacterAvatar.displayName = 'CharacterAvatar';
-
-const CharacterCard = memo(({
-  character,
-  onSelect,
-  onLongPress
-}: {
-  character: Character;
-  onSelect: (character: Character) => void;
-  onLongPress: (character: Character) => void;
-}) => {
-  const descriptionPreview = character.description?.trim() || "No description yet";
-  const { gradientCss, hasGradient, textColor, textSecondary } = useAvatarGradient(
-    "character",
-    character.id,
-    character.avatarPath,
-    character.disableAvatarGradient,
-    // Pass custom colors if enabled
-    character.customGradientEnabled && character.customGradientColors?.length ? {
-      colors: character.customGradientColors,
-      textColor: character.customTextColor,
-      textSecondary: character.customTextSecondary,
-    } : undefined
-  );
-  // Long-press support for desktop
-  const longPressTimer = useRef<number | null>(null);
-  const isLongPress = useRef(false);
-
-  const handlePointerDown = () => {
-    isLongPress.current = false;
-    longPressTimer.current = window.setTimeout(() => {
-      isLongPress.current = true;
-      onLongPress(character);
-    }, 500);
-  };
-
-  const handlePointerUp = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handlePointerLeave = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handleClick = () => {
-    // Don't trigger click if it was a long press
-    if (isLongPress.current) {
-      isLongPress.current = false;
-      return;
-    }
-    onSelect(character);
-  };
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    onLongPress(character);
-  };
-
-  return (
-    <motion.button
-      layoutId={`character-${character.id}`}
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerLeave}
-      className={cn(
-        "group relative flex w-full items-center gap-3.5 lg:gap-6 p-3.5 lg:p-6 text-left",
-        "rounded-2xl lg:rounded-3xl",
-        interactive.transition.default,
-        interactive.active.scale,
-        hasGradient ? "" : "bg-[#1a1b23] hover:bg-[#22232d]"
-      )}
-      style={hasGradient ? { background: gradientCss } : {}}
-    >
-      {/* Circular Avatar */}
-      <div className={cn(
-        "relative h-14 w-14 lg:h-24 lg:w-24 shrink-0 overflow-hidden rounded-full",
-        hasGradient ? "ring-2 ring-white/20" : "ring-1 ring-white/10",
-        "shadow-lg"
-      )}>
-        <CharacterAvatar character={character} />
+      <div
+        className={cn(
+          "flex h-full w-full items-center justify-center",
+          "bg-linear-to-br from-white/20 to-white/5",
+          className,
+        )}
+      >
+        <span className="text-lg font-bold text-white/80">{initials}</span>
       </div>
+    );
+  },
+);
 
-      {/* Content */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:gap-1.5 py-1">
-        <h3
+CharacterAvatar.displayName = "CharacterAvatar";
+
+const CharacterCard = memo(
+  ({
+    character,
+    onSelect,
+    onLongPress,
+  }: {
+    character: Character;
+    onSelect: (character: Character) => void;
+    onLongPress: (character: Character) => void;
+  }) => {
+    const descriptionPreview =
+      (character.description || character.definition || "").trim() || "No description yet";
+    const { gradientCss, hasGradient, textColor, textSecondary } = useAvatarGradient(
+      "character",
+      character.id,
+      character.avatarPath,
+      character.disableAvatarGradient,
+      // Pass custom colors if enabled
+      character.customGradientEnabled && character.customGradientColors?.length
+        ? {
+            colors: character.customGradientColors,
+            textColor: character.customTextColor,
+            textSecondary: character.customTextSecondary,
+          }
+        : undefined,
+    );
+    // Long-press support for desktop
+    const longPressTimer = useRef<number | null>(null);
+    const isLongPress = useRef(false);
+
+    const handlePointerDown = () => {
+      isLongPress.current = false;
+      longPressTimer.current = window.setTimeout(() => {
+        isLongPress.current = true;
+        onLongPress(character);
+      }, 500);
+    };
+
+    const handlePointerUp = () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    };
+
+    const handlePointerLeave = () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    };
+
+    const handleClick = () => {
+      // Don't trigger click if it was a long press
+      if (isLongPress.current) {
+        isLongPress.current = false;
+        return;
+      }
+      onSelect(character);
+    };
+
+    const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      onLongPress(character);
+    };
+
+    return (
+      <motion.button
+        layoutId={`character-${character.id}`}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+        className={cn(
+          "group relative flex w-full items-center gap-3.5 lg:gap-6 p-3.5 lg:p-6 text-left",
+          "rounded-2xl lg:rounded-3xl",
+          interactive.transition.default,
+          interactive.active.scale,
+          hasGradient ? "" : "bg-[#1a1b23] hover:bg-[#22232d]",
+        )}
+        style={hasGradient ? { background: gradientCss } : {}}
+      >
+        {/* Circular Avatar */}
+        <div
           className={cn(
-            "truncate font-semibold text-[15px] lg:text-xl leading-tight",
-            hasGradient ? "" : "text-white"
+            "relative h-14 w-14 lg:h-24 lg:w-24 shrink-0 overflow-hidden rounded-full",
+            hasGradient ? "ring-2 ring-white/20" : "ring-1 ring-white/10",
+            "shadow-lg",
           )}
-          style={hasGradient ? { color: textColor } : {}}
         >
-          {character.name}
-        </h3>
-        <p
+          <CharacterAvatar character={character} />
+        </div>
+
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:gap-1.5 py-1">
+          <h3
+            className={cn(
+              "truncate font-semibold text-[15px] lg:text-xl leading-tight",
+              hasGradient ? "" : "text-white",
+            )}
+            style={hasGradient ? { color: textColor } : {}}
+          >
+            {character.name}
+          </h3>
+          <p
+            className={cn(
+              "line-clamp-1 lg:line-clamp-2 text-[13px] lg:text-base leading-tight lg:leading-relaxed",
+              hasGradient ? "" : "text-white/50",
+            )}
+            style={hasGradient ? { color: textSecondary } : {}}
+          >
+            {descriptionPreview}
+          </p>
+        </div>
+
+        {/* Subtle chevron */}
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           className={cn(
-            "line-clamp-1 lg:line-clamp-2 text-[13px] lg:text-base leading-tight lg:leading-relaxed",
-            hasGradient ? "" : "text-white/50"
+            "shrink-0 transition-all",
+            hasGradient ? "" : "text-white/30 group-hover:text-white/60",
           )}
           style={hasGradient ? { color: textSecondary } : {}}
         >
-          {descriptionPreview}
-        </p>
-      </div>
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </motion.button>
+    );
+  },
+);
 
-      {/* Subtle chevron */}
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={cn(
-          "shrink-0 transition-all",
-          hasGradient ? "" : "text-white/30 group-hover:text-white/60"
-        )}
-        style={hasGradient ? { color: textSecondary } : {}}
-      >
-        <path d="m9 18 6-6-6-6" />
-      </svg>
-    </motion.button>
-  );
-});
-
-CharacterCard.displayName = 'CharacterCard';
+CharacterCard.displayName = "CharacterCard";

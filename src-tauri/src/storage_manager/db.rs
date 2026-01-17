@@ -243,6 +243,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           avatar_path TEXT,
           background_image_path TEXT,
           description TEXT,
+          definition TEXT,
           default_scene_id TEXT,
           default_model_id TEXT,
           memory_type TEXT NOT NULL DEFAULT 'manual',

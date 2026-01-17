@@ -24,6 +24,7 @@ type EditCharacterState = {
   exporting: boolean;
   error: string | null;
   name: string;
+  definition: string;
   description: string;
   avatarPath: string;
   backgroundImagePath: string;
@@ -64,6 +65,7 @@ const initialState: EditCharacterState = {
   exporting: false,
   error: null,
   name: "",
+  definition: "",
   description: "",
   avatarPath: "",
   backgroundImagePath: "",
@@ -116,6 +118,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
   // Track initial state for change detection
   const initialStateRef = useRef<{
     name: string;
+    definition: string;
     description: string;
     avatarPath: string;
     backgroundImagePath: string;
@@ -208,6 +211,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
 
       setFields({
         name: character.name,
+        definition: character.definition || character.description || "",
         description: character.description || "",
         avatarPath: loadedAvatarPath,
         backgroundImagePath: backgroundImage,
@@ -229,6 +233,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
       // Store initial state for change detection
       initialStateRef.current = {
         name: character.name,
+        definition: character.definition || character.description || "",
         description: character.description || "",
         avatarPath: loadedAvatarPath,
         backgroundImagePath: backgroundImage,
@@ -293,7 +298,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
   }, [characterId, loadCharacter, loadModels, loadPromptTemplates]);
 
   const handleSave = useCallback(async () => {
-    if (!characterId || !state.name.trim() || !state.description.trim()) return;
+    if (!characterId || !state.name.trim() || !state.definition.trim()) return;
 
     try {
       setSaving(true);
@@ -325,7 +330,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
       await saveCharacter({
         id: characterId,
         name: state.name.trim(),
-        description: state.description.trim(),
+        definition: state.definition.trim(),
+        description: state.description.trim() || undefined,
         avatarPath: avatarFilename,
         backgroundImagePath: backgroundImageId,
         scenes: state.scenes,
@@ -344,15 +350,17 @@ export function useEditCharacterForm(characterId: string | undefined) {
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
       });
 
-      // Sync only name/description with trimmed values
+      // Sync only name/definition/description with trimmed values
       setFields({
         name: state.name.trim(),
+        definition: state.definition.trim(),
         description: state.description.trim(),
       });
 
       // Update initial state ref to match current state (for change detection)
       initialStateRef.current = {
         name: state.name.trim(),
+        definition: state.definition.trim(),
         description: state.description.trim(),
         avatarPath: state.avatarPath,
         backgroundImagePath: state.backgroundImagePath,
@@ -529,8 +537,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
     computed: {
       avatarInitial,
       canSave: (() => {
-        // Must have name and description
-        if (!state.name.trim() || !state.description.trim() || state.saving) return false;
+        // Must have name and definition
+        if (!state.name.trim() || !state.definition.trim() || state.saving) return false;
 
         // If initial state not yet loaded, don't allow save
         const initial = initialStateRef.current;
@@ -539,6 +547,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         // Check for actual changes
         const hasChanges =
           state.name !== initial.name ||
+          state.definition !== initial.definition ||
           state.description !== initial.description ||
           state.avatarPath !== initial.avatarPath ||
           state.backgroundImagePath !== initial.backgroundImagePath ||

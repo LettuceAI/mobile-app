@@ -36,6 +36,8 @@ pub struct CharacterExportPackage {
 pub struct CharacterExportData {
     pub name: String,
     pub description: Option<String>,
+    #[serde(default)]
+    pub definition: Option<String>,
     pub rules: Vec<String>,
     pub scenes: Vec<SceneExport>,
     pub default_scene_id: Option<String>,
@@ -95,13 +97,13 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     let conn = open_db(&app)?;
 
     // Read character data
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, _created_at, _updated_at):
-        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, i64) =
+    let (name, avatar_path, bg_path, description, definition, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, _created_at, _updated_at):
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, i64) =
         conn.query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![&character_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get::<_, i64>(10)?, r.get(11)?, r.get(12)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get::<_, i64>(11)?, r.get(12)?, r.get(13)?
             )),
         )
         .map_err(|e| format!("Character not found: {}", e))?;
@@ -192,6 +194,8 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         None
     };
 
+    let resolved_definition = definition.or_else(|| description.clone());
+
     // Create export package
     let char_export = CharacterExportPackage {
         version: 1,
@@ -199,6 +203,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         character: CharacterExportData {
             name,
             description,
+            definition: resolved_definition,
             rules,
             scenes,
             default_scene_id,
@@ -311,14 +316,19 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 
     // Insert character
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         params![
             &new_character_id,
             &package.character.name,
             avatar_path,
             background_image_path,
             package.character.description,
+            package
+                .character
+                .definition
+                .clone()
+                .or(package.character.description.clone()),
             package.character.prompt_template_id,
             package.character.system_prompt,
             voice_config,
@@ -567,13 +577,13 @@ fn read_imported_character(
     conn: &rusqlite::Connection,
     character_id: &str,
 ) -> Result<String, String> {
-    let (name, avatar_path, bg_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at):
-        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, i64) =
+    let (name, avatar_path, bg_path, description, definition, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at):
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, i64) =
         conn.query_row(
-            "SELECT name, avatar_path, background_image_path, description, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get::<_, i64>(10)?, r.get(11)?, r.get(12)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get::<_, i64>(11)?, r.get(12)?, r.get(13)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -661,6 +671,10 @@ fn read_imported_character(
     }
     if let Some(b) = bg_path {
         root.insert("backgroundImagePath".into(), JsonValue::String(b));
+    }
+    let resolved_definition = definition.or_else(|| description.clone());
+    if let Some(def) = resolved_definition {
+        root.insert("definition".into(), JsonValue::String(def));
     }
     if let Some(d) = description {
         root.insert("description".into(), JsonValue::String(d));

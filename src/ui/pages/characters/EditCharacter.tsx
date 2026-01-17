@@ -19,6 +19,7 @@ import {
   Volume2,
   EyeOff,
   Check,
+  Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
@@ -71,6 +72,7 @@ export function EditCharacterPage() {
     exporting,
     error,
     name,
+    definition,
     description,
     avatarPath,
     backgroundImagePath,
@@ -580,14 +582,14 @@ export function EditCharacterPage() {
                   <h3 className="text-sm font-semibold text-white">Personality & Background</h3>
                 </div>
                 <textarea
-                  value={description}
-                  onChange={(e) => setFields({ description: e.target.value })}
+                  value={definition}
+                  onChange={(e) => setFields({ definition: e.target.value })}
                   rows={8}
                   placeholder="Describe who this character is, their personality, background, speaking style, and how they should interact..."
                   className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
                 />
                 <div className="flex justify-end text-[11px] text-white/40">
-                  {wordCount(description)} words
+                  {wordCount(definition)} words
                 </div>
                 <p className="text-xs text-white/50">Be detailed to create a unique personality</p>
                 <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-3.5 py-3">
@@ -604,6 +606,25 @@ export function EditCharacterPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-1.5">
+                    <Info className="h-4 w-4 text-white/60" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Description (UI)</h3>
+                </div>
+                <textarea
+                  value={description}
+                  onChange={(e) => setFields({ description: e.target.value })}
+                  rows={3}
+                  placeholder="Short summary shown in lists and cards..."
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                />
+                <p className="text-xs text-white/50">
+                  Optional short description for display purposes.
+                </p>
               </div>
 
               {/* Starting Scenes Section */}
@@ -636,25 +657,28 @@ export function EditCharacterPage() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9, x: -20 }}
                             transition={{ duration: 0.15 }}
-                            className={`overflow-hidden rounded-xl border ${isDefault
-                              ? "border-emerald-400/30 bg-emerald-400/5"
-                              : "border-white/10 bg-white/5"
-                              }`}
+                            className={`overflow-hidden rounded-xl border ${
+                              isDefault
+                                ? "border-emerald-400/30 bg-emerald-400/5"
+                                : "border-white/10 bg-white/5"
+                            }`}
                           >
                             {/* Scene Header - clickable to expand/collapse */}
                             <button
                               onClick={() => setExpandedSceneId(isExpanded ? null : scene.id)}
-                              className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${isDefault
-                                ? "border-emerald-400/20 bg-emerald-400/10"
-                                : "border-white/10 bg-white/5"
-                                }`}
+                              className={`flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left ${
+                                isDefault
+                                  ? "border-emerald-400/20 bg-emerald-400/10"
+                                  : "border-white/10 bg-white/5"
+                              }`}
                             >
                               {/* Scene number badge */}
                               <div
-                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${isDefault
-                                  ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
-                                  : "border-white/10 bg-white/5 text-white/60"
-                                  }`}
+                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium ${
+                                  isDefault
+                                    ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
+                                    : "border-white/10 bg-white/5 text-white/60"
+                                }`}
                               >
                                 {index + 1}
                               </div>
@@ -786,10 +810,11 @@ export function EditCharacterPage() {
                     onClick={addScene}
                     disabled={!newSceneContent.trim()}
                     whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${newSceneContent.trim()
-                      ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
-                      : "border border-white/10 bg-white/5 text-white/40"
-                      }`}
+                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+                      newSceneContent.trim()
+                        ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
+                        : "border border-white/10 bg-white/5 text-white/40"
+                    }`}
                   >
                     <Plus className="h-4 w-4" />
                     Add Scene
@@ -828,11 +853,20 @@ export function EditCharacterPage() {
                     className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
                   >
                     <div className="flex items-center gap-2">
-                      {selectedModelId ? getProviderIcon(models.find(m => m.id === selectedModelId)?.providerId || '') : <Cpu className="h-5 w-5 text-white/40" />}
-                      <span className={`text-sm ${selectedModelId ? 'text-white' : 'text-white/50'}`}>
+                      {selectedModelId ? (
+                        getProviderIcon(
+                          models.find((m) => m.id === selectedModelId)?.providerId || "",
+                        )
+                      ) : (
+                        <Cpu className="h-5 w-5 text-white/40" />
+                      )}
+                      <span
+                        className={`text-sm ${selectedModelId ? "text-white" : "text-white/50"}`}
+                      >
                         {selectedModelId
-                          ? models.find(m => m.id === selectedModelId)?.displayName || 'Selected Model'
-                          : 'Use global default model'}
+                          ? models.find((m) => m.id === selectedModelId)?.displayName ||
+                            "Selected Model"
+                          : "Use global default model"}
                       </span>
                     </div>
                     <ChevronDown className="h-4 w-4 text-white/40" />
@@ -911,20 +945,26 @@ export function EditCharacterPage() {
                   >
                     <div className="flex items-center gap-2">
                       <Volume2 className="h-5 w-5 text-white/40" />
-                      <span className={`text-sm ${voiceSelectionValue ? 'text-white' : 'text-white/50'}`}>
+                      <span
+                        className={`text-sm ${voiceSelectionValue ? "text-white" : "text-white/50"}`}
+                      >
                         {voiceSelectionValue
                           ? (() => {
-                            if (voiceConfig?.source === 'user') {
-                              const v = userVoices.find(uv => uv.id === voiceConfig.userVoiceId);
-                              return v?.name || 'Custom Voice';
-                            }
-                            if (voiceConfig?.source === 'provider') {
-                              const pv = providerVoices[voiceConfig.providerId || '']?.find(pv => pv.voiceId === voiceConfig.voiceId);
-                              return pv?.name || 'Provider Voice';
-                            }
-                            return 'Selected Voice';
-                          })()
-                          : 'No voice assigned'}
+                              if (voiceConfig?.source === "user") {
+                                const v = userVoices.find(
+                                  (uv) => uv.id === voiceConfig.userVoiceId,
+                                );
+                                return v?.name || "Custom Voice";
+                              }
+                              if (voiceConfig?.source === "provider") {
+                                const pv = providerVoices[voiceConfig.providerId || ""]?.find(
+                                  (pv) => pv.voiceId === voiceConfig.voiceId,
+                                );
+                                return pv?.name || "Provider Voice";
+                              }
+                              return "Selected Voice";
+                            })()
+                          : "No voice assigned"}
                       </span>
                     </div>
                     <ChevronDown className="h-4 w-4 text-white/40" />
@@ -938,14 +978,18 @@ export function EditCharacterPage() {
                 <p className="text-xs text-white/50">
                   Assign a voice for future text-to-speech playback
                 </p>
-                <div className={cn(
-                  "flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3",
-                  !voiceConfig && "opacity-50"
-                )}>
+                <div
+                  className={cn(
+                    "flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3",
+                    !voiceConfig && "opacity-50",
+                  )}
+                >
                   <div>
                     <p className="text-sm font-medium text-white">Autoplay voice</p>
                     <p className="mt-1 text-xs text-white/50">
-                      {voiceConfig ? "Play this character's replies automatically" : "Select a voice first"}
+                      {voiceConfig
+                        ? "Play this character's replies automatically"
+                        : "Select a voice first"}
                     </p>
                   </div>
                   <div className="flex items-center">
@@ -959,12 +1003,14 @@ export function EditCharacterPage() {
                     />
                     <label
                       htmlFor="character-voice-autoplay"
-                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all ${voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
-                        } ${voiceConfig ? "cursor-pointer" : "cursor-not-allowed"}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all ${
+                        voiceAutoplay ? "bg-emerald-500" : "bg-white/20"
+                      } ${voiceConfig ? "cursor-pointer" : "cursor-not-allowed"}`}
                     >
                       <span
-                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${voiceAutoplay ? "translate-x-5" : "translate-x-0.5"
-                          }`}
+                        className={`inline-block h-5 w-5 mt-0.5 transform rounded-full bg-white transition ${
+                          voiceAutoplay ? "translate-x-5" : "translate-x-0.5"
+                        }`}
                       />
                     </label>
                   </div>
@@ -988,10 +1034,11 @@ export function EditCharacterPage() {
                   <button
                     type="button"
                     onClick={() => setFields({ memoryType: "manual" })}
-                    className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "manual"
-                      ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
-                      : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
-                      }`}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                      memoryType === "manual"
+                        ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                        : "border-white/10 bg-black/20 text-white/70 hover:border-white/20 hover:bg-black/30"
+                    }`}
                   >
                     <p className="text-sm font-semibold">Manual Memory</p>
                     <p className="mt-1 text-xs text-white/60">
@@ -1002,10 +1049,11 @@ export function EditCharacterPage() {
                     type="button"
                     disabled={!dynamicMemoryEnabled}
                     onClick={() => dynamicMemoryEnabled && setFields({ memoryType: "dynamic" })}
-                    className={`rounded-xl border px-3.5 py-3 text-left transition ${memoryType === "dynamic" && dynamicMemoryEnabled
-                      ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
-                      : "border-white/10 bg-black/15 text-white/60"
-                      } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                      memoryType === "dynamic" && dynamicMemoryEnabled
+                        ? "border-blue-400/50 bg-blue-500/20 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                        : "border-white/10 bg-black/15 text-white/60"
+                    } ${!dynamicMemoryEnabled ? "cursor-not-allowed opacity-50" : "hover:border-white/20 hover:bg-black/25"}`}
                   >
                     <p className="text-sm font-semibold">Dynamic Memory</p>
                     <p className="mt-1 text-xs text-white/60">
@@ -1275,8 +1323,18 @@ export function EditCharacterPage() {
               placeholder="Search models..."
               className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
             />
-            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </div>
           <div className="space-y-2 max-h-[50vh] overflow-y-auto">
@@ -1290,7 +1348,7 @@ export function EditCharacterPage() {
                 "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
                 !selectedModelId
                   ? "border-emerald-400/40 bg-emerald-400/10"
-                  : "border-white/10 bg-white/5 hover:bg-white/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10",
               )}
             >
               <Cpu className="h-5 w-5 text-white/40" />
@@ -1298,10 +1356,12 @@ export function EditCharacterPage() {
               {!selectedModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
             </button>
             {models
-              .filter(m => {
+              .filter((m) => {
                 if (!modelSearchQuery) return true;
                 const q = modelSearchQuery.toLowerCase();
-                return m.displayName?.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q);
+                return (
+                  m.displayName?.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q)
+                );
               })
               .map((model) => (
                 <button
@@ -1315,15 +1375,19 @@ export function EditCharacterPage() {
                     "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
                     selectedModelId === model.id
                       ? "border-emerald-400/40 bg-emerald-400/10"
-                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10",
                   )}
                 >
                   {getProviderIcon(model.providerId)}
                   <div className="flex-1 min-w-0">
-                    <span className="block truncate text-sm text-white">{model.displayName || model.name}</span>
+                    <span className="block truncate text-sm text-white">
+                      {model.displayName || model.name}
+                    </span>
                     <span className="block truncate text-xs text-white/40">{model.name}</span>
                   </div>
-                  {selectedModelId === model.id && <Check className="h-4 w-4 shrink-0 text-emerald-400" />}
+                  {selectedModelId === model.id && (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                  )}
                 </button>
               ))}
           </div>
@@ -1348,8 +1412,18 @@ export function EditCharacterPage() {
               placeholder="Search voices..."
               className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
             />
-            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </div>
           <div className="space-y-2 max-h-[50vh] overflow-y-auto">
@@ -1363,7 +1437,7 @@ export function EditCharacterPage() {
                 "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
                 !voiceSelectionValue
                   ? "border-emerald-400/40 bg-emerald-400/10"
-                  : "border-white/10 bg-white/5 hover:bg-white/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10",
               )}
             >
               <Volume2 className="h-5 w-5 text-white/40" />
@@ -1375,14 +1449,15 @@ export function EditCharacterPage() {
             {userVoices.length > 0 && (
               <MenuSection label="My Voices">
                 {userVoices
-                  .filter(v => {
+                  .filter((v) => {
                     if (!voiceSearchQuery) return true;
                     return v.name.toLowerCase().includes(voiceSearchQuery.toLowerCase());
                   })
                   .map((voice) => {
                     const value = buildUserVoiceValue(voice.id);
                     const isSelected = voiceSelectionValue === value;
-                    const providerLabel = audioProviders.find(p => p.id === voice.providerId)?.label ?? "Provider";
+                    const providerLabel =
+                      audioProviders.find((p) => p.id === voice.providerId)?.label ?? "Provider";
                     return (
                       <button
                         key={voice.id}
@@ -1403,13 +1478,15 @@ export function EditCharacterPage() {
                           "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
                           isSelected
                             ? "border-emerald-400/40 bg-emerald-400/10"
-                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                            : "border-white/10 bg-white/5 hover:bg-white/10",
                         )}
                       >
                         <User className="h-5 w-5 text-white/40" />
                         <div className="flex-1 min-w-0">
                           <span className="block truncate text-sm text-white">{voice.name}</span>
-                          <span className="block truncate text-xs text-white/40">{providerLabel}</span>
+                          <span className="block truncate text-xs text-white/40">
+                            {providerLabel}
+                          </span>
                         </div>
                         {isSelected && <Check className="h-4 w-4 shrink-0 text-emerald-400" />}
                       </button>
@@ -1420,7 +1497,7 @@ export function EditCharacterPage() {
 
             {/* Provider Voices */}
             {audioProviders.map((provider) => {
-              const voices = (providerVoices[provider.id] ?? []).filter(v => {
+              const voices = (providerVoices[provider.id] ?? []).filter((v) => {
                 if (!voiceSearchQuery) return true;
                 return v.name.toLowerCase().includes(voiceSearchQuery.toLowerCase());
               });
@@ -1449,7 +1526,7 @@ export function EditCharacterPage() {
                           "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
                           isSelected
                             ? "border-emerald-400/40 bg-emerald-400/10"
-                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                            : "border-white/10 bg-white/5 hover:bg-white/10",
                         )}
                       >
                         <Volume2 className="h-5 w-5 text-white/40" />

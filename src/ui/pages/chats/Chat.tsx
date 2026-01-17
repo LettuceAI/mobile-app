@@ -1562,7 +1562,7 @@ function CharacterOption({ character, onClick }: { character: Character; onClick
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-medium text-white truncate">{character.name}</h3>
         <p className="text-xs text-white/50 truncate">
-          {character.description || "No description"}
+          {character.description || character.definition || "No description"}
         </p>
       </div>
     </button>

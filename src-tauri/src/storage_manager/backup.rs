@@ -288,7 +288,7 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 
     // Get all characters
     let mut stmt = conn
-        .prepare("SELECT id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters")
+        .prepare("SELECT id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters")
         .map_err(|e| e.to_string())?;
 
     let characters: Vec<(String, JsonValue)> = stmt
@@ -300,20 +300,21 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "avatar_path": r.get::<_, Option<String>>(2)?,
                 "background_image_path": r.get::<_, Option<String>>(3)?,
                 "description": r.get::<_, Option<String>>(4)?,
-                "default_scene_id": r.get::<_, Option<String>>(5)?,
-                "default_model_id": r.get::<_, Option<String>>(6)?,
-                "memory_type": r.get::<_, String>(7)?,
-                "prompt_template_id": r.get::<_, Option<String>>(8)?,
-                "system_prompt": r.get::<_, Option<String>>(9)?,
-                "voice_config": r.get::<_, Option<String>>(10)?,
-                "voice_autoplay": r.get::<_, Option<i64>>(11)?.unwrap_or(0) != 0,
-                "disable_avatar_gradient": r.get::<_, i64>(12)? != 0,
-                "custom_gradient_enabled": r.get::<_, i64>(13)? != 0,
-                "custom_gradient_colors": r.get::<_, Option<String>>(14)?,
-                "custom_text_color": r.get::<_, Option<String>>(15)?,
-                "custom_text_secondary": r.get::<_, Option<String>>(16)?,
-                "created_at": r.get::<_, i64>(17)?,
-                "updated_at": r.get::<_, i64>(18)?,
+                "definition": r.get::<_, Option<String>>(5)?,
+                "default_scene_id": r.get::<_, Option<String>>(6)?,
+                "default_model_id": r.get::<_, Option<String>>(7)?,
+                "memory_type": r.get::<_, String>(8)?,
+                "prompt_template_id": r.get::<_, Option<String>>(9)?,
+                "system_prompt": r.get::<_, Option<String>>(10)?,
+                "voice_config": r.get::<_, Option<String>>(11)?,
+                "voice_autoplay": r.get::<_, Option<i64>>(12)?.unwrap_or(0) != 0,
+                "disable_avatar_gradient": r.get::<_, i64>(13)? != 0,
+                "custom_gradient_enabled": r.get::<_, i64>(14)? != 0,
+                "custom_gradient_colors": r.get::<_, Option<String>>(15)?,
+                "custom_text_color": r.get::<_, Option<String>>(16)?,
+                "custom_text_secondary": r.get::<_, Option<String>>(17)?,
+                "created_at": r.get::<_, i64>(18)?,
+                "updated_at": r.get::<_, i64>(19)?,
             });
             Ok((id, json))
         })
@@ -1194,17 +1195,20 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
 
             // Insert character
             conn.execute(
-                "INSERT INTO characters (id, name, avatar_path, background_image_path, description,
+                "INSERT INTO characters (id, name, avatar_path, background_image_path, description, definition,
                  default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt,
                  voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors,
                  custom_text_color, custom_text_secondary, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
                 params![
                     char_id,
                     item.get("name").and_then(|v| v.as_str()),
                     item.get("avatar_path").and_then(|v| v.as_str()),
                     item.get("background_image_path").and_then(|v| v.as_str()),
                     item.get("description").and_then(|v| v.as_str()),
+                    item.get("definition")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| item.get("description").and_then(|v| v.as_str())),
                     item.get("default_scene_id").and_then(|v| v.as_str()),
                     item.get("default_model_id").and_then(|v| v.as_str()),
                     item.get("memory_type").and_then(|v| v.as_str()).unwrap_or("manual"),

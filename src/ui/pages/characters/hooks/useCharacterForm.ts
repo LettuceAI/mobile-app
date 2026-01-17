@@ -26,6 +26,7 @@ interface CharacterFormState {
   backgroundImagePath: string;
   scenes: Scene[];
   defaultSceneId: string | null;
+  definition: string;
   description: string;
   selectedModelId: string | null;
   systemPromptTemplateId: string | null;
@@ -55,6 +56,7 @@ type CharacterFormAction =
   | { type: "SET_BACKGROUND_IMAGE_PATH"; payload: string }
   | { type: "SET_SCENES"; payload: Scene[] }
   | { type: "SET_DEFAULT_SCENE_ID"; payload: string | null }
+  | { type: "SET_DEFINITION"; payload: string }
   | { type: "SET_DESCRIPTION"; payload: string }
   | { type: "SET_SELECTED_MODEL_ID"; payload: string | null }
   | { type: "SET_SYSTEM_PROMPT_TEMPLATE_ID"; payload: string | null }
@@ -78,6 +80,7 @@ const initialState: CharacterFormState = {
   backgroundImagePath: "",
   scenes: [],
   defaultSceneId: null,
+  definition: "",
   description: "",
   selectedModelId: null,
   systemPromptTemplateId: null,
@@ -111,6 +114,8 @@ function characterFormReducer(
       return { ...state, scenes: action.payload };
     case "SET_DEFAULT_SCENE_ID":
       return { ...state, defaultSceneId: action.payload };
+    case "SET_DEFINITION":
+      return { ...state, definition: action.payload };
     case "SET_DESCRIPTION":
       return { ...state, description: action.payload };
     case "SET_SELECTED_MODEL_ID":
@@ -165,6 +170,10 @@ export function useCharacterForm(draftCharacter?: any) {
         if (draftCharacter) {
           console.log("[useCharacterForm] Received draftCharacter:", draftCharacter);
           dispatch({ type: "SET_NAME", payload: draftCharacter.name || "" });
+          dispatch({
+            type: "SET_DEFINITION",
+            payload: draftCharacter.definition || draftCharacter.description || "",
+          });
           dispatch({ type: "SET_DESCRIPTION", payload: draftCharacter.description || "" });
           dispatch({ type: "SET_AVATAR_PATH", payload: draftCharacter.avatarPath || "" });
           dispatch({
@@ -272,6 +281,10 @@ export function useCharacterForm(draftCharacter?: any) {
 
   const setDescription = useCallback((description: string) => {
     dispatch({ type: "SET_DESCRIPTION", payload: description });
+  }, []);
+
+  const setDefinition = useCallback((definition: string) => {
+    dispatch({ type: "SET_DEFINITION", payload: definition });
   }, []);
 
   const setSelectedModelId = useCallback((id: string | null) => {
@@ -387,6 +400,10 @@ export function useCharacterForm(draftCharacter?: any) {
         : newScenes[0]?.id || null;
 
       dispatch({ type: "SET_NAME", payload: characterData.name });
+      dispatch({
+        type: "SET_DEFINITION",
+        payload: characterData.definition || characterData.description || "",
+      });
       dispatch({ type: "SET_DESCRIPTION", payload: characterData.description || "" });
       dispatch({ type: "SET_SCENES", payload: newScenes });
       dispatch({ type: "SET_DEFAULT_SCENE_ID", payload: newDefaultSceneId });
@@ -424,7 +441,7 @@ export function useCharacterForm(draftCharacter?: any) {
 
   const handleSave = useCallback(async () => {
     if (
-      state.description.trim().length === 0 ||
+      state.definition.trim().length === 0 ||
       state.selectedModelId === null ||
       state.saving ||
       state.scenes.length === 0
@@ -478,7 +495,8 @@ export function useCharacterForm(draftCharacter?: any) {
         name: state.name.trim(),
         avatarPath: avatarFilename || undefined,
         backgroundImagePath: backgroundImageId || undefined,
-        description: state.description.trim(),
+        definition: state.definition.trim(),
+        description: state.description.trim() || undefined,
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
@@ -510,6 +528,7 @@ export function useCharacterForm(draftCharacter?: any) {
     state.backgroundImagePath,
     state.scenes,
     state.defaultSceneId,
+    state.definition,
     state.description,
     state.selectedModelId,
     state.systemPromptTemplateId,
@@ -524,7 +543,7 @@ export function useCharacterForm(draftCharacter?: any) {
   const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
   const canContinueStartingScene = state.scenes.length > 0 && !state.saving;
   const canSaveDescription =
-    state.description.trim().length > 0 && state.selectedModelId !== null && !state.saving;
+    state.definition.trim().length > 0 && state.selectedModelId !== null && !state.saving;
   const progress =
     state.step === Step.Identity ? 0.33 : state.step === Step.StartingScene ? 0.66 : 1;
 
@@ -537,6 +556,7 @@ export function useCharacterForm(draftCharacter?: any) {
       setBackgroundImagePath,
       setScenes,
       setDefaultSceneId,
+      setDefinition,
       setDescription,
       setSelectedModelId,
       setSystemPromptTemplateId,

@@ -43,22 +43,18 @@ const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
 function isImageLike(s?: string) {
   if (!s) return false;
   const lower = s.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
+  return (
+    lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image")
+  );
 }
 
 function CharacterAvatar({ character }: { character: Character }) {
   const avatarUrl = useAvatar("character", character.id, character.avatarPath);
-  
+
   if (avatarUrl && isImageLike(avatarUrl)) {
-    return (
-      <img
-        src={avatarUrl}
-        alt={character.name}
-        className="h-full w-full object-cover"
-      />
-    );
+    return <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />;
   }
-  
+
   const initials = character.name
     .split(" ")
     .map((n) => n[0])
@@ -78,14 +74,15 @@ export function CharactersPage() {
   } = useCharactersController();
 
   // Get gradients for all characters at once (follows React rules of hooks)
-  const { getGradientCss, hasGradient, getTextColor, getTextSecondary } = useMultipleAvatarGradients(
-    characters.map(c => ({ 
-      type: 'character' as const, 
-      id: c.id, 
-      avatarPath: c.avatarPath,
-      disableGradient: c.disableAvatarGradient
-    }))
-  );
+  const { getGradientCss, hasGradient, getTextColor, getTextSecondary } =
+    useMultipleAvatarGradients(
+      characters.map((c) => ({
+        type: "character" as const,
+        id: c.id,
+        avatarPath: c.avatarPath,
+        disableGradient: c.disableAvatarGradient,
+      })),
+    );
 
   const handleEditCharacter = (character: Character) => {
     navigate(`/settings/characters/${character.id}/edit`);
@@ -103,12 +100,14 @@ export function CharactersPage() {
             {/* Characters List */}
             <AnimatePresence>
               {characters.map((character) => {
-                const descriptionPreview = character.description?.trim() || "No description yet";
+                const descriptionPreview =
+                  (character.description || character.definition || "").trim() ||
+                  "No description yet";
                 const gradientCss = getGradientCss(character.id);
                 const hasGrad = hasGradient(character.id);
                 const textColor = getTextColor(character.id);
                 const textSecondary = getTextSecondary(character.id);
-                
+
                 return (
                   <motion.div
                     key={character.id}
@@ -118,49 +117,50 @@ export function CharactersPage() {
                       hasGrad ? "" : "border border-white/10 bg-[#0b0c12]/90",
                       interactive.transition.default,
                       "hover:border-white/25 hover:bg-[#0c0d13]/95",
-                      interactive.active.scale
+                      interactive.active.scale,
                     )}
-                    style={hasGrad ? {
-                      background: gradientCss,
-                    } : {}}
+                    style={
+                      hasGrad
+                        ? {
+                            background: gradientCss,
+                          }
+                        : {}
+                    }
                   >
                     {/* Hover gradient effect */}
-                    <div className={cn(
-                      "absolute inset-y-0 right-0 w-1/4 transition",
-                      hasGrad 
-                        ? "bg-linear-to-l from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
-                        : "bg-linear-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
-                    )} />
+                    <div
+                      className={cn(
+                        "absolute inset-y-0 right-0 w-1/4 transition",
+                        hasGrad
+                          ? "bg-linear-to-l from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+                          : "bg-linear-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100",
+                      )}
+                    />
 
                     {/* Avatar */}
-                    <div className={cn(
-                      "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden",
-                      radius.lg,
-                      "border border-white/15 bg-white/8",
-                      typography.body.size,
-                      typography.body.weight,
-                      "text-white"
-                    )}>
+                    <div
+                      className={cn(
+                        "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden",
+                        radius.lg,
+                        "border border-white/15 bg-white/8",
+                        typography.body.size,
+                        typography.body.weight,
+                        "text-white",
+                      )}
+                    >
                       <CharacterAvatar character={character} />
                     </div>
 
                     {/* Content */}
                     <div className="relative min-w-0 flex-1">
-                      <h3 
-                        className={cn(
-                          "truncate",
-                          typography.body.size,
-                          typography.h3.weight,
-                        )}
+                      <h3
+                        className={cn("truncate", typography.body.size, typography.h3.weight)}
                         style={hasGrad ? { color: textColor } : {}}
                       >
                         {character.name}
                       </h3>
-                      <p 
-                        className={cn(
-                          typography.bodySmall.size,
-                          "line-clamp-1"
-                        )}
+                      <p
+                        className={cn(typography.bodySmall.size, "line-clamp-1")}
                         style={hasGrad ? { color: textSecondary } : {}}
                       >
                         {descriptionPreview}
@@ -175,19 +175,22 @@ export function CharactersPage() {
                           "relative flex items-center justify-center",
                           radius.full,
                           "border border-white/10 bg-white/25 text-white/70",
-                          "transition-all hover:border-white/50 hover:text-white"
+                          "transition-all hover:border-white/50 hover:text-white",
                         )}
                         aria-label="Edit Character"
                       >
                         <Edit2 size={12} />
                       </button>
                       <button
-                        onClick={() => { setSelectedCharacter(character); setShowDeleteConfirm(true); }}
+                        onClick={() => {
+                          setSelectedCharacter(character);
+                          setShowDeleteConfirm(true);
+                        }}
                         className={cn(
                           "relative flex items-center justify-center",
                           radius.full,
                           "border border-red-500/30 bg-red-500/70 text-red-300",
-                          "transition-all hover:border-red-500/90 hover:bg-red-500/20"
+                          "transition-all hover:border-red-500/90 hover:bg-red-500/20",
                         )}
                         aria-label="Delete Character"
                       >
@@ -210,7 +213,8 @@ export function CharactersPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-white/70">
-            Are you sure you want to delete "{selectedCharacter?.name}"? This will also delete all chat sessions with this character.
+            Are you sure you want to delete "{selectedCharacter?.name}"? This will also delete all
+            chat sessions with this character.
           </p>
           <div className="flex gap-3">
             <button

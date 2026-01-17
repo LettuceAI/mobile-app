@@ -746,8 +746,10 @@ export function GroupChatSettingsPage() {
                 <CharacterAvatar character={character} size="md" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-white truncate">{character.name}</p>
-                  {character.description && (
-                    <p className="text-xs text-white/50 truncate mt-0.5">{character.description}</p>
+                  {(character.description || character.definition) && (
+                    <p className="text-xs text-white/50 truncate mt-0.5">
+                      {character.description || character.definition}
+                    </p>
                   )}
                 </div>
                 <Plus className="h-4 w-4 text-emerald-400" />

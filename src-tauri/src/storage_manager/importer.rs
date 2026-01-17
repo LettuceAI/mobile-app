@@ -196,6 +196,11 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
             .get("description")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let definition = c
+            .get("definition")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| description.clone());
         let default_scene_id = c
             .get("defaultSceneId")
             .and_then(|v| v.as_str())
@@ -220,9 +225,9 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
         let updated_at = c.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(now);
 
         tx.execute(
-            r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, background_image_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-            params![id, name, avatar_path, bg_path, description, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at],
+            r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            params![id, name, avatar_path, bg_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at],
         ).map_err(|e| e.to_string())?;
 
         // Rules

@@ -117,12 +117,16 @@ fn execute_tool(
                 json!({ "success": false, "error": "Missing 'name' argument" })
             }
         }
-        "set_character_description" => {
-            if let Some(desc) = arguments.get("description").and_then(|v| v.as_str()) {
-                session.draft.description = Some(desc.to_string());
-                json!({ "success": true, "message": "Description updated" })
+        "set_character_definition" | "set_character_description" => {
+            let value = arguments
+                .get("definition")
+                .or_else(|| arguments.get("description"))
+                .and_then(|v| v.as_str());
+            if let Some(def) = value {
+                session.draft.definition = Some(def.to_string());
+                json!({ "success": true, "message": "Definition updated" })
             } else {
-                json!({ "success": false, "error": "Missing 'description' argument" })
+                json!({ "success": false, "error": "Missing 'definition' argument" })
             }
         }
         "add_scene" => {

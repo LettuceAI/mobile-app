@@ -378,6 +378,8 @@ pub struct Character {
     #[serde(default)]
     pub background_image_path: Option<String>,
     #[serde(default)]
+    pub definition: Option<String>,
+    #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,

@@ -72,6 +72,8 @@ pub struct GroupChatResponse {
 pub struct CharacterInfo {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub definition: Option<String>,
     pub description: Option<String>,
     pub personality_summary: Option<String>,
 }
@@ -1460,9 +1462,17 @@ fn load_character(conn: &rusqlite::Connection, character_id: &str) -> Result<Cha
     }
 
     // Fallback: construct from basic columns
-    let row: (String, String, Option<String>, i64, i64, Option<String>) = conn
+    let row: (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        i64,
+        i64,
+        Option<String>,
+    ) = conn
         .query_row(
-            "SELECT id, name, description, created_at, updated_at, default_model_id
+            "SELECT id, name, description, definition, created_at, updated_at, default_model_id
              FROM characters WHERE id = ?1",
             rusqlite::params![character_id],
             |row| {
@@ -1473,18 +1483,23 @@ fn load_character(conn: &rusqlite::Connection, character_id: &str) -> Result<Cha
                     row.get(3)?,
                     row.get(4)?,
                     row.get(5)?,
+                    row.get(6)?,
                 ))
             },
         )
         .map_err(|e| format!("Failed to load character {}: {}", character_id, e))?;
 
+    let description = row.2;
+    let definition = row.3.or(description.clone());
+
     Ok(Character {
         id: row.0,
         name: row.1,
-        description: row.2,
-        created_at: row.3 as u64,
-        updated_at: row.4 as u64,
-        default_model_id: row.5,
+        description,
+        definition,
+        created_at: row.4 as u64,
+        updated_at: row.5 as u64,
+        default_model_id: row.6,
         avatar_path: None,
         background_image_path: None,
         rules: Vec::new(),
@@ -1504,14 +1519,19 @@ fn load_characters_info(
     let mut characters = Vec::new();
 
     for character_id in character_ids {
-        let result: Result<(String, Option<String>, Option<String>), _> = conn.query_row(
-            "SELECT name, description, system_prompt FROM characters WHERE id = ?1",
-            rusqlite::params![character_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        );
+        let result: Result<(String, Option<String>, Option<String>, Option<String>), _> = conn
+            .query_row(
+                "SELECT name, description, definition, system_prompt FROM characters WHERE id = ?1",
+                rusqlite::params![character_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            );
 
-        if let Ok((name, description, system_prompt)) = result {
-            let personality_summary = description.as_ref().or(system_prompt.as_ref()).map(|s| {
+        if let Ok((name, description, definition, system_prompt)) = result {
+            let personality_source = definition
+                .as_ref()
+                .or(description.as_ref())
+                .or(system_prompt.as_ref());
+            let personality_summary = personality_source.map(|s| {
                 if s.len() > 200 {
                     format!("{}...", &s[..200])
                 } else {
@@ -1522,6 +1542,7 @@ fn load_characters_info(
             characters.push(CharacterInfo {
                 id: character_id.clone(),
                 name,
+                definition: definition.or(description.clone()),
                 description,
                 personality_summary,
             });
@@ -1851,7 +1872,11 @@ fn build_group_system_prompt(
     // Character and persona descriptions are passed RAW to the LLM without any
     // translation or processing. The LLM receives the full description text as-is.
     let char_name = &character.name;
-    let char_desc = character.description.as_deref().unwrap_or("");
+    let char_desc = character
+        .definition
+        .as_deref()
+        .or(character.description.as_deref())
+        .unwrap_or("");
 
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("User");
     let persona_desc = persona
@@ -1864,7 +1889,7 @@ fn build_group_system_prompt(
     for other in other_characters {
         if other.id != character.id {
             // Use full description if available, otherwise fall back to personality_summary
-            if let Some(desc) = &other.description {
+            if let Some(desc) = other.definition.as_ref().or(other.description.as_ref()) {
                 if !desc.is_empty() {
                     group_chars.push_str(&format!("- {}: {}\n", other.name, desc));
                 } else if let Some(summary) = &other.personality_summary {
@@ -3236,7 +3261,11 @@ pub async fn group_chat_generate_user_reply(
     let char_list = group_characters
         .iter()
         .map(|c| {
-            let desc = c.description.as_deref().unwrap_or("");
+            let desc = c
+                .definition
+                .as_deref()
+                .or(c.description.as_deref())
+                .unwrap_or("");
             if desc.is_empty() {
                 c.name.clone()
             } else {

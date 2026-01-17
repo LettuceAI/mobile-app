@@ -3,7 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Search, X, ArrowLeft, User, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { listCharacters, listPersonas, createSession, listSessionPreviews } from "../../../core/storage/repo";
+import {
+  listCharacters,
+  listPersonas,
+  createSession,
+  listSessionPreviews,
+} from "../../../core/storage/repo";
 import type { Character, Persona } from "../../../core/storage/schemas";
 import { cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -25,10 +30,7 @@ export function SearchPage() {
 
   const loadData = async () => {
     try {
-      const [chars, pers] = await Promise.all([
-        listCharacters(),
-        listPersonas()
-      ]);
+      const [chars, pers] = await Promise.all([listCharacters(), listPersonas()]);
       setCharacters(chars);
       setPersonas(pers);
     } catch (err) {
@@ -40,11 +42,8 @@ export function SearchPage() {
 
   const filteredCharacters = characters.filter((char) => {
     const query = searchQuery.toLowerCase();
-    return (
-      char.name.toLowerCase().includes(query) ||
-      char.description?.toLowerCase().includes(query) ||
-      ""
-    );
+    const description = `${char.description ?? ""} ${char.definition ?? ""}`.toLowerCase();
+    return char.name.toLowerCase().includes(query) || description.includes(query);
   });
 
   const filteredPersonas = personas.filter((persona) => {
@@ -64,11 +63,7 @@ export function SearchPage() {
         return;
       }
 
-      const session = await createSession(
-        character.id,
-        "New Chat",
-        character.scenes?.[0]?.id
-      );
+      const session = await createSession(character.id, "New Chat", character.scenes?.[0]?.id);
       navigate(`/chat/${character.id}?sessionId=${session.id}`);
     } catch (error) {
       console.error("Failed to load or create session:", error);
@@ -163,10 +158,7 @@ export function SearchPage() {
               {filteredCharacters.length > 0 ? (
                 <CharacterList characters={filteredCharacters} onSelect={startChat} />
               ) : (
-                <EmptyState
-                  type="characters"
-                  hasQuery={hasQuery}
-                />
+                <EmptyState type="characters" hasQuery={hasQuery} />
               )}
             </motion.div>
           ) : (
@@ -180,10 +172,7 @@ export function SearchPage() {
               {filteredPersonas.length > 0 ? (
                 <PersonaList personas={filteredPersonas} onSelect={openPersona} />
               ) : (
-                <EmptyState
-                  type="personas"
-                  hasQuery={hasQuery}
-                />
+                <EmptyState type="personas" hasQuery={hasQuery} />
               )}
             </motion.div>
           )}
@@ -198,7 +187,7 @@ function TabButton({
   onClick,
   icon,
   label,
-  count
+  count,
 }: {
   active: boolean;
   onClick: () => void;
@@ -213,15 +202,17 @@ function TabButton({
         "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium transition-all",
         active
           ? "bg-white/15 text-white"
-          : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+          : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70",
       )}
     >
       {icon}
       <span>{label}</span>
-      <span className={cn(
-        "ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
-        active ? "bg-white/20 text-white" : "bg-white/10 text-white/50"
-      )}>
+      <span
+        className={cn(
+          "ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
+          active ? "bg-white/20 text-white" : "bg-white/10 text-white/50",
+        )}
+      >
         {count}
       </span>
     </button>
@@ -250,99 +241,100 @@ const CharacterAvatar = memo(({ character }: { character: Character }) => {
   );
 });
 
-CharacterAvatar.displayName = 'CharacterAvatar';
+CharacterAvatar.displayName = "CharacterAvatar";
 
 // Character Card matching Chats.tsx style
-const CharacterCard = memo(({
-  character,
-  onSelect
-}: {
-  character: Character;
-  onSelect: (c: Character) => void;
-}) => {
-  const descriptionPreview = character.description?.trim() || "No description";
-  const { gradientCss, hasGradient, textColor, textSecondary } = useAvatarGradient(
-    "character",
-    character.id,
-    character.avatarPath,
-    character.disableAvatarGradient,
-    // Pass custom colors if enabled
-    character.customGradientEnabled && character.customGradientColors?.length ? {
-      colors: character.customGradientColors,
-      textColor: character.customTextColor,
-      textSecondary: character.customTextSecondary,
-    } : undefined
-  );
+const CharacterCard = memo(
+  ({ character, onSelect }: { character: Character; onSelect: (c: Character) => void }) => {
+    const descriptionPreview =
+      (character.description || character.definition || "").trim() || "No description";
+    const { gradientCss, hasGradient, textColor, textSecondary } = useAvatarGradient(
+      "character",
+      character.id,
+      character.avatarPath,
+      character.disableAvatarGradient,
+      // Pass custom colors if enabled
+      character.customGradientEnabled && character.customGradientColors?.length
+        ? {
+            colors: character.customGradientColors,
+            textColor: character.customTextColor,
+            textSecondary: character.customTextSecondary,
+          }
+        : undefined,
+    );
 
-  return (
-    <motion.button
-      whileTap={{ scale: 0.98 }}
-      onClick={() => onSelect(character)}
-      className={cn(
-        "group relative flex w-full items-center gap-3.5 p-3.5 text-left",
-        "rounded-2xl transition-all",
-        hasGradient ? "" : "bg-[#1a1b23] hover:bg-[#22232d]"
-      )}
-      style={hasGradient ? { background: gradientCss } : {}}
-    >
-      {/* Circular Avatar */}
-      <div className={cn(
-        "relative h-14 w-14 shrink-0 overflow-hidden rounded-full",
-        hasGradient ? "ring-2 ring-white/20" : "ring-1 ring-white/10",
-        "shadow-lg"
-      )}>
-        <CharacterAvatar character={character} />
-      </div>
-
-      {/* Content */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
-        <h3
+    return (
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        onClick={() => onSelect(character)}
+        className={cn(
+          "group relative flex w-full items-center gap-3.5 p-3.5 text-left",
+          "rounded-2xl transition-all",
+          hasGradient ? "" : "bg-[#1a1b23] hover:bg-[#22232d]",
+        )}
+        style={hasGradient ? { background: gradientCss } : {}}
+      >
+        {/* Circular Avatar */}
+        <div
           className={cn(
-            "truncate font-semibold text-[15px] leading-tight",
-            hasGradient ? "" : "text-white"
+            "relative h-14 w-14 shrink-0 overflow-hidden rounded-full",
+            hasGradient ? "ring-2 ring-white/20" : "ring-1 ring-white/10",
+            "shadow-lg",
           )}
-          style={hasGradient ? { color: textColor } : {}}
         >
-          {character.name}
-        </h3>
-        <p
+          <CharacterAvatar character={character} />
+        </div>
+
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
+          <h3
+            className={cn(
+              "truncate font-semibold text-[15px] leading-tight",
+              hasGradient ? "" : "text-white",
+            )}
+            style={hasGradient ? { color: textColor } : {}}
+          >
+            {character.name}
+          </h3>
+          <p
+            className={cn(
+              "line-clamp-1 text-[13px] leading-tight",
+              hasGradient ? "" : "text-white/50",
+            )}
+            style={hasGradient ? { color: textSecondary } : {}}
+          >
+            {descriptionPreview}
+          </p>
+        </div>
+
+        {/* Subtle chevron */}
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           className={cn(
-            "line-clamp-1 text-[13px] leading-tight",
-            hasGradient ? "" : "text-white/50"
+            "shrink-0 transition-all",
+            hasGradient ? "" : "text-white/30 group-hover:text-white/60",
           )}
           style={hasGradient ? { color: textSecondary } : {}}
         >
-          {descriptionPreview}
-        </p>
-      </div>
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </motion.button>
+    );
+  },
+);
 
-      {/* Subtle chevron */}
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={cn(
-          "shrink-0 transition-all",
-          hasGradient ? "" : "text-white/30 group-hover:text-white/60"
-        )}
-        style={hasGradient ? { color: textSecondary } : {}}
-      >
-        <path d="m9 18 6-6-6-6" />
-      </svg>
-    </motion.button>
-  );
-});
-
-CharacterCard.displayName = 'CharacterCard';
+CharacterCard.displayName = "CharacterCard";
 
 function CharacterList({
   characters,
-  onSelect
+  onSelect,
 }: {
   characters: Character[];
   onSelect: (character: Character) => void;
@@ -350,87 +342,75 @@ function CharacterList({
   return (
     <div className="space-y-2 pb-4">
       {characters.map((character) => (
-        <CharacterCard
-          key={character.id}
-          character={character}
-          onSelect={onSelect}
-        />
+        <CharacterCard key={character.id} character={character} onSelect={onSelect} />
       ))}
     </div>
   );
 }
 
 // Persona Card
-const PersonaCard = memo(({
-  persona,
-  onSelect
-}: {
-  persona: Persona;
-  onSelect: (p: Persona) => void;
-}) => {
-  const avatarUrl = useAvatar("persona", persona.id, persona.avatarPath);
+const PersonaCard = memo(
+  ({ persona, onSelect }: { persona: Persona; onSelect: (p: Persona) => void }) => {
+    const avatarUrl = useAvatar("persona", persona.id, persona.avatarPath);
 
-  return (
-    <motion.button
-      whileTap={{ scale: 0.98 }}
-      onClick={() => onSelect(persona)}
-      className="group relative flex w-full items-center gap-3.5 p-3.5 text-left rounded-2xl bg-[#1a1b23] transition-all hover:bg-[#22232d]"
-    >
-      {/* Circular Avatar */}
-      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10 shadow-lg">
-        {avatarUrl && isImageLike(avatarUrl) ? (
-          <img
-            src={avatarUrl}
-            alt={persona.title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500/30 to-purple-500/20">
-            <User size={24} className="text-white/60" />
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
-        <div className="flex items-center gap-2">
-          <h3 className="truncate font-semibold text-[15px] leading-tight text-white">
-            {persona.title}
-          </h3>
-          {persona.isDefault && (
-            <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-              Default
-            </span>
+    return (
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        onClick={() => onSelect(persona)}
+        className="group relative flex w-full items-center gap-3.5 p-3.5 text-left rounded-2xl bg-[#1a1b23] transition-all hover:bg-[#22232d]"
+      >
+        {/* Circular Avatar */}
+        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10 shadow-lg">
+          {avatarUrl && isImageLike(avatarUrl) ? (
+            <img src={avatarUrl} alt={persona.title} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500/30 to-purple-500/20">
+              <User size={24} className="text-white/60" />
+            </div>
           )}
         </div>
-        <p className="line-clamp-1 text-[13px] leading-tight text-white/50">
-          {persona.description}
-        </p>
-      </div>
 
-      {/* Subtle chevron */}
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="shrink-0 text-white/30 transition-all group-hover:text-white/60"
-      >
-        <path d="m9 18 6-6-6-6" />
-      </svg>
-    </motion.button>
-  );
-});
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate font-semibold text-[15px] leading-tight text-white">
+              {persona.title}
+            </h3>
+            {persona.isDefault && (
+              <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                Default
+              </span>
+            )}
+          </div>
+          <p className="line-clamp-1 text-[13px] leading-tight text-white/50">
+            {persona.description}
+          </p>
+        </div>
 
-PersonaCard.displayName = 'PersonaCard';
+        {/* Subtle chevron */}
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 text-white/30 transition-all group-hover:text-white/60"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </motion.button>
+    );
+  },
+);
+
+PersonaCard.displayName = "PersonaCard";
 
 function PersonaList({
   personas,
-  onSelect
+  onSelect,
 }: {
   personas: Persona[];
   onSelect: (persona: Persona) => void;
@@ -438,11 +418,7 @@ function PersonaList({
   return (
     <div className="space-y-2 pb-4">
       {personas.map((persona) => (
-        <PersonaCard
-          key={persona.id}
-          persona={persona}
-          onSelect={onSelect}
-        />
+        <PersonaCard key={persona.id} persona={persona} onSelect={onSelect} />
       ))}
     </div>
   );
@@ -452,10 +428,7 @@ function LoadingSkeleton() {
   return (
     <div className="space-y-2 pb-4">
       {[0, 1, 2, 3].map((index) => (
-        <div
-          key={index}
-          className="h-[76px] animate-pulse rounded-2xl bg-[#1a1b23] p-3.5"
-        >
+        <div key={index} className="h-[76px] animate-pulse rounded-2xl bg-[#1a1b23] p-3.5">
           <div className="flex items-center gap-3.5">
             <div className="h-14 w-14 rounded-full bg-white/10" />
             <div className="flex-1 space-y-2">
@@ -482,18 +455,14 @@ function EmptyState({ type, hasQuery }: { type: "characters" | "personas"; hasQu
         )}
       </div>
       <h3 className="mb-1 text-lg font-semibold text-white/80">
-        {hasQuery
-          ? `No ${type} found`
-          : `No ${type} yet`
-        }
+        {hasQuery ? `No ${type} found` : `No ${type} yet`}
       </h3>
       <p className="text-sm text-white/40">
         {hasQuery
           ? "Try a different search term"
           : isCharacters
             ? "Create your first character to start chatting"
-            : "Create a persona in settings"
-        }
+            : "Create a persona in settings"}
       </p>
     </div>
   );
@@ -502,5 +471,7 @@ function EmptyState({ type, hasQuery }: { type: "characters" | "personas"; hasQu
 function isImageLike(s?: string) {
   if (!s) return false;
   const lower = s.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
+  return (
+    lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image")
+  );
 }

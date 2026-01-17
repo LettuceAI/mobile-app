@@ -115,6 +115,7 @@ pub struct Character {
     pub name: String,
     pub avatar_path: Option<String>,
     pub background_image_path: Option<String>,
+    pub definition: Option<String>,
     pub description: Option<String>,
     pub default_scene_id: Option<String>,
     pub default_model_id: Option<String>,

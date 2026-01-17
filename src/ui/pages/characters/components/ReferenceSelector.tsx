@@ -8,258 +8,268 @@ import { useAvatar } from "../../../hooks/useAvatar";
 import type { Character, Persona } from "../../../../core/storage/schemas";
 
 export interface Reference {
-    type: "character" | "persona";
-    id: string;
-    name: string;
-    description?: string;
-    avatarPath?: string;
+  type: "character" | "persona";
+  id: string;
+  name: string;
+  description?: string;
+  avatarPath?: string;
 }
 
 interface ReferenceSelectorProps {
-    isOpen: boolean;
-    onClose: () => void;
-    type: "character" | "persona";
-    onSelect: (ref: Reference) => void;
-    existingRefs?: Reference[];
+  isOpen: boolean;
+  onClose: () => void;
+  type: "character" | "persona";
+  onSelect: (ref: Reference) => void;
+  existingRefs?: Reference[];
 }
 
 function isImageLike(s?: string) {
-    if (!s) return false;
-    const lower = s.toLowerCase();
-    return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
+  if (!s) return false;
+  const lower = s.toLowerCase();
+  return (
+    lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image")
+  );
 }
 
 // Avatar component that uses the useAvatar hook
-export const ReferenceAvatar = memo(({
+export const ReferenceAvatar = memo(
+  ({
     type,
     id,
     avatarPath,
     name,
-    size = "md"
-}: {
+    size = "md",
+  }: {
     type: "character" | "persona";
     id: string;
     avatarPath?: string;
     name: string;
     size?: "sm" | "md";
-}) => {
+  }) => {
     const avatarUrl = useAvatar(type, id, avatarPath);
     const sizeClasses = size === "sm" ? "h-5 w-5" : "h-10 w-10";
     const iconSize = size === "sm" ? "h-3 w-3" : "h-5 w-5";
 
     if (avatarUrl && isImageLike(avatarUrl)) {
-        return (
-            <img
-                src={avatarUrl}
-                alt={name}
-                className={cn(sizeClasses, "rounded-full object-cover shrink-0")}
-            />
-        );
+      return (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className={cn(sizeClasses, "rounded-full object-cover shrink-0")}
+        />
+      );
     }
 
     // Fallback icon
     return (
-        <div className={cn(
-            sizeClasses,
-            "flex shrink-0 items-center justify-center rounded-full",
-            type === "character" ? "bg-purple-500/20" : "bg-amber-500/20"
-        )}>
-            {type === "character" ? (
-                <User className={cn(iconSize, "text-purple-300")} />
-            ) : (
-                <Users className={cn(iconSize, "text-amber-300")} />
-            )}
-        </div>
+      <div
+        className={cn(
+          sizeClasses,
+          "flex shrink-0 items-center justify-center rounded-full",
+          type === "character" ? "bg-purple-500/20" : "bg-amber-500/20",
+        )}
+      >
+        {type === "character" ? (
+          <User className={cn(iconSize, "text-purple-300")} />
+        ) : (
+          <Users className={cn(iconSize, "text-amber-300")} />
+        )}
+      </div>
     );
-});
+  },
+);
 
 ReferenceAvatar.displayName = "ReferenceAvatar";
 
 export function ReferenceSelector({
-    isOpen,
-    onClose,
-    type,
-    onSelect,
-    existingRefs = [],
+  isOpen,
+  onClose,
+  type,
+  onSelect,
+  existingRefs = [],
 }: ReferenceSelectorProps) {
-    const [search, setSearch] = useState("");
-    const [characters, setCharacters] = useState<Character[]>([]);
-    const [personas, setPersonas] = useState<Persona[]>([]);
-    const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (!isOpen) return;
+  useEffect(() => {
+    if (!isOpen) return;
 
-        const load = async () => {
-            setLoading(true);
-            try {
-                if (type === "character") {
-                    const chars = await listCharacters();
-                    setCharacters(chars);
-                } else {
-                    const pers = await listPersonas();
-                    setPersonas(pers);
-                }
-            } catch (err) {
-                console.error("Failed to load references:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        load();
-    }, [isOpen, type]);
-
-    const filteredItems = useMemo(() => {
-        const searchLower = search.toLowerCase();
-        const existingIds = new Set(existingRefs.map(r => r.id));
-
+    const load = async () => {
+      setLoading(true);
+      try {
         if (type === "character") {
-            return characters.filter(c =>
-                !existingIds.has(c.id) &&
-                (c.name.toLowerCase().includes(searchLower) ||
-                    c.description?.toLowerCase().includes(searchLower))
-            );
+          const chars = await listCharacters();
+          setCharacters(chars);
         } else {
-            return personas.filter(p =>
-                !existingIds.has(p.id) &&
-                (p.title.toLowerCase().includes(searchLower) ||
-                    p.description.toLowerCase().includes(searchLower))
-            );
+          const pers = await listPersonas();
+          setPersonas(pers);
         }
-    }, [type, characters, personas, search, existingRefs]);
-
-    const handleSelect = (item: Character | Persona) => {
-        if (type === "character") {
-            const char = item as Character;
-            onSelect({
-                type: "character",
-                id: char.id,
-                name: char.name,
-                description: char.description,
-                avatarPath: char.avatarPath,
-            });
-        } else {
-            const persona = item as Persona;
-            onSelect({
-                type: "persona",
-                id: persona.id,
-                name: persona.title,
-                description: persona.description,
-                avatarPath: persona.avatarPath,
-            });
-        }
-        onClose();
+      } catch (err) {
+        console.error("Failed to load references:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    return (
-        <BottomMenu
-            isOpen={isOpen}
-            onClose={onClose}
-            title={type === "character" ? "Select Character" : "Select Persona"}
-        >
-            <div className="space-y-4">
-                {/* Search Input */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={`Search ${type}s...`}
-                        className={cn(
-                            "w-full py-2.5 pl-10 pr-4",
-                            radius.lg,
-                            "bg-white/5 border border-white/15",
-                            "text-white placeholder-white/40 text-sm",
-                            "focus:outline-none focus:border-white/30"
-                        )}
-                    />
-                    {search && (
-                        <button
-                            onClick={() => setSearch("")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2"
-                        >
-                            <X className="h-4 w-4 text-white/40" />
-                        </button>
-                    )}
-                </div>
+    load();
+  }, [isOpen, type]);
 
-                {/* List */}
-                <div className="max-h-[50vh] overflow-y-auto -mx-4 px-4">
-                    {loading ? (
-                        <div className="flex items-center justify-center py-8">
-                            <span className="text-white/40 text-sm">Loading...</span>
-                        </div>
-                    ) : filteredItems.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                            <div className="mb-2 h-10 w-10 rounded-full bg-white/5 flex items-center justify-center">
-                                {type === "character" ? (
-                                    <User className="h-5 w-5 text-white/30" />
-                                ) : (
-                                    <Users className="h-5 w-5 text-white/30" />
-                                )}
-                            </div>
-                            <span className="text-white/40 text-sm">
-                                {search ? `No ${type}s match your search` : `No ${type}s available`}
-                            </span>
-                        </div>
-                    ) : (
-                        <AnimatePresence mode="popLayout">
-                            <div className="space-y-2">
-                                {filteredItems.map((item) => {
-                                    const name = type === "character"
-                                        ? (item as Character).name
-                                        : (item as Persona).title;
-                                    const desc = type === "character"
-                                        ? (item as Character).description
-                                        : (item as Persona).description;
-                                    const avatarPath = type === "character"
-                                        ? (item as Character).avatarPath
-                                        : (item as Persona).avatarPath;
+  const filteredItems = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    const existingIds = new Set(existingRefs.map((r) => r.id));
 
-                                    return (
-                                        <motion.button
-                                            key={item.id}
-                                            initial={{ opacity: 0, y: 5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0 }}
-                                            onClick={() => handleSelect(item)}
-                                            className={cn(
-                                                "w-full text-left p-3",
-                                                radius.lg,
-                                                "bg-white/5 border border-white/10",
-                                                interactive.transition.fast,
-                                                "hover:bg-white/10 hover:border-white/20"
-                                            )}
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <ReferenceAvatar
-                                                    type={type}
-                                                    id={item.id}
-                                                    avatarPath={avatarPath}
-                                                    name={name}
-                                                    size="md"
-                                                />
-                                                <div className="flex-1 min-w-0">
-                                                    <div className={cn(typography.body.size, "font-medium text-white truncate")}>
-                                                        {name}
-                                                    </div>
-                                                    {desc && (
-                                                        <div className="text-sm text-white/50 line-clamp-2 mt-0.5">
-                                                            {desc}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </motion.button>
-                                    );
-                                })}
-                            </div>
-                        </AnimatePresence>
-                    )}
-                </div>
+    if (type === "character") {
+      return characters.filter((c) => {
+        const desc = `${c.description ?? ""} ${c.definition ?? ""}`.toLowerCase();
+        return (
+          !existingIds.has(c.id) &&
+          (c.name.toLowerCase().includes(searchLower) || desc.includes(searchLower))
+        );
+      });
+    } else {
+      return personas.filter(
+        (p) =>
+          !existingIds.has(p.id) &&
+          (p.title.toLowerCase().includes(searchLower) ||
+            p.description.toLowerCase().includes(searchLower)),
+      );
+    }
+  }, [type, characters, personas, search, existingRefs]);
+
+  const handleSelect = (item: Character | Persona) => {
+    if (type === "character") {
+      const char = item as Character;
+      onSelect({
+        type: "character",
+        id: char.id,
+        name: char.name,
+        description: char.definition || char.description,
+        avatarPath: char.avatarPath,
+      });
+    } else {
+      const persona = item as Persona;
+      onSelect({
+        type: "persona",
+        id: persona.id,
+        name: persona.title,
+        description: persona.description,
+        avatarPath: persona.avatarPath,
+      });
+    }
+    onClose();
+  };
+
+  return (
+    <BottomMenu
+      isOpen={isOpen}
+      onClose={onClose}
+      title={type === "character" ? "Select Character" : "Select Persona"}
+    >
+      <div className="space-y-4">
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Search ${type}s...`}
+            className={cn(
+              "w-full py-2.5 pl-10 pr-4",
+              radius.lg,
+              "bg-white/5 border border-white/15",
+              "text-white placeholder-white/40 text-sm",
+              "focus:outline-none focus:border-white/30",
+            )}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
+              <X className="h-4 w-4 text-white/40" />
+            </button>
+          )}
+        </div>
+
+        {/* List */}
+        <div className="max-h-[50vh] overflow-y-auto -mx-4 px-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <span className="text-white/40 text-sm">Loading...</span>
             </div>
-        </BottomMenu>
-    );
+          ) : filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="mb-2 h-10 w-10 rounded-full bg-white/5 flex items-center justify-center">
+                {type === "character" ? (
+                  <User className="h-5 w-5 text-white/30" />
+                ) : (
+                  <Users className="h-5 w-5 text-white/30" />
+                )}
+              </div>
+              <span className="text-white/40 text-sm">
+                {search ? `No ${type}s match your search` : `No ${type}s available`}
+              </span>
+            </div>
+          ) : (
+            <AnimatePresence mode="popLayout">
+              <div className="space-y-2">
+                {filteredItems.map((item) => {
+                  const name =
+                    type === "character" ? (item as Character).name : (item as Persona).title;
+                  const desc =
+                    type === "character"
+                      ? (item as Character).description || (item as Character).definition
+                      : (item as Persona).description;
+                  const avatarPath =
+                    type === "character"
+                      ? (item as Character).avatarPath
+                      : (item as Persona).avatarPath;
+
+                  return (
+                    <motion.button
+                      key={item.id}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => handleSelect(item)}
+                      className={cn(
+                        "w-full text-left p-3",
+                        radius.lg,
+                        "bg-white/5 border border-white/10",
+                        interactive.transition.fast,
+                        "hover:bg-white/10 hover:border-white/20",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <ReferenceAvatar
+                          type={type}
+                          id={item.id}
+                          avatarPath={avatarPath}
+                          name={name}
+                          size="md"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className={cn(typography.body.size, "font-medium text-white truncate")}
+                          >
+                            {name}
+                          </div>
+                          {desc && (
+                            <div className="text-sm text-white/50 line-clamp-2 mt-0.5">{desc}</div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </AnimatePresence>
+          )}
+        </div>
+      </div>
+    </BottomMenu>
+  );
 }

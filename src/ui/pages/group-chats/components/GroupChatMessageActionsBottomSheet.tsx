@@ -144,14 +144,21 @@ export function GroupChatMessageActionsBottomSheet({
             {messageAction.message.usage && (
               <div className="flex items-center gap-x-3 text-xs text-white/40 mb-4">
                 <div className="flex items-center gap-2 border-r border-white/10 pr-3">
-                  <span title="Prompt Tokens">↓{messageAction.message.usage.promptTokens ?? 0}</span>
-                  <span title="Completion Tokens">↑{messageAction.message.usage.completionTokens ?? 0}</span>
-                </div>               
+                  <span title="Prompt Tokens">
+                    ↓{messageAction.message.usage.promptTokens ?? 0}
+                  </span>
+                  <span title="Completion Tokens">
+                    ↑{messageAction.message.usage.completionTokens ?? 0}
+                  </span>
+                </div>
                 <div className="flex-1">
-                  <span className="text-white/60">{modelName || messageAction.message.modelId}</span>
+                  <span className="text-white/60">
+                    {modelName || messageAction.message.modelId}
+                  </span>
                 </div>
                 <div className="tabular-nums">
-                  {(messageAction.message.usage.totalTokens ?? 0).toLocaleString()} <span className="text-[12px] uppercase opacity-50">total</span>
+                  {(messageAction.message.usage.totalTokens ?? 0).toLocaleString()}{" "}
+                  <span className="text-[12px] uppercase opacity-50">total</span>
                 </div>
               </div>
             )}
@@ -306,6 +313,7 @@ function CharacterPickerItem({
   onClick: () => void;
 }) {
   const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const description = character.description || character.definition;
 
   return (
     <button
@@ -335,9 +343,7 @@ function CharacterPickerItem({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-white truncate">{character.name}</p>
-        {character.description && (
-          <p className="text-xs text-white/50 truncate">{character.description}</p>
-        )}
+        {description && <p className="text-xs text-white/50 truncate">{description}</p>}
       </div>
     </button>
   );

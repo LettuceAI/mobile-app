@@ -60,9 +60,10 @@ export function GroupChatFooter({
   const filteredCharacters = useMemo(() => {
     if (!mentionQuery) return characters;
     const query = mentionQuery.toLowerCase();
-    return characters.filter(
-      (c) => c.name.toLowerCase().includes(query) || c.description?.toLowerCase().includes(query),
-    );
+    return characters.filter((c) => {
+      const description = `${c.description ?? ""} ${c.definition ?? ""}`.toLowerCase();
+      return c.name.toLowerCase().includes(query) || description.includes(query);
+    });
   }, [characters, mentionQuery]);
 
   useEffect(() => {
@@ -524,6 +525,8 @@ function MentionPickerItem({
     );
   };
 
+  const description = character.description || character.definition;
+
   return (
     <button
       onClick={onClick}
@@ -551,10 +554,10 @@ function MentionPickerItem({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-white truncate">{highlightMatch(character.name)}</p>
-        {character.description && (
+        {description && (
           <p className="text-[11px] text-white/40 truncate">
-            {character.description.slice(0, 50)}
-            {character.description.length > 50 ? "..." : ""}
+            {description.slice(0, 50)}
+            {description.length > 50 ? "..." : ""}
           </p>
         )}
       </div>

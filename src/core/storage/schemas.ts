@@ -1035,6 +1035,7 @@ export const CharacterSchema = z.object({
   name: z.string().min(1),
   avatarPath: z.string().optional(),
   backgroundImagePath: z.string().optional(),
+  definition: z.string().optional(),
   description: z.string().optional(),
   rules: z.array(z.string()).default([]),
   scenes: z.array(SceneSchema).default([]),

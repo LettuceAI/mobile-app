@@ -135,6 +135,8 @@ export function CreateCharacterPage() {
           ) : (
             <DescriptionStep
               key="description"
+              definition={state.definition}
+              onDefinitionChange={actions.setDefinition}
               description={state.description}
               onDescriptionChange={actions.setDescription}
               models={state.models}

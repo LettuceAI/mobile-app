@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 29;
+pub const CURRENT_MIGRATION_VERSION: u32 = 30;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -327,6 +327,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v28_to_v29(app)?;
         version = 29;
+    }
+
+    if version < 30 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v29 -> v30: Add definition column to characters",
+        );
+        migrate_v29_to_v30(app)?;
+        version = 30;
     }
 
     // Update the stored version
@@ -1142,6 +1152,39 @@ fn migrate_v28_to_v29(app: &AppHandle) -> Result<(), String> {
             [],
         );
     }
+
+    Ok(())
+}
+
+fn migrate_v29_to_v30(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    let mut has_definition = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(characters)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        if name == "definition" {
+            has_definition = true;
+            break;
+        }
+    }
+
+    if !has_definition {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN definition TEXT", []);
+    }
+
+    let _ = conn.execute(
+        "UPDATE characters SET definition = description WHERE (definition IS NULL OR definition = '') AND description IS NOT NULL",
+        [],
+    );
 
     Ok(())
 }

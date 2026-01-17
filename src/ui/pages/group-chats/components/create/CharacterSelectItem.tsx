@@ -10,12 +10,9 @@ type CharacterSelectItemProps = {
   onToggle: () => void;
 };
 
-export function CharacterSelectItem({
-  character,
-  selected,
-  onToggle,
-}: CharacterSelectItemProps) {
+export function CharacterSelectItem({ character, selected, onToggle }: CharacterSelectItemProps) {
   const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const description = character.description || character.definition;
 
   return (
     <button
@@ -56,9 +53,9 @@ export function CharacterSelectItem({
         >
           {character.name}
         </h3>
-        {character.description && (
+        {description && (
           <p className={cn("truncate text-sm", selected ? "text-emerald-200/60" : "text-white/50")}>
-            {character.description}
+            {description}
           </p>
         )}
       </div>
