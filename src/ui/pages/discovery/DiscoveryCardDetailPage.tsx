@@ -33,8 +33,8 @@ import {
   type DiscoveryCardDetailResponse,
   type AuthorInfo,
 } from "../../../core/discovery";
-import { MarkdownRenderer } from "../chats/components/MarkdownRenderer.tsx";
-import { BottomMenu } from "../../components";
+import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
+import { BottomMenu, MenuButton, MenuButtonGroup, MenuDivider } from "../../components";
 import { createSession } from "../../../core/storage/repo";
 
 interface TokenStat {
@@ -697,50 +697,62 @@ export function DiscoveryCardDetailPage() {
         title="Character Downloaded!"
       >
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-              <CheckCircle2 className="h-6 w-6 text-emerald-400" />
-            </div>
-            <div>
-              <p className="font-semibold text-white">{card.name}</p>
-              <p className="text-sm text-white/60">Added to your library</p>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/10"
+                  style={{ background: fallbackGradient }}
+                >
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={card.name}
+                      className={cn("h-full w-full object-cover", card.isNsfw && "blur-md")}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-base font-semibold text-white/70">
+                      {card.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{card.name}</p>
+                  <p className="text-xs text-white/50">Added to your library</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                  Saved
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <button
+          <MenuButtonGroup>
+            <MenuButton
+              icon={Play}
+              title="Start Chat"
+              description="Open the first scene now"
+              color="from-emerald-500 to-emerald-600"
               onClick={handleStartChat}
-              className={cn(
-                "flex w-full items-center justify-center gap-2 rounded-xl py-3",
-                "bg-emerald-500 text-sm font-semibold text-white",
-                interactive.active.scale,
-              )}
-            >
-              <Play className="h-4 w-4" />
-              Start Chatting
-            </button>
-
-            <button
+            />
+            <MenuButton
+              icon={BookOpen}
+              title="View in Library"
+              description="Edit, manage, or export later"
+              color="from-blue-500 to-cyan-600"
               onClick={handleViewInLibrary}
-              className={cn(
-                "flex w-full items-center justify-center gap-2 rounded-xl py-3",
-                "border border-white/15 bg-white/5",
-                "text-sm font-medium text-white",
-                "hover:bg-white/10",
-                interactive.active.scale,
-              )}
-            >
-              <BookOpen className="h-4 w-4" />
-              View in Library
-            </button>
+            />
+          </MenuButtonGroup>
 
-            <button
-              onClick={() => setShowDownloadMenu(false)}
-              className="w-full py-2 text-sm text-white/50 transition-all hover:text-white"
-            >
-              Continue Browsing
-            </button>
-          </div>
+          <MenuButton
+            icon={ArrowLeft}
+            title="Continue Browsing"
+            description="Back to discovery"
+            onClick={() => setShowDownloadMenu(false)}
+          />
         </div>
       </BottomMenu>
     </div>
