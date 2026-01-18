@@ -17,7 +17,9 @@
 }
 
 @keyframes bounce {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     transform: scale(0);
   }
   40% {
@@ -25,8 +27,18 @@
   }
 }
 
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes dotPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.2;
     transform: scale(0.9);
   }
@@ -67,12 +79,33 @@
   -webkit-text-size-adjust: 100%;
 }
 
-html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow-x: hidden; overscroll-behavior: none; min-height: -webkit-fill-available; }
-#root { height: 100%; width: 100%; }
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  min-height: -webkit-fill-available;
+}
+#root {
+  height: 100%;
+  width: 100%;
+}
 
-
-*, *::before, *::after { box-sizing: border-box; }
-body, .app-shell, .app-main { overflow-x: hidden; background: linear-gradient(to bottom, #050505, #000000); color: #f5f5f5; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body,
+.app-shell,
+.app-main {
+  overflow-x: hidden;
+  background: linear-gradient(to bottom, #050505, #000000);
+  color: #f5f5f5;
+}
 
 .container {
   margin: 0;
@@ -98,15 +131,14 @@ body, .app-shell, .app-main { overflow-x: hidden; background: linear-gradient(to
   margin-right: 5px;
 }
 
-
-button { padding: 0.6em 0.9em; }
+button {
+  padding: 0.6em 0.9em;
+}
 .audio-btn {
   padding: 0 !important;
   min-height: 25px !important;
   line-height: 1 !important;
 }
-
-
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -154,7 +186,7 @@ input[type="range"]::-moz-range-track {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  margin-top: -5px; 
+  margin-top: -5px;
   background-color: #ffffff;
   height: 16px;
   width: 16px;
