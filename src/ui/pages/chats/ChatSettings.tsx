@@ -189,7 +189,7 @@ function QuickChip({
     </button>
   );
 }
-
+/*
 interface ModelOptionProps {
   model: Model;
   isSelected: boolean;
@@ -197,6 +197,7 @@ interface ModelOptionProps {
   isCharacterDefault: boolean;
   onClick: () => void;
 }
+
 function ModelOption({
   model,
   isSelected,
@@ -263,7 +264,7 @@ function ModelOption({
       </div>
     </button>
   );
-}
+}*/
 
 function ChatSettingsContent({ character }: { character: Character }) {
   const navigate = useNavigate();

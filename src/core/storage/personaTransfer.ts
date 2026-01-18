@@ -20,7 +20,7 @@ export interface PersonaExportData {
 }
 
 /**
- * Export a persona to a JSON package
+ * Export a persona to a UEC package
  * Returns JSON string with all persona data and embedded avatar
  */
 export async function exportPersona(personaId: string): Promise<string> {
@@ -36,7 +36,7 @@ export async function exportPersona(personaId: string): Promise<string> {
 }
 
 /**
- * Import a persona from a JSON package
+ * Import a persona from a UEC package
  * Creates a new persona with new ID
  * Returns the newly created persona
  */
@@ -99,5 +99,5 @@ export function readFileAsText(file: File): Promise<string> {
 export function generateExportFilename(personaTitle: string): string {
   const safeName = personaTitle.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
   const timestamp = new Date().toISOString().split("T")[0];
-  return `persona_${safeName}_${timestamp}.json`;
+  return `persona_${safeName}_${timestamp}.uec`;
 }

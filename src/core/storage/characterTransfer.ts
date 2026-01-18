@@ -1,43 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Character, CharacterVoiceConfig } from "./schemas";
-
-/**
- * Character export package format
- */
-export interface CharacterExportPackage {
-  version: number;
-  exportedAt: number;
-  character: CharacterExportData;
-  avatarData?: string;
-  backgroundImageData?: string;
-}
-
-/**
- * Character data in export (without provider/model references)
- */
-export interface CharacterExportData {
-  originalId: string;
-  name: string;
-  definition?: string;
-  description?: string;
-  rules: string[];
-  scenes: SceneExport[];
-  defaultSceneId?: string;
-  memoryType?: "manual" | "dynamic";
-  promptTemplateId?: string;
-  systemPrompt?: string;
-  voiceConfig?: CharacterVoiceConfig;
-  voiceAutoplay?: boolean;
-  disableAvatarGradient: boolean;
-  createdAt: number;
-  updatedAt: number;
-}
+import type { Character } from "./schemas";
 
 export interface SceneExport {
   id: string;
   content: string;
   direction?: string;
-  createdAt: number;
+  createdAt?: number;
   selectedVariantId?: string;
   variants: SceneVariantExport[];
 }
@@ -46,11 +14,24 @@ export interface SceneVariantExport {
   id: string;
   content: string;
   direction?: string;
-  createdAt: number;
+  createdAt?: number;
+}
+
+export interface CharacterImportPreview {
+  name: string;
+  description: string;
+  definition: string;
+  scenes: SceneExport[];
+  defaultSceneId: string | null;
+  promptTemplateId: string | null;
+  memoryType: "manual" | "dynamic";
+  disableAvatarGradient: boolean;
+  avatarData?: string | null;
+  backgroundImageData?: string | null;
 }
 
 /**
- * Export a character to a JSON package
+ * Export a character to a UEC package
  * Returns JSON string with all character data and embedded images
  */
 export async function exportCharacter(characterId: string): Promise<string> {
@@ -66,7 +47,7 @@ export async function exportCharacter(characterId: string): Promise<string> {
 }
 
 /**
- * Import a character from a JSON package
+ * Import a character from a UEC package
  * Creates a new character with new IDs
  * Returns the newly created character
  */
@@ -80,6 +61,19 @@ export async function importCharacter(importJson: string): Promise<Character> {
   } catch (error) {
     console.error("[importCharacter] Failed to import character:", error);
     throw new Error(typeof error === "string" ? error : "Failed to import character");
+  }
+}
+
+/**
+ * Parse an import file into a preview payload for the character form
+ */
+export async function previewCharacterImport(importJson: string): Promise<CharacterImportPreview> {
+  try {
+    const previewJson = await invoke<string>("character_import_preview", { importJson });
+    return JSON.parse(previewJson) as CharacterImportPreview;
+  } catch (error) {
+    console.error("[previewCharacterImport] Failed to parse character:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to parse character");
   }
 }
 
@@ -129,5 +123,5 @@ export function readFileAsText(file: File): Promise<string> {
 export function generateExportFilename(characterName: string): string {
   const safeName = characterName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
   const timestamp = new Date().toISOString().split("T")[0];
-  return `character_${safeName}_${timestamp}.json`;
+  return `character_${safeName}_${timestamp}.uec`;
 }

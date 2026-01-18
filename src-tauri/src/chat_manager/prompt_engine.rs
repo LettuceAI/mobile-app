@@ -756,6 +756,7 @@ mod tests {
             avatar_path: None,
             background_image_path: None,
             description: Some("I am {{char}}. Partner: {{persona}}.".into()),
+            definition: Some("I am {{char}}. Partner: {{persona}}.".into()),
             rules: vec![],
             scenes: vec![],
             default_scene_id: None,

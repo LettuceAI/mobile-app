@@ -124,6 +124,8 @@ pub fn run() {
             storage_manager::lorebook::lorebook_entries_reorder,
             storage_manager::character_transfer::character_export,
             storage_manager::character_transfer::character_import,
+            storage_manager::character_transfer::character_import_preview,
+            storage_manager::character_transfer::convert_export_to_uec,
             storage_manager::character_transfer::persona_export,
             storage_manager::character_transfer::persona_import,
             storage_manager::character_transfer::import_package,

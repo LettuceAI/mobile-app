@@ -300,13 +300,12 @@ export function IdentityStep({
             Import Character from File
             <input
               type="file"
-              accept="application/json,.json"
               onChange={onImport}
               className="hidden"
             />
           </label>
           <p className={cn(typography.bodySmall.size, "mt-2 text-center text-white/40")}>
-            Load a character from a .json export file
+            Load a character from a .uec (or .json) export file
           </p>
         </div>
       )}

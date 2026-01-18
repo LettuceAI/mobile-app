@@ -19,9 +19,9 @@ export async function importPackage(importJson: string): Promise<GenericImportRe
     console.log("[importPackage] Importing package with auto-detection");
     const resultJson = await invoke<string>("import_package", { importJson });
     const result = JSON.parse(resultJson);
-    
+
     console.log("[importPackage] Import successful, type:", result.importType);
-    
+
     return {
       importType: result.importType,
       data: result,
@@ -33,11 +33,27 @@ export async function importPackage(importJson: string): Promise<GenericImportRe
 }
 
 /**
+ * Convert a legacy export package to a UEC JSON string.
+ */
+export async function convertImportToUec(importJson: string): Promise<string> {
+  try {
+    const convertedJson = await invoke<string>("convert_export_to_uec", { importJson });
+    return convertedJson;
+  } catch (error) {
+    console.error("[convertImportToUec] Failed to convert package:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to convert package");
+  }
+}
+
+/**
  * Helper to check if import JSON is a character export
  */
 export function isCharacterExport(importJson: string): boolean {
   try {
     const parsed = JSON.parse(importJson);
+    if (parsed?.schema?.name === "UEC") {
+      return parsed.kind === "character";
+    }
     return parsed.type === "character";
   } catch {
     return false;
@@ -50,6 +66,9 @@ export function isCharacterExport(importJson: string): boolean {
 export function isPersonaExport(importJson: string): boolean {
   try {
     const parsed = JSON.parse(importJson);
+    if (parsed?.schema?.name === "UEC") {
+      return parsed.kind === "persona";
+    }
     return parsed.type === "persona";
   } catch {
     return false;

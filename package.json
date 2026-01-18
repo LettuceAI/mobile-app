@@ -28,6 +28,7 @@
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^6.30.3",
     "recharts": "^3.6.0",
+    "sonner": "^2.0.7",
     "tauri-plugin-android-fs-api": "^23.0.1",
     "tauri-plugin-app-events-api": "^0.2.0",
     "tauri-plugin-tts-api": "0.1.1",

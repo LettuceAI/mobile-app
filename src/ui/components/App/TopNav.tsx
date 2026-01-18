@@ -43,6 +43,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
       { match: (p) => p === "/settings/accessibility", title: "Accessibility" },
       { match: (p) => p === "/settings/reset", title: "Reset" },
       { match: (p) => p === "/settings/backup", title: "Backup & Restore" },
+      { match: (p) => p === "/settings/convert", title: "Convert Files" },
       { match: (p) => p === "/settings/usage", title: "Usage Analytics" },
       { match: (p) => p === "/settings/changelog", title: "Changelog" },
       { match: (p) => p === "/settings/prompts/new", title: "Create Template" },

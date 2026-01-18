@@ -2845,6 +2845,7 @@ dependencies = [
  "tokenizers",
  "tokio",
  "tokio-util",
+ "unified-entity-card",
  "url",
  "urlencoding",
  "uuid",
@@ -6609,6 +6610,16 @@ name = "unicode_categories"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
+
+[[package]]
+name = "unified-entity-card"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0906f2fae0d735955feb6c843c24f90f8d4af28105d52351c158c1303dea47fc"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "universal-hash"

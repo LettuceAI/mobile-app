@@ -11,7 +11,8 @@ import type {
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
-import { readFileAsText } from "../../../../core/storage/characterTransfer";
+import { previewCharacterImport, readFileAsText } from "../../../../core/storage/characterTransfer";
+import { toast } from "../../../components/toast";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
@@ -345,32 +346,26 @@ export function useCharacterForm(draftCharacter?: any) {
 
     try {
       dispatch({ type: "SET_ERROR", payload: null });
-      const jsonContent = await readFileAsText(file);
-
-      const exportPackage = JSON.parse(jsonContent);
-
-      if (exportPackage.type && exportPackage.type !== "character") {
-        throw new Error(
-          `Invalid import: This is a ${exportPackage.type} export, not a character export`,
+      if (file.name.toLowerCase().endsWith(".json")) {
+        toast.warning(
+          "Legacy JSON import detected",
+          "JSON imports are deprecated and will be removed soon. Use Settings → Convert Files.",
         );
       }
+      const jsonContent = await readFileAsText(file);
 
-      if (!exportPackage.character) {
-        throw new Error("Invalid character export file");
-      }
-
-      const characterData = exportPackage.character;
+      const characterData = await previewCharacterImport(jsonContent);
 
       const sceneIdMap = new Map<string, string>();
 
-      const newScenes = characterData.scenes.map((scene: any) => {
+      const newScenes = characterData.scenes.map((scene) => {
         const newSceneId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
         sceneIdMap.set(scene.id, newSceneId);
 
         const variantIdMap = new Map<string, string>();
 
         const newVariants =
-          scene.variants?.map((variant: any) => {
+          scene.variants?.map((variant) => {
             const newVariantId =
               globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
             variantIdMap.set(variant.id, newVariantId);
@@ -421,12 +416,15 @@ export function useCharacterForm(draftCharacter?: any) {
         payload: state.dynamicMemoryEnabled ? importedMemoryType : "manual",
       });
 
-      if (exportPackage.avatarData) {
-        dispatch({ type: "SET_AVATAR_PATH", payload: exportPackage.avatarData });
+      if (characterData.avatarData) {
+        dispatch({ type: "SET_AVATAR_PATH", payload: characterData.avatarData });
       }
 
-      if (exportPackage.backgroundImageData) {
-        dispatch({ type: "SET_BACKGROUND_IMAGE_PATH", payload: exportPackage.backgroundImageData });
+      if (characterData.backgroundImageData) {
+        dispatch({
+          type: "SET_BACKGROUND_IMAGE_PATH",
+          payload: characterData.backgroundImageData,
+        });
       }
 
       console.log("[handleImport] Character data loaded into form, ready to save");

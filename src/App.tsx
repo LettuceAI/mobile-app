@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { Toaster } from "sonner";
 
 import { WelcomePage, OnboardingPage } from "./ui/pages/onboarding";
 import { WhereToFindPage } from "./ui/pages/onboarding/WhereToFind";
@@ -14,6 +15,7 @@ import { EditPromptTemplate } from "./ui/pages/settings/EditPromptTemplate";
 import { SecurityPage } from "./ui/pages/settings/SecurityPage";
 import { ResetPage } from "./ui/pages/settings/ResetPage";
 import { BackupRestorePage } from "./ui/pages/settings/BackupRestorePage";
+import { ConvertPage } from "./ui/pages/settings/ConvertPage";
 import { UsagePage } from "./ui/pages/settings/UsagePage";
 import { AccessibilityPage } from "./ui/pages/settings/AccessibilityPage";
 import { LogsPage } from "./ui/pages/settings/LogsPage";
@@ -143,6 +145,14 @@ function App() {
         }}
       >
         <div id="app-root" className="min-h-screen bg-[#050505] text-gray-100 antialiased">
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              unstyled: true,
+              className: "pointer-events-auto w-full max-w-md",
+              descriptionClassName: "text-xs text-white/70",
+            }}
+          />
           <AppContent />
         </div>
       </BrowserRouter>
@@ -321,6 +331,7 @@ function AppContent() {
               <Route path="/settings/developer" element={<DeveloperPage />} />
               <Route path="/settings/reset" element={<ResetPage />} />
               <Route path="/settings/backup" element={<BackupRestorePage />} />
+              <Route path="/settings/convert" element={<ConvertPage />} />
               <Route path="/settings/sync" element={<SyncPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/chat/:characterId" element={<ChatConversationPage />} />

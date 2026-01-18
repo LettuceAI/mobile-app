@@ -4,6 +4,7 @@ import { savePersona } from "../../../../core/storage/repo";
 import { saveAvatar } from "../../../../core/storage/avatars";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
 import { importPersona, readFileAsText } from "../../../../core/storage/personaTransfer";
+import { toast } from "../../../components/toast";
 
 export interface PersonaFormState {
   title: string;
@@ -23,7 +24,10 @@ export type PersonaFormAction =
   | { type: "set_saving"; value: boolean }
   | { type: "set_importing"; value: boolean }
   | { type: "set_error"; value: string | null }
-  | { type: "hydrate_from_import"; payload: { title: string; description: string; avatarPath: string | null } };
+  | {
+      type: "hydrate_from_import";
+      payload: { title: string; description: string; avatarPath: string | null };
+    };
 
 export const initialCreatePersonaState: PersonaFormState = {
   title: "",
@@ -35,7 +39,10 @@ export const initialCreatePersonaState: PersonaFormState = {
   error: null,
 };
 
-export function createPersonaReducer(state: PersonaFormState, action: PersonaFormAction): PersonaFormState {
+export function createPersonaReducer(
+  state: PersonaFormState,
+  action: PersonaFormAction,
+): PersonaFormState {
   switch (action.type) {
     case "set_title":
       return { ...state, title: action.value };
@@ -71,10 +78,13 @@ export function useCreatePersonaController() {
 
   const canSave = useMemo(
     () => state.title.trim().length > 0 && state.description.trim().length > 0 && !state.saving,
-    [state.title, state.description, state.saving]
+    [state.title, state.description, state.saving],
   );
 
-  const topNavPath = useMemo(() => location.pathname + location.search, [location.pathname, location.search]);
+  const topNavPath = useMemo(
+    () => location.pathname + location.search,
+    [location.pathname, location.search],
+  );
 
   const handleAvatarUpload = () => {
     const input = document.createElement("input");
@@ -96,20 +106,19 @@ export function useCreatePersonaController() {
   const handleImport = async () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json";
     input.onchange = async (event) => {
       const file = (event.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
       try {
         dispatch({ type: "set_importing", value: true });
-        const jsonContent = await readFileAsText(file);
-        const exportPackage = JSON.parse(jsonContent);
-
-        if (exportPackage.type && exportPackage.type !== "persona") {
-          throw new Error(`Invalid import: This is a ${exportPackage.type} export, not a persona export`);
+        if (file.name.toLowerCase().endsWith(".json")) {
+          toast.warning(
+            "Legacy JSON import detected",
+            "JSON imports are deprecated and will be removed soon. Use Settings → Convert Files.",
+          );
         }
-
+        const jsonContent = await readFileAsText(file);
         const importedPersona = await importPersona(jsonContent);
 
         dispatch({
