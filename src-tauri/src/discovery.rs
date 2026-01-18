@@ -7,6 +7,7 @@ use crate::utils::{log_error, log_info};
 
 const DISCOVERY_BASE_URL: &str = "https://character-tavern.com/api/homepage/cards";
 const CARD_DETAIL_BASE_URL: &str = "https://character-tavern.com/api/character";
+const CARD_SEARCH_BASE_URL: &str = "https://character-tavern.com/api/search/cards";
 const CARD_IMAGE_BASE_URL: &str = "https://cards.character-tavern.com/cdn-cgi/image";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +25,7 @@ pub struct DiscoveryCard {
     pub page_description: Option<String>,
     #[serde(default)]
     pub author: Option<String>,
-    #[serde(default)]
+    #[serde(default, rename = "isNSFW", alias = "isNsfw")]
     pub is_nsfw: Option<bool>,
     #[serde(default)]
     pub content_warnings: Vec<String>,
@@ -48,13 +49,31 @@ pub struct DiscoveryCard {
     pub total_tokens: Option<i64>,
     #[serde(default)]
     pub has_lorebook: Option<bool>,
-    #[serde(default)]
+    #[serde(default, rename = "isOC", alias = "isOc")]
     pub is_oc: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DiscoveryResponse {
     hits: Vec<DiscoveryCard>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverySearchResponse {
+    pub hits: Vec<DiscoveryCard>,
+    #[serde(default)]
+    pub total_hits: Option<i64>,
+    #[serde(default)]
+    pub hits_per_page: Option<i64>,
+    #[serde(default)]
+    pub page: Option<i64>,
+    #[serde(default)]
+    pub total_pages: Option<i64>,
+    #[serde(default)]
+    pub processing_time_ms: Option<i64>,
+    #[serde(default)]
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +100,7 @@ pub struct DiscoveryCardDetail {
     pub tagline: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
-    #[serde(default)]
+    #[serde(default, rename = "isNSFW", alias = "isNsfw")]
     pub is_nsfw: Option<bool>,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -129,7 +148,7 @@ pub struct DiscoveryCardDetail {
     pub analytics_downloads: Option<i64>,
     #[serde(default)]
     pub analytics_messages: Option<i64>,
-    #[serde(default)]
+    #[serde(default, rename = "isOC", alias = "isOc")]
     pub is_oc: Option<bool>,
 }
 
@@ -429,4 +448,60 @@ pub async fn discovery_fetch_sections(
         popular,
         trending,
     })
+}
+
+#[tauri::command]
+pub async fn discovery_search_cards(
+    app: AppHandle,
+    query: Option<String>,
+    page: Option<u32>,
+    limit: Option<u32>,
+) -> Result<DiscoverySearchResponse, String> {
+    let mut params: Vec<(String, String)> = Vec::new();
+    if let Some(query) = query
+        .map(|q| q.trim().to_string())
+        .filter(|q| !q.is_empty())
+    {
+        params.push(("query".to_string(), query));
+    }
+
+    if let Some(page) = page {
+        if page > 0 {
+            params.push(("page".to_string(), page.to_string()));
+        }
+    }
+
+    let limit = limit.unwrap_or(30).max(1);
+    params.push(("limit".to_string(), limit.to_string()));
+
+    log_info(
+        &app,
+        "discovery_search",
+        format!("fetching search cards with params {:?}", params),
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(CARD_SEARCH_BASE_URL)
+        .query(&params)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        log_error(
+            &app,
+            "discovery_search",
+            format!("search fetch failed: {} {}", status, text),
+        );
+        return Err(format!(
+            "Discovery search request failed: {} {}",
+            status, text
+        ));
+    }
+
+    resp.json::<DiscoverySearchResponse>()
+        .await
+        .map_err(|e| e.to_string())
 }

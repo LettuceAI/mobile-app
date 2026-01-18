@@ -275,6 +275,7 @@ pub fn run() {
             discovery::discovery_fetch_card_detail,
             discovery::discovery_fetch_cards,
             discovery::discovery_fetch_sections,
+            discovery::discovery_search_cards,
             // Group chat commands
             storage_manager::group_sessions::group_sessions_list,
             storage_manager::group_sessions::group_sessions_list_all,
