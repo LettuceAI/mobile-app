@@ -68,6 +68,12 @@ export const Routes = {
   groupChatSettings: (groupSessionId: string) => `/group-chats/${groupSessionId}/settings`,
   groupChatMemories: (groupSessionId: string) => `/group-chats/${groupSessionId}/memories`,
   groupChatHistory: "/group-chats/history",
+  // Discovery routes
+  discover: "/discover",
+  discoverSearch: "/discover/search",
+  discoverBrowse: (section: "trending" | "popular" | "newest") =>
+    `/discover/browse?section=${section}`,
+  discoverCard: (path: string) => `/discover/card/${encodeURIComponent(path)}`,
 } as const;
 
 export type BackMapping = {
@@ -98,6 +104,10 @@ export const BACK_MAPPINGS: BackMapping[] = [
   { match: (p) => p === "/group-chats/history", target: Routes.groupChats },
   { match: (p) => p.startsWith("/group-chats/new"), target: Routes.groupChats },
   { match: (p) => p.match(/^\/group-chats\/[^/]+$/) !== null, target: Routes.groupChats },
+  // Discovery back navigation
+  { match: (p) => p.startsWith("/discover/card/"), target: Routes.discover },
+  { match: (p) => p.startsWith("/discover/browse"), target: Routes.discover },
+  { match: (p) => p.startsWith("/discover/search"), target: Routes.discover },
   { match: (p) => p.startsWith("/settings/advanced/memory"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-download"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-test"), target: "/settings/advanced" },

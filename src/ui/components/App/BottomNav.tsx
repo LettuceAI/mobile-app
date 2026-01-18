@@ -1,4 +1,4 @@
-import { MessageCircle, Plus, Library, Users, Search } from "lucide-react";
+import { MessageCircle, Plus, Library, Users, Compass } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 import { TabItem } from "./NavItem";
@@ -57,7 +57,7 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
           active={pathname.startsWith("/group-chats")}
           className="flex-1 h-12 text-sm"
         />
-        
+
         <button
           onClick={handleCreateClick}
           className="flex flex-1 h-12 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-white/25 hover:bg-white/20"
@@ -67,10 +67,10 @@ export function BottomNav({ onCreateClick }: { onCreateClick: () => void }) {
         </button>
 
         <TabItem
-          to="/search"
-          icon={Search}
-          label="Search"
-          active={pathname.startsWith("/search")}
+          to="/discover"
+          icon={Compass}
+          label="Discover"
+          active={pathname.startsWith("/discover")}
           className="flex-1 h-12 text-sm"
         />
 

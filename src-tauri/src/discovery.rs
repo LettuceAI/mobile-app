@@ -1,14 +1,80 @@
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
-use serde::{Deserialize, Serialize};
+use lazy_static::lazy_static;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use tauri::AppHandle;
 
+use crate::storage_manager::lorebook::{
+    set_character_lorebooks, upsert_lorebook, upsert_lorebook_entry, Lorebook, LorebookEntry,
+};
+use crate::storage_manager::media::storage_write_image;
 use crate::utils::{log_error, log_info};
 
 const DISCOVERY_BASE_URL: &str = "https://character-tavern.com/api/homepage/cards";
 const CARD_DETAIL_BASE_URL: &str = "https://character-tavern.com/api/character";
 const CARD_SEARCH_BASE_URL: &str = "https://character-tavern.com/api/search/cards";
 const CARD_IMAGE_BASE_URL: &str = "https://cards.character-tavern.com/cdn-cgi/image";
+const DISCOVERY_CACHE_TTL_SECS: i64 = 600;
+
+#[derive(Clone)]
+struct CacheEntry {
+    expires_at: i64,
+    value: Value,
+}
+
+lazy_static! {
+    static ref DISCOVERY_CACHE: Mutex<HashMap<String, CacheEntry>> = Mutex::new(HashMap::new());
+}
+
+fn now_epoch() -> i64 {
+    chrono::Utc::now().timestamp()
+}
+
+fn cache_get<T: DeserializeOwned>(key: &str) -> Option<T> {
+    let now = now_epoch();
+    let value = {
+        let mut cache = DISCOVERY_CACHE.lock().ok()?;
+        match cache.get(key) {
+            Some(entry) if entry.expires_at > now => Some(entry.value.clone()),
+            Some(_) => {
+                cache.remove(key);
+                None
+            }
+            None => None,
+        }
+    }?;
+
+    serde_json::from_value(value).ok()
+}
+
+fn cache_set<T: Serialize>(key: String, value: &T, ttl_secs: i64) {
+    let expires_at = now_epoch() + ttl_secs;
+    if let Ok(value) = serde_json::to_value(value) {
+        if let Ok(mut cache) = DISCOVERY_CACHE.lock() {
+            cache.insert(key, CacheEntry { expires_at, value });
+        }
+    }
+}
+
+fn deserialize_optional_string_or_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    let output = match value {
+        Some(Value::String(text)) => Some(text),
+        Some(Value::Number(number)) => Some(number.to_string()),
+        Some(Value::Bool(flag)) => Some(flag.to_string()),
+        _ => None,
+    };
+    Ok(output)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,21 +176,21 @@ pub struct DiscoveryCardDetail {
     pub last_updated_at: Option<String>,
     #[serde(default)]
     pub visibility: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_string_or_number")]
     pub lorebook_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_scenario")]
     pub definition_scenario: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_personality")]
     pub definition_personality: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_character_description")]
     pub definition_character_description: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_first_message")]
     pub definition_first_message: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_example_messages")]
     pub definition_example_messages: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_system_prompt")]
     pub definition_system_prompt: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "definition_post_history_prompt")]
     pub definition_post_history_prompt: Option<String>,
     #[serde(default)]
     pub token_total: Option<i64>,
@@ -140,13 +206,13 @@ pub struct DiscoveryCardDetail {
     pub token_first_mes: Option<i64>,
     #[serde(default)]
     pub token_system_prompt: Option<i64>,
-    #[serde(default)]
+    #[serde(default, alias = "token_post_history_instructions")]
     pub token_post_history_instructions: Option<i64>,
-    #[serde(default)]
+    #[serde(default, alias = "analytics_views")]
     pub analytics_views: Option<i64>,
-    #[serde(default)]
+    #[serde(default, alias = "analytics_downloads")]
     pub analytics_downloads: Option<i64>,
-    #[serde(default)]
+    #[serde(default, alias = "analytics_messages")]
     pub analytics_messages: Option<i64>,
     #[serde(default, rename = "isOC", alias = "isOc")]
     pub is_oc: Option<bool>,
@@ -156,8 +222,73 @@ pub struct DiscoveryCardDetail {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCardDetailResponse {
     pub card: DiscoveryCardDetail,
-    #[serde(default)]
+    #[serde(default, alias = "ownerCTId")]
     pub owner_ct_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscoveryLorebook {
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub scan_depth: Option<i64>,
+    #[serde(default)]
+    pub entries: Vec<DiscoveryLorebookEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscoveryLorebookEntry {
+    pub id: i64,
+    pub name: String,
+    pub content: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub insertion_order: Option<i64>,
+    #[serde(default)]
+    pub constant: bool,
+    #[serde(default)]
+    pub keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharaCardV3 {
+    pub spec: String,
+    pub spec_version: String,
+    pub data: CharaCardV3Data,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharaCardV3Data {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub personality: Option<String>,
+    #[serde(default)]
+    pub scenario: Option<String>,
+    #[serde(default)]
+    pub first_mes: Option<String>,
+    #[serde(default)]
+    pub mes_example: Option<String>,
+    #[serde(default)]
+    pub system_prompt: Option<String>,
+    #[serde(default)]
+    pub post_history_instructions: Option<String>,
+    #[serde(default)]
+    pub alternate_greetings: Option<Vec<String>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub creator: Option<String>,
+    #[serde(default)]
+    pub character_version: Option<String>,
+    #[serde(default)]
+    pub extensions: Option<Value>,
 }
 
 #[derive(Clone, Copy)]
@@ -298,6 +429,24 @@ fn normalize_detail_path(raw: &str) -> Result<(String, String), String> {
     Ok((author_encoded, name_encoded))
 }
 
+fn push_definition_block(parts: &mut Vec<String>, label: Option<&str>, value: Option<String>) {
+    let text = match value {
+        Some(value) => value.trim().to_string(),
+        None => return,
+    };
+
+    if text.is_empty() {
+        return;
+    }
+
+    let block = match label {
+        Some(label) => format!("[{}]\n{}", label, text),
+        None => text,
+    };
+
+    parts.push(block);
+}
+
 #[tauri::command]
 pub fn get_card_image(
     path: String,
@@ -339,6 +488,10 @@ pub async fn discovery_fetch_card_detail(
         let (author, name) = normalize_detail_path(&path)?;
         format!("{}/{}/{}", CARD_DETAIL_BASE_URL, author, name)
     };
+    let cache_key = format!("detail:{}", url);
+    if let Some(cached) = cache_get(&cache_key) {
+        return Ok(cached);
+    }
 
     log_info(
         &app,
@@ -362,9 +515,12 @@ pub async fn discovery_fetch_card_detail(
         ));
     }
 
-    resp.json::<DiscoveryCardDetailResponse>()
+    let detail = resp
+        .json::<DiscoveryCardDetailResponse>()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    cache_set(cache_key, &detail, DISCOVERY_CACHE_TTL_SECS);
+    Ok(detail)
 }
 
 async fn fetch_cards(
@@ -372,6 +528,11 @@ async fn fetch_cards(
     card_type: &str,
     client: &reqwest::Client,
 ) -> Result<Vec<DiscoveryCard>, String> {
+    let cache_key = format!("cards:{}", card_type);
+    if let Some(cached) = cache_get(&cache_key) {
+        return Ok(cached);
+    }
+
     let url = format!("{}?type={}", DISCOVERY_BASE_URL, card_type);
     log_info(
         app,
@@ -392,6 +553,7 @@ async fn fetch_cards(
     }
 
     let data: DiscoveryResponse = resp.json().await.map_err(|e| e.to_string())?;
+    cache_set(cache_key, &data.hits, DISCOVERY_CACHE_TTL_SECS);
     Ok(data.hits)
 }
 
@@ -457,22 +619,32 @@ pub async fn discovery_search_cards(
     page: Option<u32>,
     limit: Option<u32>,
 ) -> Result<DiscoverySearchResponse, String> {
-    let mut params: Vec<(String, String)> = Vec::new();
-    if let Some(query) = query
+    let query_value = query
         .map(|q| q.trim().to_string())
-        .filter(|q| !q.is_empty())
-    {
+        .filter(|q| !q.is_empty());
+    let page_value = page.filter(|p| *p > 0);
+    let limit_value = limit.unwrap_or(30).max(1);
+
+    let cache_key = format!(
+        "search:{}:{}:{}",
+        query_value.clone().unwrap_or_default(),
+        page_value.unwrap_or(0),
+        limit_value
+    );
+    if let Some(cached) = cache_get(&cache_key) {
+        return Ok(cached);
+    }
+
+    let mut params: Vec<(String, String)> = Vec::new();
+    if let Some(query) = query_value.clone() {
         params.push(("query".to_string(), query));
     }
 
-    if let Some(page) = page {
-        if page > 0 {
-            params.push(("page".to_string(), page.to_string()));
-        }
+    if let Some(page) = page_value {
+        params.push(("page".to_string(), page.to_string()));
     }
 
-    let limit = limit.unwrap_or(30).max(1);
-    params.push(("limit".to_string(), limit.to_string()));
+    params.push(("limit".to_string(), limit_value.to_string()));
 
     log_info(
         &app,
@@ -501,7 +673,456 @@ pub async fn discovery_search_cards(
         ));
     }
 
-    resp.json::<DiscoverySearchResponse>()
+    let response = resp
+        .json::<DiscoverySearchResponse>()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    cache_set(cache_key, &response, DISCOVERY_CACHE_TTL_SECS);
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn discovery_fetch_alternate_greetings(
+    app: AppHandle,
+    card_id: String,
+) -> Result<Vec<String>, String> {
+    let card_id = card_id.trim().to_string();
+    if card_id.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let cache_key = format!("alt_greetings:{}", card_id);
+    if let Some(cached) = cache_get(&cache_key) {
+        return Ok(cached);
+    }
+
+    let url = format!(
+        "https://character-tavern.com/api/character/{}/alternative-greetings",
+        card_id
+    );
+
+    log_info(
+        &app,
+        "discovery_alternate_greetings",
+        format!("Fetching alternate greetings from: {}", url),
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Ok(vec![]);
+    }
+
+    let greetings = resp
+        .json::<Vec<String>>()
+        .await
+        .map_err(|e| e.to_string())?;
+    cache_set(cache_key, &greetings, DISCOVERY_CACHE_TTL_SECS);
+    Ok(greetings)
+}
+
+#[tauri::command]
+pub async fn discovery_fetch_tags(app: AppHandle, card_id: String) -> Result<Vec<String>, String> {
+    let card_id = card_id.trim().to_string();
+    if card_id.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let cache_key = format!("tags:{}", card_id);
+    if let Some(cached) = cache_get(&cache_key) {
+        return Ok(cached);
+    }
+
+    let url = format!(
+        "https://character-tavern.com/api/character/{}/tags",
+        card_id
+    );
+
+    log_info(
+        &app,
+        "discovery_tags",
+        format!("Fetching tags from: {}", url),
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Ok(vec![]);
+    }
+
+    let tags = resp
+        .json::<Vec<String>>()
+        .await
+        .map_err(|e| e.to_string())?;
+    cache_set(cache_key, &tags, DISCOVERY_CACHE_TTL_SECS);
+    Ok(tags)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorInfo {
+    pub display_name: String,
+    #[serde(default, alias = "avatarURL")]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub followers_count: Option<i64>,
+}
+
+#[tauri::command]
+pub async fn discovery_fetch_author_info(
+    app: AppHandle,
+    author_name: String,
+) -> Result<AuthorInfo, String> {
+    let author = author_name.trim();
+    if author.is_empty() {
+        return Err("Author name cannot be empty".to_string());
+    }
+
+    let author_encoded = urlencoding::encode(author);
+    let cache_key = format!("author:{}", author_encoded);
+    if let Some(cached) = cache_get(&cache_key) {
+        return Ok(cached);
+    }
+
+    let url = format!(
+        "https://character-tavern.com/api/author/{}/info",
+        author_encoded
+    );
+
+    log_info(
+        &app,
+        "discovery_author_info",
+        format!("Fetching author info from: {}", url),
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Err(format!("Failed to fetch author info: {}", status));
+    }
+
+    let info = resp.json::<AuthorInfo>().await.map_err(|e| e.to_string())?;
+    cache_set(cache_key, &info, DISCOVERY_CACHE_TTL_SECS);
+    Ok(info)
+}
+
+async fn discovery_fetch_lorebook(
+    app: &AppHandle,
+    card_id: &str,
+) -> Result<Option<DiscoveryLorebook>, String> {
+    let card_id = card_id.trim();
+    if card_id.is_empty() {
+        return Ok(None);
+    }
+
+    let cache_key = format!("lorebook:{}", card_id);
+    if let Some(cached) = cache_get::<Option<DiscoveryLorebook>>(&cache_key) {
+        return Ok(cached);
+    }
+
+    let url = format!(
+        "https://character-tavern.com/api/character/{}/lorebook",
+        card_id
+    );
+
+    log_info(
+        app,
+        "discovery_lorebook",
+        format!("Fetching lorebook from: {}", url),
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Ok(None);
+    }
+
+    let lorebook = resp
+        .json::<Option<DiscoveryLorebook>>()
+        .await
+        .map_err(|e| e.to_string())?;
+    cache_set(cache_key, &lorebook, DISCOVERY_CACHE_TTL_SECS);
+    Ok(lorebook)
+}
+
+#[tauri::command]
+pub async fn discovery_import_character(app: AppHandle, path: String) -> Result<String, String> {
+    log_info(
+        &app,
+        "discovery_import",
+        format!("Importing character from path: {}", path),
+    );
+
+    // Fetch card detail from API
+    let detail = discovery_fetch_card_detail(app.clone(), path.clone()).await?;
+    let card = detail.card;
+
+    let alternate_greetings = discovery_fetch_alternate_greetings(app.clone(), card.id.clone())
+        .await
+        .unwrap_or_default();
+    if !alternate_greetings.is_empty() {
+        log_info(
+            &app,
+            "discovery_import",
+            format!("Found {} alternate greetings", alternate_greetings.len()),
+        );
+    }
+
+    let lorebook = match discovery_fetch_lorebook(&app, &card.id).await {
+        Ok(lorebook) => lorebook,
+        Err(err) => {
+            log_error(
+                &app,
+                "discovery_import",
+                format!("Failed to fetch lorebook: {}", err),
+            );
+            None
+        }
+    };
+
+    // Fetch avatar image from CDN
+    let client = reqwest::Client::new();
+
+    // Save avatar image locally using CDN URL
+    let avatar_cdn_url = get_card_image(
+        card.path.clone(),
+        Some("webp".to_string()),
+        Some(400),
+        Some(85),
+    )?;
+
+    log_info(
+        &app,
+        "discovery_import",
+        format!("Downloading avatar from CDN: {}", avatar_cdn_url),
+    );
+
+    let avatar_response = client
+        .get(&avatar_cdn_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download avatar: {}", e))?;
+
+    let avatar_data = avatar_response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read avatar data: {}", e))?;
+
+    // Generate unique UUID for character
+    let character_id = uuid::Uuid::new_v4().to_string();
+    let avatar_filename = format!("{}_avatar.webp", character_id);
+
+    // Convert bytes to base64 for storage_write_image
+    let avatar_base64 =
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &avatar_data);
+
+    let avatar_path = crate::storage_manager::media::storage_write_image(
+        app.clone(),
+        avatar_filename,
+        avatar_base64,
+    )
+    .map_err(|e| format!("Failed to save avatar: {}", e))?;
+
+    log_info(
+        &app,
+        "discovery_import",
+        format!("Avatar saved to: {}", avatar_path),
+    );
+
+    // Build character JSON
+    let now = chrono::Utc::now().timestamp_millis();
+
+    // Create scenes: first_message + alternate_greetings
+    let mut scenes = vec![];
+
+    // Add primary scene from definition_first_message
+    if let Some(first_msg) = card.definition_first_message.clone() {
+        let scene_id = uuid::Uuid::new_v4().to_string();
+        scenes.push(serde_json::json!({
+            "id": scene_id,
+            "content": first_msg,
+            "createdAt": now,
+            "variants": []
+        }));
+    }
+
+    // Add alternate greetings as additional scenes
+    for alt_greeting in alternate_greetings {
+        let scene_id = uuid::Uuid::new_v4().to_string();
+        scenes.push(serde_json::json!({
+            "id": scene_id,
+            "content": alt_greeting,
+            "createdAt": now,
+            "variants": []
+        }));
+    }
+
+    // Build definition from available fields
+    let mut definition_parts = vec![];
+
+    push_definition_block(
+        &mut definition_parts,
+        None,
+        card.definition_character_description.clone(),
+    );
+    push_definition_block(
+        &mut definition_parts,
+        Some("Personality"),
+        card.definition_personality.clone(),
+    );
+    push_definition_block(
+        &mut definition_parts,
+        Some("Scenario"),
+        card.definition_scenario.clone(),
+    );
+    push_definition_block(
+        &mut definition_parts,
+        Some("System Prompt"),
+        card.definition_system_prompt.clone(),
+    );
+    push_definition_block(
+        &mut definition_parts,
+        Some("Post History Instructions"),
+        card.definition_post_history_prompt.clone(),
+    );
+    push_definition_block(
+        &mut definition_parts,
+        None,
+        card.definition_example_messages.clone().map(|examples| {
+            format!(
+                "<example_dialogue>\n{}\n</example_dialogue>",
+                examples.trim()
+            )
+        }),
+    );
+
+    let definition = if definition_parts.is_empty() {
+        None
+    } else {
+        Some(definition_parts.join("\n\n"))
+    };
+
+    let character = serde_json::json!({
+        "id": character_id,
+        "name": card.in_chat_name.clone().unwrap_or(card.name.clone()),
+        "description": card.description.clone().or(card.tagline.clone()).unwrap_or_default(),
+        "definition": definition,
+        "avatarPath": avatar_path,
+        "backgroundImagePath": null,
+        "rules": [],
+        "defaultSceneId": if !scenes.is_empty() { scenes[0]["id"].as_str() } else { None },
+        "defaultModelId": null,
+        "memoryType": "manual",
+        "promptTemplateId": null,
+        "voiceConfig": null,
+        "voiceAutoplay": false,
+        "disableAvatarGradient": false,
+        "customGradientEnabled": false,
+        "customGradientColors": null,
+        "customTextColor": null,
+        "customTextSecondary": null,
+        "scenes": scenes,
+        "createdAt": now,
+        "updatedAt": now
+    });
+
+    let character_json = serde_json::to_string(&character)
+        .map_err(|e| format!("Failed to serialize character: {}", e))?;
+
+    // Save to database using existing character_upsert command
+    crate::storage_manager::characters::character_upsert(app.clone(), character_json)
+        .map_err(|e| format!("Failed to save character to database: {}", e))?;
+
+    if let Some(lorebook) = lorebook {
+        match crate::storage_manager::db::open_db(&app) {
+            Ok(mut conn) => {
+                let now = crate::utils::now_millis().unwrap_or(0) as i64;
+                let lorebook_id = uuid::Uuid::new_v4().to_string();
+                let lorebook_name = if lorebook.name.trim().is_empty() {
+                    format!("{} Lorebook", card.name)
+                } else {
+                    lorebook.name.clone()
+                };
+
+                let lorebook_record = Lorebook {
+                    id: lorebook_id.clone(),
+                    name: lorebook_name,
+                    created_at: now,
+                    updated_at: now,
+                };
+
+                if let Err(err) = upsert_lorebook(&conn, &lorebook_record) {
+                    log_error(
+                        &app,
+                        "discovery_import",
+                        format!("Failed to save lorebook: {}", err),
+                    );
+                } else {
+                    for (index, entry) in lorebook.entries.iter().enumerate() {
+                        let display_order = entry
+                            .insertion_order
+                            .and_then(|value| i32::try_from(value).ok())
+                            .unwrap_or(index as i32);
+
+                        let always_active = entry.constant && entry.keys.is_empty();
+                        let entry_record = LorebookEntry {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            lorebook_id: lorebook_id.clone(),
+                            title: entry.name.clone(),
+                            enabled: entry.enabled,
+                            always_active,
+                            keywords: entry.keys.clone(),
+                            case_sensitive: false,
+                            content: entry.content.clone(),
+                            priority: 0,
+                            display_order,
+                            created_at: now,
+                            updated_at: now,
+                        };
+
+                        if let Err(err) = upsert_lorebook_entry(&conn, &entry_record) {
+                            log_error(
+                                &app,
+                                "discovery_import",
+                                format!("Failed to save lorebook entry: {}", err),
+                            );
+                        }
+                    }
+
+                    if let Err(err) =
+                        set_character_lorebooks(&mut conn, &character_id, &[lorebook_id.clone()])
+                    {
+                        log_error(
+                            &app,
+                            "discovery_import",
+                            format!("Failed to link lorebook to character: {}", err),
+                        );
+                    }
+                }
+            }
+            Err(err) => {
+                log_error(
+                    &app,
+                    "discovery_import",
+                    format!("Failed to open database for lorebook import: {}", err),
+                );
+            }
+        }
+    }
+
+    log_info(
+        &app,
+        "discovery_import",
+        format!("Successfully imported character: {}", character_id),
+    );
+
+    Ok(character_id)
 }

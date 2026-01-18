@@ -48,6 +48,12 @@ import { LibraryPage } from "./ui/pages/library/LibraryPage";
 import { StandaloneLorebookEditor } from "./ui/pages/library/StandaloneLorebookEditor";
 import { SyncPage } from "./ui/pages/sync/SyncPage";
 import {
+  DiscoveryPage,
+  DiscoverySearchPage,
+  DiscoveryCardDetailPage,
+  DiscoveryBrowsePage,
+} from "./ui/pages/discovery";
+import {
   GroupChatsListPage,
   GroupChatCreatePage,
   GroupChatPage,
@@ -176,6 +182,10 @@ function AppContent() {
       location.pathname.startsWith("/wheretofind"),
     [location.pathname],
   );
+  const isDiscoveryRoute = useMemo(
+    () => location.pathname.startsWith("/discover"),
+    [location.pathname],
+  );
   const isCreateRoute = useMemo(
     () => location.pathname.startsWith("/create/"),
     [location.pathname],
@@ -197,14 +207,16 @@ function AppContent() {
     !isChatDetailRoute &&
     !isCreateRoute &&
     !isSearchRoute &&
-    !isLorebookEditorRoute;
+    !isLorebookEditorRoute &&
+    !isDiscoveryRoute;
   const showBottomNav =
     !isSettingRoute &&
     !isOnboardingRoute &&
     !isChatDetailRoute &&
     !isCreateRoute &&
     !isSearchRoute &&
-    !isLorebookEditorRoute;
+    !isLorebookEditorRoute &&
+    !isDiscoveryRoute;
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const { isVisible: showCreateTooltip, dismissTooltip: dismissCreateTooltip } =
@@ -288,7 +300,9 @@ function AppContent() {
                     ? "overflow-hidden px-0 pt-0 pb-0"
                     : isLorebookEditorRoute
                       ? "overflow-hidden px-0 pt-0 pb-0"
-                      : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
+                      : isDiscoveryRoute
+                        ? "overflow-hidden px-0 pt-0 pb-0"
+                        : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
           }`}
         >
           <motion.div
@@ -307,6 +321,10 @@ function AppContent() {
               <Route path="/onboarding/memory" element={<OnboardingPage />} />
               <Route path="/wheretofind" element={<WhereToFindPage />} />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/discover" element={<DiscoveryPage />} />
+              <Route path="/discover/search" element={<DiscoverySearchPage />} />
+              <Route path="/discover/browse" element={<DiscoveryBrowsePage />} />
+              <Route path="/discover/card/:path" element={<DiscoveryCardDetailPage />} />
               <Route path="/library" element={<LibraryPage />} />
               <Route path="/library/lorebooks/:lorebookId" element={<StandaloneLorebookEditor />} />
               <Route path="/settings" element={<SettingsPage />} />

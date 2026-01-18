@@ -276,6 +276,10 @@ pub fn run() {
             discovery::discovery_fetch_cards,
             discovery::discovery_fetch_sections,
             discovery::discovery_search_cards,
+            discovery::discovery_fetch_alternate_greetings,
+            discovery::discovery_fetch_tags,
+            discovery::discovery_fetch_author_info,
+            discovery::discovery_import_character,
             // Group chat commands
             storage_manager::group_sessions::group_sessions_list,
             storage_manager::group_sessions::group_sessions_list_all,
