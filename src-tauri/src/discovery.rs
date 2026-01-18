@@ -11,7 +11,7 @@ use tauri::AppHandle;
 use crate::storage_manager::lorebook::{
     set_character_lorebooks, upsert_lorebook, upsert_lorebook_entry, Lorebook, LorebookEntry,
 };
-use crate::storage_manager::media::storage_write_image;
+use crate::storage_manager::media::{generate_avatar_gradient, storage_save_avatar};
 use crate::utils::{log_error, log_info};
 
 const DISCOVERY_BASE_URL: &str = "https://character-tavern.com/api/homepage/cards";
@@ -918,18 +918,23 @@ pub async fn discovery_import_character(app: AppHandle, path: String) -> Result<
 
     // Generate unique UUID for character
     let character_id = uuid::Uuid::new_v4().to_string();
-    let avatar_filename = format!("{}_avatar.webp", character_id);
+    let avatar_entity_id = format!("character-{}", character_id);
 
-    // Convert bytes to base64 for storage_write_image
+    // Convert bytes to base64 for storage_save_avatar
     let avatar_base64 =
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &avatar_data);
 
-    let avatar_path = crate::storage_manager::media::storage_write_image(
-        app.clone(),
-        avatar_filename,
-        avatar_base64,
-    )
-    .map_err(|e| format!("Failed to save avatar: {}", e))?;
+    let avatar_path = storage_save_avatar(app.clone(), avatar_entity_id.clone(), avatar_base64)
+        .map_err(|e| format!("Failed to save avatar: {}", e))?;
+
+    if let Err(err) = generate_avatar_gradient(app.clone(), avatar_entity_id, "avatar.webp".into())
+    {
+        log_error(
+            &app,
+            "discovery_import",
+            format!("Failed to generate avatar gradient: {}", err),
+        );
+    }
 
     log_info(
         &app,
