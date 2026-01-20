@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
+  ArrowLeft,
   TrendingUp,
   Flame,
   Clock,
@@ -11,6 +12,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn, typography, interactive } from "../../design-tokens";
+import { Routes, useNavigationManager } from "../../navigation";
 import { DiscoveryCard, DiscoverySection, DiscoverySectionSkeleton } from "./components";
 import {
   fetchDiscoverySections,
@@ -35,6 +37,7 @@ const TABS: TabItem[] = [
 
 export function DiscoveryPage() {
   const navigate = useNavigate();
+  const { backOrReplace } = useNavigationManager();
 
   const [sections, setSections] = useState<DiscoverySections | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +89,10 @@ export function DiscoveryPage() {
     navigate("/discover/search");
   };
 
+  const handleBack = () => {
+    backOrReplace(Routes.chat);
+  };
+
   const handleRefresh = () => {
     loadSections(true);
   };
@@ -120,9 +127,23 @@ export function DiscoveryPage() {
         }}
       >
         <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 lg:max-w-none lg:px-8">
-          <h1 className={cn(typography.h1.size, "font-bold tracking-tight text-white")}>
-            Discover
-          </h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBack}
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded-full p-2",
+                "text-white/70 hover:bg-white/10 hover:text-white",
+                interactive.transition.fast,
+                interactive.active.scale,
+              )}
+              aria-label="Go back"
+            >
+              <ArrowLeft size={20} strokeWidth={2.5} />
+            </button>
+            <h1 className={cn(typography.h1.size, "font-bold tracking-tight text-white")}>
+              Discover
+            </h1>
+          </div>
 
           <div className="flex items-center gap-1">
             <button
