@@ -34,7 +34,7 @@ import {
   type AuthorInfo,
 } from "../../../core/discovery";
 import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
-import { BottomMenu, MenuButton, MenuButtonGroup, MenuDivider } from "../../components";
+import { BottomMenu, MenuButton, MenuButtonGroup } from "../../components";
 import { createSession } from "../../../core/storage/repo";
 
 interface TokenStat {
@@ -340,7 +340,7 @@ export function DiscoveryCardDetailPage() {
           animate={{ opacity: 1 }}
           className={cn(
             "relative aspect-4/3 w-full overflow-hidden",
-            "lg:aspect-[21/9] lg:max-w-6xl lg:mx-auto lg:rounded-2xl lg:border lg:border-white/10",
+            "lg:aspect-21/9 lg:max-w-6xl lg:mx-auto lg:rounded-2xl lg:border lg:border-white/10",
           )}
           style={{ background: fallbackGradient }}
         >

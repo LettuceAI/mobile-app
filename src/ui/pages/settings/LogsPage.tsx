@@ -160,7 +160,7 @@ export function LogsPage() {
                     interactive.transition.default,
                     selectedFile === file
                       ? "border-blue-400/30 bg-blue-400/10"
-                      : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.08]",
+                      : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8",
                     interactive.active.scale
                   )}
                 >
@@ -235,10 +235,10 @@ export function LogsPage() {
                   <Loader2 className="h-6 w-6 animate-spin text-white/30" />
                 </div>
               ) : (
-                <div className="max-h-[400px] overflow-y-auto">
+                <div className="max-h-100 overflow-y-auto">
                   <pre className={cn(
                     typography.caption.size,
-                    "font-mono p-4 text-white/70 whitespace-pre-wrap break-words"
+                    "font-mono p-4 text-white/70 whitespace-pre-wrap wrap-break-word"
                   )}>
                     {logContent || "Log file is empty"}
                   </pre>

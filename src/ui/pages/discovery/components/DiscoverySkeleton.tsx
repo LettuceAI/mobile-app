@@ -14,7 +14,7 @@ const SkeletonCard = memo(function SkeletonCard({ variant = "default" }: Skeleto
       className={cn(
         "relative overflow-hidden rounded-xl border border-white/10 bg-white/5",
         isFeatured
-          ? "aspect-16/10 w-full lg:aspect-[21/9] lg:max-w-5xl lg:mx-auto xl:max-w-6xl"
+          ? "aspect-16/10 w-full lg:aspect-21/9 lg:max-w-5xl lg:mx-auto xl:max-w-6xl"
           : isCompact
             ? "aspect-3/4 w-36 shrink-0"
             : "aspect-3/4 w-full",
@@ -143,7 +143,7 @@ export const DiscoveryDetailSkeleton = memo(function DiscoveryDetailSkeleton() {
   return (
     <div className="space-y-6 pb-24">
       {/* Hero image skeleton */}
-      <div className="relative aspect-4/3 w-full bg-white/5 lg:aspect-[21/9] lg:max-w-6xl lg:mx-auto lg:rounded-2xl lg:border lg:border-white/10">
+      <div className="relative aspect-4/3 w-full bg-white/5 lg:aspect-21/9 lg:max-w-6xl lg:mx-auto lg:rounded-2xl lg:border lg:border-white/10">
         <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-linear-to-r from-transparent via-white/10 to-transparent" />
       </div>
 
