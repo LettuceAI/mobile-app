@@ -8,6 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tauri::AppHandle;
 
+use crate::storage_manager::internal_read_settings;
 use crate::storage_manager::lorebook::{
     set_character_lorebooks, upsert_lorebook, upsert_lorebook_entry, Lorebook, LorebookEntry,
 };
@@ -32,6 +33,21 @@ lazy_static! {
 
 fn now_epoch() -> i64 {
     chrono::Utc::now().timestamp()
+}
+
+fn is_pure_mode_enabled(app: &AppHandle) -> bool {
+    if let Ok(Some(raw)) = internal_read_settings(app) {
+        if let Ok(json) = serde_json::from_str::<Value>(&raw) {
+            if let Some(enabled) = json
+                .get("appState")
+                .and_then(|v| v.get("pureModeEnabled"))
+                .and_then(|v| v.as_bool())
+            {
+                return enabled;
+            }
+        }
+    }
+    true
 }
 
 fn cache_get<T: DeserializeOwned>(key: &str) -> Option<T> {
@@ -140,6 +156,12 @@ pub struct DiscoverySearchResponse {
     pub processing_time_ms: Option<i64>,
     #[serde(default)]
     pub query: Option<String>,
+}
+
+fn filter_nsfw_cards(cards: &mut Vec<DiscoveryCard>, pure_mode_enabled: bool) {
+    if pure_mode_enabled {
+        cards.retain(|card| !card.is_nsfw.unwrap_or(false));
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -482,6 +504,7 @@ pub async fn discovery_fetch_card_detail(
         return Err("Card path cannot be empty".to_string());
     }
 
+    let pure_mode_enabled = is_pure_mode_enabled(&app);
     let url = if path.starts_with("http://") || path.starts_with("https://") {
         path
     } else {
@@ -490,6 +513,9 @@ pub async fn discovery_fetch_card_detail(
     };
     let cache_key = format!("detail:{}", url);
     if let Some(cached) = cache_get(&cache_key) {
+        if pure_mode_enabled && cached.card.is_nsfw.unwrap_or(false) {
+            return Err("NSFW content is blocked in Pure Mode".to_string());
+        }
         return Ok(cached);
     }
 
@@ -520,6 +546,9 @@ pub async fn discovery_fetch_card_detail(
         .await
         .map_err(|e| e.to_string())?;
     cache_set(cache_key, &detail, DISCOVERY_CACHE_TTL_SECS);
+    if pure_mode_enabled && detail.card.is_nsfw.unwrap_or(false) {
+        return Err("NSFW content is blocked in Pure Mode".to_string());
+    }
     Ok(detail)
 }
 
@@ -567,6 +596,8 @@ pub async fn discovery_fetch_cards(
     let card_type = normalize_type(&card_type)?;
     let client = reqwest::Client::new();
     let mut cards = fetch_cards(&app, card_type, &client).await?;
+    let pure_mode_enabled = is_pure_mode_enabled(&app);
+    filter_nsfw_cards(&mut cards, pure_mode_enabled);
 
     let (default_key, default_desc) = default_sort_for_type(card_type);
     let key = parse_sort_key(sort_by.as_deref()).unwrap_or(default_key);
@@ -589,6 +620,10 @@ pub async fn discovery_fetch_sections(
         fetch_cards(&app, "trending", &client),
     )
     .map_err(|e| e.to_string())?;
+    let pure_mode_enabled = is_pure_mode_enabled(&app);
+    filter_nsfw_cards(&mut newest, pure_mode_enabled);
+    filter_nsfw_cards(&mut popular, pure_mode_enabled);
+    filter_nsfw_cards(&mut trending, pure_mode_enabled);
 
     let key_override = parse_sort_key(sort_by.as_deref());
     if let Some(key) = key_override {
@@ -619,6 +654,7 @@ pub async fn discovery_search_cards(
     page: Option<u32>,
     limit: Option<u32>,
 ) -> Result<DiscoverySearchResponse, String> {
+    let pure_mode_enabled = is_pure_mode_enabled(&app);
     let query_value = query
         .map(|q| q.trim().to_string())
         .filter(|q| !q.is_empty());
@@ -631,7 +667,8 @@ pub async fn discovery_search_cards(
         page_value.unwrap_or(0),
         limit_value
     );
-    if let Some(cached) = cache_get(&cache_key) {
+    if let Some(mut cached) = cache_get(&cache_key) {
+        filter_nsfw_cards(&mut cached.hits, pure_mode_enabled);
         return Ok(cached);
     }
 
@@ -673,11 +710,12 @@ pub async fn discovery_search_cards(
         ));
     }
 
-    let response = resp
+    let mut response = resp
         .json::<DiscoverySearchResponse>()
         .await
         .map_err(|e| e.to_string())?;
     cache_set(cache_key, &response, DISCOVERY_CACHE_TTL_SECS);
+    filter_nsfw_cards(&mut response.hits, pure_mode_enabled);
     Ok(response)
 }
 
