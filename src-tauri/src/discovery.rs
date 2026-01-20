@@ -512,7 +512,7 @@ pub async fn discovery_fetch_card_detail(
         format!("{}/{}/{}", CARD_DETAIL_BASE_URL, author, name)
     };
     let cache_key = format!("detail:{}", url);
-    if let Some(cached) = cache_get(&cache_key) {
+    if let Some(cached) = cache_get::<DiscoveryCardDetailResponse>(&cache_key) {
         if pure_mode_enabled && cached.card.is_nsfw.unwrap_or(false) {
             return Err("NSFW content is blocked in Pure Mode".to_string());
         }
@@ -667,7 +667,7 @@ pub async fn discovery_search_cards(
         page_value.unwrap_or(0),
         limit_value
     );
-    if let Some(mut cached) = cache_get(&cache_key) {
+    if let Some(mut cached) = cache_get::<DiscoverySearchResponse>(&cache_key) {
         filter_nsfw_cards(&mut cached.hits, pure_mode_enabled);
         return Ok(cached);
     }
