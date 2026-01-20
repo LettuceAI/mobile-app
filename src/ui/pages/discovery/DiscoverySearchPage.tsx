@@ -65,6 +65,7 @@ export function DiscoverySearchPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [debouncedQuery, setDebouncedQuery] = useState(query);
@@ -75,12 +76,29 @@ export function DiscoverySearchPage() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   // Load recent searches on mount
   useEffect(() => {
     setRecentSearches(loadRecentSearches());
     // Auto-focus search input
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const update = () => setHeaderHeight(header.getBoundingClientRect().height);
+    update();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const observer = new ResizeObserver(() => update());
+    observer.observe(header);
+    return () => observer.disconnect();
   }, []);
 
   // Debounce search query
@@ -201,10 +219,11 @@ export function DiscoverySearchPage() {
   const showNoResults = !loading && results && results.hits.length === 0;
 
   return (
-    <div className="flex h-full flex-col bg-[#050505]">
-      {/* Header - matches TopNav style */}
-      <header
-        className="sticky top-0 z-30 border-b border-white/10 bg-[#0F0F0F]/80 backdrop-blur-md"
+    <div className="flex h-screen min-h-0 flex-col bg-[#050505]">
+      {/* Search Section */}
+      <div
+        ref={headerRef}
+        className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0F0F0F]/95 backdrop-blur-md"
         style={{
           paddingTop: "calc(env(safe-area-inset-top) + 12px)",
           paddingBottom: "12px",
@@ -260,12 +279,13 @@ export function DiscoverySearchPage() {
             </p>
           </div>
         )}
-      </header>
+      </div>
 
       {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-h-0 overflow-y-auto"
         style={{
+          paddingTop: headerHeight ? `${headerHeight}px` : undefined,
           paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
         }}
       >
