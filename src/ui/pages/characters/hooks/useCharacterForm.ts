@@ -11,13 +11,24 @@ import type {
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { processBackgroundImage } from "../../../../core/utils/image";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
-import { previewCharacterImport, readFileAsText } from "../../../../core/storage/characterTransfer";
+import {
+  previewCharacterImport,
+  readFileAsText,
+  type CharacterFileFormat,
+} from "../../../../core/storage/characterTransfer";
 import { toast } from "../../../components/toast";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
   Description = 3,
 }
+
+const FORMAT_LABELS: Record<CharacterFileFormat, string> = {
+  uec: "Unified Entity Card (UEC)",
+  chara_card_v2: "Character Card V2",
+  chara_card_v1: "Character Card V1",
+  legacy_json: "Legacy JSON",
+};
 
 interface CharacterFormState {
   // Form data
@@ -346,15 +357,20 @@ export function useCharacterForm(draftCharacter?: any) {
 
     try {
       dispatch({ type: "SET_ERROR", payload: null });
-      if (file.name.toLowerCase().endsWith(".json")) {
-        toast.warning(
-          "Legacy JSON import detected",
-          "JSON imports are deprecated and will be removed soon. Use Settings → Convert Files.",
-        );
-      }
       const jsonContent = await readFileAsText(file);
 
       const characterData = await previewCharacterImport(jsonContent);
+      if (characterData.fileFormat) {
+        const label = FORMAT_LABELS[characterData.fileFormat] || characterData.fileFormat;
+        if (characterData.fileFormat === "legacy_json") {
+          toast.warning(
+            "Legacy JSON import detected",
+            "JSON imports are deprecated and will be removed soon. Use Settings > Convert Files.",
+          );
+        } else {
+          toast.success("Import ready", `Detected ${label}`);
+        }
+      }
 
       const sceneIdMap = new Map<string, string>();
 

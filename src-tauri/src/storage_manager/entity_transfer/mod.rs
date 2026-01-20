@@ -12,6 +12,10 @@ use super::db::{now_ms, open_db};
 use super::legacy::storage_root;
 use crate::utils::log_info;
 
+mod engine;
+
+pub use engine::{CharacterFileFormat, CharacterFormatInfo};
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterExportPackage {
@@ -329,6 +333,42 @@ fn looks_like_uec(value: &JsonValue) -> bool {
         || value.get("kind").and_then(|kind| kind.as_str()).is_some()
 }
 
+fn detect_character_format(value: &JsonValue) -> Option<CharacterFileFormat> {
+    if looks_like_uec(value) {
+        return Some(CharacterFileFormat::Uec);
+    }
+    if let Some(format) = engine::guess_chara_card_format(value) {
+        return Some(format);
+    }
+    if serde_json::from_value::<CharacterExportPackage>(value.clone()).is_ok() {
+        return Some(CharacterFileFormat::LegacyJson);
+    }
+    None
+}
+
+fn parse_character_import_payload(
+    raw_value: &JsonValue,
+) -> Result<(CharacterExportPackage, CharacterFileFormat), String> {
+    if looks_like_uec(raw_value) {
+        return Ok((parse_uec_character(raw_value)?, CharacterFileFormat::Uec));
+    }
+    if engine::looks_like_chara_card_v2(raw_value) {
+        return Ok((
+            engine::parse_chara_card_v2(raw_value)?,
+            CharacterFileFormat::CharaCardV2,
+        ));
+    }
+    if engine::looks_like_chara_card_v1(raw_value) {
+        return Ok((
+            engine::parse_chara_card_v1(raw_value)?,
+            CharacterFileFormat::CharaCardV1,
+        ));
+    }
+    let legacy = serde_json::from_value::<CharacterExportPackage>(raw_value.clone())
+        .map_err(|e| format!("Invalid import data: {}", e))?;
+    Ok((legacy, CharacterFileFormat::LegacyJson))
+}
+
 fn is_http_url(value: &str) -> bool {
     value.starts_with("http://") || value.starts_with("https://")
 }
@@ -345,17 +385,19 @@ fn legacy_entity_id(raw_value: &JsonValue, key: &str) -> Option<String> {
         .map(|value| value.to_string())
 }
 
-#[tauri::command]
-pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<String, String> {
-    log_info(
-        &app,
-        "character_export",
-        format!("Exporting character: {}", character_id),
-    );
+struct CharacterExportSnapshot {
+    character_id: String,
+    created_at: i64,
+    updated_at: i64,
+    package: CharacterExportPackage,
+}
 
-    let conn = open_db(&app)?;
+fn load_character_export_snapshot(
+    app: &tauri::AppHandle,
+    character_id: &str,
+) -> Result<CharacterExportSnapshot, String> {
+    let conn = open_db(app)?;
 
-    // Read character data
     let (
         name,
         avatar_path,
@@ -366,8 +408,8 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         default_model_id,
         prompt_template_id,
         system_prompt,
-        voice_config,
-        voice_autoplay,
+        voice_config_raw,
+        voice_autoplay_raw,
         memory_type,
         disable_avatar_gradient,
         custom_gradient_enabled,
@@ -399,7 +441,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     ) = conn
         .query_row(
             "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
-            params![&character_id],
+            params![character_id],
             |r| {
                 Ok((
                     r.get(0)?,
@@ -426,25 +468,23 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         )
         .map_err(|e| format!("Character not found: {}", e))?;
 
-    // Read rules
     let mut rules: Vec<String> = Vec::new();
     let mut stmt = conn
         .prepare("SELECT rule FROM character_rules WHERE character_id = ? ORDER BY idx ASC")
         .map_err(|e| e.to_string())?;
     let rule_rows = stmt
-        .query_map(params![&character_id], |r| Ok(r.get::<_, String>(0)?))
+        .query_map(params![character_id], |r| Ok(r.get::<_, String>(0)?))
         .map_err(|e| e.to_string())?;
     for rule in rule_rows {
         rules.push(rule.map_err(|e| e.to_string())?);
     }
 
-    // Read scenes
-    let mut scenes: Vec<JsonValue> = Vec::new();
+    let mut scenes: Vec<SceneExport> = Vec::new();
     let mut scenes_stmt = conn
         .prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
     let scene_rows = scenes_stmt
-        .query_map(params![&character_id], |r| {
+        .query_map(params![character_id], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
@@ -459,8 +499,7 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         let (scene_id, content, direction, scene_created_at, selected_variant_id) =
             row.map_err(|e| e.to_string())?;
 
-        // Read scene variants
-        let mut variants: Vec<JsonValue> = Vec::new();
+        let mut variants: Vec<SceneVariantExport> = Vec::new();
         let mut var_stmt = conn
             .prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
@@ -477,119 +516,179 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
 
         for v in var_rows {
             let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| e.to_string())?;
-            let mut variant_obj =
-                serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated});
-            if let Some(dir) = vdirection {
-                variant_obj["direction"] = serde_json::json!(dir);
-            }
-            variants.push(variant_obj);
+            variants.push(SceneVariantExport {
+                id: vid,
+                content: vcontent,
+                direction: vdirection,
+                created_at: Some(vcreated),
+            });
         }
 
-        let mut scene_obj = JsonMap::new();
-        scene_obj.insert("id".into(), JsonValue::String(scene_id));
-        scene_obj.insert("content".into(), JsonValue::String(content));
-        if let Some(dir) = direction {
-            scene_obj.insert("direction".into(), JsonValue::String(dir));
-        }
-        scene_obj.insert("createdAt".into(), JsonValue::from(scene_created_at));
-        if !variants.is_empty() {
-            scene_obj.insert("variants".into(), JsonValue::Array(variants));
-        }
-        if let Some(sel) = selected_variant_id {
-            scene_obj.insert("selectedVariantId".into(), JsonValue::String(sel));
-        }
-        scenes.push(JsonValue::Object(scene_obj));
+        scenes.push(SceneExport {
+            id: scene_id,
+            content,
+            direction,
+            created_at: Some(scene_created_at),
+            selected_variant_id,
+            variants,
+        });
     }
 
-    // Read avatar image if exists
     let avatar_data = if let Some(ref avatar_filename) = avatar_path {
-        read_avatar_as_base64(
-            &app,
-            &format!("character-{}", character_id),
-            avatar_filename,
-        )
-        .ok()
+        read_avatar_as_base64(app, &format!("character-{}", character_id), avatar_filename).ok()
     } else {
         None
     };
 
-    // Read background image if exists
     let background_image_data = if let Some(ref bg_id) = bg_path {
-        read_background_image_as_base64(&app, bg_id).ok()
+        read_background_image_as_base64(app, bg_id).ok()
     } else {
         None
     };
 
-    let resolved_definition = definition.or_else(|| description.clone());
+    let resolved_definition = definition.clone().or_else(|| description.clone());
     let memory_value = memory_type.unwrap_or_else(|| "manual".to_string());
+    let voice_config = voice_config_raw
+        .and_then(|vc| serde_json::from_str::<JsonValue>(&vc).ok())
+        .filter(|v| !v.is_null());
+    let voice_autoplay = voice_autoplay_raw.map(|v| v != 0);
+
+    let custom_gradient_colors = custom_gradient_colors
+        .as_ref()
+        .and_then(|colors_json| serde_json::from_str::<Vec<String>>(colors_json).ok());
+
+    let package = CharacterExportPackage {
+        version: 1,
+        exported_at: now_ms() as i64,
+        character: CharacterExportData {
+            name,
+            description: description.clone(),
+            definition: resolved_definition,
+            rules,
+            scenes,
+            default_scene_id,
+            default_model_id,
+            memory_type: Some(memory_value),
+            prompt_template_id,
+            system_prompt,
+            voice_config,
+            voice_autoplay,
+            disable_avatar_gradient: disable_avatar_gradient != 0,
+            custom_gradient_enabled: Some(custom_gradient_enabled != 0),
+            custom_gradient_colors,
+            custom_text_color,
+            custom_text_secondary,
+        },
+        avatar_data,
+        background_image_data,
+    };
+
+    Ok(CharacterExportSnapshot {
+        character_id: character_id.to_string(),
+        created_at,
+        updated_at,
+        package,
+    })
+}
+
+fn build_uec_from_package(
+    package: &CharacterExportPackage,
+    character_id: &str,
+    created_at: Option<i64>,
+    updated_at: Option<i64>,
+) -> Result<String, String> {
+    let resolved_definition = package
+        .character
+        .definition
+        .clone()
+        .or_else(|| package.character.description.clone());
+    let memory_value = package
+        .character
+        .memory_type
+        .clone()
+        .unwrap_or_else(|| "manual".to_string());
 
     let mut payload = JsonMap::new();
-    payload.insert("id".into(), JsonValue::String(character_id.clone()));
-    payload.insert("name".into(), JsonValue::String(name));
-    if let Some(desc) = description.clone() {
+    payload.insert("id".into(), JsonValue::String(character_id.to_string()));
+    payload.insert(
+        "name".into(),
+        JsonValue::String(package.character.name.clone()),
+    );
+    if let Some(desc) = package.character.description.clone() {
         payload.insert("description".into(), JsonValue::String(desc));
     }
     if let Some(def) = resolved_definition {
         payload.insert("definitions".into(), JsonValue::String(def));
     }
-    if let Some(data) = avatar_data {
+    if let Some(data) = package.avatar_data.clone() {
         payload.insert("avatar".into(), JsonValue::String(data));
     }
-    if let Some(data) = background_image_data {
+    if let Some(data) = package.background_image_data.clone() {
         payload.insert("chatBackground".into(), JsonValue::String(data));
     }
     payload.insert(
         "rules".into(),
-        JsonValue::Array(rules.into_iter().map(JsonValue::String).collect()),
+        JsonValue::Array(
+            package
+                .character
+                .rules
+                .iter()
+                .map(|rule| JsonValue::String(rule.clone()))
+                .collect(),
+        ),
     );
-    payload.insert("scenes".into(), JsonValue::Array(scenes));
-    if let Some(ds) = default_scene_id {
+    let scenes = serde_json::to_value(&package.character.scenes).map_err(|e| e.to_string())?;
+    payload.insert("scenes".into(), scenes);
+    if let Some(ds) = package.character.default_scene_id.clone() {
         payload.insert("defaultSceneId".into(), JsonValue::String(ds));
     }
-    if let Some(dm) = default_model_id {
+    if let Some(dm) = package.character.default_model_id.clone() {
         payload.insert("defaultModelId".into(), JsonValue::String(dm));
     }
+
     let mut system_prompt_is_id = false;
-    if let Some(pt) = prompt_template_id {
+    if let Some(pt) = package.character.prompt_template_id.clone() {
         payload.insert("systemPrompt".into(), JsonValue::String(pt));
         system_prompt_is_id = true;
-    } else if let Some(sp) = system_prompt {
+    } else if let Some(sp) = package.character.system_prompt.clone() {
         payload.insert("systemPrompt".into(), JsonValue::String(sp));
     }
-    if let Some(vc) = voice_config {
-        if let Ok(value) = serde_json::from_str::<JsonValue>(&vc) {
-            if !value.is_null() {
-                payload.insert("voiceConfig".into(), value);
-            }
+
+    if let Some(vc) = package.character.voice_config.clone() {
+        if !vc.is_null() {
+            payload.insert("voiceConfig".into(), vc);
         }
     }
+
     payload.insert(
         "voiceAutoplay".into(),
-        JsonValue::Bool(voice_autoplay.unwrap_or(0) != 0),
+        JsonValue::Bool(package.character.voice_autoplay.unwrap_or(false)),
     );
+
+    let created_at = created_at.unwrap_or(package.exported_at);
+    let updated_at = updated_at.unwrap_or(package.exported_at);
+
     payload.insert("createdAt".into(), JsonValue::from(created_at));
     payload.insert("updatedAt".into(), JsonValue::from(updated_at));
 
     let mut app_specific = JsonMap::new();
     app_specific.insert(
         "disableAvatarGradient".into(),
-        JsonValue::Bool(disable_avatar_gradient != 0),
+        JsonValue::Bool(package.character.disable_avatar_gradient),
     );
     app_specific.insert("memoryType".into(), JsonValue::String(memory_value));
     app_specific.insert(
         "customGradientEnabled".into(),
-        JsonValue::Bool(custom_gradient_enabled != 0),
+        JsonValue::Bool(package.character.custom_gradient_enabled.unwrap_or(false)),
     );
-    if let Some(colors_json) = custom_gradient_colors {
-        if let Ok(colors) = serde_json::from_str::<Vec<String>>(&colors_json) {
-            app_specific.insert("customGradientColors".into(), serde_json::json!(colors));
-        }
+    if let Some(colors) = package.character.custom_gradient_colors.clone() {
+        app_specific.insert("customGradientColors".into(), serde_json::json!(colors));
     }
-    if let Some(tc) = custom_text_color {
-        app_specific.insert("customTextColor".into(), JsonValue::String(tc));
+    if let Some(color) = package.character.custom_text_color.clone() {
+        app_specific.insert("customTextColor".into(), JsonValue::String(color));
     }
-    if let Some(ts) = custom_text_secondary {
-        app_specific.insert("customTextSecondary".into(), JsonValue::String(ts));
+    if let Some(color) = package.character.custom_text_secondary.clone() {
+        app_specific.insert("customTextSecondary".into(), JsonValue::String(color));
     }
 
     let mut meta = JsonMap::new();
@@ -606,8 +705,95 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
         Some(JsonValue::Object(JsonMap::new())),
     );
 
-    let json = serde_json::to_string_pretty(&export_card)
-        .map_err(|e| format!("Failed to serialize export: {}", e))?;
+    serde_json::to_string_pretty(&export_card)
+        .map_err(|e| format!("Failed to serialize export: {}", e))
+}
+
+fn build_uec_from_persona_package(
+    package: &PersonaExportPackage,
+    persona_id: &str,
+    created_at: Option<i64>,
+    updated_at: Option<i64>,
+) -> Result<String, String> {
+    let mut payload = JsonMap::new();
+    payload.insert("id".into(), JsonValue::String(persona_id.to_string()));
+    payload.insert(
+        "title".into(),
+        JsonValue::String(package.persona.title.clone()),
+    );
+    if !package.persona.description.is_empty() {
+        payload.insert(
+            "description".into(),
+            JsonValue::String(package.persona.description.clone()),
+        );
+    }
+    if let Some(data) = package.avatar_data.clone() {
+        payload.insert("avatar".into(), JsonValue::String(data));
+    }
+    if let Some(is_default) = package.persona.is_default {
+        payload.insert("isDefault".into(), JsonValue::Bool(is_default));
+    }
+
+    let created_at = created_at.unwrap_or(package.exported_at);
+    let updated_at = updated_at.unwrap_or(package.exported_at);
+
+    payload.insert("createdAt".into(), JsonValue::from(created_at));
+    payload.insert("updatedAt".into(), JsonValue::from(updated_at));
+
+    let mut meta = JsonMap::new();
+    meta.insert("createdAt".into(), JsonValue::from(created_at));
+    meta.insert("updatedAt".into(), JsonValue::from(updated_at));
+    meta.insert("source".into(), JsonValue::String("lettuceai".to_string()));
+
+    let uec = create_persona_uec(
+        payload,
+        None,
+        Some(JsonValue::Object(JsonMap::new())),
+        Some(JsonValue::Object(meta)),
+        Some(JsonValue::Object(JsonMap::new())),
+    );
+
+    serde_json::to_string_pretty(&uec).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<String, String> {
+    character_export_with_format(app, character_id, CharacterFileFormat::Uec)
+}
+
+#[tauri::command]
+pub fn character_export_with_format(
+    app: tauri::AppHandle,
+    character_id: String,
+    format: CharacterFileFormat,
+) -> Result<String, String> {
+    log_info(
+        &app,
+        "character_export",
+        format!("Exporting character {} as {:?}", character_id, format),
+    );
+
+    let snapshot = load_character_export_snapshot(&app, &character_id)?;
+
+    let json = match format {
+        CharacterFileFormat::Uec => build_uec_from_package(
+            &snapshot.package,
+            &snapshot.character_id,
+            Some(snapshot.created_at),
+            Some(snapshot.updated_at),
+        )?,
+        CharacterFileFormat::CharaCardV2 => {
+            let card = engine::export_chara_card_v2(&snapshot.package);
+            serde_json::to_string_pretty(&card)
+                .map_err(|e| format!("Failed to serialize export: {}", e))?
+        }
+        CharacterFileFormat::CharaCardV1 => {
+            return Err("Character Card V1 export is read-only".to_string());
+        }
+        CharacterFileFormat::LegacyJson => {
+            return Err("Legacy JSON export is not supported".to_string());
+        }
+    };
 
     log_info(
         &app,
@@ -618,6 +804,20 @@ pub fn character_export(app: tauri::AppHandle, character_id: String) -> Result<S
     Ok(json)
 }
 
+#[tauri::command]
+pub fn character_list_formats() -> Result<Vec<CharacterFormatInfo>, String> {
+    Ok(engine::all_character_formats())
+}
+
+#[tauri::command]
+pub fn character_detect_format(import_json: String) -> Result<CharacterFormatInfo, String> {
+    let raw_value: JsonValue =
+        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+    let format = detect_character_format(&raw_value)
+        .ok_or_else(|| "Unsupported character file format".to_string())?;
+    Ok(engine::character_format_info(format))
+}
+
 /// Import a character from a JSON package
 #[tauri::command]
 pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<String, String> {
@@ -625,13 +825,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 
     let raw_value: JsonValue =
         serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
-
-    let package = if looks_like_uec(&raw_value) {
-        parse_uec_character(&raw_value)?
-    } else {
-        serde_json::from_value::<CharacterExportPackage>(raw_value)
-            .map_err(|e| format!("Invalid import data: {}", e))?
-    };
+    let (package, _format) = parse_character_import_payload(&raw_value)?;
 
     // Validate version
     if package.version > 1 {
@@ -866,12 +1060,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 pub fn character_import_preview(import_json: String) -> Result<String, String> {
     let raw_value: JsonValue =
         serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
-    let package = if looks_like_uec(&raw_value) {
-        parse_uec_character(&raw_value)?
-    } else {
-        serde_json::from_value::<CharacterExportPackage>(raw_value)
-            .map_err(|e| format!("Invalid import data: {}", e))?
-    };
+    let (package, format) = parse_character_import_payload(&raw_value)?;
 
     if package.version > 1 {
         return Err(format!(
@@ -903,6 +1092,7 @@ pub fn character_import_preview(import_json: String) -> Result<String, String> {
         "promptTemplateId": package.character.prompt_template_id,
         "memoryType": memory_type,
         "disableAvatarGradient": package.character.disable_avatar_gradient,
+        "fileFormat": format,
         "avatarData": package.avatar_data,
         "backgroundImageData": package.background_image_data
     });
@@ -919,6 +1109,22 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
     if looks_like_uec(&raw_value) {
         assert_uec(&raw_value, false)?;
         return serde_json::to_string_pretty(&raw_value).map_err(|e| e.to_string());
+    }
+
+    if engine::guess_chara_card_format(&raw_value).is_some() {
+        let (package, _) = parse_character_import_payload(&raw_value)?;
+        let character_id = uuid::Uuid::new_v4().to_string();
+        return build_uec_from_package(&package, &character_id, None, None);
+    }
+
+    if let Ok(package) = serde_json::from_value::<CharacterExportPackage>(raw_value.clone()) {
+        let character_id = uuid::Uuid::new_v4().to_string();
+        return build_uec_from_package(&package, &character_id, None, None);
+    }
+
+    if let Ok(package) = serde_json::from_value::<PersonaExportPackage>(raw_value.clone()) {
+        let persona_id = uuid::Uuid::new_v4().to_string();
+        return build_uec_from_persona_package(&package, &persona_id, None, None);
     }
 
     let kind = raw_value
@@ -1688,12 +1894,12 @@ pub fn import_package(app: tauri::AppHandle, import_json: String) -> Result<Stri
             .and_then(|value| value.as_str())
             .ok_or_else(|| "Invalid UEC: missing kind".to_string())?
             .to_string()
+    } else if let Some(kind) = raw_value.get("type").and_then(|value| value.as_str()) {
+        kind.to_string()
+    } else if engine::guess_chara_card_format(&raw_value).is_some() {
+        "character".to_string()
     } else {
-        raw_value
-            .get("type")
-            .and_then(|value| value.as_str())
-            .ok_or_else(|| "Invalid import: missing type".to_string())?
-            .to_string()
+        return Err("Invalid import: missing type".to_string());
     };
 
     match import_kind.as_str() {

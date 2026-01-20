@@ -1,0 +1,134 @@
+import { useEffect, useMemo, useState } from "react";
+import { FileCode, Package, Loader2 } from "lucide-react";
+import { BottomMenu, MenuButton, MenuButtonGroup, MenuLabel } from "./BottomMenu";
+import {
+  listCharacterFormats,
+  type CharacterFileFormat,
+  type CharacterFormatInfo,
+} from "../../core/storage/characterTransfer";
+
+const FALLBACK_FORMATS: CharacterFormatInfo[] = [
+  {
+    id: "uec",
+    label: "Unified Entity Card (UEC)",
+    extension: ".uec",
+    canExport: true,
+    canImport: true,
+    readOnly: false,
+  },
+  {
+    id: "chara_card_v2",
+    label: "Character Card V2",
+    extension: ".json",
+    canExport: true,
+    canImport: true,
+    readOnly: false,
+  },
+];
+
+const FORMAT_META: Record<
+  CharacterFileFormat,
+  { icon: typeof Package; color: string; description: string }
+> = {
+  uec: {
+    icon: Package,
+    color: "from-emerald-500 to-emerald-600",
+    description: "Unified Entity Card (.uec) format (recommended).",
+  },
+  legacy_json: {
+    icon: FileCode,
+    color: "from-amber-500 to-orange-600",
+    description: "Legacy JSON (import-only).",
+  },
+  chara_card_v2: {
+    icon: FileCode,
+    color: "from-blue-500 to-cyan-600",
+    description: "Character Card V2 JSON (Tavern spec).",
+  },
+  chara_card_v1: {
+    icon: FileCode,
+    color: "from-amber-500 to-amber-600",
+    description: "Character Card V1 (import-only).",
+  },
+};
+
+interface CharacterExportMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (format: CharacterFileFormat) => void;
+  exporting?: boolean;
+}
+
+export function CharacterExportMenu({
+  isOpen,
+  onClose,
+  onSelect,
+  exporting = false,
+}: CharacterExportMenuProps) {
+  const [formats, setFormats] = useState<CharacterFormatInfo[]>(FALLBACK_FORMATS);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    setLoading(true);
+    setLoadError(null);
+    listCharacterFormats()
+      .then((data) => {
+        if (!active) return;
+        setFormats(data);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLoadError(error instanceof Error ? error.message : "Failed to load export formats");
+        setFormats(FALLBACK_FORMATS);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen]);
+
+  const exportableFormats = useMemo(
+    () => formats.filter((format) => format.canExport && !format.readOnly),
+    [formats],
+  );
+
+  return (
+    <BottomMenu isOpen={isOpen} onClose={onClose} title="Export Format">
+      <div className="space-y-4">
+        <MenuLabel>Select a format</MenuLabel>
+        <MenuButtonGroup>
+          {loading && (
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading formats...
+            </div>
+          )}
+          {!loading &&
+            exportableFormats.map((format) => {
+              const meta = FORMAT_META[format.id];
+              const Icon = meta?.icon ?? FileCode;
+              return (
+                <MenuButton
+                  key={format.id}
+                  icon={<Icon className="h-4 w-4" />}
+                  title={format.label}
+                  description={meta?.description ?? `${format.extension} format`}
+                  color={meta?.color ?? "from-blue-500 to-cyan-600"}
+                  onClick={() => onSelect(format.id)}
+                  disabled={exporting}
+                />
+              );
+            })}
+        </MenuButtonGroup>
+        {loadError && <p className="text-xs text-amber-200/80">{loadError} (showing defaults)</p>}
+      </div>
+    </BottomMenu>
+  );
+}

@@ -12,13 +12,14 @@ import {
 } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
-import { BottomMenu } from "../../components";
+import { BottomMenu, CharacterExportMenu } from "../../components";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
 import {
-  exportCharacter,
+  exportCharacterWithFormat,
   downloadJson,
-  generateExportFilename,
+  generateExportFilenameWithFormat,
+  type CharacterFileFormat,
 } from "../../../core/storage/characterTransfer";
 
 export function ChatPage() {
@@ -28,6 +29,8 @@ export function ChatPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState<Character | null>(null);
   const navigate = useNavigate();
 
   const loadCharacters = async () => {
@@ -104,19 +107,27 @@ export function ChatPage() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = () => {
     if (!selectedCharacter) return;
+    setExportTarget(selectedCharacter);
+    setSelectedCharacter(null);
+    setExportMenuOpen(true);
+  };
+
+  const handleExportFormat = async (format: CharacterFileFormat) => {
+    if (!exportTarget) return;
 
     try {
       setExporting(true);
-      const exportJson = await exportCharacter(selectedCharacter.id);
-      const filename = generateExportFilename(selectedCharacter.name);
+      const exportJson = await exportCharacterWithFormat(exportTarget.id, format);
+      const filename = generateExportFilenameWithFormat(exportTarget.name, format);
       await downloadJson(exportJson, filename);
-      setSelectedCharacter(null);
     } catch (err) {
       console.error("Failed to export character:", err);
     } finally {
       setExporting(false);
+      setExportMenuOpen(false);
+      setExportTarget(null);
     }
   };
 
@@ -182,6 +193,16 @@ export function ChatPage() {
           </div>
         )}
       </BottomMenu>
+
+      <CharacterExportMenu
+        isOpen={exportMenuOpen}
+        onClose={() => {
+          setExportMenuOpen(false);
+          setExportTarget(null);
+        }}
+        onSelect={handleExportFormat}
+        exporting={exporting}
+      />
 
       {/* Delete Confirmation */}
       <BottomMenu

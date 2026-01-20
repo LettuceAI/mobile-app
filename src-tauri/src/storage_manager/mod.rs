@@ -1,7 +1,7 @@
 pub mod backup;
-pub mod character_transfer;
 pub mod characters;
 pub mod db;
+pub mod entity_transfer;
 pub mod group_sessions;
 pub mod importer;
 pub mod legacy;

@@ -26,8 +26,10 @@ import { useEditCharacterForm } from "./hooks/useEditCharacterForm";
 import { AvatarPicker } from "../../components/AvatarPicker";
 import { BottomMenu, MenuSection } from "../../components/BottomMenu";
 import { BackgroundPositionModal } from "../../components/BackgroundPositionModal";
+import { CharacterExportMenu } from "../../components/CharacterExportMenu";
 import { cn, radius, colors, interactive } from "../../design-tokens";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
+import type { CharacterFileFormat } from "../../../core/storage/characterTransfer";
 import {
   listAudioProviders,
   listUserVoices,
@@ -61,6 +63,7 @@ export function EditCharacterPage() {
   const [modelSearchQuery, setModelSearchQuery] = React.useState("");
   const [showVoiceMenu, setShowVoiceMenu] = React.useState(false);
   const [voiceSearchQuery, setVoiceSearchQuery] = React.useState("");
+  const [exportMenuOpen, setExportMenuOpen] = React.useState(false);
   const tabsId = React.useId();
   const tabPanelId = `${tabsId}-panel`;
   const characterTabId = `${tabsId}-tab-character`;
@@ -116,6 +119,14 @@ export function EditCharacterPage() {
   } = actions;
 
   const { avatarInitial, canSave } = computed;
+
+  const handleExportFormat = React.useCallback(
+    async (format: CharacterFileFormat) => {
+      await handleExport(format);
+      setExportMenuOpen(false);
+    },
+    [handleExport],
+  );
 
   const [audioProviders, setAudioProviders] = React.useState<AudioProvider[]>([]);
   const [userVoices, setUserVoices] = React.useState<UserVoice[]>([]);
@@ -1072,7 +1083,7 @@ export function EditCharacterPage() {
           {/* Export Button - Character Tab */}
           {activeTab === "character" && (
             <motion.button
-              onClick={handleExport}
+              onClick={() => setExportMenuOpen(true)}
               disabled={exporting}
               whileTap={{ scale: exporting ? 1 : 0.98 }}
               className="w-full rounded-xl border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50"
@@ -1092,6 +1103,13 @@ export function EditCharacterPage() {
           )}
         </motion.div>
       </main>
+
+      <CharacterExportMenu
+        isOpen={exportMenuOpen}
+        onClose={() => setExportMenuOpen(false)}
+        onSelect={handleExportFormat}
+        exporting={exporting}
+      />
 
       {/* Bottom Tab Bar */}
       <div

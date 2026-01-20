@@ -13,9 +13,10 @@ import { saveAvatar, loadAvatar } from "../../../../core/storage/avatars";
 import { listPromptTemplates } from "../../../../core/prompts/service";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
 import {
-  exportCharacter,
+  exportCharacterWithFormat,
   downloadJson,
-  generateExportFilename,
+  generateExportFilenameWithFormat,
+  type CharacterFileFormat,
 } from "../../../../core/storage/characterTransfer";
 
 type EditCharacterState = {
@@ -383,23 +384,26 @@ export function useEditCharacterForm(characterId: string | undefined) {
     }
   }, [characterId, setError, setFields, setSaving, state]);
 
-  const handleExport = useCallback(async () => {
-    if (!characterId) return;
+  const handleExport = useCallback(
+    async (format: CharacterFileFormat = "uec") => {
+      if (!characterId) return;
 
-    try {
-      setExporting(true);
-      setError(null);
+      try {
+        setExporting(true);
+        setError(null);
 
-      const exportJson = await exportCharacter(characterId);
-      const filename = generateExportFilename(state.name || "character");
-      await downloadJson(exportJson, filename);
-    } catch (err: any) {
-      console.error("Failed to export character:", err);
-      setError(err?.message || "Failed to export character");
-    } finally {
-      setExporting(false);
-    }
-  }, [characterId, setError, setExporting, state.name]);
+        const exportJson = await exportCharacterWithFormat(characterId, format);
+        const filename = generateExportFilenameWithFormat(state.name || "character", format);
+        await downloadJson(exportJson, filename);
+      } catch (err: any) {
+        console.error("Failed to export character:", err);
+        setError(err?.message || "Failed to export character");
+      } finally {
+        setExporting(false);
+      }
+    },
+    [characterId, setError, setExporting, state.name],
+  );
 
   const addScene = useCallback(() => {
     if (!state.newSceneContent.trim()) return;

@@ -15,7 +15,7 @@ import { typography, interactive, cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
 import { useNavigate } from "react-router-dom";
-import { BottomMenu } from "../../components";
+import { BottomMenu, CharacterExportMenu } from "../../components";
 import {
   MessageCircle,
   Edit2,
@@ -27,9 +27,10 @@ import {
   Pencil,
 } from "lucide-react";
 import {
-  exportCharacter,
+  exportCharacterWithFormat,
   downloadJson,
-  generateExportFilename,
+  generateExportFilenameWithFormat,
+  type CharacterFileFormat,
 } from "../../../core/storage/characterTransfer";
 import { listen } from "@tauri-apps/api/event";
 
@@ -58,6 +59,8 @@ export function LibraryPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState<LibraryItem | null>(null);
 
   // Rename state
   const [renameItem, setRenameItem] = useState<LibraryItem | null>(null);
@@ -175,18 +178,26 @@ export function LibraryPage() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = () => {
     if (!selectedItem || selectedItem.itemType !== "character") return;
+    setExportTarget(selectedItem);
+    setSelectedItem(null);
+    setExportMenuOpen(true);
+  };
+
+  const handleExportFormat = async (format: CharacterFileFormat) => {
+    if (!exportTarget || exportTarget.itemType !== "character") return;
     try {
       setExporting(true);
-      const exportJson = await exportCharacter(selectedItem.id);
-      const filename = generateExportFilename(getItemName(selectedItem));
+      const exportJson = await exportCharacterWithFormat(exportTarget.id, format);
+      const filename = generateExportFilenameWithFormat(getItemName(exportTarget), format);
       await downloadJson(exportJson, filename);
-      setSelectedItem(null);
     } catch (err) {
       console.error("Failed to export character:", err);
     } finally {
       setExporting(false);
+      setExportMenuOpen(false);
+      setExportTarget(null);
     }
   };
 
@@ -235,7 +246,7 @@ export function LibraryPage() {
                     ? "No personas yet"
                     : "No lorebooks yet"}
             </h3>
-            <p className="mb-6 max-w-[280px] text-center text-sm text-white/50">
+            <p className="mb-6 max-w-70 text-center text-sm text-white/50">
               {filter === "All"
                 ? "Create characters, personas, and lorebooks to see them here"
                 : filter === "Characters"
@@ -382,6 +393,16 @@ export function LibraryPage() {
           </div>
         )}
       </BottomMenu>
+
+      <CharacterExportMenu
+        isOpen={exportMenuOpen}
+        onClose={() => {
+          setExportMenuOpen(false);
+          setExportTarget(null);
+        }}
+        onSelect={handleExportFormat}
+        exporting={exporting}
+      />
 
       {/* Delete Confirmation */}
       <BottomMenu

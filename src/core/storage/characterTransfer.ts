@@ -1,6 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Character } from "./schemas";
 
+export type CharacterFileFormat = "uec" | "legacy_json" | "chara_card_v2" | "chara_card_v1";
+
+export interface CharacterFormatInfo {
+  id: CharacterFileFormat;
+  label: string;
+  extension: string;
+  canExport: boolean;
+  canImport: boolean;
+  readOnly: boolean;
+}
+
 export interface SceneExport {
   id: string;
   content: string;
@@ -26,6 +37,7 @@ export interface CharacterImportPreview {
   promptTemplateId: string | null;
   memoryType: "manual" | "dynamic";
   disableAvatarGradient: boolean;
+  fileFormat?: CharacterFileFormat;
   avatarData?: string | null;
   backgroundImageData?: string | null;
 }
@@ -37,11 +49,35 @@ export interface CharacterImportPreview {
 export async function exportCharacter(characterId: string): Promise<string> {
   try {
     console.log("[exportCharacter] Exporting character:", characterId);
-    const exportJson = await invoke<string>("character_export", { characterId });
+    const exportJson = await invoke<string>("character_export_with_format", {
+      characterId,
+      format: "uec",
+    });
     console.log("[exportCharacter] Export successful");
     return exportJson;
   } catch (error) {
     console.error("[exportCharacter] Failed to export character:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to export character");
+  }
+}
+
+/**
+ * Export a character in a specific file format
+ */
+export async function exportCharacterWithFormat(
+  characterId: string,
+  format: CharacterFileFormat,
+): Promise<string> {
+  try {
+    console.log("[exportCharacterWithFormat] Exporting character:", characterId, format);
+    const exportJson = await invoke<string>("character_export_with_format", {
+      characterId,
+      format,
+    });
+    console.log("[exportCharacterWithFormat] Export successful");
+    return exportJson;
+  } catch (error) {
+    console.error("[exportCharacterWithFormat] Failed to export character:", error);
     throw new Error(typeof error === "string" ? error : "Failed to export character");
   }
 }
@@ -124,4 +160,38 @@ export function generateExportFilename(characterName: string): string {
   const safeName = characterName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
   const timestamp = new Date().toISOString().split("T")[0];
   return `character_${safeName}_${timestamp}.uec`;
+}
+
+export function generateExportFilenameWithFormat(
+  characterName: string,
+  format: CharacterFileFormat,
+): string {
+  const safeName = characterName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
+  const timestamp = new Date().toISOString().split("T")[0];
+  const extension = format === "uec" ? "uec" : "json";
+  return `character_${safeName}_${timestamp}.${extension}`;
+}
+
+/**
+ * List supported character file formats
+ */
+export async function listCharacterFormats(): Promise<CharacterFormatInfo[]> {
+  try {
+    return await invoke<CharacterFormatInfo[]>("character_list_formats");
+  } catch (error) {
+    console.error("[listCharacterFormats] Failed to load formats:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to load formats");
+  }
+}
+
+/**
+ * Detect character file format from JSON content
+ */
+export async function detectCharacterFormat(importJson: string): Promise<CharacterFormatInfo> {
+  try {
+    return await invoke<CharacterFormatInfo>("character_detect_format", { importJson });
+  } catch (error) {
+    console.error("[detectCharacterFormat] Failed to detect format:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to detect format");
+  }
 }

@@ -1,4 +1,5 @@
 export * from "./BottomMenu";
+export * from "./CharacterExportMenu";
 export * from "./Tooltip";
 export * from "./CreateMenus/CreateMenu";
 export * from "./AdvancedModelSettingsForm";

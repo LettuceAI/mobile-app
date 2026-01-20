@@ -45,7 +45,7 @@ export function ConvertPage() {
       const parsed = JSON.parse(converted) as { kind?: string; payload?: Record<string, any> };
       const kind = parsed.kind === "persona" ? "persona" : "character";
       const title =
-        kind === "persona" ? parsed.payload?.title ?? "" : parsed.payload?.name ?? "";
+        kind === "persona" ? (parsed.payload?.title ?? "") : (parsed.payload?.name ?? "");
       const baseName = selectedFile.name.replace(/\.[^.]+$/, "") || kind;
       const filename =
         kind === "persona"
@@ -83,8 +83,8 @@ export function ConvertPage() {
                   Convert legacy exports
                 </h2>
                 <p className={cn(typography.caption.size, "mt-1 text-amber-100/70")}>
-                  JSON exports are deprecated. Convert them to unified .uec files for future
-                  compatibility.
+                  JSON exports are deprecated. Convert them to Unified Entity Card (UEC) files for
+                  future compatibility.
                 </p>
               </div>
             </div>
@@ -97,7 +97,7 @@ export function ConvertPage() {
                   Choose a file
                 </h3>
                 <p className={cn(typography.caption.size, "text-white/50")}>
-                  Supports legacy .json exports and existing .uec files.
+                  Supports legacy .json exports and existing Unified Entity Card (UEC) files.
                 </p>
               </div>
               <label
@@ -131,14 +131,14 @@ export function ConvertPage() {
                   </p>
                 </div>
                 <span className="rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/50">
-                  {selectedFile.name.toLowerCase().endsWith(".json") ? "JSON" : "UEC"}
+                  {selectedFile.name.toLowerCase().endsWith(".json")
+                    ? "JSON"
+                    : "Unified Entity Card (UEC)"}
                 </span>
               </div>
             ) : (
               <div className="mt-4 rounded-xl border border-dashed border-white/15 bg-white/5 px-4 py-6 text-center">
-                <p className={cn(typography.caption.size, "text-white/40")}>
-                  No file selected yet
-                </p>
+                <p className={cn(typography.caption.size, "text-white/40")}>No file selected yet</p>
               </div>
             )}
           </div>
@@ -164,7 +164,7 @@ export function ConvertPage() {
               ) : (
                 <>
                   <ArrowRight className="h-4 w-4" />
-                  Convert to .uec
+                  Convert to Unified Entity Card (UEC)
                 </>
               )}
             </button>

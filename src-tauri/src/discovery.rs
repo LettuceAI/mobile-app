@@ -277,42 +277,6 @@ struct DiscoveryLorebookEntry {
     pub keys: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharaCardV3 {
-    pub spec: String,
-    pub spec_version: String,
-    pub data: CharaCardV3Data,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharaCardV3Data {
-    pub name: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub personality: Option<String>,
-    #[serde(default)]
-    pub scenario: Option<String>,
-    #[serde(default)]
-    pub first_mes: Option<String>,
-    #[serde(default)]
-    pub mes_example: Option<String>,
-    #[serde(default)]
-    pub system_prompt: Option<String>,
-    #[serde(default)]
-    pub post_history_instructions: Option<String>,
-    #[serde(default)]
-    pub alternate_greetings: Option<Vec<String>>,
-    #[serde(default)]
-    pub tags: Option<Vec<String>>,
-    #[serde(default)]
-    pub creator: Option<String>,
-    #[serde(default)]
-    pub character_version: Option<String>,
-    #[serde(default)]
-    pub extensions: Option<Value>,
-}
-
 #[derive(Clone, Copy)]
 enum DiscoverySortKey {
     CreatedAt,
