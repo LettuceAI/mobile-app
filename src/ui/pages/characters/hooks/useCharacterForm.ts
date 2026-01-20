@@ -17,6 +17,10 @@ import {
   type CharacterFileFormat,
 } from "../../../../core/storage/characterTransfer";
 import { toast } from "../../../components/toast";
+import {
+  APP_DEFAULT_TEMPLATE_ID,
+  isSystemPromptTemplate,
+} from "../../../../core/prompts/constants";
 export enum Step {
   Identity = 1,
   StartingScene = 2,
@@ -234,7 +238,11 @@ export function useCharacterForm(draftCharacter?: any) {
           dispatch({ type: "SET_MEMORY_TYPE", payload: "manual" });
         }
 
-        dispatch({ type: "SET_PROMPT_TEMPLATES", payload: templates });
+        const filteredTemplates = templates.filter(
+          (template) =>
+            isSystemPromptTemplate(template.id) && template.id !== APP_DEFAULT_TEMPLATE_ID,
+        );
+        dispatch({ type: "SET_PROMPT_TEMPLATES", payload: filteredTemplates });
       } catch (err) {
         console.error("Failed to load settings", err);
       } finally {

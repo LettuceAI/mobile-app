@@ -29,6 +29,7 @@ import { useModelEditorController } from "./hooks/useModelEditorController";
 import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
 import { getProviderReasoningSupport } from "../../../core/storage/schemas";
 import { listPromptTemplates } from "../../../core/prompts/service";
+import { APP_DEFAULT_TEMPLATE_ID, isSystemPromptTemplate } from "../../../core/prompts/constants";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { cn } from "../../design-tokens";
 import { openDocs } from "../../../core/utils/docs";
@@ -138,7 +139,11 @@ export function EditModelPage() {
     try {
       setLoadingTemplates(true);
       const templates = await listPromptTemplates();
-      setPromptTemplates(templates);
+      const filtered = templates.filter(
+        (template) =>
+          isSystemPromptTemplate(template.id) && template.id !== APP_DEFAULT_TEMPLATE_ID,
+      );
+      setPromptTemplates(filtered);
     } catch (err) {
       console.error("Failed to load prompt templates:", err);
     } finally {
@@ -446,13 +451,11 @@ export function EditModelPage() {
                         <option value="" className="bg-[#16171d]">
                           Use app default
                         </option>
-                        {promptTemplates
-                          .filter((t) => t.name !== "App Default")
-                          .map((template) => (
-                            <option key={template.id} value={template.id} className="bg-[#16171d]">
-                              {template.name}
-                            </option>
-                          ))}
+                        {promptTemplates.map((template) => (
+                          <option key={template.id} value={template.id} className="bg-[#16171d]">
+                            {template.name}
+                          </option>
+                        ))}
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                     </div>

@@ -46,9 +46,9 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
       { match: (p) => p === "/settings/convert", title: "Convert Files" },
       { match: (p) => p === "/settings/usage", title: "Usage Analytics" },
       { match: (p) => p === "/settings/changelog", title: "Changelog" },
-      { match: (p) => p === "/settings/prompts/new", title: "Create Template" },
-      { match: (p) => p.startsWith("/settings/prompts/"), title: "Edit Template" },
-      { match: (p) => p === "/settings/prompts", title: "Prompt Templates" },
+      { match: (p) => p === "/settings/prompts/new", title: "Create System Prompt" },
+      { match: (p) => p.startsWith("/settings/prompts/"), title: "Edit System Prompt" },
+      { match: (p) => p === "/settings/prompts", title: "System Prompts" },
       { match: (p) => p === "/settings/developer", title: "Developer" },
       { match: (p) => p === "/settings/advanced", title: "Advanced" },
       { match: (p) => p === "/settings/characters", title: "Characters" },
@@ -164,7 +164,13 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     [basePath],
   );
   const isModelNew = useMemo(() => basePath === "/settings/models/new", [basePath]);
-  const showSaveButton = isCharacterEdit || isPersonaEdit || isModelEdit || isModelNew;
+  const isPromptEdit = useMemo(
+    () => /^\/settings\/prompts\/[^/]+$/.test(basePath) && basePath !== "/settings/prompts/new",
+    [basePath],
+  );
+  const isPromptNew = useMemo(() => basePath === "/settings/prompts/new", [basePath]);
+  const showSaveButton =
+    isCharacterEdit || isPersonaEdit || isModelEdit || isModelNew || isPromptEdit || isPromptNew;
 
   // Track save button state from window globals
   const [canSave, setCanSave] = useState(false);
@@ -191,6 +197,11 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
         const newIsSaving = !!globalWindow.__saveModelSaving;
         setCanSave((prev) => (prev !== newCanSave ? newCanSave : prev));
         setIsSaving((prev) => (prev !== newIsSaving ? newIsSaving : prev));
+      } else if (isPromptEdit || isPromptNew) {
+        const newCanSave = !!globalWindow.__savePromptCanSave;
+        const newIsSaving = !!globalWindow.__savePromptSaving;
+        setCanSave((prev) => (prev !== newCanSave ? newCanSave : prev));
+        setIsSaving((prev) => (prev !== newIsSaving ? newIsSaving : prev));
       }
     };
 
@@ -199,7 +210,15 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     const interval = setInterval(checkGlobals, 200);
 
     return () => clearInterval(interval);
-  }, [showSaveButton, isCharacterEdit, isPersonaEdit, isModelEdit, isModelNew]);
+  }, [
+    showSaveButton,
+    isCharacterEdit,
+    isPersonaEdit,
+    isModelEdit,
+    isModelNew,
+    isPromptEdit,
+    isPromptNew,
+  ]);
 
   const handleBack = () => {
     if (onBackOverride) {
@@ -383,6 +402,8 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                   typeof globalWindow.__saveModel === "function"
                 ) {
                   globalWindow.__saveModel();
+                } else if (isPromptEdit || isPromptNew) {
+                  window.dispatchEvent(new CustomEvent("prompt:save"));
                 }
               }}
               disabled={!canSave || isSaving}

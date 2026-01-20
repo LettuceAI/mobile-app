@@ -18,6 +18,10 @@ import {
   generateExportFilenameWithFormat,
   type CharacterFileFormat,
 } from "../../../../core/storage/characterTransfer";
+import {
+  APP_DEFAULT_TEMPLATE_ID,
+  isSystemPromptTemplate,
+} from "../../../../core/prompts/constants";
 
 type EditCharacterState = {
   loading: boolean;
@@ -279,7 +283,11 @@ export function useEditCharacterForm(characterId: string | undefined) {
       setFields({ loadingTemplates: true });
       // Global list (scopes removed)
       const templates = await listPromptTemplates();
-      setFields({ promptTemplates: templates });
+      const filtered = templates.filter(
+        (template) =>
+          isSystemPromptTemplate(template.id) && template.id !== APP_DEFAULT_TEMPLATE_ID,
+      );
+      setFields({ promptTemplates: filtered });
     } catch (err) {
       console.error("Failed to load prompt templates:", err);
     } finally {
