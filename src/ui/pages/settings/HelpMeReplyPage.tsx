@@ -122,7 +122,7 @@ export function HelpMeReplyPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <main className="flex-1 px-4 pb-24 pt-4">
-        <div className="mx-auto w-full max-w-2xl space-y-6">
+        <div className="mx-auto w-full max-w-5xl space-y-6">
           {/* Info Card */}
           <div className={cn("rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3")}>
             <div className="flex items-start gap-2">
@@ -134,240 +134,249 @@ export function HelpMeReplyPage() {
             </div>
           </div>
 
-          {/* Model Configuration Section */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
-              Model Configuration
-            </h3>
+          {/* Desktop: Two Column Layout / Mobile: Single Column */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Model Configuration */}
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
+                Model Configuration
+              </h3>
 
-            {/* Model Selector */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
-                  <Cpu className="h-4 w-4 text-emerald-400" />
+              {/* Model Selector */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
+                    <Cpu className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Reply Model</h3>
                 </div>
-                <h3 className="text-sm font-semibold text-white">Reply Model</h3>
+
+                {models.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowModelMenu(true)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      {selectedModelId ? (
+                        getProviderIcon(selectedModel?.providerId || "")
+                      ) : (
+                        <Cpu className="h-5 w-5 text-white/40" />
+                      )}
+                      <span
+                        className={`text-sm ${selectedModelId ? "text-white" : "text-white/50"}`}
+                      >
+                        {selectedModelId
+                          ? selectedModel?.displayName || "Selected Model"
+                          : `Use app default${defaultModel ? ` (${defaultModel.displayName})` : ""}`}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <p className="text-sm text-white/50">No models available</p>
+                  </div>
+                )}
+                <p className="text-xs text-white/50 px-1">
+                  AI model for generating reply suggestions
+                </p>
               </div>
 
-              {models.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowModelMenu(true)}
-                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
-                >
-                  <div className="flex items-center gap-2">
-                    {selectedModelId ? (
-                      getProviderIcon(selectedModel?.providerId || "")
-                    ) : (
-                      <Cpu className="h-5 w-5 text-white/40" />
-                    )}
-                    <span className={`text-sm ${selectedModelId ? "text-white" : "text-white/50"}`}>
-                      {selectedModelId
-                        ? selectedModel?.displayName || "Selected Model"
-                        : `Use app default${defaultModel ? ` (${defaultModel.displayName})` : ""}`}
-                    </span>
+              {/* Streaming Toggle */}
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
+                      <Zap className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-white">Streaming Output</span>
+                      <p className="text-[11px] text-white/45">
+                        Show suggestions as they're generated
+                      </p>
+                    </div>
                   </div>
-                  <ChevronDown className="h-4 w-4 text-white/40" />
-                </button>
-              ) : (
-                <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                  <p className="text-sm text-white/50">No models available</p>
-                </div>
-              )}
-              <p className="text-xs text-white/50 px-1">
-                AI model for generating reply suggestions
-              </p>
-            </div>
-
-            {/* Streaming Toggle */}
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
-                    <Zap className="h-4 w-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-white">Streaming Output</span>
-                    <p className="text-[11px] text-white/45">
-                      Show suggestions as they're generated
-                    </p>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={streamingEnabled}
-                    onChange={handleStreamingToggle}
-                    className="sr-only peer"
-                  />
-                  <div
-                    className={cn(
-                      "w-9 h-5 rounded-full transition-colors",
-                      streamingEnabled ? "bg-blue-500" : "bg-white/20",
-                    )}
-                  >
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={streamingEnabled}
+                      onChange={handleStreamingToggle}
+                      className="sr-only peer"
+                    />
                     <div
                       className={cn(
-                        "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
-                        streamingEnabled && "translate-x-4",
+                        "w-9 h-5 rounded-full transition-colors",
+                        streamingEnabled ? "bg-blue-500" : "bg-white/20",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
+                          streamingEnabled && "translate-x-4",
+                        )}
+                      />
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Max Tokens */}
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
+                      <Hash className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-white">Max Tokens</span>
+                      <p className="text-[11px] text-white/45">Maximum length of suggestions</p>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    value={maxTokensInput}
+                    onChange={(e) => setMaxTokensInput(e.target.value)}
+                    onBlur={handleMaxTokensBlur}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    min={1}
+                    className={cn(
+                      "w-20 rounded-lg border border-white/15 bg-black/30 px-3 py-1.5",
+                      "text-center font-mono text-sm text-white",
+                      "focus:border-white/30 focus:outline-none",
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[100, 150, 250, 400].map((val) => (
+                    <button
+                      key={val}
+                      onClick={() => handleMaxTokensChange(val)}
+                      className={cn(
+                        "px-3 py-2 rounded-lg text-xs font-medium transition-all",
+                        maxTokens === val
+                          ? "bg-amber-500/20 border border-amber-400/40 text-amber-200"
+                          : "border border-white/10 bg-white/5 text-white/60 hover:border-white/20",
+                      )}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Response Style */}
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
+                Response Style
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Conversational Style */}
+                <button
+                  onClick={() => handleStyleChange("conversational")}
+                  className={cn(
+                    "flex flex-col items-center gap-3 rounded-xl border p-4 transition-all",
+                    replyStyle === "conversational"
+                      ? "border-emerald-400/40 bg-emerald-500/10"
+                      : "border-white/10 bg-white/5 hover:border-white/20",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-full border transition-all",
+                      replyStyle === "conversational"
+                        ? "border-emerald-400/50 bg-emerald-500/20"
+                        : "border-white/15 bg-white/5",
+                    )}
+                  >
+                    <MessageCircle
+                      className={cn(
+                        "h-6 w-6 transition-colors",
+                        replyStyle === "conversational" ? "text-emerald-300" : "text-white/50",
                       )}
                     />
                   </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Max Tokens */}
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
-                    <Hash className="h-4 w-4 text-amber-400" />
+                  <div className="text-center">
+                    <span
+                      className={cn(
+                        "text-sm font-semibold block",
+                        replyStyle === "conversational" ? "text-emerald-100" : "text-white/70",
+                      )}
+                    >
+                      Conversational
+                    </span>
+                    <span className="text-[10px] text-white/40 mt-1 block">
+                      Natural, casual tone
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-sm font-medium text-white">Max Tokens</span>
-                    <p className="text-[11px] text-white/45">Maximum length of suggestions</p>
-                  </div>
-                </div>
-                <input
-                  type="number"
-                  value={maxTokensInput}
-                  onChange={(e) => setMaxTokensInput(e.target.value)}
-                  onBlur={handleMaxTokensBlur}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.currentTarget.blur();
-                    }
-                  }}
-                  min={1}
-                  className={cn(
-                    "w-20 rounded-lg border border-white/15 bg-black/30 px-3 py-1.5",
-                    "text-center font-mono text-sm text-white",
-                    "focus:border-white/30 focus:outline-none",
+                  {replyStyle === "conversational" && (
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
+                      <Check className="h-3 w-3 text-white" />
+                    </div>
                   )}
-                />
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {[100, 150, 250, 400].map((val) => (
-                  <button
-                    key={val}
-                    onClick={() => handleMaxTokensChange(val)}
-                    className={cn(
-                      "px-3 py-2 rounded-lg text-xs font-medium transition-all",
-                      maxTokens === val
-                        ? "bg-amber-500/20 border border-amber-400/40 text-amber-200"
-                        : "border border-white/10 bg-white/5 text-white/60 hover:border-white/20",
-                    )}
-                  >
-                    {val}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+                </button>
 
-          {/* Response Style Section */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
-              Response Style
-            </h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Conversational Style */}
-              <button
-                onClick={() => handleStyleChange("conversational")}
-                className={cn(
-                  "flex flex-col items-center gap-3 rounded-xl border p-4 transition-all",
-                  replyStyle === "conversational"
-                    ? "border-emerald-400/40 bg-emerald-500/10"
-                    : "border-white/10 bg-white/5 hover:border-white/20",
-                )}
-              >
-                <div
+                {/* Roleplay Style */}
+                <button
+                  onClick={() => handleStyleChange("roleplay")}
                   className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-full border transition-all",
-                    replyStyle === "conversational"
-                      ? "border-emerald-400/50 bg-emerald-500/20"
-                      : "border-white/15 bg-white/5",
-                  )}
-                >
-                  <MessageCircle
-                    className={cn(
-                      "h-6 w-6 transition-colors",
-                      replyStyle === "conversational" ? "text-emerald-300" : "text-white/50",
-                    )}
-                  />
-                </div>
-                <div className="text-center">
-                  <span
-                    className={cn(
-                      "text-sm font-semibold block",
-                      replyStyle === "conversational" ? "text-emerald-100" : "text-white/70",
-                    )}
-                  >
-                    Conversational
-                  </span>
-                  <span className="text-[10px] text-white/40 mt-1 block">Natural, casual tone</span>
-                </div>
-                {replyStyle === "conversational" && (
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
-                    <Check className="h-3 w-3 text-white" />
-                  </div>
-                )}
-              </button>
-
-              {/* Roleplay Style */}
-              <button
-                onClick={() => handleStyleChange("roleplay")}
-                className={cn(
-                  "flex flex-col items-center gap-3 rounded-xl border p-4 transition-all",
-                  replyStyle === "roleplay"
-                    ? "border-rose-400/40 bg-rose-500/10"
-                    : "border-white/10 bg-white/5 hover:border-white/20",
-                )}
-              >
-                <div
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-full border transition-all",
+                    "flex flex-col items-center gap-3 rounded-xl border p-4 transition-all",
                     replyStyle === "roleplay"
-                      ? "border-rose-400/50 bg-rose-500/20"
-                      : "border-white/15 bg-white/5",
+                      ? "border-rose-400/40 bg-rose-500/10"
+                      : "border-white/10 bg-white/5 hover:border-white/20",
                   )}
                 >
-                  <BookOpen
+                  <div
                     className={cn(
-                      "h-6 w-6 transition-colors",
-                      replyStyle === "roleplay" ? "text-rose-300" : "text-white/50",
-                    )}
-                  />
-                </div>
-                <div className="text-center">
-                  <span
-                    className={cn(
-                      "text-sm font-semibold block",
-                      replyStyle === "roleplay" ? "text-rose-100" : "text-white/70",
+                      "flex h-12 w-12 items-center justify-center rounded-full border transition-all",
+                      replyStyle === "roleplay"
+                        ? "border-rose-400/50 bg-rose-500/20"
+                        : "border-white/15 bg-white/5",
                     )}
                   >
-                    Roleplay
-                  </span>
-                  <span className="text-[10px] text-white/40 mt-1 block">In-character actions</span>
-                </div>
-                {replyStyle === "roleplay" && (
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500">
-                    <Check className="h-3 w-3 text-white" />
+                    <BookOpen
+                      className={cn(
+                        "h-6 w-6 transition-colors",
+                        replyStyle === "roleplay" ? "text-rose-300" : "text-white/50",
+                      )}
+                    />
                   </div>
-                )}
-              </button>
-            </div>
+                  <div className="text-center">
+                    <span
+                      className={cn(
+                        "text-sm font-semibold block",
+                        replyStyle === "roleplay" ? "text-rose-100" : "text-white/70",
+                      )}
+                    >
+                      Roleplay
+                    </span>
+                    <span className="text-[10px] text-white/40 mt-1 block">
+                      In-character actions
+                    </span>
+                  </div>
+                  {replyStyle === "roleplay" && (
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500">
+                      <Check className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              </div>
 
-            <p className="text-xs text-white/50 px-1">
-              {replyStyle === "conversational"
-                ? "Suggestions will be written as natural dialogue, suitable for casual chats."
-                : "Suggestions will include roleplay elements like *actions* and narrative descriptions."}
-            </p>
+              <p className="text-xs text-white/50 px-1">
+                {replyStyle === "conversational"
+                  ? "Suggestions will be written as natural dialogue, suitable for casual chats."
+                  : "Suggestions will include roleplay elements like *actions* and narrative descriptions."}
+              </p>
+            </div>
           </div>
 
-          {/* Bottom Info Card */}
+          {/* Bottom Info Card - Full Width */}
           <div
             className={cn(
               "rounded-xl border px-4 py-3.5",

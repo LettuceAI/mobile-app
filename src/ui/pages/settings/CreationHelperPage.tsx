@@ -303,7 +303,7 @@ export function CreationHelperPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <main className="flex-1 px-4 pb-24 pt-4">
-        <div className="mx-auto w-full max-w-2xl space-y-6">
+        <div className="mx-auto w-full max-w-5xl space-y-6">
           {/* Info Card */}
           <div className={cn("rounded-xl border border-rose-400/20 bg-rose-400/5 p-3")}>
             <div className="flex items-start gap-2">
@@ -315,299 +315,307 @@ export function CreationHelperPage() {
             </div>
           </div>
 
-          {/* Model Configuration Section */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
-              Model Configuration
-            </h3>
+          {/* Desktop: Two Column Layout / Mobile: Single Column */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Model Configuration */}
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
+                Model Configuration
+              </h3>
 
-            {/* Chat Model Selector */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg border border-rose-400/30 bg-rose-400/10 p-1.5">
-                  <MessageSquare className="h-4 w-4 text-rose-400" />
+              {/* Chat Model Selector */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-rose-400/30 bg-rose-400/10 p-1.5">
+                    <MessageSquare className="h-4 w-4 text-rose-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Chat Model</h3>
                 </div>
-                <h3 className="text-sm font-semibold text-white">Chat Model</h3>
-              </div>
 
-              {textModels.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowModelMenu(true)}
-                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
-                >
-                  <div className="flex items-center gap-2">
-                    {selectedModelId ? (
-                      getProviderIcon(selectedModel?.providerId || "")
-                    ) : (
-                      <Cpu className="h-5 w-5 text-white/40" />
-                    )}
-                    <span className={`text-sm ${selectedModelId ? "text-white" : "text-white/50"}`}>
-                      {selectedModelId
-                        ? selectedModel?.displayName || "Selected Model"
-                        : `Use app default${defaultModel ? ` (${defaultModel.displayName})` : ""}`}
-                    </span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-white/40" />
-                </button>
-              ) : (
-                <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                  <p className="text-sm text-white/50">No models available</p>
-                </div>
-              )}
-              <p className="text-xs text-white/50 px-1">
-                AI model for character creation conversations
-              </p>
-            </div>
-
-            {/* Streaming Toggle */}
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
-                    <Zap className="h-4 w-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-white">Streaming Output</span>
-                    <p className="text-[11px] text-white/45">Show responses as they're generated</p>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={streamingEnabled}
-                    onChange={handleStreamingToggle}
-                    className="sr-only peer"
-                  />
-                  <div
-                    className={cn(
-                      "w-9 h-5 rounded-full transition-colors",
-                      streamingEnabled ? "bg-emerald-500" : "bg-white/20",
-                    )}
+                {textModels.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowModelMenu(true)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
                   >
-                    <div
-                      className={cn(
-                        "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
-                        streamingEnabled && "translate-x-4",
+                    <div className="flex items-center gap-2">
+                      {selectedModelId ? (
+                        getProviderIcon(selectedModel?.providerId || "")
+                      ) : (
+                        <Cpu className="h-5 w-5 text-white/40" />
                       )}
-                    />
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Image Model Selector */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
-                  <Image className="h-4 w-4 text-amber-400" />
-                </div>
-                <h3 className="text-sm font-semibold text-white">Image Generation Model</h3>
-              </div>
-
-              {imageModels.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowImageModelMenu(true)}
-                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
-                >
-                  <div className="flex items-center gap-2">
-                    {imageModelId ? (
-                      getProviderIcon(selectedImageModel?.providerId || "")
-                    ) : (
-                      <Image className="h-5 w-5 text-white/40" />
-                    )}
-                    <span className={`text-sm ${imageModelId ? "text-white" : "text-white/50"}`}>
-                      {imageModelId
-                        ? selectedImageModel?.displayName || "Selected Model"
-                        : "No model selected"}
-                    </span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-white/40" />
-                </button>
-              ) : (
-                <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                  <p className="text-sm text-white/50">No image models available</p>
-                </div>
-              )}
-              <p className="text-xs text-white/50 px-1">For generating character avatars</p>
-            </div>
-          </div>
-
-          {/* Tool Selection Section */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
-              Tool Selection
-            </h3>
-
-            {/* Smart Tool Selection Toggle */}
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
-                    <Wand2 className="h-4 w-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-white">Smart Tool Selection</span>
-                    <p className="text-[11px] text-white/45">
-                      AI automatically chooses which tools to use
-                    </p>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={smartToolSelection}
-                    onChange={handleSmartToolToggle}
-                    className="sr-only peer"
-                  />
-                  <div
-                    className={cn(
-                      "w-9 h-5 rounded-full transition-colors",
-                      smartToolSelection ? "bg-blue-500" : "bg-white/20",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
-                        smartToolSelection && "translate-x-4",
-                      )}
-                    />
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Tool Presets - shown when smart selection is OFF */}
-            {!smartToolSelection && (
-              <>
-                <div className="space-y-3">
-                  <p className="text-xs text-white/50 px-1">Quick Presets</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {TOOL_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => handlePresetSelect(preset.id)}
-                        className={cn(
-                          "rounded-xl border px-3 py-2.5 text-center transition-all",
-                          currentPreset === preset.id
-                            ? "border-rose-400/40 bg-rose-500/15 text-rose-200"
-                            : "border-white/10 bg-white/5 text-white/60 hover:border-white/20",
-                        )}
+                      <span
+                        className={`text-sm ${selectedModelId ? "text-white" : "text-white/50"}`}
                       >
-                        <span className="text-xs font-medium">{preset.name}</span>
-                      </button>
-                    ))}
+                        {selectedModelId
+                          ? selectedModel?.displayName || "Selected Model"
+                          : `Use app default${defaultModel ? ` (${defaultModel.displayName})` : ""}`}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <p className="text-sm text-white/50">No models available</p>
                   </div>
-                  {currentPreset === "custom" && (
-                    <p className="text-[11px] text-amber-200/70 px-1">
-                      Custom selection — {enabledTools.length} tools enabled
-                    </p>
-                  )}
+                )}
+                <p className="text-xs text-white/50 px-1">
+                  AI model for character creation conversations
+                </p>
+              </div>
+
+              {/* Streaming Toggle */}
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
+                      <Zap className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-white">Streaming Output</span>
+                      <p className="text-[11px] text-white/45">
+                        Show responses as they're generated
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={streamingEnabled}
+                      onChange={handleStreamingToggle}
+                      className="sr-only peer"
+                    />
+                    <div
+                      className={cn(
+                        "w-9 h-5 rounded-full transition-colors",
+                        streamingEnabled ? "bg-emerald-500" : "bg-white/20",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
+                          streamingEnabled && "translate-x-4",
+                        )}
+                      />
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Image Model Selector */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
+                    <Image className="h-4 w-4 text-amber-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Image Generation Model</h3>
                 </div>
 
-                {/* Tool List */}
-                <div className="space-y-4">
-                  {Object.entries(groupedTools).map(([category, tools]) => {
-                    const categoryInfo = TOOL_CATEGORIES[category as keyof typeof TOOL_CATEGORIES];
-                    const colorMap = {
-                      blue: {
-                        badge: "border-blue-400/30 bg-blue-500/10 text-blue-300",
-                      },
-                      emerald: {
-                        badge: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
-                      },
-                      amber: {
-                        badge: "border-amber-400/30 bg-amber-500/10 text-amber-300",
-                      },
-                      rose: {
-                        badge: "border-rose-400/30 bg-rose-500/10 text-rose-300",
-                      },
-                      cyan: {
-                        badge: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
-                      },
-                    };
+                {imageModels.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowImageModelMenu(true)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      {imageModelId ? (
+                        getProviderIcon(selectedImageModel?.providerId || "")
+                      ) : (
+                        <Image className="h-5 w-5 text-white/40" />
+                      )}
+                      <span className={`text-sm ${imageModelId ? "text-white" : "text-white/50"}`}>
+                        {imageModelId
+                          ? selectedImageModel?.displayName || "Selected Model"
+                          : "No model selected"}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <p className="text-sm text-white/50">No image models available</p>
+                  </div>
+                )}
+                <p className="text-xs text-white/50 px-1">For generating character avatars</p>
+              </div>
+            </div>
 
-                    const categoryColors = colorMap[categoryInfo.color as keyof typeof colorMap];
+            {/* Right Column - Tool Selection */}
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
+                Tool Selection
+              </h3>
 
-                    return (
-                      <div key={category} className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <span
-                            className={cn(
-                              "rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-                              categoryColors.badge,
-                            )}
-                          >
-                            {categoryInfo.label}
-                          </span>
-                        </div>
+              {/* Smart Tool Selection Toggle */}
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 p-1.5">
+                      <Wand2 className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-white">Smart Tool Selection</span>
+                      <p className="text-[11px] text-white/45">
+                        AI automatically chooses which tools to use
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smartToolSelection}
+                      onChange={handleSmartToolToggle}
+                      className="sr-only peer"
+                    />
+                    <div
+                      className={cn(
+                        "w-9 h-5 rounded-full transition-colors",
+                        smartToolSelection ? "bg-blue-500" : "bg-white/20",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
+                          smartToolSelection && "translate-x-4",
+                        )}
+                      />
+                    </div>
+                  </label>
+                </div>
+              </div>
 
-                        <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden divide-y divide-white/5">
-                          {tools.map((tool) => {
-                            const Icon = tool.icon;
-                            const isEnabled = enabledTools.includes(tool.id);
+              {/* Tool Presets - shown when smart selection is OFF */}
+              {!smartToolSelection && (
+                <>
+                  <div className="space-y-3">
+                    <p className="text-xs text-white/50 px-1">Quick Presets</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {TOOL_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          onClick={() => handlePresetSelect(preset.id)}
+                          className={cn(
+                            "rounded-xl border px-3 py-2.5 text-center transition-all",
+                            currentPreset === preset.id
+                              ? "border-rose-400/40 bg-rose-500/15 text-rose-200"
+                              : "border-white/10 bg-white/5 text-white/60 hover:border-white/20",
+                          )}
+                        >
+                          <span className="text-xs font-medium">{preset.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {currentPreset === "custom" && (
+                      <p className="text-[11px] text-amber-200/70 px-1">
+                        Custom selection — {enabledTools.length} tools enabled
+                      </p>
+                    )}
+                  </div>
 
-                            return (
-                              <button
-                                key={tool.id}
-                                onClick={() => handleToolToggle(tool.id)}
-                                className={cn(
-                                  "w-full flex items-center gap-3 px-4 py-3 text-left",
-                                  "transition-colors hover:bg-white/5",
-                                )}
-                              >
-                                <div
+                  {/* Tool List */}
+                  <div className="space-y-4">
+                    {Object.entries(groupedTools).map(([category, tools]) => {
+                      const categoryInfo =
+                        TOOL_CATEGORIES[category as keyof typeof TOOL_CATEGORIES];
+                      const colorMap = {
+                        blue: {
+                          badge: "border-blue-400/30 bg-blue-500/10 text-blue-300",
+                        },
+                        emerald: {
+                          badge: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
+                        },
+                        amber: {
+                          badge: "border-amber-400/30 bg-amber-500/10 text-amber-300",
+                        },
+                        rose: {
+                          badge: "border-rose-400/30 bg-rose-500/10 text-rose-300",
+                        },
+                        cyan: {
+                          badge: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
+                        },
+                      };
+
+                      const categoryColors = colorMap[categoryInfo.color as keyof typeof colorMap];
+
+                      return (
+                        <div key={category} className="space-y-2">
+                          <div className="flex items-center gap-2 px-1">
+                            <span
+                              className={cn(
+                                "rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                                categoryColors.badge,
+                              )}
+                            >
+                              {categoryInfo.label}
+                            </span>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden divide-y divide-white/5">
+                            {tools.map((tool) => {
+                              const Icon = tool.icon;
+                              const isEnabled = enabledTools.includes(tool.id);
+
+                              return (
+                                <button
+                                  key={tool.id}
+                                  onClick={() => handleToolToggle(tool.id)}
                                   className={cn(
-                                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
-                                    isEnabled
-                                      ? "border-white/20 bg-white/10"
-                                      : "border-white/10 bg-white/5",
+                                    "w-full flex items-center gap-3 px-4 py-3 text-left",
+                                    "transition-colors hover:bg-white/5",
                                   )}
                                 >
-                                  <Icon
+                                  <div
                                     className={cn(
-                                      "h-4 w-4 transition-colors",
-                                      isEnabled ? "text-white/70" : "text-white/30",
-                                    )}
-                                  />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <span
-                                    className={cn(
-                                      "text-sm font-medium",
-                                      isEnabled ? "text-white" : "text-white/50",
+                                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                                      isEnabled
+                                        ? "border-white/20 bg-white/10"
+                                        : "border-white/10 bg-white/5",
                                     )}
                                   >
-                                    {tool.name}
-                                  </span>
-                                  <p className="text-[11px] text-white/40 truncate">
-                                    {tool.description}
-                                  </p>
-                                </div>
-                                <div
-                                  className={cn(
-                                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all",
-                                    isEnabled
-                                      ? "border-emerald-400/50 bg-emerald-500/20"
-                                      : "border-white/15 bg-white/5",
-                                  )}
-                                >
-                                  {isEnabled && <Check className="h-3 w-3 text-emerald-300" />}
-                                </div>
-                              </button>
-                            );
-                          })}
+                                    <Icon
+                                      className={cn(
+                                        "h-4 w-4 transition-colors",
+                                        isEnabled ? "text-white/70" : "text-white/30",
+                                      )}
+                                    />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <span
+                                      className={cn(
+                                        "text-sm font-medium",
+                                        isEnabled ? "text-white" : "text-white/50",
+                                      )}
+                                    >
+                                      {tool.name}
+                                    </span>
+                                    <p className="text-[11px] text-white/40 truncate">
+                                      {tool.description}
+                                    </p>
+                                  </div>
+                                  <div
+                                    className={cn(
+                                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all",
+                                      isEnabled
+                                        ? "border-emerald-400/50 bg-emerald-500/20"
+                                        : "border-white/15 bg-white/5",
+                                    )}
+                                  >
+                                    {isEnabled && <Check className="h-3 w-3 text-emerald-300" />}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Bottom Info Card */}
+          {/* Bottom Info Card - Full Width */}
           <div
             className={cn(
               "rounded-xl border px-4 py-3.5",
