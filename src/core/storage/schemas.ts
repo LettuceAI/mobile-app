@@ -963,6 +963,7 @@ export const SettingsSchema = z.object({
       summarisationModelId: z.string().optional(),
       creationHelperEnabled: z.boolean().default(false),
       creationHelperModelId: z.string().optional(),
+      helpMeReplyEnabled: z.boolean().default(true),
       manualModeContextWindow: z.number().optional(),
       embeddingMaxTokens: z.number().optional(), // 1024, 2048, or 4096
       dynamicMemory: DynamicMemorySettingsSchema.optional(),
@@ -986,6 +987,7 @@ export function createDefaultSettings(): Settings {
     appState: createDefaultAppState(),
     advancedSettings: {
       creationHelperEnabled: false,
+      helpMeReplyEnabled: true,
       accessibility: createDefaultAccessibilitySettings(),
     },
     promptTemplateId: null,

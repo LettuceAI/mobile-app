@@ -55,6 +55,8 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
       { match: (p) => p.includes("/lorebook"), title: "Lorebooks" },
       { match: (p) => p === "/settings/personas", title: "Personas" },
       { match: (p) => p === "/settings/advanced/memory", title: "Dynamic Memory" },
+      { match: (p) => p === "/settings/advanced/creation-helper", title: "Creation Helper" },
+      { match: (p) => p === "/settings/advanced/help-me-reply", title: "Help Me Reply" },
       {
         match: (p) => p.startsWith("/settings/personas/") && p.endsWith("/edit"),
         title: "Edit Persona",

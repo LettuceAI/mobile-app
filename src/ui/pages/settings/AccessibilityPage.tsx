@@ -47,7 +47,7 @@ function percentToVolume(value: number): number {
 
 export function AccessibilityPage() {
   const [accessibility, setAccessibility] = useState<AccessibilitySettings>(
-    createDefaultAccessibilitySettings()
+    createDefaultAccessibilitySettings(),
   );
   const [isLoading, setIsLoading] = useState(true);
   const [platform, setPlatform] = useState<string>("");
@@ -57,7 +57,8 @@ export function AccessibilityPage() {
     const loadSettings = async () => {
       try {
         const settings = await readSettings();
-        const next = settings.advancedSettings?.accessibility ?? createDefaultAccessibilitySettings();
+        const next =
+          settings.advancedSettings?.accessibility ?? createDefaultAccessibilitySettings();
         setAccessibility(next);
       } catch (error) {
         console.error("Failed to load accessibility settings:", error);
@@ -77,6 +78,7 @@ export function AccessibilityPage() {
       const advancedSettings = {
         ...(settings.advancedSettings ?? {}),
         creationHelperEnabled: settings.advancedSettings?.creationHelperEnabled ?? false,
+        helpMeReplyEnabled: settings.advancedSettings?.helpMeReplyEnabled ?? true,
         accessibility: next,
       };
       await saveAdvancedSettings(advancedSettings);
@@ -85,7 +87,10 @@ export function AccessibilityPage() {
     }
   };
 
-  const updateSound = (key: SoundKey, updater: (current: AccessibilitySettings[SoundKey]) => AccessibilitySettings[SoundKey]) => {
+  const updateSound = (
+    key: SoundKey,
+    updater: (current: AccessibilitySettings[SoundKey]) => AccessibilitySettings[SoundKey],
+  ) => {
     setAccessibility((prev) => {
       const next = {
         ...prev,
@@ -149,19 +154,27 @@ export function AccessibilityPage() {
                   key={key}
                   className={cn(
                     "rounded-xl border px-4 py-3",
-                    sound.enabled ? "border-emerald-400/25 bg-white/6" : "border-white/10 bg-white/5"
+                    sound.enabled
+                      ? "border-emerald-400/25 bg-white/6"
+                      : "border-white/10 bg-white/5",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
-                        sound.enabled ? "border-emerald-400/40 bg-emerald-500/15" : "border-white/10 bg-white/10"
-                      )}>
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+                          sound.enabled
+                            ? "border-emerald-400/40 bg-emerald-500/15"
+                            : "border-white/10 bg-white/10",
+                        )}
+                      >
                         <Volume2 className="h-4 w-4 text-white/70" />
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-white">{SOUND_LABELS[key].title}</div>
+                        <div className="text-sm font-medium text-white">
+                          {SOUND_LABELS[key].title}
+                        </div>
                         <div className="mt-0.5 text-[11px] text-white/45">
                           {SOUND_LABELS[key].description}
                         </div>
@@ -181,13 +194,13 @@ export function AccessibilityPage() {
                         htmlFor={`accessibility-${key}-enabled`}
                         className={cn(
                           "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out",
-                          sound.enabled ? "bg-emerald-500" : "bg-white/20"
+                          sound.enabled ? "bg-emerald-500" : "bg-white/20",
                         )}
                       >
                         <span
                           className={cn(
                             "inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ease-in-out",
-                            sound.enabled ? "translate-x-5" : "translate-x-0"
+                            sound.enabled ? "translate-x-5" : "translate-x-0",
                           )}
                         />
                       </label>
@@ -239,15 +252,21 @@ export function AccessibilityPage() {
               <div
                 className={cn(
                   "rounded-xl border px-4 py-4",
-                  accessibility.haptics ? "border-emerald-400/25 bg-white/6" : "border-white/10 bg-white/5"
+                  accessibility.haptics
+                    ? "border-emerald-400/25 bg-white/6"
+                    : "border-white/10 bg-white/5",
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
-                      accessibility.haptics ? "border-emerald-400/40 bg-emerald-500/15" : "border-white/10 bg-white/10"
-                    )}>
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+                        accessibility.haptics
+                          ? "border-emerald-400/40 bg-emerald-500/15"
+                          : "border-white/10 bg-white/10",
+                      )}
+                    >
                       <Smartphone className="h-4 w-4 text-white/70" />
                     </div>
                     <div>
@@ -269,13 +288,13 @@ export function AccessibilityPage() {
                       htmlFor="accessibility-haptics-enabled"
                       className={cn(
                         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out",
-                        accessibility.haptics ? "bg-emerald-500" : "bg-white/20"
+                        accessibility.haptics ? "bg-emerald-500" : "bg-white/20",
                       )}
                     >
                       <span
                         className={cn(
                           "inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ease-in-out",
-                          accessibility.haptics ? "translate-x-5" : "translate-x-0"
+                          accessibility.haptics ? "translate-x-5" : "translate-x-0",
                         )}
                       />
                     </label>
@@ -297,7 +316,7 @@ export function AccessibilityPage() {
                             "flex flex-col items-center justify-center rounded-lg border py-2.5 transition-all",
                             accessibility.hapticIntensity === opt.value
                               ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-400"
-                              : "border-white/5 bg-white/5 text-white/40 hover:bg-white/10"
+                              : "border-white/5 bg-white/5 text-white/40 hover:bg-white/10",
                           )}
                         >
                           <span className="text-[10px] font-medium">{opt.label}</span>
@@ -311,10 +330,12 @@ export function AccessibilityPage() {
           </div>
         )}
 
-        <div className={cn(
-          "rounded-xl border px-4 py-3 text-[11px] text-white/45",
-          colors.glass.subtle
-        )}>
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-3 text-[11px] text-white/45",
+            colors.glass.subtle,
+          )}
+        >
           Feedback helps you notice when messages are sent or received.
           {isMobile ? " Haptics are available on mobile devices." : ""}
         </div>

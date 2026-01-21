@@ -99,6 +99,7 @@ export async function readSettings(): Promise<Settings> {
       settings.advancedSettings = {
         ...(settings.advancedSettings ?? {}),
         creationHelperEnabled: settings.advancedSettings?.creationHelperEnabled ?? false,
+        helpMeReplyEnabled: settings.advancedSettings?.helpMeReplyEnabled ?? true,
         accessibility: createDefaultAccessibilitySettings(),
       };
       await saveAdvancedSettings(settings.advancedSettings);

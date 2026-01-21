@@ -132,6 +132,7 @@ export function ChatConversationPage() {
   const [generatedReply, setGeneratedReply] = useState<string | null>(null);
   const [generatingReply, setGeneratingReply] = useState(false);
   const [helpMeReplyError, setHelpMeReplyError] = useState<string | null>(null);
+  const [helpMeReplyEnabled, setHelpMeReplyEnabled] = useState(true);
   const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
@@ -161,6 +162,7 @@ export function ChatConversationPage() {
           settings.advancedSettings?.accessibility ?? createDefaultAccessibilitySettings();
         if (mounted) {
           setAccessibilitySettings(next);
+          setHelpMeReplyEnabled(settings.advancedSettings?.helpMeReplyEnabled ?? true);
         }
       } catch (error) {
         console.error("Failed to load accessibility settings:", error);
@@ -1403,12 +1405,14 @@ export function ChatConversationPage() {
           {supportsImageInput && (
             <MenuButton icon={Image} title="Upload Image" onClick={handlePlusMenuImageUpload} />
           )}
-          <MenuButton
-            icon={Sparkles}
-            title="Help Me Reply"
-            description="Let AI suggest what to say"
-            onClick={handlePlusMenuHelpMeReply}
-          />
+          {helpMeReplyEnabled && (
+            <MenuButton
+              icon={Sparkles}
+              title="Help Me Reply"
+              description="Let AI suggest what to say"
+              onClick={handlePlusMenuHelpMeReply}
+            />
+          )}
         </div>
       </BottomMenu>
 

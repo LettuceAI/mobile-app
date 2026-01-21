@@ -109,6 +109,11 @@ export const BACK_MAPPINGS: BackMapping[] = [
   { match: (p) => p.startsWith("/discover/browse"), target: Routes.discover },
   { match: (p) => p.startsWith("/discover/search"), target: Routes.discover },
   { match: (p) => p.startsWith("/settings/advanced/memory"), target: "/settings/advanced" },
+  {
+    match: (p) => p.startsWith("/settings/advanced/creation-helper"),
+    target: "/settings/advanced",
+  },
+  { match: (p) => p.startsWith("/settings/advanced/help-me-reply"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-download"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/embedding-test"), target: "/settings/advanced" },
   { match: (p) => p.startsWith("/settings/security"), target: Routes.settings },

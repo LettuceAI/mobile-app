@@ -116,6 +116,7 @@ export function GroupChatPage() {
   // Background image theming
   const backgroundImageData = useImageData(session?.backgroundImagePath);
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
+  const helpMeReplyEnabled = settings?.advancedSettings?.helpMeReplyEnabled ?? true;
 
   // Get current persona
   const currentPersona = useMemo(() => {
@@ -1099,12 +1100,14 @@ export function GroupChatPage() {
           {supportsImageInput && (
             <MenuButton icon={Image} title="Upload Image" onClick={handlePlusMenuImageUpload} />
           )}
-          <MenuButton
-            icon={Sparkles}
-            title="Help Me Reply"
-            description="Let AI suggest what to say"
-            onClick={handlePlusMenuHelpMeReply}
-          />
+          {helpMeReplyEnabled && (
+            <MenuButton
+              icon={Sparkles}
+              title="Help Me Reply"
+              description="Let AI suggest what to say"
+              onClick={handlePlusMenuHelpMeReply}
+            />
+          )}
         </div>
       </BottomMenu>
 

@@ -97,17 +97,21 @@ const hydrateDynamicMemorySettings = (settings?: DynamicMemorySettings): Dynamic
     settings?.contextEnrichmentEnabled ?? DEFAULT_DYNAMIC_MEMORY_SETTINGS.contextEnrichmentEnabled,
 });
 
-const ensureAdvancedSettings = (settings: Settings) => {
-  if (!settings.advancedSettings) {
-    settings.advancedSettings = {
-      creationHelperEnabled: false,
-      dynamicMemory: { ...DEFAULT_DYNAMIC_MEMORY_SETTINGS },
-    };
+const ensureAdvancedSettings = (settings: Settings): NonNullable<Settings["advancedSettings"]> => {
+  const advanced = settings.advancedSettings ?? {
+    creationHelperEnabled: false,
+    helpMeReplyEnabled: true,
+    dynamicMemory: { ...DEFAULT_DYNAMIC_MEMORY_SETTINGS },
+  };
+  if (advanced.helpMeReplyEnabled === undefined) {
+    advanced.helpMeReplyEnabled = true;
   }
-  settings.advancedSettings.dynamicMemory = hydrateDynamicMemorySettings(
-    settings.advancedSettings.dynamicMemory,
-  );
-  return settings.advancedSettings;
+  if (!advanced.dynamicMemory) {
+    advanced.dynamicMemory = { ...DEFAULT_DYNAMIC_MEMORY_SETTINGS };
+  }
+  advanced.dynamicMemory = hydrateDynamicMemorySettings(advanced.dynamicMemory);
+  settings.advancedSettings = advanced;
+  return advanced;
 };
 
 const normalizeModelId = (value?: string | null) => (value && value.trim() ? value : null);
