@@ -25,13 +25,13 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
         .nth(3)
         .ok_or_else(|| anyhow::anyhow!("Failed to determine target directory"))?;
 
-    let ort_version = "1.23.2";
+    let ort_version = "1.22.0";
 
     let (archive_url, _lib_name, lib_path_in_archive) = match (target_os.as_str(), target_arch.as_str()) {
         ("linux", "x86_64") => (
             format!("https://github.com/microsoft/onnxruntime/releases/download/v{}/onnxruntime-linux-x64-{}.tgz", ort_version, ort_version),
             "libonnxruntime.so",
-            format!("onnxruntime-linux-x64-{}/lib/libonnxruntime.so.{}", ort_version, ort_version) 
+            format!("onnxruntime-linux-x64-{}/lib/libonnxruntime.so.{}", ort_version, ort_version)
         ),
         ("windows", "x86_64") => (
             format!("https://github.com/microsoft/onnxruntime/releases/download/v{}/onnxruntime-win-x64-{}.zip", ort_version, ort_version),
@@ -103,7 +103,7 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
 
             if path.contains("libonnxruntime")
                 && (path.ends_with(".so")
-                    || path.ends_with(".so.1.23.2")
+                    || path.ends_with(".so.1.22.0")
                     || path.ends_with(".dylib")
                     || path.ends_with(".dll"))
             {
@@ -133,7 +133,7 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
 }
 
 fn setup_android_libs() -> anyhow::Result<()> {
-    let ort_version = "1.23.2";
+    let ort_version = "1.22.0";
     let jni_libs_path = PathBuf::from("gen/android/app/src/main/jniLibs");
 
     let targets = vec![
