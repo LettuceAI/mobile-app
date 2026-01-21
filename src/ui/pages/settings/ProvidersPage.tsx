@@ -59,6 +59,12 @@ export function ProvidersPage() {
     setSearchParams(nextParams, { replace: true });
   };
 
+  const isLocalProvider =
+    !!editorProvider && ["ollama", "lmstudio"].includes(editorProvider.providerId);
+  const showBaseUrl =
+    !!editorProvider &&
+    (isLocalProvider || ["custom", "custom-anthropic"].includes(editorProvider.providerId));
+
   useEffect(() => {
     const handleAddProvider = () => {
       if (activeTab === "audio") {
@@ -93,7 +99,6 @@ export function ProvidersPage() {
     </div>
   );
 
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+96px)]">
@@ -105,11 +110,11 @@ export function ProvidersPage() {
             tabIndex={0}
             className="space-y-2"
           >
-            {providers.length === 0 && (
-              <EmptyState onCreate={() => openEditor()} />
-            )}
-            {providers.map(provider => {
-              const cap: ProviderCapabilitiesCamel | undefined = capabilities.find(p => p.id === provider.providerId);
+            {providers.length === 0 && <EmptyState onCreate={() => openEditor()} />}
+            {providers.map((provider) => {
+              const cap: ProviderCapabilitiesCamel | undefined = capabilities.find(
+                (p) => p.id === provider.providerId,
+              );
               return (
                 <button
                   key={provider.id}
@@ -120,14 +125,18 @@ export function ProvidersPage() {
                     {getProviderIcon(cap?.id ?? "custom")}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-white">{provider.label || cap?.name}</span>
+                        <span className="truncate text-sm font-medium text-white">
+                          {provider.label || cap?.name}
+                        </span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-1 text-[11px] text-white/50">
                         <span className="truncate">{cap?.name}</span>
                         {provider.baseUrl && (
                           <>
                             <span className="opacity-40">•</span>
-                            <span className="truncate max-w-[120px]">{provider.baseUrl.replace(/^https?:\/\//, '')}</span>
+                            <span className="truncate max-w-[120px]">
+                              {provider.baseUrl.replace(/^https?:\/\//, "")}
+                            </span>
                           </>
                         )}
                       </div>
@@ -156,13 +165,18 @@ export function ProvidersPage() {
           <BottomMenu
             isOpen={!!selectedProvider}
             onClose={() => setSelectedProvider(null)}
-            title={selectedProvider?.label || 'Provider'}
+            title={selectedProvider?.label || "Provider"}
           >
             {selectedProvider && (
               <div className="space-y-4">
                 <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                  <p className="truncate text-sm font-medium text-white">{selectedProvider.label || capabilities.find(p => p.id === selectedProvider.providerId)?.name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-white/50">{capabilities.find(p => p.id === selectedProvider.providerId)?.name}</p>
+                  <p className="truncate text-sm font-medium text-white">
+                    {selectedProvider.label ||
+                      capabilities.find((p) => p.id === selectedProvider.providerId)?.name}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-white/50">
+                    {capabilities.find((p) => p.id === selectedProvider.providerId)?.name}
+                  </p>
                 </div>
                 <MenuButton
                   icon={Edit3}
@@ -173,7 +187,7 @@ export function ProvidersPage() {
                 />
                 <MenuButton
                   icon={Trash2}
-                  title={isDeleting ? 'Deleting...' : 'Delete'}
+                  title={isDeleting ? "Deleting..." : "Delete"}
                   description="Remove this provider"
                   onClick={() => void handleDeleteProvider(selectedProvider.id)}
                   disabled={isDeleting}
@@ -186,12 +200,14 @@ export function ProvidersPage() {
           <BottomMenu
             isOpen={isEditorOpen}
             onClose={closeEditor}
-            title={editorProvider?.label ? 'Edit Provider' : 'Add Provider'}
+            title={editorProvider?.label ? "Edit Provider" : "Add Provider"}
           >
             {editorProvider && (
               <div className="space-y-4 pb-2">
                 <div>
-                  <label className="mb-1 block text-[11px] font-medium text-white/70">Provider Type</label>
+                  <label className="mb-1 block text-[11px] font-medium text-white/70">
+                    Provider Type
+                  </label>
                   <select
                     value={editorProvider.providerId}
                     onChange={(e) => {
@@ -199,26 +215,33 @@ export function ProvidersPage() {
                       // Reset config when switching providers
                       updateEditorProvider({
                         providerId,
-                        config: providerId === 'custom' ? {
-                          chatEndpoint: '/v1/chat/completions',
-                          systemRole: 'system',
-                          userRole: 'user',
-                          assistantRole: 'assistant',
-                          supportsStream: true
-                        } : providerId === 'custom-anthropic' ? {
-                          chatEndpoint: '/v1/messages',
-                          systemRole: 'system',
-                          userRole: 'user',
-                          assistantRole: 'assistant',
-                          supportsStream: true
-                        } : undefined
+                        config:
+                          providerId === "custom"
+                            ? {
+                                chatEndpoint: "/v1/chat/completions",
+                                systemRole: "system",
+                                userRole: "user",
+                                assistantRole: "assistant",
+                                supportsStream: true,
+                              }
+                            : providerId === "custom-anthropic"
+                              ? {
+                                  chatEndpoint: "/v1/messages",
+                                  systemRole: "system",
+                                  userRole: "user",
+                                  assistantRole: "assistant",
+                                  supportsStream: true,
+                                }
+                              : undefined,
                       });
                       setValidationError(null);
                     }}
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
                   >
-                    {capabilities.map(p => (
-                      <option key={p.id} value={p.id} className="bg-black">{p.name}</option>
+                    {capabilities.map((p) => (
+                      <option key={p.id} value={p.id} className="bg-black">
+                        {p.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -228,12 +251,14 @@ export function ProvidersPage() {
                     type="text"
                     value={editorProvider.label}
                     onChange={(e) => updateEditorProvider({ label: e.target.value })}
-                    placeholder={`My ${capabilities.find(p => p.id === editorProvider.providerId)?.name || 'Provider'}`}
+                    placeholder={`My ${capabilities.find((p) => p.id === editorProvider.providerId)?.name || "Provider"}`}
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] font-medium text-white/70">API Key</label>
+                  <label className="mb-1 block text-[11px] font-medium text-white/70">
+                    API Key
+                  </label>
                   <input
                     type="password"
                     value={apiKey}
@@ -245,38 +270,57 @@ export function ProvidersPage() {
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-white/70">Base URL (optional)</label>
-                  <input
-                    type="url"
-                    value={editorProvider.baseUrl || ''}
-                    onChange={(e) => {
-                      updateEditorProvider({ baseUrl: e.target.value || undefined });
-                      if (validationError) setValidationError(null);
-                    }}
-                    placeholder="https://api.openai.com"
-                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
-                  />
-                </div>
-                {(editorProvider.providerId === 'custom' || editorProvider.providerId === 'custom-anthropic') && (
+                {showBaseUrl && (
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-white/70">
+                      Base URL
+                    </label>
+                    <input
+                      type="url"
+                      value={editorProvider.baseUrl || ""}
+                      onChange={(e) => {
+                        updateEditorProvider({ baseUrl: e.target.value || undefined });
+                        if (validationError) setValidationError(null);
+                      }}
+                      placeholder={
+                        isLocalProvider ? "http://localhost:11434" : "https://api.provider.com"
+                      }
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                  </div>
+                )}
+                {(editorProvider.providerId === "custom" ||
+                  editorProvider.providerId === "custom-anthropic") && (
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="mb-1 block text-[11px] font-medium text-white/70">Chat Endpoint</label>
+                        <label className="mb-1 block text-[11px] font-medium text-white/70">
+                          Chat Endpoint
+                        </label>
                         <input
                           type="text"
-                          value={editorProvider.config?.chatEndpoint ?? '/v1/chat/completions'}
-                          onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, chatEndpoint: e.target.value } })}
+                          value={editorProvider.config?.chatEndpoint ?? "/v1/chat/completions"}
+                          onChange={(e) =>
+                            updateEditorProvider({
+                              config: { ...editorProvider.config, chatEndpoint: e.target.value },
+                            })
+                          }
                           placeholder="/v1/chat/completions"
                           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-[11px] font-medium text-white/70">System Role</label>
+                        <label className="mb-1 block text-[11px] font-medium text-white/70">
+                          System Role
+                        </label>
                         <input
                           type="text"
-                          value={editorProvider.config?.systemRole ?? 'system'}
-                          onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, systemRole: e.target.value } })}
+                          value={editorProvider.config?.systemRole ?? "system"}
+                          onChange={(e) =>
+                            updateEditorProvider({
+                              config: { ...editorProvider.config, systemRole: e.target.value },
+                            })
+                          }
                           placeholder="system"
                           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                         />
@@ -284,46 +328,71 @@ export function ProvidersPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="mb-1 block text-[11px] font-medium text-white/70">User Role</label>
+                        <label className="mb-1 block text-[11px] font-medium text-white/70">
+                          User Role
+                        </label>
                         <input
                           type="text"
-                          value={editorProvider.config?.userRole ?? 'user'}
-                          onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, userRole: e.target.value } })}
+                          value={editorProvider.config?.userRole ?? "user"}
+                          onChange={(e) =>
+                            updateEditorProvider({
+                              config: { ...editorProvider.config, userRole: e.target.value },
+                            })
+                          }
                           placeholder="user"
                           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-[11px] font-medium text-white/70">Assistant Role</label>
+                        <label className="mb-1 block text-[11px] font-medium text-white/70">
+                          Assistant Role
+                        </label>
                         <input
                           type="text"
-                          value={editorProvider.config?.assistantRole ?? 'assistant'}
-                          onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, assistantRole: e.target.value } })}
+                          value={editorProvider.config?.assistantRole ?? "assistant"}
+                          onChange={(e) =>
+                            updateEditorProvider({
+                              config: { ...editorProvider.config, assistantRole: e.target.value },
+                            })
+                          }
                           placeholder="assistant"
                           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                         />
                       </div>
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-sm font-medium text-white/70">Supports Streaming (SSE/Delta)</span>
+                      <span className="text-sm font-medium text-white/70">
+                        Supports Streaming (SSE/Delta)
+                      </span>
                       <div className="flex items-center">
                         <input
                           id="supportsStream"
                           type="checkbox"
                           checked={editorProvider.config?.supportsStream ?? true}
-                          onChange={(e) => updateEditorProvider({ config: { ...editorProvider.config, supportsStream: e.target.checked } })}
+                          onChange={(e) =>
+                            updateEditorProvider({
+                              config: {
+                                ...editorProvider.config,
+                                supportsStream: e.target.checked,
+                              },
+                            })
+                          }
                           className="peer sr-only"
                         />
                         <label
                           htmlFor="supportsStream"
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out ${(editorProvider.config?.supportsStream ?? true)
-                            ? 'bg-emerald-500'
-                            : 'bg-white/20'
-                            }`}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out ${
+                            (editorProvider.config?.supportsStream ?? true)
+                              ? "bg-emerald-500"
+                              : "bg-white/20"
+                          }`}
                         >
                           <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${(editorProvider.config?.supportsStream ?? true) ? 'translate-x-5' : 'translate-x-0'
-                              }`}
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              (editorProvider.config?.supportsStream ?? true)
+                                ? "translate-x-5"
+                                : "translate-x-0"
+                            }`}
                           />
                         </label>
                       </div>
@@ -345,7 +414,7 @@ export function ProvidersPage() {
                     disabled={isSaving || !editorProvider.label}
                     className="flex-1 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSaving ? 'Saving...' : 'Save'}
+                    {isSaving ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>
@@ -354,18 +423,16 @@ export function ProvidersPage() {
         </>
       )}
 
-      <div className={cn(
-        "fixed bottom-0 left-0 right-0 z-30 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
-        colors.glass.strong
-      )}>
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-30 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
+          colors.glass.strong,
+        )}
+      >
         <div
           role="tablist"
           aria-label="Provider categories"
-          className={cn(
-            radius.lg,
-            "grid grid-cols-2 gap-2 p-1",
-            colors.surface.elevated
-          )}
+          className={cn(radius.lg, "grid grid-cols-2 gap-2 p-1", colors.surface.elevated)}
         >
           {[
             { id: "llm" as const, icon: Cpu, label: "AI" },
@@ -385,7 +452,7 @@ export function ProvidersPage() {
                 interactive.active.scale,
                 activeTab === id
                   ? "bg-white/10 text-white"
-                  : cn(colors.text.tertiary, "hover:text-white")
+                  : cn(colors.text.tertiary, "hover:text-white"),
               )}
             >
               <Icon size={16} />

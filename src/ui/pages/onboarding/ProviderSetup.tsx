@@ -1,13 +1,12 @@
 import React from "react";
-import {
-  AlertCircle,
-  ArrowLeft,
-  Check,
-  Loader,
-} from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../core/providers/capabilities";
+import {
+  getProviderCapabilities,
+  toCamel,
+  type ProviderCapabilitiesCamel,
+} from "../../../core/providers/capabilities";
 import { useProviderController } from "./hooks/useProviderController";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { getPlatform } from "../../../core/utils/platform";
@@ -22,10 +21,11 @@ interface ProviderCardProps {
 function ProviderCard({ provider, isActive, onClick }: ProviderCardProps) {
   return (
     <button
-      className={`relative group min-h-[88px] rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${isActive
-        ? "border-white/25 bg-white/15 shadow-lg"
-        : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
-        }`}
+      className={`relative group min-h-[88px] rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
+        isActive
+          ? "border-white/25 bg-white/15 shadow-lg"
+          : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
+      }`}
       onClick={onClick}
     >
       <div className="flex flex-col gap-2">
@@ -33,16 +33,21 @@ function ProviderCard({ provider, isActive, onClick }: ProviderCardProps) {
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/8">
             {getProviderIcon(provider.id)}
           </div>
-          <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${isActive
-            ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-300"
-            : "border-white/20 text-transparent"
-            }`}>
+          <div
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
+              isActive
+                ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-300"
+                : "border-white/20 text-transparent"
+            }`}
+          >
             <Check size={10} />
           </div>
         </div>
         <div className="space-y-0.5">
           <h3 className="text-sm font-semibold text-white leading-tight">{provider.name}</h3>
-          <p className="text-[11px] text-gray-400 leading-snug line-clamp-2">{getProviderDescription(provider.id)}</p>
+          <p className="text-[11px] text-gray-400 leading-snug line-clamp-2">
+            {getProviderDescription(provider.id)}
+          </p>
         </div>
       </div>
     </button>
@@ -52,27 +57,38 @@ function ProviderCard({ provider, isActive, onClick }: ProviderCardProps) {
 function ProviderCardCompact({ provider, isActive, onClick }: ProviderCardProps) {
   return (
     <button
-      className={`relative group rounded-xl border px-4 py-3 text-left transition-all duration-200 ${isActive
-        ? "border-emerald-400/40 bg-emerald-400/10 ring-1 ring-emerald-400/30"
-        : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8 active:scale-[0.98]"
-        }`}
+      className={`relative group rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
+        isActive
+          ? "border-emerald-400/40 bg-emerald-400/10 ring-1 ring-emerald-400/30"
+          : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8 active:scale-[0.98]"
+      }`}
       onClick={onClick}
     >
       <div className="flex items-center gap-3">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${isActive ? "border-emerald-400/30 bg-emerald-400/10" : "border-white/15 bg-white/8"
-          }`}>
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${
+            isActive ? "border-emerald-400/30 bg-emerald-400/10" : "border-white/15 bg-white/8"
+          }`}
+        >
           {getProviderIcon(provider.id)}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className={`text-sm font-medium leading-tight truncate ${isActive ? "text-emerald-100" : "text-white"}`}>
+          <h3
+            className={`text-sm font-medium leading-tight truncate ${isActive ? "text-emerald-100" : "text-white"}`}
+          >
             {provider.name}
           </h3>
-          <p className="text-xs text-gray-500 leading-snug truncate">{getProviderDescriptionShort(provider.id)}</p>
+          <p className="text-xs text-gray-500 leading-snug truncate">
+            {getProviderDescriptionShort(provider.id)}
+          </p>
         </div>
-        <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${isActive
-          ? "border-emerald-400/60 bg-emerald-400/30 text-emerald-200"
-          : "border-white/15 text-transparent"
-          }`}>
+        <div
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+            isActive
+              ? "border-emerald-400/60 bg-emerald-400/30 text-emerald-200"
+              : "border-white/15 text-transparent"
+          }`}
+        >
           <Check size={10} />
         </div>
       </div>
@@ -119,10 +135,15 @@ export function ProviderSetupPage() {
         console.warn("[Onboarding] Failed to load provider capabilities", e);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const selectedProvider = capabilities.find((p) => p.id === selectedProviderId);
+  const isCustomProvider = ["custom", "custom-anthropic"].includes(selectedProviderId);
+  const isLocalProvider = ["ollama", "lmstudio"].includes(selectedProviderId);
+  const showBaseUrl = isCustomProvider || isLocalProvider;
 
   const configFormContent = (
     <div className="space-y-4">
@@ -147,7 +168,9 @@ export function ProviderSetupPage() {
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-white/70">API Key</label>
           <button
-            onClick={() => navigate(`/wheretofind${selectedProviderId ? `?provider=${selectedProviderId}` : ""}`)}
+            onClick={() =>
+              navigate(`/wheretofind${selectedProviderId ? `?provider=${selectedProviderId}` : ""}`)
+            }
             className="text-[11px] text-gray-400 hover:text-white transition-colors"
           >
             Where to find it
@@ -163,28 +186,37 @@ export function ProviderSetupPage() {
         <p className="text-[11px] text-gray-500">Keys are encrypted locally</p>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium text-white/70">Base URL (Optional)</label>
-        <input
-          type="text"
-          value={baseUrl}
-          onChange={(e) => handleBaseUrlChange(e.target.value)}
-          onPaste={(e) => {
-            e.stopPropagation();
-            const pastedText = e.clipboardData.getData("text");
-            handleBaseUrlChange(pastedText);
-          }}
-          placeholder="https://api.provider.com"
-          className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
-        />
-        <p className="text-[11px] text-gray-500">Override the default endpoint if needed</p>
-      </div>
+      {showBaseUrl && (
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-white/70">Base URL</label>
+          <input
+            type="text"
+            value={baseUrl}
+            onChange={(e) => handleBaseUrlChange(e.target.value)}
+            onPaste={(e) => {
+              e.stopPropagation();
+              const pastedText = e.clipboardData.getData("text");
+              handleBaseUrlChange(pastedText);
+            }}
+            placeholder={isLocalProvider ? "http://localhost:11434" : "https://api.provider.com"}
+            className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
+          />
+          <p className="text-[11px] text-gray-500">
+            {isLocalProvider
+              ? "Your local server address with port"
+              : "Override the default endpoint if needed"}
+          </p>
+        </div>
+      )}
 
       {testResult && (
-        <div className={`rounded-xl border px-4 py-3 text-sm ${testResult.success
-          ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
-          : "border-amber-400/40 bg-amber-400/10 text-amber-200"
-          }`}>
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            testResult.success
+              ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+              : "border-amber-400/40 bg-amber-400/10 text-amber-200"
+          }`}
+        >
           {testResult.message}
         </div>
       )}
@@ -238,7 +270,9 @@ export function ProviderSetupPage() {
             <ArrowLeft size={18} />
           </button>
           <div className="text-center">
-            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">Step 1 of 3</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">
+              Step 1 of 3
+            </p>
             <p className="text-xs text-gray-400 mt-0.5">Provider Setup</p>
           </div>
           <div className="w-10" />
@@ -259,7 +293,13 @@ export function ProviderSetupPage() {
                     key={provider.id}
                     provider={provider}
                     isActive={selectedProviderId === provider.id}
-                    onClick={() => handleSelectProvider({ id: provider.id, name: provider.name, defaultBaseUrl: provider.defaultBaseUrl })}
+                    onClick={() =>
+                      handleSelectProvider({
+                        id: provider.id,
+                        name: provider.name,
+                        defaultBaseUrl: provider.defaultBaseUrl,
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -305,7 +345,9 @@ export function ProviderSetupPage() {
             <ArrowLeft size={16} />
           </button>
           <div className="text-center">
-            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">Step 1 of 3</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">
+              Step 1 of 3
+            </p>
             <p className="text-xs text-gray-400 mt-0.5">Provider Setup</p>
           </div>
           <div className="w-10" />
@@ -315,7 +357,8 @@ export function ProviderSetupPage() {
         <div className="text-center space-y-2 mb-8">
           <h1 className="text-2xl font-bold text-white">Choose your AI provider</h1>
           <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
-            Select an AI provider to get started. Your API keys are securely encrypted on your device. No account signup needed.
+            Select an AI provider to get started. Your API keys are securely encrypted on your
+            device. No account signup needed.
           </p>
         </div>
 
@@ -327,7 +370,13 @@ export function ProviderSetupPage() {
                 key={provider.id}
                 provider={provider}
                 isActive={selectedProviderId === provider.id}
-                onClick={() => handleSelectProvider({ id: provider.id, name: provider.name, defaultBaseUrl: provider.defaultBaseUrl })}
+                onClick={() =>
+                  handleSelectProvider({
+                    id: provider.id,
+                    name: provider.name,
+                    defaultBaseUrl: provider.defaultBaseUrl,
+                  })
+                }
               />
             ))}
           </div>
@@ -335,11 +384,13 @@ export function ProviderSetupPage() {
 
         {/* Configuration Form */}
         <div
-          className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-[2000px]" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}>
+          className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-[2000px]" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}
+        >
           <div className="text-center space-y-2 mb-6">
             <h2 className="text-lg font-semibold text-white">Connect {selectedProvider?.name}</h2>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Paste your API key below to enable chats. Need a key? Get one from the provider dashboard.
+              Paste your API key below to enable chats. Need a key? Get one from the provider
+              dashboard.
             </p>
           </div>
 
