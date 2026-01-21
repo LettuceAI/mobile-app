@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Sparkles, User, MessageSquare } from "lucide-react";
+import { Sparkles, User, MessageSquare, Calculator } from "lucide-react";
 import { typography, radius, interactive, cn } from "../../design-tokens";
 import {
   saveCharacter,
@@ -9,6 +9,7 @@ import {
   listCharacters,
 } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
+import { storageBridge } from "../../../core/storage/files";
 
 export function DeveloperPage() {
   const [status, setStatus] = useState<string>("");
@@ -149,6 +150,32 @@ export function DeveloperPage() {
     }
   };
 
+  const recalculateUsageCosts = async () => {
+    try {
+      setStatus("Recalculating usage costs... This may take a while.");
+
+      // Get OpenRouter API key from settings
+      const settings = await storageBridge.readSettings({});
+      const openRouterCred = (settings as any)?.providerCredentials?.find(
+        (c: any) => c.providerId?.toLowerCase() === "openrouter",
+      );
+
+      if (!openRouterCred?.apiKey) {
+        showError(
+          "OpenRouter API key not found. Please configure it in Settings > Providers first.",
+        );
+        return;
+      }
+
+      const result = await invoke<string>("usage_recalculate_costs", {
+        apiKey: openRouterCred.apiKey,
+      });
+      showStatus(`✓ ${result}`);
+    } catch (err) {
+      showError(`Recalculation failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-[#050505]">
       {/* Content */}
@@ -236,6 +263,17 @@ export function DeveloperPage() {
             description="Moves legacy .bin storage into a backup folder"
             onClick={backupLegacy}
             variant="danger"
+          />
+
+          <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-3 mt-6")}>
+            Usage Tracking
+          </h2>
+          <ActionButton
+            icon={<Calculator />}
+            title="Recalculate All Usage Costs"
+            description="Re-fetches pricing and recalculates costs for all OpenRouter usage records"
+            onClick={recalculateUsageCosts}
+            variant="primary"
           />
 
           <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-3 mt-6")}>

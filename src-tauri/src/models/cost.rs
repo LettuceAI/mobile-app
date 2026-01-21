@@ -112,9 +112,11 @@ mod tests {
 
     #[test]
     fn test_calculate_request_cost() {
+        // OpenRouter pricing is per token, not per 1K tokens
+        // Example: Claude Sonnet 4 pricing
         let pricing = ModelPricing {
-            prompt: "0.000005".to_string(),
-            completion: "0.000015".to_string(),
+            prompt: "0.000003".to_string(),     // $3 per million tokens
+            completion: "0.000015".to_string(), // $15 per million tokens
             request: "0".to_string(),
             image: "0".to_string(),
             web_search: "0".to_string(),
@@ -127,13 +129,13 @@ mod tests {
         assert_eq!(cost.completion_tokens, 500);
         assert_eq!(cost.total_tokens, 1500);
 
-        // 1000 tokens * 0.000005 = 0.005
-        assert!((cost.prompt_cost - 0.005).abs() < 0.0001);
+        // 1000 tokens * 0.000003 = 0.003
+        assert!((cost.prompt_cost - 0.003).abs() < 0.0001);
 
         // 500 tokens * 0.000015 = 0.0075
         assert!((cost.completion_cost - 0.0075).abs() < 0.0001);
 
-        // Total should be 0.0125
-        assert!((cost.total_cost - 0.0125).abs() < 0.0001);
+        // Total should be 0.0105
+        assert!((cost.total_cost - 0.0105).abs() < 0.0001);
     }
 }

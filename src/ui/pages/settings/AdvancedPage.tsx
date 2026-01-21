@@ -10,15 +10,20 @@ import {
   Info,
   MessageSquare,
   Zap,
+  DollarSign,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import {
   readSettings,
   saveAdvancedSettings,
   checkEmbeddingModel,
 } from "../../../core/storage/repo";
+import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "../../../core/storage/schemas";
 import { cn, typography, spacing, interactive, colors } from "../../design-tokens";
 import { EmbeddingDownloadPrompt } from "../../components/EmbeddingDownloadPrompt";
+import { BottomMenu } from "../../components/BottomMenu";
 import { openDocs, DOCS } from "../../../core/utils/docs";
 
 type DocsKey = keyof typeof DOCS;
@@ -316,6 +321,12 @@ export function AdvancedPage() {
   const [helpMeReplyEnabled, setHelpMeReplyEnabled] = useState(true);
   const [manualWindow, setManualWindow] = useState<number | null>(50);
 
+  // Usage recalculation state
+  const [showRecalculateWarning, setShowRecalculateWarning] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalculateResult, setRecalculateResult] = useState<string | null>(null);
+  const [openRouterApiKey, setOpenRouterApiKey] = useState<string>("");
+
   const getAdvancedSettings = (settings: Settings) => {
     const advanced = settings.advancedSettings ?? {
       creationHelperEnabled: false,
@@ -340,6 +351,12 @@ export function AdvancedPage() {
         setDynamicMemoryEnabled(settings.advancedSettings?.dynamicMemory?.enabled ?? false);
         setHelpMeReplyEnabled(settings.advancedSettings?.helpMeReplyEnabled ?? true);
         setManualWindow(settings.advancedSettings?.manualModeContextWindow ?? 50);
+
+        // Get OpenRouter API key for recalculation
+        const openRouterCred = settings.providerCredentials?.find(
+          (c) => c.providerId === "openrouter",
+        );
+        setOpenRouterApiKey(openRouterCred?.apiKey ?? "");
 
         setIsLoading(false);
       } catch (err) {
@@ -427,6 +444,29 @@ export function AdvancedPage() {
       await saveAdvancedSettings(advanced);
     } catch (err) {
       console.error("Failed to save manual window setting:", err);
+    }
+  };
+
+  const handleRecalculateCosts = async () => {
+    if (!openRouterApiKey) {
+      setRecalculateResult(
+        "Error: No OpenRouter API key found. Please configure it in Settings > Providers.",
+      );
+      return;
+    }
+
+    setRecalculating(true);
+    setRecalculateResult(null);
+
+    try {
+      const result = await invoke<string>("usage_recalculate_costs", {
+        apiKey: openRouterApiKey,
+      });
+      setRecalculateResult(result);
+    } catch (err) {
+      setRecalculateResult(`Error: ${err}`);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -543,6 +583,75 @@ export function AdvancedPage() {
           </div>
         </SettingsSection>
 
+        {/* Usage Analytics Section */}
+        <SettingsSection title="Usage Analytics" icon={<DollarSign size={12} />}>
+          <div className={cn("rounded-xl border px-4 py-4", "border-white/10 bg-white/5")}>
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border",
+                  "border-amber-500/20 bg-amber-500/10",
+                )}
+              >
+                <DollarSign className="h-4 w-4 text-amber-400" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className={cn(typography.body.size, "font-medium text-white")}>
+                      Recalculate Usage Costs
+                    </span>
+                    <p className="mt-0.5 text-[11px] text-white/45">
+                      Update all historical usage records with correct pricing
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowRecalculateWarning(true)}
+                  disabled={recalculating || !openRouterApiKey}
+                  className={cn(
+                    "w-full rounded-lg border px-4 py-2.5 text-sm font-medium",
+                    "transition-all",
+                    recalculating || !openRouterApiKey
+                      ? "border-white/10 bg-white/5 text-white/30 cursor-not-allowed"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 hover:border-amber-500/40",
+                  )}
+                >
+                  {recalculating ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Recalculating...
+                    </span>
+                  ) : (
+                    "Recalculate All Costs"
+                  )}
+                </button>
+
+                {!openRouterApiKey && (
+                  <p className="mt-2 text-[11px] text-red-400/70">
+                    OpenRouter API key required. Configure it in Settings → Providers.
+                  </p>
+                )}
+
+                {recalculateResult && (
+                  <div
+                    className={cn(
+                      "mt-3 rounded-lg border px-3 py-2 text-[11px]",
+                      recalculateResult.startsWith("Error")
+                        ? "border-red-500/30 bg-red-500/10 text-red-200"
+                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+                    )}
+                  >
+                    {recalculateResult}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </SettingsSection>
+
         {/* Info Card */}
         <div
           className={cn(
@@ -570,6 +679,79 @@ export function AdvancedPage() {
         isOpen={showDownloadPrompt}
         onClose={() => setShowDownloadPrompt(false)}
       />
+
+      {/* Recalculate Warning Bottom Menu */}
+      <BottomMenu
+        isOpen={showRecalculateWarning}
+        onClose={() => setShowRecalculateWarning(false)}
+        title="Recalculate Usage Costs?"
+        includeExitIcon={false}
+      >
+        <div className="space-y-4 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/20">
+              <AlertTriangle className="h-5 w-5 text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-white/80 leading-relaxed">
+                This will update all historical OpenRouter usage records with current pricing from
+                the OpenRouter API.
+              </p>
+            </div>
+          </div>
+
+          <div className={cn("rounded-xl border border-white/10 bg-white/5 p-3")}>
+            <p className="text-xs font-medium text-white/70 mb-2">Important:</p>
+            <ul className="space-y-1.5 text-xs text-white/60">
+              <li className="flex items-start gap-2">
+                <span className="text-amber-400 mt-0.5">•</span>
+                <span>This operation cannot be undone</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-400 mt-0.5">•</span>
+                <span>It may take time if you have many records</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-400 mt-0.5">•</span>
+                <span>Only OpenRouter records with tokens will be updated</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-400 mt-0.5">•</span>
+                <span>Existing cost values will be overwritten</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                setShowRecalculateWarning(false);
+                setRecalculateResult(null);
+              }}
+              className={cn(
+                "flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5",
+                "text-sm font-medium text-white/60",
+                "hover:bg-white/10 hover:text-white transition-all",
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setShowRecalculateWarning(false);
+                handleRecalculateCosts();
+              }}
+              className={cn(
+                "flex-1 rounded-xl border border-amber-500/30 bg-amber-500/20 px-4 py-2.5",
+                "text-sm font-medium text-amber-100",
+                "hover:bg-amber-500/30 hover:border-amber-500/40 transition-all",
+              )}
+            >
+              Proceed
+            </button>
+          </div>
+        </div>
+      </BottomMenu>
     </div>
   );
 }

@@ -1,1002 +1,1368 @@
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { motion, AnimatePresence, animate } from 'framer-motion';
-import { useUsageTracking, RequestUsage, UsageStats, UsageFilter } from '../../../core/usage';
-import { ChevronDown, Download, CheckCircle2, Check, BarChart3, History } from 'lucide-react';
-import { BottomMenu } from '../../components';
-import { UsageAnalytics } from './components/UsageAnalytics';
+import { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+} from "recharts";
+import { useUsageTracking, RequestUsage, UsageFilter } from "../../../core/usage";
+import {
+  Download,
+  TrendingUp,
+  TrendingDown,
+  Zap,
+  DollarSign,
+  Activity,
+  Clock,
+  Filter,
+  X,
+  ChevronRight,
+  Calendar,
+  GitCompare,
+  ArrowRight,
+} from "lucide-react";
+import { BottomMenu } from "../../components";
 
-/**
- * Format currency with smart decimals (show more decimals for small values)
- * Uses decimal notation instead of exponential for readability
- */
+// ============================================================================
+// Utilities
+// ============================================================================
+
 function formatCurrency(value: number): string {
-  if (value === 0) return '$0';
-
-  if (value < 0.00001) {
-    return `$${value.toFixed(10).replace(/\.?0+$/, '')}`;
-  }
-  if (value < 0.0001) return `$${value.toFixed(7)}`;
-  if (value < 0.001) return `$${value.toFixed(6)}`;
-  if (value < 0.01) return `$${value.toFixed(5)}`;
-  if (value < 0.1) return `$${value.toFixed(4)}`;
+  if (value === 0) return "$0.00";
+  if (value < 0.01) return `$${value.toFixed(4)}`;
   if (value < 1) return `$${value.toFixed(3)}`;
   return `$${value.toFixed(2)}`;
 }
 
-/**
- * Format large numbers with K/M suffix
- */
 function formatNumber(value: number): string {
-  if (value === 0) return '0';
+  if (value === 0) return "0";
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toLocaleString();
+}
+
+function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
   return value.toString();
 }
 
-/**
- * Get operation type display info with colors
- */
-function getOperationTypeInfo(operationType: string): { label: string; color: string } {
-  const normalized = operationType.toLowerCase();
+function getRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
 
-  switch (normalized) {
-    case 'chat':
-      return { label: 'Chat', color: 'bg-blue-500/15 border-blue-400/30 text-blue-100' };
-    case 'regenerate':
-      return { label: 'Regenerate', color: 'bg-purple-500/15 border-purple-400/30 text-purple-100' };
-    case 'continue':
-      return { label: 'Continue', color: 'bg-cyan-500/15 border-cyan-400/30 text-cyan-100' };
-    case 'summary':
-      return { label: 'Summary', color: 'bg-amber-500/15 border-amber-400/30 text-amber-100' };
-    case 'memory_manager':
-      return { label: 'Memory', color: 'bg-emerald-500/15 border-emerald-400/30 text-emerald-100' };
-    default:
-      return { label: operationType, color: 'bg-white/10 border-white/15 text-white/80' };
-  }
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
-/**
- * Get finish reason display label
- */
-function getFinishReasonLabel(reason: string): string {
-  const normalized = reason.toLowerCase();
-  switch (normalized) {
-    case 'stop': return 'Stop';
-    case 'length': return 'Max Tokens';
-    case 'contentfilter':
-    case 'content_filter': return 'Content Filter';
-    case 'toolcalls':
-    case 'tool_calls': return 'Tool Calls';
-    case 'aborted': return 'Aborted';
-    case 'error': return 'Error';
-    default: return reason.charAt(0).toUpperCase() + reason.slice(1);
-  }
-}
-
-/**
- * Mobile-friendly date picker component
- */
-function DateRangePicker({
-  startDate,
-  endDate,
-  onStartChange,
-  onEndChange,
-}: {
-  startDate: Date;
-  endDate: Date;
-  onStartChange: (date: Date) => void;
-  onEndChange: (date: Date) => void;
-}) {
-  const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
+function getOperationColor(type: string): string {
+  const colors: Record<string, string> = {
+    chat: "#60a5fa",
+    regenerate: "#a78bfa",
+    continue: "#22d3ee",
+    summary: "#fbbf24",
+    memory_manager: "#34d399",
   };
-
-  return (
-    <div className="space-y-2">
-      <div>
-        <label className="text-[10px] font-semibold text-white/60 uppercase tracking-wider">From</label>
-        <input
-          type="date"
-          value={formatDate(startDate)}
-          onChange={(e) => onStartChange(new Date(e.target.value + 'T00:00:00Z'))}
-          className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-white/30 focus:outline-none transition"
-        />
-      </div>
-      <div>
-        <label className="text-[10px] font-semibold text-white/60 uppercase tracking-wider">To</label>
-        <input
-          type="date"
-          value={formatDate(endDate)}
-          onChange={(e) => onEndChange(new Date(e.target.value + 'T23:59:59Z'))}
-          className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-white/30 focus:outline-none transition"
-        />
-      </div>
-    </div>
-  );
+  return colors[type.toLowerCase()] || "#94a3b8";
 }
 
-/**
- * Simple stat display component
- */
-function StatRow({ label, value, secondary }: { label: string; value: ReactNode; secondary?: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between">
-      <span className="text-sm text-white/50">{label}</span>
-      <div className="text-right">
-        <span className="text-sm font-medium text-white">{value}</span>
-        {secondary && <span className="ml-2 text-xs text-white/40">{secondary}</span>}
-      </div>
-    </div>
-  );
+function getOperationLabel(type: string): string {
+  const labels: Record<string, string> = {
+    chat: "Chat",
+    regenerate: "Regen",
+    continue: "Continue",
+    summary: "Summary",
+    memory_manager: "Memory",
+  };
+  return labels[type.toLowerCase()] || type;
 }
 
-function AnimatedNumber({ value, formatter, duration = 0.4 }: { value: number; formatter: (n: number) => string; duration?: number }) {
-  const [display, setDisplay] = useState<number>(value);
-  const prev = useRef<number>(value);
-
-  useEffect(() => {
-    const from = prev.current;
-    const controls = animate(from, value, {
-      duration,
-      ease: 'easeOut',
-      onUpdate: (latest) => setDisplay(latest as number),
-    });
-    prev.current = value;
-    return () => controls.stop();
-  }, [value, duration]);
-
-  return <>{formatter(display)}</>;
+function formatDateShort(date: Date): string {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/**
- * Request detail row - minimal design
- */
-function RequestRow({ request, alt }: { request: RequestUsage; alt?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
+function formatDateForInput(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+// ============================================================================
+// Date Range Presets
+// ============================================================================
+
+type DatePreset = "today" | "week" | "month" | "all" | "custom";
+
+function getDateRange(preset: DatePreset): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  switch (preset) {
+    case "today":
+      break;
+    case "week":
+      start.setDate(start.getDate() - 7);
+      break;
+    case "month":
+      start.setDate(start.getDate() - 30);
+      break;
+    case "all":
+      start.setFullYear(start.getFullYear() - 10);
+      break;
+    case "custom":
+      // Custom range will be handled separately
+      break;
+  }
+
+  return { start, end };
+}
+
+// ============================================================================
+// Chart Tooltip
+// ============================================================================
+
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
 
   return (
-    <div className={`rounded-xl border border-white/10 ${alt ? 'bg-white/6.5' : 'bg-white/5'} overflow-hidden`}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/8 transition active:scale-[0.99]"
-      >
-        <div className="flex-1 min-w-0 text-left">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{request.characterName}</p>
-            {/* Operation type badge */}
-            {request.operationType && (() => {
-              const opInfo = getOperationTypeInfo(request.operationType);
-              return (
-                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${opInfo.color}`}>
-                  {opInfo.label}
-                </span>
-              );
-            })()}
-            {/* Provider/Model badge next to title */}
-            {(request.providerLabel || request.modelName) && (
-              <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] text-white/80">
-                {request.providerLabel || request.modelName}
-              </span>
-            )}
-            {!request.success && (
-              <span className="text-[10px] text-red-400">Failed</span>
-            )}
-          </div>
-          <p className="text-xs text-white/40 mt-0.5">
-            {request.totalTokens ? `${formatNumber(request.totalTokens)} tokens` : ''}
-          </p>
+    <div className="rounded-lg border border-white/20 bg-[#0a0b0f]/95 backdrop-blur-md px-3 py-2 shadow-xl">
+      <p className="text-[11px] font-medium text-white/70 mb-1">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+          <span className="text-white/60">{p.name}:</span>
+          <span className="text-white font-medium">{formatNumber(p.value)}</span>
         </div>
+      ))}
+    </div>
+  );
+};
 
-        <div className="flex items-center gap-3 shrink-0">
-          {request.cost && (
-            <span className="text-sm font-medium text-emerald-400">
-              {formatCurrency(request.cost.totalCost)}
+// ============================================================================
+// Stat Card
+// ============================================================================
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  subValue,
+  trend,
+  highlight,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  subValue?: string;
+  trend?: { value: number; isUp: boolean } | null;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 ${
+        highlight
+          ? "border-emerald-500/30 bg-linear-to-br from-emerald-500/20 via-emerald-500/10 to-transparent"
+          : "border-white/10 bg-white/5"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`p-1.5 rounded-lg ${highlight ? "bg-emerald-500/20" : "bg-white/5"}`}>
+          <Icon className={`h-3.5 w-3.5 ${highlight ? "text-emerald-400" : "text-white/50"}`} />
+        </div>
+        <span className="text-[11px] font-medium text-white/50 uppercase tracking-wide">
+          {label}
+        </span>
+      </div>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className={`text-2xl font-bold ${highlight ? "text-emerald-100" : "text-white"}`}>
+            {value}
+          </p>
+          {subValue && <p className="text-[11px] text-white/40 mt-0.5">{subValue}</p>}
+        </div>
+        {trend && trend.value > 0 && (
+          <div
+            className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+              trend.isUp ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+            }`}
+          >
+            {trend.isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {trend.value.toFixed(0)}%
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Activity Item
+// ============================================================================
+
+function ActivityItem({ request }: { request: RequestUsage }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors">
+      <div
+        className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
+        style={{ backgroundColor: `${getOperationColor(request.operationType)}20` }}
+      >
+        <Zap className="h-3.5 w-3.5" style={{ color: getOperationColor(request.operationType) }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-white truncate">
+            {request.characterName || "Unknown"}
+          </span>
+          <span
+            className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+            style={{
+              backgroundColor: `${getOperationColor(request.operationType)}20`,
+              color: getOperationColor(request.operationType),
+            }}
+          >
+            {getOperationLabel(request.operationType)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-white/40">
+          <span>{formatCompactNumber(request.totalTokens || 0)} tokens</span>
+          <span>·</span>
+          <span>{getRelativeTime(request.timestamp)}</span>
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm font-medium text-emerald-400">
+          {formatCurrency(request.cost?.totalCost || 0)}
+        </p>
+        <p className="text-[10px] text-white/30">{request.modelName}</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Comparison Stat
+// ============================================================================
+
+function ComparisonStat({
+  label,
+  period1Value,
+  period2Value,
+  formatter,
+  period1Label,
+  period2Label,
+}: {
+  label: string;
+  period1Value: number;
+  period2Value: number;
+  formatter: (v: number) => string;
+  period1Label: string;
+  period2Label: string;
+}) {
+  const diff = period2Value - period1Value;
+  const percentChange = period1Value > 0 ? (diff / period1Value) * 100 : period2Value > 0 ? 100 : 0;
+  const isIncrease = diff > 0;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p className="text-[11px] font-medium text-white/50 uppercase tracking-wide mb-3">{label}</p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <p className="text-[10px] text-white/40 mb-1">{period1Label}</p>
+          <p className="text-lg font-bold text-white">{formatter(period1Value)}</p>
+        </div>
+        <div className="flex flex-col items-center">
+          <ArrowRight className="h-4 w-4 text-white/20" />
+          {diff !== 0 && (
+            <span
+              className={`text-[10px] font-medium mt-1 ${
+                isIncrease ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {isIncrease ? "+" : ""}
+              {percentChange.toFixed(0)}%
             </span>
           )}
-          <motion.div
-            animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ChevronDown className="h-4 w-4 text-white/30" />
-          </motion.div>
         </div>
-      </button>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden border-t border-white/10 bg-black/20"
-          >
-            <div className="px-4 py-3 space-y-2.5">
-              {request.operationType && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Operation</span>
-                  <span className="text-white/60">{getOperationTypeInfo(request.operationType).label}</span>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xs">
-                <span className="text-white/40">Time</span>
-                <span className="text-white/60">
-                  {new Date(request.timestamp).toLocaleString(undefined, {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  })}
-                </span>
-              </div>
-
-              {request.finishReason && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Finish Reason</span>
-                  <span className="text-white/60">{getFinishReasonLabel(request.finishReason)}</span>
-                </div>
-              )}
-
-              {request.promptTokens !== undefined && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Input</span>
-                  <span className="text-white/60">{request.promptTokens.toLocaleString()} tokens</span>
-                </div>
-              )}
-
-              {request.memoryTokens !== undefined && request.memoryTokens > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Memory</span>
-                  <span className="text-white/60">{request.memoryTokens.toLocaleString()} tokens</span>
-                </div>
-              )}
-
-              {request.summaryTokens !== undefined && request.summaryTokens > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Summary</span>
-                  <span className="text-white/60">{request.summaryTokens.toLocaleString()} tokens</span>
-                </div>
-              )}
-
-              {request.completionTokens !== undefined && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Output</span>
-                  <span className="text-white/60">{request.completionTokens.toLocaleString()} tokens</span>
-                </div>
-              )}
-
-              {request.reasoningTokens !== undefined && request.reasoningTokens > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Reasoning</span>
-                  <span className="text-white/60">{request.reasoningTokens.toLocaleString()} tokens</span>
-                </div>
-              )}
-
-              {request.imageTokens !== undefined && request.imageTokens > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Image</span>
-                  <span className="text-white/60">{request.imageTokens.toLocaleString()} tokens</span>
-                </div>
-              )}
-
-              {request.cost && (
-                <>
-                  <div className="h-px bg-white/10 my-2" />
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/40">Input Cost</span>
-                    <span className="text-white/60">{formatCurrency(request.cost.promptCost)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/40">Output Cost</span>
-                    <span className="text-white/60">{formatCurrency(request.cost.completionCost)}</span>
-                  </div>
-
-                  <div className="flex justify-between text-sm font-medium">
-                    <span className="text-white/70">Total</span>
-                    <span className="text-emerald-400">{formatCurrency(request.cost.totalCost)}</span>
-                  </div>
-                </>
-              )}
-
-              {request.errorMessage && (
-                <>
-                  <div className="h-px bg-white/10 my-2" />
-                  <div className="text-xs">
-                    <span className="text-red-400 block mb-1">Error</span>
-                    <span className="text-white/50">{request.errorMessage}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <div className="flex-1 text-right">
+          <p className="text-[10px] text-white/40 mb-1">{period2Label}</p>
+          <p className="text-lg font-bold text-white">{formatter(period2Value)}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-/**
- * Provider/Model breakdown section - Mobile optimized with display names
- */
-/* Removed BreakdownSection in favor of lightweight filter chips above Recent */
+// ============================================================================
+// Main Component
+// ============================================================================
 
-/**
- * Usage Analytics Page
- */
 export function UsagePage() {
-  const { queryRecords, getStats, exportCSV, saveCSV } = useUsageTracking();
+  const { queryRecords, exportCSV, saveCSV } = useUsageTracking();
 
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30); // Last 30 days
-    return date;
-  });
+  // View mode
+  const [viewMode, setViewMode] = useState<"dashboard" | "compare">("dashboard");
 
-  const [endDate, setEndDate] = useState(new Date());
-  const [stats, setStats] = useState<UsageStats | null>(null);
+  // Dashboard state
+  const [datePreset, setDatePreset] = useState<DatePreset>("month");
   const [records, setRecords] = useState<RequestUsage[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [successOnly, setSuccessOnly] = useState(false);
-  // Deprecated pagination (replaced by Load more)
-  const RECORDS_PER_PAGE = 10;
-
-  // Filters for recent requests
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-  const [selectedOperationType, setSelectedOperationType] = useState<string | null>(null);
-  const [showModelFilter, setShowModelFilter] = useState(false);
-  const [showCharacterFilter, setShowCharacterFilter] = useState(false);
-  const [showOperationTypeFilter, setShowOperationTypeFilter] = useState(false);
-
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [visibleCount, setVisibleCount] = useState(RECORDS_PER_PAGE);
-  const [activeTab, setActiveTab] = useState<'history' | 'analytics'>('history');
 
-  const loadData = async () => {
+  // Custom date range
+  const [customStartDate, setCustomStartDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [customEndDate, setCustomEndDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    return d;
+  });
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+
+  // Filters
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
+
+  // Comparison state
+  const [period1Start, setPeriod1Start] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [period1End, setPeriod1End] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  });
+  const [period2Start, setPeriod2Start] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [period2End, setPeriod2End] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    return d;
+  });
+  const [compareRecords1, setCompareRecords1] = useState<RequestUsage[]>([]);
+  const [compareRecords2, setCompareRecords2] = useState<RequestUsage[]>([]);
+  const [compareLoading, setCompareLoading] = useState(false);
+
+  // Load dashboard data
+  const loadDashboardData = async () => {
     setLoading(true);
+    let start: Date, end: Date;
+
+    if (datePreset === "custom") {
+      start = customStartDate;
+      end = customEndDate;
+    } else {
+      const range = getDateRange(datePreset);
+      start = range.start;
+      end = range.end;
+    }
+
     const filter: UsageFilter = {
-      startTimestamp: startDate.getTime(),
-      endTimestamp: endDate.getTime(),
-      successOnly: successOnly || undefined,
+      startTimestamp: start.getTime(),
+      endTimestamp: end.getTime(),
     };
-
-    const [newStats, newRecords] = await Promise.all([
-      getStats(filter),
-      queryRecords(filter),
-    ]);
-
-    if (newStats) setStats(newStats);
+    const newRecords = await queryRecords(filter);
     if (newRecords) setRecords(newRecords);
-    setVisibleCount(RECORDS_PER_PAGE);
     setLoading(false);
   };
 
-  useEffect(() => {
-    loadData();
-  }, [startDate, endDate, successOnly]);
+  // Load comparison data
+  const loadComparisonData = async () => {
+    setCompareLoading(true);
+    const [r1, r2] = await Promise.all([
+      queryRecords({
+        startTimestamp: period1Start.getTime(),
+        endTimestamp: period1End.getTime(),
+      }),
+      queryRecords({
+        startTimestamp: period2Start.getTime(),
+        endTimestamp: period2End.getTime(),
+      }),
+    ]);
+    if (r1) setCompareRecords1(r1);
+    if (r2) setCompareRecords2(r2);
+    setCompareLoading(false);
+  };
 
   useEffect(() => {
-    (window as any).__openUsageFilters = () => setShowFilters(true);
-    const listener = () => setShowFilters(true);
-    window.addEventListener("usage:filters", listener);
-    return () => {
-      if ((window as any).__openUsageFilters) delete (window as any).__openUsageFilters;
-      window.removeEventListener("usage:filters", listener);
+    if (viewMode === "dashboard") {
+      loadDashboardData();
+    }
+  }, [datePreset, viewMode, customStartDate, customEndDate]);
+
+  useEffect(() => {
+    if (viewMode === "compare") {
+      loadComparisonData();
+    }
+  }, [viewMode, period1Start, period1End, period2Start, period2End]);
+
+  // Filtered records for dashboard
+  const filteredRecords = useMemo(() => {
+    let list = records;
+    if (selectedModel) list = list.filter((r) => r.modelId === selectedModel);
+    if (selectedCharacter) list = list.filter((r) => r.characterId === selectedCharacter);
+    return list.sort((a, b) => b.timestamp - a.timestamp);
+  }, [records, selectedModel, selectedCharacter]);
+
+  // Dashboard derived data
+  const { modelOptions, characterOptions, chartData, topModels } = useMemo(() => {
+    const modelMap = new Map<string, { name: string; tokens: number; cost: number }>();
+    const charMap = new Map<string, { name: string; tokens: number; cost: number }>();
+    const dailyMap = new Map<string, { input: number; output: number; cost: number; date: Date }>();
+
+    for (const r of filteredRecords) {
+      if (r.modelId && r.modelName) {
+        const existing = modelMap.get(r.modelId) || { name: r.modelName, tokens: 0, cost: 0 };
+        existing.tokens += r.totalTokens || 0;
+        existing.cost += r.cost?.totalCost || 0;
+        modelMap.set(r.modelId, existing);
+      }
+      if (r.characterId && r.characterName) {
+        const existing = charMap.get(r.characterId) || {
+          name: r.characterName,
+          tokens: 0,
+          cost: 0,
+        };
+        existing.tokens += r.totalTokens || 0;
+        existing.cost += r.cost?.totalCost || 0;
+        charMap.set(r.characterId, existing);
+      }
+      const recordDate = new Date(r.timestamp);
+      // Use date string as key (YYYY-MM-DD format ensures uniqueness)
+      const dateKey = recordDate.toISOString().split("T")[0];
+      const dayData = dailyMap.get(dateKey) || { input: 0, output: 0, cost: 0, date: recordDate };
+      dayData.input += r.promptTokens || 0;
+      dayData.output += r.completionTokens || 0;
+      dayData.cost += r.cost?.totalCost || 0;
+      dailyMap.set(dateKey, dayData);
+    }
+
+    const modelOptions = Array.from(modelMap.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.tokens - a.tokens);
+
+    const characterOptions = Array.from(charMap.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.tokens - a.tokens);
+
+    // Determine how many days to show based on the date preset
+    const daysToShow =
+      datePreset === "today"
+        ? 1
+        : datePreset === "week"
+          ? 7
+          : datePreset === "month"
+            ? 30
+            : datePreset === "all"
+              ? undefined // Show all data
+              : datePreset === "custom"
+                ? undefined // Show all data for custom range
+                : 14; // Default fallback
+
+    const sortedEntries = Array.from(dailyMap.entries()).sort(
+      (a, b) => a[1].date.getTime() - b[1].date.getTime(),
+    );
+
+    const chartData = (
+      daysToShow !== undefined ? sortedEntries.slice(-daysToShow) : sortedEntries
+    ).map(([, data]) => ({
+      label: data.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      input: data.input,
+      output: data.output,
+      cost: data.cost,
+    }));
+
+    const topModels = modelOptions.slice(0, 5);
+
+    return { modelOptions, characterOptions, chartData, topModels };
+  }, [filteredRecords, datePreset]);
+
+  // Dashboard stats
+  const displayStats = useMemo(() => {
+    const totals = filteredRecords.reduce(
+      (acc, r) => {
+        acc.tokens += r.totalTokens || 0;
+        acc.cost += r.cost?.totalCost || 0;
+        acc.requests += 1;
+        return acc;
+      },
+      { tokens: 0, cost: 0, requests: 0 },
+    );
+    return {
+      ...totals,
+      avgPerRequest: totals.requests > 0 ? totals.tokens / totals.requests : 0,
     };
-  }, []);
+  }, [filteredRecords]);
 
-  const handleExportCSV = async () => {
+  // Comparison stats
+  const compareStats1 = useMemo(() => {
+    return compareRecords1.reduce(
+      (acc, r) => {
+        acc.tokens += r.totalTokens || 0;
+        acc.cost += r.cost?.totalCost || 0;
+        acc.requests += 1;
+        return acc;
+      },
+      { tokens: 0, cost: 0, requests: 0 },
+    );
+  }, [compareRecords1]);
+
+  const compareStats2 = useMemo(() => {
+    return compareRecords2.reduce(
+      (acc, r) => {
+        acc.tokens += r.totalTokens || 0;
+        acc.cost += r.cost?.totalCost || 0;
+        acc.requests += 1;
+        return acc;
+      },
+      { tokens: 0, cost: 0, requests: 0 },
+    );
+  }, [compareRecords2]);
+
+  // Export handler
+  const handleExport = async () => {
     setExporting(true);
-    setExportSuccess(null);
-    setExportError(null);
     try {
-      const filter: UsageFilter = {
-        startTimestamp: startDate.getTime(),
-        endTimestamp: endDate.getTime(),
-        successOnly: successOnly || undefined,
-      };
-
-      console.log('[UsagePage] Exporting CSV with filter:', filter);
-      console.log('[UsagePage] Current records count:', records.length);
-
-      const csv = await exportCSV(filter);
-      console.log('[UsagePage] CSV generated, length:', csv?.length);
-      console.log('[UsagePage] CSV preview:', csv?.substring(0, 200));
-
-      if (!csv) {
-        const errorMsg = 'exportCSV returned null - check console for errors';
-        console.error('[UsagePage]', errorMsg);
-        setExportError(errorMsg);
-        alert(errorMsg);
-        return;
+      const { start, end } = getDateRange(datePreset);
+      const csv = await exportCSV({
+        startTimestamp: start.getTime(),
+        endTimestamp: end.getTime(),
+      });
+      if (csv) {
+        const fileName = `usage-${datePreset}-${new Date().toISOString().split("T")[0]}.csv`;
+        const path = await saveCSV(csv, fileName);
+        if (path) alert(`Exported to: ${path}`);
       }
-
-      if (csv.length === 0) {
-        const errorMsg = 'No CSV data generated - check if there are records in the selected date range';
-        console.error('[UsagePage]', errorMsg);
-        setExportError(errorMsg);
-        alert(errorMsg);
-        return;
-      }
-
-      const fileName = `usage-${new Date().toISOString().split('T')[0]}.csv`;
-      console.log('[UsagePage] Saving CSV as:', fileName);
-      console.log('[UsagePage] CSV size:', csv.length, 'bytes');
-
-      const filePath = await saveCSV(csv, fileName);
-      console.log('[UsagePage] saveCSV returned:', filePath);
-
-      if (!filePath) {
-        // Check if there was an error in the hook
-        const errorMsg = 'saveCSV returned null - check browser console for the actual error from Rust backend';
-        console.error('[UsagePage]', errorMsg);
-        setExportError(errorMsg);
-        alert(errorMsg);
-        return;
-      }
-
-      setExportSuccess(filePath);
-      setTimeout(() => setExportSuccess(null), 4000);
-      alert(`CSV exported successfully!\n\nSaved to:\n${filePath}`);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('[UsagePage] Export failed:', errorMsg);
-      setExportError(errorMsg);
-      alert(`Export failed: ${errorMsg}`);
+    } catch (e) {
+      console.error("Export failed:", e);
     } finally {
       setExporting(false);
     }
   };
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setVisibleCount(RECORDS_PER_PAGE);
-  }, [selectedModelId, selectedCharacterId, selectedOperationType]);
+  const COLORS = ["#34d399", "#60a5fa", "#a78bfa", "#f472b6", "#fbbf24"];
+  const activeFilterCount = [selectedModel, selectedCharacter].filter(Boolean).length;
 
-  // Derived lists for filters
-  const modelOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const r of records) {
-      if (r.modelId && r.modelName && !map.has(r.modelId)) map.set(r.modelId, r.modelName);
-    }
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [records]);
-
-  const characterOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const r of records) {
-      if (r.characterId && r.characterName && !map.has(r.characterId)) map.set(r.characterId, r.characterName);
-    }
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [records]);
-
-  const operationTypeOptions = useMemo(() => {
-    const map = new Map<string, { label: string; color: string }>();
-    for (const r of records) {
-      if (r.operationType && !map.has(r.operationType)) {
-        map.set(r.operationType, getOperationTypeInfo(r.operationType));
-      }
-    }
-    return Array.from(map.entries()).map(([id, info]) => ({ id, label: info.label, color: info.color }));
-  }, [records]);
-
-  const filteredRecords = useMemo(() => {
-    let list = records.slice();
-    if (selectedModelId) list = list.filter(r => r.modelId === selectedModelId);
-    if (selectedCharacterId) list = list.filter(r => r.characterId === selectedCharacterId);
-    if (selectedOperationType) list = list.filter(r => r.operationType === selectedOperationType);
-    return list;
-  }, [records, selectedModelId, selectedCharacterId, selectedOperationType]);
-
-  // Derived stats based on current filter (All / By Model / By Character)
-  const displayStats = useMemo(() => {
-    const totals = filteredRecords.reduce(
-      (acc, r) => {
-        const totalTokens = (r.totalTokens ?? 0) || ((r.promptTokens ?? 0) + (r.completionTokens ?? 0));
-        const promptCost = r.cost?.promptCost ?? 0;
-        const completionCost = r.cost?.completionCost ?? 0;
-        const totalCost = r.cost?.totalCost ?? (promptCost + completionCost);
-        acc.totalRequests += 1;
-        acc.successfulRequests += r.success ? 1 : 0;
-        acc.totalTokens += totalTokens;
-        acc.promptCost += promptCost;
-        acc.completionCost += completionCost;
-        acc.totalCost += totalCost;
-        return acc;
-      },
-      { totalRequests: 0, successfulRequests: 0, totalTokens: 0, promptCost: 0, completionCost: 0, totalCost: 0 }
-    );
-    const averageCostPerRequest = totals.totalRequests > 0 ? totals.totalCost / totals.totalRequests : 0;
-    const successRate = totals.totalRequests > 0 ? (totals.successfulRequests / totals.totalRequests) * 100 : 0;
-    return { ...totals, averageCostPerRequest, successRate };
-  }, [filteredRecords]);
+  const period1Label = `${formatDateShort(period1Start)} - ${formatDateShort(period1End)}`;
+  const period2Label = `${formatDateShort(period2Start)} - ${formatDateShort(period2End)}`;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="min-h-screen bg-[#050505] pb-20"
-    >
-      {/* Filters BottomMenu */}
+    <div className="min-h-screen bg-[#050505] pb-24">
+      {/* Filters Bottom Sheet */}
       <BottomMenu
         isOpen={showFilters}
-        includeExitIcon={false}
         onClose={() => setShowFilters(false)}
         title="Filters"
+        includeExitIcon={false}
       >
         <div className="space-y-4 pb-4">
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onStartChange={setStartDate}
-            onEndChange={setEndDate}
-          />
-
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 transition cursor-pointer">
-            <span className="text-sm text-white">Show successful requests only</span>
-            <div className="flex items-center shrink-0">
-              <input
-                id="show-only-successful"
-                type="checkbox"
-                checked={successOnly}
-                onChange={(e) => setSuccessOnly(e.target.checked)}
-                className="peer sr-only"
-              />
-              <label
-                htmlFor="show-only-successful"
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${successOnly
-                  ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                  : 'bg-white/20'
+          <div>
+            <label className="text-xs font-medium text-white/60 uppercase tracking-wide mb-2 block">
+              Model
+            </label>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {modelOptions.slice(0, 8).map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedModel(selectedModel === m.id ? null : m.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
+                    selectedModel === m.id
+                      ? "bg-emerald-500/20 text-emerald-100"
+                      : "bg-white/5 text-white/70 hover:bg-white/10"
                   }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${successOnly ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                />
-              </label>
+                >
+                  <span className="truncate">{m.name}</span>
+                  <span className="text-xs text-white/40">{formatCompactNumber(m.tokens)}</span>
+                </button>
+              ))}
             </div>
-          </label>
+          </div>
 
-          <button
-            onClick={handleExportCSV}
-            disabled={exporting || records.length === 0}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2.5 text-sm font-medium text-emerald-100 hover:border-emerald-500/60 hover:bg-emerald-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
-          >
-            <Download className="h-4 w-4" />
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </button>
+          <div>
+            <label className="text-xs font-medium text-white/60 uppercase tracking-wide mb-2 block">
+              Character
+            </label>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {characterOptions.slice(0, 8).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCharacter(selectedCharacter === c.id ? null : c.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
+                    selectedCharacter === c.id
+                      ? "bg-emerald-500/20 text-emerald-100"
+                      : "bg-white/5 text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  <span className="truncate">{c.name}</span>
+                  <span className="text-xs text-white/40">{formatCompactNumber(c.tokens)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                setSelectedModel(null);
+                setSelectedCharacter(null);
+              }}
+              className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm font-medium hover:bg-white/5 transition"
+            >
+              Clear All
+            </button>
+            <button
+              onClick={() => setShowFilters(false)}
+              className="flex-1 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-sm font-medium hover:bg-emerald-500/30 transition"
+            >
+              Apply
+            </button>
+          </div>
         </div>
       </BottomMenu>
 
-      {/* Content */}
-      <div className="space-y-4 px-4 py-4">
-        {/* Tab Switcher */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-2">
-          <div className="flex items-center gap-1 rounded-lg bg-black/30 p-1">
-            <motion.button
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${activeTab === 'history'
-                ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                : 'text-white/50 hover:text-white/70 hover:bg-white/5'
-                }`}
-              whileTap={{ scale: 0.97 }}
+      {/* All Activity Bottom Sheet */}
+      <BottomMenu
+        isOpen={showAllActivity}
+        onClose={() => setShowAllActivity(false)}
+        title="Recent Activity"
+        includeExitIcon={false}
+      >
+        <div className="space-y-1 pb-4 max-h-[60vh] overflow-y-auto">
+          {filteredRecords.slice(0, 50).map((r) => (
+            <ActivityItem key={r.id} request={r} />
+          ))}
+          {filteredRecords.length === 0 && (
+            <p className="text-center text-white/40 py-8 text-sm">No activity in this period</p>
+          )}
+        </div>
+      </BottomMenu>
+
+      {/* Custom Date Range Bottom Sheet */}
+      <BottomMenu
+        isOpen={showCustomDatePicker}
+        onClose={() => setShowCustomDatePicker(false)}
+        title="Custom Date Range"
+        includeExitIcon={false}
+      >
+        <div className="space-y-4 pb-4">
+          <div>
+            <label className="block text-xs font-medium text-white/60 mb-2">Start Date</label>
+            <input
+              type="date"
+              value={customStartDate.toISOString().split("T")[0]}
+              onChange={(e) => {
+                const newDate = new Date(e.target.value);
+                newDate.setHours(0, 0, 0, 0);
+                setCustomStartDate(newDate);
+              }}
+              max={customEndDate.toISOString().split("T")[0]}
+              className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-emerald-500/50 focus:bg-white/10 transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-white/60 mb-2">End Date</label>
+            <input
+              type="date"
+              value={customEndDate.toISOString().split("T")[0]}
+              onChange={(e) => {
+                const newDate = new Date(e.target.value);
+                newDate.setHours(23, 59, 59, 999);
+                setCustomEndDate(newDate);
+              }}
+              min={customStartDate.toISOString().split("T")[0]}
+              max={new Date().toISOString().split("T")[0]}
+              className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-emerald-500/50 focus:bg-white/10 transition"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => setShowCustomDatePicker(false)}
+              className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm font-medium hover:bg-white/5 transition"
             >
-              <History className="h-4 w-4" />
-              History
-            </motion.button>
-            <motion.button
-              onClick={() => setActiveTab('analytics')}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${activeTab === 'analytics'
-                ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                : 'text-white/50 hover:text-white/70 hover:bg-white/5'
-                }`}
-              whileTap={{ scale: 0.97 }}
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setDatePreset("custom");
+                setShowCustomDatePicker(false);
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-sm font-medium hover:bg-emerald-500/30 transition"
             >
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </motion.button>
+              Apply
+            </button>
+          </div>
+        </div>
+      </BottomMenu>
+
+      <div className="max-w-5xl mx-auto px-4 py-4">
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex-1 flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+            <button
+              onClick={() => setViewMode("dashboard")}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                viewMode === "dashboard"
+                  ? "bg-white/10 text-white"
+                  : "text-white/50 hover:text-white/70"
+              }`}
+            >
+              <Activity className="h-3.5 w-3.5" />
+              Dashboard
+            </button>
+            <button
+              onClick={() => setViewMode("compare")}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                viewMode === "compare"
+                  ? "bg-white/10 text-white"
+                  : "text-white/50 hover:text-white/70"
+              }`}
+            >
+              <GitCompare className="h-3.5 w-3.5" />
+              Compare
+            </button>
           </div>
         </div>
 
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' ? (
-          <UsageAnalytics
-            records={records}
-            modelOptions={modelOptions}
-            characterOptions={characterOptions}
-            operationTypeOptions={operationTypeOptions}
-          />
-        ) : (
+        {/* ================================================================== */}
+        {/* DASHBOARD VIEW */}
+        {/* ================================================================== */}
+        {viewMode === "dashboard" && (
           <>
-            {/* Export Success/Error Toast */}
+            {/* Header Row */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+                {[
+                  { key: "today", label: "Today" },
+                  { key: "week", label: "7 Days" },
+                  { key: "month", label: "30 Days" },
+                  { key: "all", label: "All" },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setDatePreset(key as DatePreset)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      datePreset === key
+                        ? "bg-white/10 text-white"
+                        : "text-white/50 hover:text-white/70"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setShowCustomDatePicker(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    datePreset === "custom"
+                      ? "bg-white/10 text-white"
+                      : "text-white/50 hover:text-white/70"
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowFilters(true)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                    activeFilterCount > 0
+                      ? "bg-emerald-500/20 text-emerald-100 border border-emerald-500/30"
+                      : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  {activeFilterCount > 0 ? `${activeFilterCount}` : "Filter"}
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting || records.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs font-medium hover:bg-white/10 transition disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Active Filters */}
             <AnimatePresence>
-              {exportSuccess && (
+              {activeFilterCount > 0 && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-3 flex items-center gap-2"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-2 mb-4 overflow-hidden"
                 >
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-emerald-100">CSV exported successfully</p>
-                    <p className="text-[10px] text-emerald-200/70 truncate">{exportSuccess}</p>
-                  </div>
-                </motion.div>
-              )}
-              {exportError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="rounded-xl border border-red-500/30 bg-red-500/15 px-4 py-3 flex items-center gap-2"
-                  onClick={() => setExportError(null)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-red-100">Export failed</p>
-                    <p className="text-[10px] text-red-200/70">{exportError}</p>
-                  </div>
+                  {selectedModel && (
+                    <button
+                      onClick={() => setSelectedModel(null)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 text-xs"
+                    >
+                      {modelOptions.find((m) => m.id === selectedModel)?.name}
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  {selectedCharacter && (
+                    <button
+                      onClick={() => setSelectedCharacter(null)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 text-xs"
+                    >
+                      {characterOptions.find((c) => c.id === selectedCharacter)?.name}
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {loading && !stats ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-emerald-400" />
               </div>
-            ) : stats ? (
-              <>
-                {/* Overview Card (filtered) */}
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2.5"
-                >
-                  <h2 className="text-lg font-semibold text-white mb-3">Overview</h2>
-                  <StatRow
+            ) : (
+              <div className="space-y-4">
+                {/* Stats Row */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatCard
+                    icon={DollarSign}
                     label="Total Cost"
-                    value={<AnimatedNumber value={displayStats.totalCost} formatter={formatCurrency} />}
+                    value={formatCurrency(displayStats.cost)}
+                    highlight
                   />
-                  <StatRow
-                    label="Total Requests"
-                    value={<AnimatedNumber value={displayStats.totalRequests} formatter={(v) => formatNumber(Math.round(v))} />}
-                    secondary={<><AnimatedNumber value={displayStats.successfulRequests} formatter={(v) => formatNumber(Math.round(v))} />{' '}successful</>}
+                  <StatCard
+                    icon={Zap}
+                    label="Tokens"
+                    value={formatNumber(displayStats.tokens)}
+                    subValue={`${formatNumber(Math.round(displayStats.avgPerRequest))} avg`}
                   />
-                  <StatRow
-                    label="Total Tokens"
-                    value={<AnimatedNumber value={displayStats.totalTokens} formatter={(v) => formatNumber(Math.round(v))} />}
-                    secondary={<><AnimatedNumber value={displayStats.totalTokens / Math.max(displayStats.totalRequests, 1)} formatter={(v) => formatNumber(Math.round(v))} />{' '}avg</>}
+                  <StatCard
+                    icon={Activity}
+                    label="Requests"
+                    value={displayStats.requests.toLocaleString()}
                   />
-                  <StatRow
-                    label="Average Cost"
-                    value={<AnimatedNumber value={displayStats.averageCostPerRequest} formatter={formatCurrency} />}
+                  <StatCard
+                    icon={Clock}
+                    label="Period"
+                    value={
+                      datePreset === "today"
+                        ? "Today"
+                        : datePreset === "week"
+                          ? "7 Days"
+                          : datePreset === "month"
+                            ? "30 Days"
+                            : datePreset === "custom"
+                              ? `${customStartDate.toLocaleDateString()} - ${customEndDate.toLocaleDateString()}`
+                              : "All Time"
+                    }
+                    subValue={`${filteredRecords.length} records`}
                   />
-                  <StatRow
-                    label="Success Rate"
-                    value={<><AnimatedNumber value={displayStats.successRate} formatter={(v) => v.toFixed(1)} />%</>}
-                  />
-                </motion.div>
-
-                {/* Cost Breakdown (filtered) */}
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3"
-                >
-                  <h3 className="text-sm font-medium text-white">Cost Split</h3>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">Input Tokens</span>
-                      <span className="text-white/80">
-                        <AnimatedNumber value={displayStats.promptCost} formatter={formatCurrency} />
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">Output Tokens</span>
-                      <span className="text-white/80">
-                        <AnimatedNumber value={displayStats.completionCost} formatter={formatCurrency} />
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Filter Controls */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-1">
-                    <motion.button
-                      onClick={() => { setSelectedModelId(null); setSelectedCharacterId(null); setSelectedOperationType(null); }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${!selectedModelId && !selectedCharacterId && !selectedOperationType
-                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      All
-                    </motion.button>
-                    <motion.button
-                      onClick={() => setShowModelFilter((v) => !v)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedModelId
-                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <span className="truncate max-w-15">{selectedModelId ? (modelOptions.find(m => m.id === selectedModelId)?.name || 'Model') : 'Model'}</span>
-                    </motion.button>
-                    <motion.button
-                      onClick={() => setShowCharacterFilter((v) => !v)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedCharacterId
-                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <span className="truncate max-w-15">{selectedCharacterId ? (characterOptions.find(c => c.id === selectedCharacterId)?.name || 'Char') : 'Character'}</span>
-                    </motion.button>
-                    <motion.button
-                      onClick={() => setShowOperationTypeFilter((v) => !v)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${selectedOperationType
-                        ? 'bg-linear-to-b from-emerald-400/20 to-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/20'
-                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'}`}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <span className="truncate max-w-15">{selectedOperationType ? (operationTypeOptions.find(o => o.id === selectedOperationType)?.label || 'Type') : 'Type'}</span>
-                    </motion.button>
-                  </div>
                 </div>
 
-
-                {/* Model Filter Inline Menu */}
-                <AnimatePresence>
-                  {showModelFilter && modelOptions.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                      transition={{ duration: 0.15 }}
-                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
-                    >
-                      {/* Header */}
-                      <div className="px-4 py-3 border-b border-white/10">
-                        <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Model</h4>
-                      </div>
-
-                      {/* Options */}
-                      <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
-                        {modelOptions.map((opt, index) => {
-                          const selected = selectedModelId === opt.id;
-                          return (
-                            <motion.button
-                              key={opt.id}
-                              onClick={() => { setSelectedModelId(opt.id); setShowModelFilter(false); }}
-                              className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
-                                ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
-                                : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
-                              whileTap={{ scale: 0.98 }}
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.02 }}
-                            >
-                              <span className="truncate pr-3">{opt.name}</span>
-                              {selected && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
-                                >
-                                  <Check className="h-3 w-3 text-emerald-400" />
-                                </motion.div>
-                              )}
-                            </motion.button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Footer */}
-                      <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
-                        <motion.button
-                          onClick={() => { setSelectedModelId(null); setShowModelFilter(false); }}
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          Clear Selection
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-
-                {/* Character Filter Inline Menu */}
-                <AnimatePresence>
-                  {showCharacterFilter && characterOptions.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                      transition={{ duration: 0.15 }}
-                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
-                    >
-                      {/* Header */}
-                      <div className="px-4 py-3 border-b border-white/10">
-                        <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Character</h4>
-                      </div>
-
-                      {/* Options */}
-                      <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
-                        {characterOptions.map((opt, index) => {
-                          const selected = selectedCharacterId === opt.id;
-                          return (
-                            <motion.button
-                              key={opt.id}
-                              onClick={() => { setSelectedCharacterId(opt.id); setShowCharacterFilter(false); }}
-                              className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
-                                ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
-                                : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
-                              whileTap={{ scale: 0.98 }}
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.02 }}
-                            >
-                              <span className="truncate pr-3">{opt.name}</span>
-                              {selected && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
-                                >
-                                  <Check className="h-3 w-3 text-emerald-400" />
-                                </motion.div>
-                              )}
-                            </motion.button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Footer */}
-                      <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
-                        <motion.button
-                          onClick={() => { setSelectedCharacterId(null); setShowCharacterFilter(false); }}
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          Clear Selection
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-
-                {/* Operation Type Filter Inline Menu */}
-                <AnimatePresence>
-                  {showOperationTypeFilter && operationTypeOptions.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                      transition={{ duration: 0.15 }}
-                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a0b0f]/98 backdrop-blur-md shadow-2xl"
-                    >
-                      {/* Header */}
-                      <div className="px-4 py-3 border-b border-white/10">
-                        <h4 className="text-xs font-semibold text-white/90 uppercase tracking-wide">Select Type</h4>
-                      </div>
-
-                      {/* Options */}
-                      <div className="max-h-64 overflow-y-auto p-2 space-y-0.5">
-                        {operationTypeOptions.map((opt, index) => {
-                          const selected = selectedOperationType === opt.id;
-                          return (
-                            <motion.button
-                              key={opt.id}
-                              onClick={() => { setSelectedOperationType(opt.id); setShowOperationTypeFilter(false); }}
-                              className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all ${selected
-                                ? 'bg-emerald-500/15 text-emerald-100 shadow-sm shadow-emerald-500/10'
-                                : 'text-white/70 hover:bg-white/8 hover:text-white/90'}`}
-                              whileTap={{ scale: 0.98 }}
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.02 }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className={`h-2 w-2 rounded-full ${opt.color.includes('blue') ? 'bg-blue-400' : opt.color.includes('purple') ? 'bg-purple-400' : opt.color.includes('cyan') ? 'bg-cyan-400' : opt.color.includes('amber') ? 'bg-amber-400' : opt.color.includes('emerald') ? 'bg-emerald-400' : 'bg-white/40'}`} />
-                                <span className="truncate">{opt.label}</span>
-                              </div>
-                              {selected && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="shrink-0 h-5 w-5 rounded-full bg-emerald-400/20 flex items-center justify-center"
-                                >
-                                  <Check className="h-3 w-3 text-emerald-400" />
-                                </motion.div>
-                              )}
-                            </motion.button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Footer */}
-                      <div className="px-3 py-2.5 border-t border-white/10 bg-black/20">
-                        <motion.button
-                          onClick={() => { setSelectedOperationType(null); setShowOperationTypeFilter(false); }}
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          Clear Selection
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-
-                {/* Recent Requests */}
-                {filteredRecords.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="px-1 text-sm font-medium text-white/70">
-                      Recent Requests ({filteredRecords.length})
-                    </h3>
-                    <div className="space-y-2">
-                      <AnimatePresence initial={false}>
-                        {filteredRecords
-                          .sort((a, b) => b.timestamp - a.timestamp)
-                          .slice(0, visibleCount)
-                          .map((request, idx) => (
-                            <motion.div
-                              key={request.id}
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -6 }}
-                              transition={{ duration: 0.15 }}
-                              layout
-                            >
-                              <RequestRow request={request} alt={idx % 2 === 1} />
-                            </motion.div>
-                          ))}
-                      </AnimatePresence>
-                    </div>
-                    {visibleCount < filteredRecords.length && (
-                      <div className="pt-2">
-                        <motion.button
-                          onClick={() => setVisibleCount((v) => v + RECORDS_PER_PAGE)}
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white hover:border-white/20 hover:bg-white/10 transition active:scale-[0.99]"
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          Load more
-                        </motion.button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {filteredRecords.length === 0 && (
+                {/* Chart */}
+                {chartData.length > 1 && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center"
+                    className="rounded-2xl border border-white/10 bg-white/5 p-4"
                   >
-                    <p className="text-sm text-white/50">No usage data available for this period</p>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-white">Usage Trend</h3>
+                      <div className="flex items-center gap-3 text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-blue-400" />
+                          <span className="text-white/50">Input</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                          <span className="text-white/50">Output</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={chartData}
+                          margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
+                        >
+                          <defs>
+                            <linearGradient id="inputGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="outputGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#34d399" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                            axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatCompactNumber}
+                          />
+                          <Tooltip content={<ChartTooltip />} />
+                          <Area
+                            type="monotone"
+                            dataKey="input"
+                            name="Input"
+                            stroke="#60a5fa"
+                            fill="url(#inputGrad)"
+                            strokeWidth={2}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="output"
+                            name="Output"
+                            stroke="#34d399"
+                            fill="url(#outputGrad)"
+                            strokeWidth={2}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   </motion.div>
                 )}
-              </>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center"
-              >
-                <p className="text-sm text-white/50">Failed to load usage data</p>
-              </motion.div>
+
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {topModels.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.05 }}
+                      className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                    >
+                      <h3 className="text-sm font-semibold text-white mb-4">By Model</h3>
+                      <div className="flex gap-4">
+                        <div className="w-28 h-28 shrink-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={topModels}
+                                dataKey="tokens"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={25}
+                                outerRadius={45}
+                                paddingAngle={2}
+                              >
+                                {topModels.map((_, i) => (
+                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                                ))}
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          {topModels.slice(0, 4).map((m, i) => (
+                            <div key={m.id} className="flex items-center gap-2">
+                              <span
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                              />
+                              <span className="text-xs text-white/70 truncate flex-1">
+                                {m.name}
+                              </span>
+                              <span className="text-xs text-white/40">
+                                {formatCompactNumber(m.tokens)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {characterOptions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                      className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                    >
+                      <h3 className="text-sm font-semibold text-white mb-4">By Character</h3>
+                      <div className="flex gap-4">
+                        <div className="w-28 h-28 shrink-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={characterOptions.slice(0, 5)}
+                                dataKey="tokens"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={25}
+                                outerRadius={45}
+                                paddingAngle={2}
+                              >
+                                {characterOptions.slice(0, 5).map((_, i) => (
+                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                                ))}
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          {characterOptions.slice(0, 4).map((c, i) => (
+                            <div key={c.id} className="flex items-center gap-2">
+                              <span
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                              />
+                              <span className="text-xs text-white/70 truncate flex-1">
+                                {c.name}
+                              </span>
+                              <span className="text-xs text-white/40">
+                                {formatCompactNumber(c.tokens)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Recent Activity */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                    <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
+                    {filteredRecords.length > 5 && (
+                      <button
+                        onClick={() => setShowAllActivity(true)}
+                        className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition"
+                      >
+                        View all
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {filteredRecords.slice(0, 5).map((r) => (
+                      <ActivityItem key={r.id} request={r} />
+                    ))}
+                    {filteredRecords.length === 0 && (
+                      <div className="py-12 text-center">
+                        <Calendar className="h-8 w-8 text-white/20 mx-auto mb-2" />
+                        <p className="text-sm text-white/50">No activity yet</p>
+                        <p className="text-xs text-white/30 mt-1">
+                          Start chatting to see usage data
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </div>
             )}
           </>
         )}
+
+        {/* ================================================================== */}
+        {/* COMPARE VIEW */}
+        {/* ================================================================== */}
+        {viewMode === "compare" && (
+          <div className="space-y-4">
+            {/* Period Selection */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Period 1 */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-3 w-3 rounded-full bg-blue-400" />
+                  <h3 className="text-sm font-semibold text-white">Period 1</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
+                      From
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(period1Start)}
+                      onChange={(e) => {
+                        const d = new Date(e.target.value);
+                        d.setHours(0, 0, 0, 0);
+                        setPeriod1Start(d);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
+                      To
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(period1End)}
+                      onChange={(e) => {
+                        const d = new Date(e.target.value);
+                        d.setHours(23, 59, 59, 999);
+                        setPeriod1End(d);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Period 2 */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                  <h3 className="text-sm font-semibold text-white">Period 2</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
+                      From
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(period2Start)}
+                      onChange={(e) => {
+                        const d = new Date(e.target.value);
+                        d.setHours(0, 0, 0, 0);
+                        setPeriod2Start(d);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
+                      To
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(period2End)}
+                      onChange={(e) => {
+                        const d = new Date(e.target.value);
+                        d.setHours(23, 59, 59, 999);
+                        setPeriod2End(d);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {compareLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-emerald-400" />
+              </div>
+            ) : (
+              <>
+                {/* Comparison Stats */}
+                <div className="space-y-3">
+                  <ComparisonStat
+                    label="Total Cost"
+                    period1Value={compareStats1.cost}
+                    period2Value={compareStats2.cost}
+                    formatter={formatCurrency}
+                    period1Label={period1Label}
+                    period2Label={period2Label}
+                  />
+                  <ComparisonStat
+                    label="Total Tokens"
+                    period1Value={compareStats1.tokens}
+                    period2Value={compareStats2.tokens}
+                    formatter={formatNumber}
+                    period1Label={period1Label}
+                    period2Label={period2Label}
+                  />
+                  <ComparisonStat
+                    label="Requests"
+                    period1Value={compareStats1.requests}
+                    period2Value={compareStats2.requests}
+                    formatter={(v) => v.toLocaleString()}
+                    period1Label={period1Label}
+                    period2Label={period2Label}
+                  />
+                </div>
+
+                {/* Comparison Bar Chart */}
+                {(compareStats1.tokens > 0 || compareStats2.tokens > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-white">Visual Comparison</h3>
+                      <div className="flex items-center gap-3 text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-blue-400" />
+                          <span className="text-white/50">{period1Label}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                          <span className="text-white/50">{period2Label}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={[
+                            {
+                              name: "Cost ($)",
+                              period1: compareStats1.cost,
+                              period2: compareStats2.cost,
+                            },
+                            {
+                              name: "Tokens (K)",
+                              period1: compareStats1.tokens / 1000,
+                              period2: compareStats2.tokens / 1000,
+                            },
+                            {
+                              name: "Requests",
+                              period1: compareStats1.requests,
+                              period2: compareStats2.requests,
+                            },
+                          ]}
+                          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                        >
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }}
+                            axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip content={<ChartTooltip />} />
+                          <Bar
+                            dataKey="period1"
+                            name={period1Label}
+                            fill="#60a5fa"
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Bar
+                            dataKey="period2"
+                            name={period2Label}
+                            fill="#34d399"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Summary */}
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <h3 className="text-sm font-semibold text-white mb-3">Summary</h3>
+                  <div className="space-y-2 text-sm">
+                    {compareStats1.cost !== compareStats2.cost && (
+                      <p className="text-white/70">
+                        {compareStats2.cost > compareStats1.cost ? (
+                          <>
+                            Cost <span className="text-red-400">increased</span> by{" "}
+                            <span className="font-medium text-white">
+                              {formatCurrency(compareStats2.cost - compareStats1.cost)}
+                            </span>{" "}
+                            (
+                            {(
+                              ((compareStats2.cost - compareStats1.cost) /
+                                Math.max(compareStats1.cost, 0.01)) *
+                              100
+                            ).toFixed(0)}
+                            %)
+                          </>
+                        ) : (
+                          <>
+                            Cost <span className="text-emerald-400">decreased</span> by{" "}
+                            <span className="font-medium text-white">
+                              {formatCurrency(compareStats1.cost - compareStats2.cost)}
+                            </span>{" "}
+                            (
+                            {(
+                              ((compareStats1.cost - compareStats2.cost) /
+                                Math.max(compareStats1.cost, 0.01)) *
+                              100
+                            ).toFixed(0)}
+                            %)
+                          </>
+                        )}
+                      </p>
+                    )}
+                    {compareStats1.tokens !== compareStats2.tokens && (
+                      <p className="text-white/70">
+                        Token usage{" "}
+                        {compareStats2.tokens > compareStats1.tokens ? (
+                          <>
+                            <span className="text-amber-400">increased</span> by{" "}
+                            <span className="font-medium text-white">
+                              {formatNumber(compareStats2.tokens - compareStats1.tokens)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-emerald-400">decreased</span> by{" "}
+                            <span className="font-medium text-white">
+                              {formatNumber(compareStats1.tokens - compareStats2.tokens)}
+                            </span>
+                          </>
+                        )}
+                      </p>
+                    )}
+                    {compareStats1.requests === 0 && compareStats2.requests === 0 && (
+                      <p className="text-white/50">No data available for the selected periods</p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
-    </motion.div>
+    </div>
   );
 }
