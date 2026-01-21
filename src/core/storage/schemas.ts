@@ -961,9 +961,17 @@ export const SettingsSchema = z.object({
   advancedSettings: z
     .object({
       summarisationModelId: z.string().optional(),
-      creationHelperEnabled: z.boolean().default(false),
+      creationHelperEnabled: z.boolean().optional(),
       creationHelperModelId: z.string().optional(),
-      helpMeReplyEnabled: z.boolean().default(true),
+      creationHelperStreaming: z.boolean().optional(),
+      creationHelperImageModelId: z.string().optional(),
+      creationHelperSmartToolSelection: z.boolean().optional(),
+      creationHelperEnabledTools: z.array(z.string()).optional(),
+      helpMeReplyEnabled: z.boolean().optional(),
+      helpMeReplyModelId: z.string().optional(),
+      helpMeReplyStreaming: z.boolean().optional(),
+      helpMeReplyMaxTokens: z.number().optional(),
+      helpMeReplyStyle: z.enum(["conversational", "roleplay"]).optional(),
       manualModeContextWindow: z.number().optional(),
       embeddingMaxTokens: z.number().optional(), // 1024, 2048, or 4096
       dynamicMemory: DynamicMemorySettingsSchema.optional(),

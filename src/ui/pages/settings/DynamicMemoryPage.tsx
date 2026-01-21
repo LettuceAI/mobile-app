@@ -331,7 +331,7 @@ export function DynamicMemoryPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <main className="flex-1 px-4 pb-24 pt-4">
-        <div className="mx-auto w-full max-w-2xl space-y-4">
+        <div className="mx-auto w-full max-w-5xl space-y-4">
           {/* Info Card */}
           <div className={cn("rounded-xl border border-blue-400/20 bg-blue-400/5 p-3")}>
             <div className="flex items-start gap-2">
@@ -659,96 +659,100 @@ export function DynamicMemoryPage() {
             </motion.div>
           </AnimatePresence>
 
-          {/* Shared Settings (always visible) */}
+          {/* Shared Settings (always visible) - Desktop: Two Column Grid */}
           {isAnyEnabled && (
             <div className="space-y-4 pt-2">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
                 Shared Settings
               </h3>
 
-              {/* Summarisation Model */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
-                    <Cpu className="h-4 w-4 text-amber-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-white">Summarisation Model</h3>
-                </div>
-
-                {models.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowModelMenu(true)}
-                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
-                  >
-                    <div className="flex items-center gap-2">
-                      {summarisationModelId ? (
-                        getProviderIcon(selectedSummarisationModel?.providerId || "")
-                      ) : (
-                        <Cpu className="h-5 w-5 text-white/40" />
-                      )}
-                      <span
-                        className={`text-sm ${summarisationModelId ? "text-white" : "text-white/50"}`}
-                      >
-                        {summarisationModelId
-                          ? selectedSummarisationModel?.displayName || "Selected Model"
-                          : "Use global default model"}
-                      </span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Left: Summarisation Model */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-1.5">
+                      <Cpu className="h-4 w-4 text-amber-400" />
                     </div>
-                    <ChevronDown className="h-4 w-4 text-white/40" />
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                    <p className="text-sm text-white/50">No models available</p>
+                    <h3 className="text-sm font-semibold text-white">Summarisation Model</h3>
                   </div>
-                )}
-                <p className="text-xs text-white/50">Used for conversation summarization</p>
-              </div>
 
-              {/* Token Capacity (v2 only) */}
-              {modelVersion === "v2" && (
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-sm font-medium text-white">Token Capacity</span>
-                    <span
-                      className={cn(
-                        "rounded-md border border-white/10 bg-white/10 px-2 py-1",
-                        typography.caption.size,
-                        "text-white/70",
-                      )}
+                  {models.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowModelMenu(true)}
+                      className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
                     >
-                      {embeddingMaxTokens} tokens
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-white/45 mb-3">
-                    Higher values = better memory for longer conversations
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[1024, 2048, 4096].map((val) => (
-                      <button
-                        key={val}
-                        onClick={() => handleEmbeddingMaxTokensChange(val)}
-                        className={cn(
-                          "px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                          embeddingMaxTokens === val
-                            ? "bg-blue-500 text-white"
-                            : "border border-white/10 bg-white/5 text-white/70 hover:border-white/20",
+                      <div className="flex items-center gap-2">
+                        {summarisationModelId ? (
+                          getProviderIcon(selectedSummarisationModel?.providerId || "")
+                        ) : (
+                          <Cpu className="h-5 w-5 text-white/40" />
                         )}
-                      >
-                        {val / 1024}K
-                      </button>
-                    ))}
-                  </div>
+                        <span
+                          className={`text-sm ${summarisationModelId ? "text-white" : "text-white/50"}`}
+                        >
+                          {summarisationModelId
+                            ? selectedSummarisationModel?.displayName || "Selected Model"
+                            : "Use global default model"}
+                        </span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-white/40" />
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                      <p className="text-sm text-white/50">No models available</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-white/50">Used for conversation summarization</p>
                 </div>
-              )}
 
-              {/* Model info */}
-              {modelVersion && (
-                <div className="text-xs text-white/40 px-1">
-                  Installed model: {modelVersion === "v2" ? "v2" : "v1"} ({embeddingMaxTokens} max
-                  tokens)
+                {/* Right: Token Capacity (v2 only) or Model Info */}
+                <div className="space-y-3">
+                  {modelVersion === "v2" && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-sm font-medium text-white">Token Capacity</span>
+                        <span
+                          className={cn(
+                            "rounded-md border border-white/10 bg-white/10 px-2 py-1",
+                            typography.caption.size,
+                            "text-white/70",
+                          )}
+                        >
+                          {embeddingMaxTokens} tokens
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/45 mb-3">
+                        Higher values = better memory for longer conversations
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[1024, 2048, 4096].map((val) => (
+                          <button
+                            key={val}
+                            onClick={() => handleEmbeddingMaxTokensChange(val)}
+                            className={cn(
+                              "px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                              embeddingMaxTokens === val
+                                ? "bg-blue-500 text-white"
+                                : "border border-white/10 bg-white/5 text-white/70 hover:border-white/20",
+                            )}
+                          >
+                            {val / 1024}K
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Model info */}
+                  {modelVersion && (
+                    <div className="text-xs text-white/40 px-1">
+                      Installed model: {modelVersion === "v2" ? "v2" : "v1"} ({embeddingMaxTokens}{" "}
+                      max tokens)
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -759,7 +763,7 @@ export function DynamicMemoryPage() {
                 Model Management
               </h3>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <button
                   onClick={() => navigate("/settings/embedding-test")}
                   className={cn(
