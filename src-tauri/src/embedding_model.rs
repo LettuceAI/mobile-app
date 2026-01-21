@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex as TokioMutex;
 
 use crate::chat_manager::prompts;
-use crate::utils::log_warn;
+use crate::utils::{log_error, log_info, log_warn};
 
 // V1 model files (legacy - 512 token max)
 const MODEL_FILES_V1: [&str; 3] = [
@@ -189,12 +189,54 @@ fn cleanup_partial_files(
 
 use tauri::Emitter;
 
+fn describe_path(path: &std::path::Path) -> String {
+    match fs::metadata(path) {
+        Ok(meta) => format!(
+            "exists=true file={} dir={} size_bytes={}",
+            meta.is_file(),
+            meta.is_dir(),
+            meta.len()
+        ),
+        Err(err) => format!("exists=false error={}", err),
+    }
+}
+
+fn log_model_file_status(app: &AppHandle, component: &str, model_dir: &PathBuf) {
+    for filename in MODEL_FILES_V1.iter() {
+        let path = model_dir.join(filename);
+        log_info(
+            app,
+            component,
+            format!("model file v1 {}: {}", filename, describe_path(&path)),
+        );
+    }
+
+    for filename in MODEL_FILES_V2_LOCAL.iter() {
+        let path = model_dir.join(filename);
+        log_info(
+            app,
+            component,
+            format!("model file v2 {}: {}", filename, describe_path(&path)),
+        );
+    }
+}
+
 async fn download_file(
     app: &AppHandle,
     url: &str,
     dest_path: &PathBuf,
     state: Arc<TokioMutex<DownloadState>>,
 ) -> Result<(), String> {
+    log_info(
+        app,
+        "embedding_download",
+        format!(
+            "download start url={} dest={} temp={}",
+            url,
+            dest_path.display(),
+            dest_path.with_extension("tmp").display()
+        ),
+    );
     let client = reqwest::Client::new();
     let response = client
         .get(url)
@@ -203,6 +245,11 @@ async fn download_file(
         .map_err(|e| format!("Failed to start download: {}", e))?;
 
     if !response.status().is_success() {
+        log_error(
+            app,
+            "embedding_download",
+            format!("download failed status={} url={}", response.status(), url),
+        );
         return Err(format!(
             "Download failed with status: {}",
             response.status()
@@ -210,6 +257,11 @@ async fn download_file(
     }
 
     let total_size = response.content_length().unwrap_or(0);
+    log_info(
+        app,
+        "embedding_download",
+        format!("download response ok url={} total_size={}", url, total_size),
+    );
 
     {
         let mut state_lock = state.lock().await;
@@ -264,6 +316,17 @@ async fn download_file(
         .await
         .map_err(|e| format!("Failed to rename file: {}", e))?;
 
+    let file_status = describe_path(dest_path);
+    log_info(
+        app,
+        "embedding_download",
+        format!(
+            "download complete dest={} {}",
+            dest_path.display(),
+            file_status
+        ),
+    );
+
     Ok(())
 }
 
@@ -290,6 +353,15 @@ pub async fn start_embedding_download(
         ),
     };
 
+    log_info(
+        &app,
+        "embedding_download",
+        format!(
+            "download init version={:?} base_url={} remote_files={:?} local_files={:?}",
+            target_version, base_url, remote_files, local_files
+        ),
+    );
+
     {
         let mut state = DOWNLOAD_STATE.lock().await;
         if state.is_downloading {
@@ -312,8 +384,22 @@ pub async fn start_embedding_download(
     }
 
     let model_dir = embedding_model_dir(&app)?;
+    log_info(
+        &app,
+        "embedding_download",
+        format!(
+            "model_dir={} {}",
+            model_dir.display(),
+            describe_path(&model_dir)
+        ),
+    );
     fs::create_dir_all(&model_dir)
         .map_err(|e| format!("Failed to create model directory: {}", e))?;
+    log_info(
+        &app,
+        "embedding_download",
+        format!("model_dir ready {}", model_dir.display()),
+    );
 
     let state = DOWNLOAD_STATE.clone();
 
@@ -331,9 +417,24 @@ pub async fn start_embedding_download(
             let _ = app.emit("embedding_download_progress", &state_lock.progress);
         }
 
+        log_info(
+            &app,
+            "embedding_download",
+            format!(
+                "download file {} of {}: {}",
+                file_index + 1,
+                remote_files.len(),
+                local_filename
+            ),
+        );
         match download_file(&app, &url, &dest_path, state.clone()).await {
             Ok(_) => {}
             Err(e) => {
+                log_error(
+                    &app,
+                    "embedding_download",
+                    format!("download failed file={} error={}", local_filename, e),
+                );
                 let _ = cleanup_partial_files(&model_dir, Some(&target_version));
                 let mut state_lock = state.lock().await;
                 state_lock.is_downloading = false;
@@ -350,6 +451,8 @@ pub async fn start_embedding_download(
         state_lock.progress.status = "completed".to_string();
         let _ = app.emit("embedding_download_progress", &state_lock.progress);
     }
+
+    log_model_file_status(&app, "embedding_download", &model_dir);
 
     if let Err(err) = prompts::ensure_dynamic_memory_templates(&app) {
         log_warn(
@@ -378,6 +481,8 @@ pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
         state.cancel_requested = true;
     }
 
+    log_info(&app, "embedding_download", "cancel requested");
+
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     let model_dir = embedding_model_dir(&app)?;
@@ -405,6 +510,11 @@ pub async fn delete_embedding_model(app: AppHandle) -> Result<(), String> {
     reset_download_state().await;
 
     let model_dir = embedding_model_dir(&app)?;
+    log_info(
+        &app,
+        "embedding_download",
+        format!("delete embedding model files in {}", model_dir.display()),
+    );
     cleanup_partial_files(&model_dir, None)?;
 
     Ok(())
@@ -426,44 +536,101 @@ async fn ensure_ort_init() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>, String> {
+    let text_len = text.len();
     crate::utils::log_info(
         &app,
         "embedding_debug",
-        format!("computing embedding for text='{}'", text),
+        format!(
+            "computing embedding for text_len_bytes={} text='{}'",
+            text_len, text
+        ),
     );
 
     let model_dir = embedding_model_dir(&app)?;
+    log_info(
+        &app,
+        "embedding_debug",
+        format!(
+            "model_dir={} {}",
+            model_dir.display(),
+            describe_path(&model_dir)
+        ),
+    );
 
-    let (model_path, max_seq_length) = match detect_model_version(&app)? {
+    let detected_version = detect_model_version(&app)?;
+    log_info(
+        &app,
+        "embedding_debug",
+        format!("detected_model_version={:?}", detected_version),
+    );
+
+    let (model_path, max_seq_length, version_label) = match detected_version {
         Some(EmbeddingModelVersion::V2) => {
-            let user_max_tokens = crate::storage_manager::settings::internal_read_settings(&app)
-                .ok()
-                .flatten()
-                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-                .and_then(|json| {
-                    json.pointer("/advancedSettings/embeddingMaxTokens")?
-                        .as_u64()
-                })
-                .map(|t| t as usize)
-                .unwrap_or(MAX_SEQ_LENGTH_V2);
+            let settings_max_tokens =
+                crate::storage_manager::settings::internal_read_settings(&app)
+                    .ok()
+                    .flatten()
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                    .and_then(|json| {
+                        json.pointer("/advancedSettings/embeddingMaxTokens")?
+                            .as_u64()
+                    })
+                    .map(|t| t as usize);
 
-            // Clamp to valid range [512, 4096]
-            let clamped = user_max_tokens.clamp(512, MAX_SEQ_LENGTH_V2);
+            let resolved_max_tokens = settings_max_tokens.unwrap_or(MAX_SEQ_LENGTH_V2);
+            let clamped = resolved_max_tokens.clamp(512, MAX_SEQ_LENGTH_V2);
 
-            (model_dir.join("v2-model.onnx"), clamped)
+            log_info(
+                &app,
+                "embedding_debug",
+                format!(
+                    "embedding max tokens settings={:?} resolved={} clamped={}",
+                    settings_max_tokens, resolved_max_tokens, clamped
+                ),
+            );
+
+            (model_dir.join("v2-model.onnx"), clamped, "v2")
         }
         Some(EmbeddingModelVersion::V1) => (
             model_dir.join("lettuce-emb-512d-kd-v1.onnx"),
             MAX_SEQ_LENGTH_V1,
+            "v1",
         ),
         None => {
+            log_error(
+                &app,
+                "embedding_debug",
+                "model files not found; compute_embedding aborted",
+            );
             return Err("Model files not found. Please download the model first.".to_string());
         }
     };
 
     let tokenizer_path = model_dir.join("tokenizer.json");
+    log_info(
+        &app,
+        "embedding_debug",
+        format!(
+            "embedding model version={} model_path={} tokenizer_path={}",
+            version_label,
+            model_path.display(),
+            tokenizer_path.display()
+        ),
+    );
+    log_model_file_status(&app, "embedding_debug", &model_dir);
+    log_info(
+        &app,
+        "embedding_debug",
+        format!("model_path status {}", describe_path(&model_path)),
+    );
+    log_info(
+        &app,
+        "embedding_debug",
+        format!("tokenizer_path status {}", describe_path(&tokenizer_path)),
+    );
 
     ensure_ort_init().await?;
+    log_info(&app, "embedding_debug", "ort initialized");
 
     let mut session = Session::builder()
         .map_err(|e| format!("Failed to create session builder: {}", e))?
@@ -471,9 +638,15 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
         .map_err(|e| format!("Failed to set optimization level: {}", e))?
         .commit_from_file(&model_path)
         .map_err(|e| format!("Failed to load model: {}", e))?;
+    log_info(
+        &app,
+        "embedding_debug",
+        format!("onnx session ready model_path={}", model_path.display()),
+    );
 
     let tokenizer = Tokenizer::from_file(&tokenizer_path)
         .map_err(|e| format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e))?;
+    log_info(&app, "embedding_debug", "tokenizer loaded");
 
     // Tokenize input
     let encoding = tokenizer
@@ -482,10 +655,27 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
 
     let input_ids = encoding.get_ids();
     let attention_mask = encoding.get_attention_mask();
+    log_info(
+        &app,
+        "embedding_debug",
+        format!(
+            "tokenization complete input_ids_len={} attention_mask_len={}",
+            input_ids.len(),
+            attention_mask.len()
+        ),
+    );
 
     let seq_len = input_ids.len().min(max_seq_length);
     let input_ids = &input_ids[..seq_len];
     let attention_mask = &attention_mask[..seq_len];
+    log_info(
+        &app,
+        "embedding_debug",
+        format!(
+            "sequence length seq_len={} max_seq_length={}",
+            seq_len, max_seq_length
+        ),
+    );
 
     // Convert to i64 arrays
     let input_ids_i64: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
@@ -498,6 +688,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     let attention_mask_value = Value::from_array(([1, seq_len], attention_mask_i64))
         .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
 
+    log_info(&app, "embedding_debug", "running embedding inference");
     let outputs = session
         .run(inputs![
             "input_ids" => input_ids_value,
@@ -505,32 +696,69 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
         ])
         .map_err(|e| format!("Inference failed: {}", e))?;
 
+    log_info(
+        &app,
+        "embedding_debug",
+        format!("inference complete outputs_len={}", outputs.len()),
+    );
+
     let embedding_value = &outputs[0];
     let (_, embedding_slice) = embedding_value
         .try_extract_tensor::<f32>()
         .map_err(|e| format!("Failed to extract embedding: {}", e))?;
 
     let embedding_vec: Vec<f32> = embedding_slice.to_vec();
+    log_info(
+        &app,
+        "embedding_debug",
+        format!("embedding extracted len={}", embedding_vec.len()),
+    );
 
     match embedding_vec.len() {
         len if len == EMBEDDING_DIM => Ok(embedding_vec),
         len if len > EMBEDDING_DIM && len % EMBEDDING_DIM == 0 => {
+            log_info(
+                &app,
+                "embedding_debug",
+                format!(
+                    "embedding dim multiple detected len={} using first {}",
+                    len, EMBEDDING_DIM
+                ),
+            );
             Ok(embedding_vec[..EMBEDDING_DIM].to_vec())
         }
-        len => Err(format!(
-            "Unexpected embedding dimension: {} (expected {} or multiple thereof)",
-            len, EMBEDDING_DIM
-        )),
+        len => {
+            log_error(
+                &app,
+                "embedding_debug",
+                format!(
+                    "unexpected embedding dimension len={} expected={}",
+                    len, EMBEDDING_DIM
+                ),
+            );
+            Err(format!(
+                "Unexpected embedding dimension: {} (expected {} or multiple thereof)",
+                len, EMBEDDING_DIM
+            ))
+        }
     }
 }
 
 #[tauri::command]
 pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
-    if detect_model_version(&app)?.is_none() {
+    let detected_version = detect_model_version(&app)?;
+    log_info(
+        &app,
+        "embedding_init",
+        format!("initialize embedding model version={:?}", detected_version),
+    );
+    if detected_version.is_none() {
+        log_error(&app, "embedding_init", "model files not found");
         return Err("Model files not found. Please download the model first.".to_string());
     }
 
     ensure_ort_init().await?;
+    log_info(&app, "embedding_init", "ort initialized");
 
     Ok(())
 }
@@ -588,7 +816,12 @@ pub struct ScoreComparison {
 
 #[tauri::command]
 pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
-    println!("Starting comprehensive embedding test...");
+    log_info(
+        &app,
+        "embedding_test",
+        "starting embedding test",
+    );
+    println!("Starting embedding test...");
 
     // Test cases organized by category
     let test_cases: Vec<(&str, &str, &str, &str, f32, &str)> = vec![
@@ -666,19 +899,39 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
     let mut embedding_dim = 0;
 
     for (name, text_a, text_b, category, threshold, expected_desc) in test_cases {
+        log_info(&app, "embedding_test", format!("testing {}", name));
         println!("Testing: {}", name);
 
         let emb_a = compute_embedding(app.clone(), text_a.to_string())
             .await
-            .map_err(|e| format!("Failed to embed '{}': {}", name, e))?;
+            .map_err(|e| {
+                log_error(
+                    &app,
+                    "embedding_test",
+                    format!("failed to embed {} text_a error={}", name, e),
+                );
+                format!("Failed to embed '{}': {}", name, e)
+            })?;
 
         if embedding_dim == 0 {
             embedding_dim = emb_a.len();
+            log_info(
+                &app,
+                "embedding_test",
+                format!("embedding dimension set to {}", embedding_dim),
+            );
         }
 
         let emb_b = compute_embedding(app.clone(), text_b.to_string())
             .await
-            .map_err(|e| format!("Failed to embed '{}': {}", name, e))?;
+            .map_err(|e| {
+                log_error(
+                    &app,
+                    "embedding_test",
+                    format!("failed to embed {} text_b error={}", name, e),
+                );
+                format!("Failed to embed '{}': {}", name, e)
+            })?;
 
         let similarity = cosine_similarity(&emb_a, &emb_b);
 
@@ -691,6 +944,15 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
         if !passed {
             all_passed = false;
         }
+
+        log_info(
+            &app,
+            "embedding_test",
+            format!(
+                "result name={} category={} similarity={} threshold={} passed={}",
+                name, category, similarity, threshold, passed
+            ),
+        );
 
         scores.push(ScoreComparison {
             pair_name: name.to_string(),
@@ -708,6 +970,14 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
 
     let passed_count = scores.iter().filter(|s| s.passed).count();
     let total_count = scores.len();
+    log_info(
+        &app,
+        "embedding_test",
+        format!(
+            "embedding test complete passed={} total={} all_passed={}",
+            passed_count, total_count, all_passed
+        ),
+    );
 
     let message = if all_passed {
         format!(
@@ -742,6 +1012,16 @@ pub async fn compare_custom_texts(
     if text_a.trim().is_empty() || text_b.trim().is_empty() {
         return Err("Both texts must be non-empty".to_string());
     }
+
+    log_info(
+        &app,
+        "embedding_test",
+        format!(
+            "compare custom texts len_a={} len_b={}",
+            text_a.len(),
+            text_b.len()
+        ),
+    );
 
     let emb_a = compute_embedding(app.clone(), text_a)
         .await
