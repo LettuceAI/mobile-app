@@ -10,7 +10,7 @@ import {
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronDown, Loader2, Sparkles, Image, RefreshCw, PenLine, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { listen } from "@tauri-apps/api/event";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 import { storageBridge } from "../../../core/storage/files";
 import {
@@ -886,15 +886,69 @@ export function GroupChatPage() {
       setGeneratingReply(true);
       setShowResultMenu(true);
 
+      const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      let unlistenNormalized: UnlistenFn | null = null;
+      let streamingText = "";
+      let hasStartedStreaming = false;
+
+      // Timeout to clear loading state if streaming doesn't start within 5 seconds
+      const loadingTimeout = setTimeout(() => {
+        if (!hasStartedStreaming) {
+          setGeneratingReply(false);
+        }
+      }, 5000);
+
       try {
+        // Set up streaming listener
+        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          try {
+            const payload =
+              typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+
+            if (payload && payload.type === "delta" && payload.data?.text) {
+              // Clear loading state on first streaming chunk
+              if (!hasStartedStreaming) {
+                hasStartedStreaming = true;
+                setGeneratingReply(false);
+                clearTimeout(loadingTimeout);
+              }
+              streamingText += String(payload.data.text);
+              setGeneratedReply(streamingText);
+            } else if (payload && payload.type === "error" && payload.data?.message) {
+              setHelpMeReplyError(String(payload.data.message));
+              setGeneratingReply(false);
+              clearTimeout(loadingTimeout);
+            }
+          } catch (err) {
+            console.error("Error processing streaming event:", err);
+          }
+        });
+
         const currentDraft = mode === "enrich" && draft.trim() ? draft : undefined;
-        const result = await generateGroupChatUserReply(session.id, currentDraft);
-        setGeneratedReply(result);
+        const result = await generateGroupChatUserReply(session.id, currentDraft, requestId);
+
+        // If we didn't get streaming updates, use the final result
+        if (!streamingText.trim()) {
+          setGeneratedReply(result);
+        }
+
+        // Clear loading state once API call completes (for non-streaming case)
+        if (!hasStartedStreaming) {
+          setGeneratingReply(false);
+          clearTimeout(loadingTimeout);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setHelpMeReplyError(message);
       } finally {
-        setGeneratingReply(false);
+        // Only clear loading if streaming hasn't started yet
+        if (!hasStartedStreaming) {
+          setGeneratingReply(false);
+        }
+        clearTimeout(loadingTimeout);
+        if (unlistenNormalized) {
+          unlistenNormalized();
+        }
       }
     },
     [session?.id, draft],
@@ -1147,13 +1201,13 @@ export function GroupChatPage() {
         title="Suggested Reply"
       >
         <div className="space-y-4">
-          {generatingReply ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-white/50" />
-            </div>
-          ) : helpMeReplyError ? (
+          {helpMeReplyError ? (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
               <p className="text-red-400 text-sm">{helpMeReplyError}</p>
+            </div>
+          ) : generatingReply && !generatedReply ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-white/50" />
             </div>
           ) : generatedReply ? (
             <div

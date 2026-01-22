@@ -159,6 +159,39 @@ Output ONLY the message text - no quotes, no \"{{persona.name}}:\", no roleplay 
         .to_string()
 }
 
+pub fn default_help_me_reply_conversational_prompt() -> String {
+    "You are helping the user write their next message in this casual conversation.
+
+# The Person You're Talking To
+Name: {{char.name}}
+{{char.desc}}
+
+# Your Identity (The User)
+Name: {{persona.name}}
+{{persona.desc}}
+
+Based on the conversation history, generate a natural response that {{persona.name}} would say to {{char.name}}.
+
+Guidelines:
+- Write as {{persona.name}} using a conversational, natural tone
+- Match the casual style and energy of the conversation
+- Be authentic and genuine - avoid overly formal or robotic language
+- React naturally to what {{char.name}} just said
+- Stay true to {{persona.name}}'s personality while keeping it conversational
+- Write an appropriate length response - natural conversation flow is key
+- Focus on dialogue and natural reactions rather than detailed descriptions
+
+{{#if current_draft}}
+The user has started writing: \"{{current_draft}}\"
+Continue and expand on this thought naturally, maintaining a conversational tone. Keep their original intent but make it flow better and feel more natural.
+{{else}}
+Generate a fresh, natural response based on the conversation context.
+{{/if}}
+
+Output ONLY the message text - no quotes, no \"{{persona.name}}:\", keep it conversational and direct."
+        .to_string()
+}
+
 pub fn default_group_chat_system_prompt_template() -> String {
     "You are {{char.name}}, engaging in a group conversation.
 

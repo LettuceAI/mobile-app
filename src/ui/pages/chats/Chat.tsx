@@ -47,6 +47,7 @@ import {
   SETTINGS_UPDATED_EVENT,
   SESSION_UPDATED_EVENT,
 } from "../../../core/storage";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { playAccessibilitySound } from "../../../core/utils/accessibilityAudio";
 
 import { useChatController } from "./hooks/useChatController";
@@ -874,15 +875,69 @@ export function ChatConversationPage() {
       setGeneratingReply(true);
       setShowResultMenu(true);
 
+      const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      let unlistenNormalized: UnlistenFn | null = null;
+      let streamingText = "";
+      let hasStartedStreaming = false;
+
+      // Timeout to clear loading state if streaming doesn't start within 5 seconds
+      const loadingTimeout = setTimeout(() => {
+        if (!hasStartedStreaming) {
+          setGeneratingReply(false);
+        }
+      }, 5000);
+
       try {
+        // Set up streaming listener
+        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          try {
+            const payload =
+              typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+
+            if (payload && payload.type === "delta" && payload.data?.text) {
+              // Clear loading state on first streaming chunk
+              if (!hasStartedStreaming) {
+                hasStartedStreaming = true;
+                setGeneratingReply(false);
+                clearTimeout(loadingTimeout);
+              }
+              streamingText += String(payload.data.text);
+              setGeneratedReply(streamingText);
+            } else if (payload && payload.type === "error" && payload.data?.message) {
+              setHelpMeReplyError(String(payload.data.message));
+              setGeneratingReply(false);
+              clearTimeout(loadingTimeout);
+            }
+          } catch (err) {
+            console.error("Error processing streaming event:", err);
+          }
+        });
+
         const currentDraft = mode === "enrich" && draft.trim() ? draft : undefined;
-        const result = await generateUserReply(session.id, currentDraft);
-        setGeneratedReply(result);
+        const result = await generateUserReply(session.id, currentDraft, requestId);
+
+        // If we didn't get streaming updates, use the final result
+        if (!streamingText.trim()) {
+          setGeneratedReply(result);
+        }
+
+        // Clear loading state once API call completes (for non-streaming case)
+        if (!hasStartedStreaming) {
+          setGeneratingReply(false);
+          clearTimeout(loadingTimeout);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setHelpMeReplyError(message);
       } finally {
-        setGeneratingReply(false);
+        // Only clear loading if streaming hasn't started yet
+        if (!hasStartedStreaming) {
+          setGeneratingReply(false);
+        }
+        clearTimeout(loadingTimeout);
+        if (unlistenNormalized) {
+          unlistenNormalized();
+        }
       }
     },
     [session?.id, draft],
@@ -1452,13 +1507,13 @@ export function ChatConversationPage() {
         title="Suggested Reply"
       >
         <div className="space-y-4">
-          {generatingReply ? (
-            <div className="flex items-center justify-center py-8">
-              <LoadingSpinner />
-            </div>
-          ) : helpMeReplyError ? (
+          {helpMeReplyError ? (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
               <p className="text-red-400 text-sm">{helpMeReplyError}</p>
+            </div>
+          ) : generatingReply && !generatedReply ? (
+            <div className="flex items-center justify-center py-8">
+              <LoadingSpinner />
             </div>
           ) : generatedReply ? (
             <div
@@ -1472,6 +1527,7 @@ export function ChatConversationPage() {
             </div>
           ) : null}
 
+          {/* Always show buttons, but with appropriate disabled states */}
           <div className="flex gap-3">
             <button
               onClick={() => handleHelpMeReply(draft.trim() ? "enrich" : "new")}

@@ -110,6 +110,16 @@ pub struct AdvancedSettings {
     #[serde(default)]
     pub creation_helper_model_id: Option<String>,
     #[serde(default)]
+    pub help_me_reply_enabled: Option<bool>,
+    #[serde(default)]
+    pub help_me_reply_model_id: Option<String>,
+    #[serde(default)]
+    pub help_me_reply_streaming: Option<bool>,
+    #[serde(default)]
+    pub help_me_reply_max_tokens: Option<u32>,
+    #[serde(default)]
+    pub help_me_reply_style: Option<String>,
+    #[serde(default)]
     pub dynamic_memory: Option<DynamicMemorySettings>,
     #[serde(default)]
     pub group_dynamic_memory: Option<DynamicMemorySettings>,

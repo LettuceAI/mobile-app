@@ -11,12 +11,15 @@ pub const APP_DEFAULT_TEMPLATE_ID: &str = "prompt_app_default";
 pub const APP_DYNAMIC_SUMMARY_TEMPLATE_ID: &str = "prompt_app_dynamic_summary";
 pub const APP_DYNAMIC_MEMORY_TEMPLATE_ID: &str = "prompt_app_dynamic_memory";
 pub const APP_HELP_ME_REPLY_TEMPLATE_ID: &str = "prompt_app_help_me_reply";
+pub const APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID: &str =
+    "prompt_app_help_me_reply_conversational";
 pub const APP_GROUP_CHAT_TEMPLATE_ID: &str = "prompt_app_group_chat";
 pub const APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID: &str = "prompt_app_group_chat_roleplay";
 const APP_DEFAULT_TEMPLATE_NAME: &str = "App Default";
 const APP_DYNAMIC_SUMMARY_TEMPLATE_NAME: &str = "Dynamic Memory: Summarizer";
 const APP_DYNAMIC_MEMORY_TEMPLATE_NAME: &str = "Dynamic Memory: Memory Manager";
 const APP_HELP_ME_REPLY_TEMPLATE_NAME: &str = "Reply Helper";
+const APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_NAME: &str = "Reply Helper (Conversational)";
 
 /// Get required variables for a specific template ID
 pub fn get_required_variables(template_id: &str) -> Vec<String> {
@@ -32,6 +35,13 @@ pub fn get_required_variables(template_id: &str) -> Vec<String> {
         APP_DYNAMIC_SUMMARY_TEMPLATE_ID => vec!["{{prev_summary}}".to_string()],
         APP_DYNAMIC_MEMORY_TEMPLATE_ID => vec!["{{max_entries}}".to_string()],
         APP_HELP_ME_REPLY_TEMPLATE_ID => vec![
+            "{{char.name}}".to_string(),
+            "{{char.desc}}".to_string(),
+            "{{persona.name}}".to_string(),
+            "{{persona.desc}}".to_string(),
+            "{{current_draft}}".to_string(),
+        ],
+        APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID => vec![
             "{{char.name}}".to_string(),
             "{{char.desc}}".to_string(),
             "{{persona.name}}".to_string(),
@@ -315,6 +325,7 @@ pub fn is_app_default_template(id: &str) -> bool {
         || id == APP_DYNAMIC_SUMMARY_TEMPLATE_ID
         || id == APP_DYNAMIC_MEMORY_TEMPLATE_ID
         || id == APP_HELP_ME_REPLY_TEMPLATE_ID
+        || id == APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID
 }
 
 pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
@@ -366,6 +377,23 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     }
+
+    // Also ensure conversational template exists
+    if get_template(app, APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID)?.is_none() {
+        let conn = open_db(app)?;
+        let now = now();
+        conn.execute(
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            params![
+                APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID,
+                APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_NAME,
+                scope_to_str(&PromptScope::AppWide),
+                get_base_prompt(PromptType::HelpMeReplyConversationalPrompt),
+                now
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -380,11 +408,36 @@ pub fn reset_help_me_reply_template(app: &AppHandle) -> Result<SystemPromptTempl
     )
 }
 
+pub fn reset_help_me_reply_conversational_template(
+    app: &AppHandle,
+) -> Result<SystemPromptTemplate, String> {
+    update_template(
+        app,
+        APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID.to_string(),
+        None,
+        None,
+        None,
+        Some(get_base_prompt(PromptType::HelpMeReplyConversationalPrompt)),
+    )
+}
+
 /// Get the Help Me Reply template from DB, falling back to default if not found
-pub fn get_help_me_reply_prompt(app: &AppHandle) -> String {
-    match get_template(app, APP_HELP_ME_REPLY_TEMPLATE_ID) {
+pub fn get_help_me_reply_prompt(app: &AppHandle, style: &str) -> String {
+    let template_id = if style == "conversational" {
+        APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID
+    } else {
+        APP_HELP_ME_REPLY_TEMPLATE_ID
+    };
+
+    let prompt_type = if style == "conversational" {
+        PromptType::HelpMeReplyConversationalPrompt
+    } else {
+        PromptType::HelpMeReplyPrompt
+    };
+
+    match get_template(app, template_id) {
         Ok(Some(template)) => template.content,
-        _ => get_base_prompt(PromptType::HelpMeReplyPrompt),
+        _ => get_base_prompt(prompt_type),
     }
 }
 

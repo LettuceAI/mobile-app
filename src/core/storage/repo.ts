@@ -740,13 +740,18 @@ export async function getEmbeddingModelInfo(): Promise<{
   return storageBridge.getEmbeddingModelInfo();
 }
 
-export async function generateUserReply(sessionId: string, currentDraft?: string): Promise<string> {
-  return storageBridge.chatGenerateUserReply(sessionId, currentDraft);
+export async function generateUserReply(
+  sessionId: string,
+  currentDraft?: string,
+  requestId?: string,
+): Promise<string> {
+  return storageBridge.chatGenerateUserReply(sessionId, currentDraft, requestId);
 }
 
 export async function generateGroupChatUserReply(
   sessionId: string,
   currentDraft?: string,
+  requestId?: string,
 ): Promise<string> {
-  return storageBridge.groupChatGenerateUserReply(sessionId, currentDraft);
+  return storageBridge.groupChatGenerateUserReply(sessionId, currentDraft, requestId);
 }

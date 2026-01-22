@@ -33,6 +33,7 @@ import {
   APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
   APP_DYNAMIC_MEMORY_TEMPLATE_ID,
   APP_HELP_ME_REPLY_TEMPLATE_ID,
+  APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID,
   APP_GROUP_CHAT_TEMPLATE_ID,
   APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID,
   isProtectedPromptTemplate,
@@ -253,6 +254,8 @@ export function EditPromptTemplate() {
           } else if (template.id === APP_DYNAMIC_MEMORY_TEMPLATE_ID) {
             setPromptType("memory");
           } else if (template.id === APP_HELP_ME_REPLY_TEMPLATE_ID) {
+            setPromptType("reply");
+          } else if (template.id === APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID) {
             setPromptType("reply");
           } else if (template.id === APP_GROUP_CHAT_TEMPLATE_ID) {
             setPromptType("group_chat");

@@ -2392,6 +2392,13 @@ pub fn reset_help_me_reply_template(app: AppHandle) -> Result<SystemPromptTempla
 }
 
 #[tauri::command]
+pub fn reset_help_me_reply_conversational_template(
+    app: AppHandle,
+) -> Result<SystemPromptTemplate, String> {
+    prompts::reset_help_me_reply_conversational_template(&app)
+}
+
+#[tauri::command]
 pub fn get_required_template_variables(template_id: String) -> Vec<String> {
     prompts::get_required_variables(&template_id)
 }
@@ -3684,6 +3691,7 @@ pub async fn chat_generate_user_reply(
     app: AppHandle,
     session_id: String,
     current_draft: Option<String>,
+    request_id: Option<String>,
 ) -> Result<String, String> {
     log_info(
         &app,
@@ -3697,6 +3705,13 @@ pub async fn chat_generate_user_reply(
 
     let context = ChatContext::initialize(app.clone())?;
     let settings = &context.settings;
+
+    // Check if help me reply is enabled
+    if let Some(advanced) = &settings.advanced_settings {
+        if advanced.help_me_reply_enabled == Some(false) {
+            return Err("Help Me Reply is disabled in settings".to_string());
+        }
+    }
 
     let session = match context.load_session(&session_id)? {
         Some(s) => s,
@@ -3713,16 +3728,19 @@ pub async fn chat_generate_user_reply(
         return Err("No conversation history to base reply on".to_string());
     }
 
+    // Use help me reply model if configured, otherwise fall back to default
     let model_id = settings
-        .default_model_id
+        .advanced_settings
         .as_ref()
-        .ok_or_else(|| "No default model configured".to_string())?;
+        .and_then(|advanced| advanced.help_me_reply_model_id.as_ref())
+        .or(settings.default_model_id.as_ref())
+        .ok_or_else(|| "No model configured for Help Me Reply".to_string())?;
 
     let model = settings
         .models
         .iter()
         .find(|m| &m.id == model_id)
-        .ok_or_else(|| "Default model not found".to_string())?;
+        .ok_or_else(|| "Help Me Reply model not found".to_string())?;
 
     let provider_cred = settings
         .provider_credentials
@@ -3732,7 +3750,29 @@ pub async fn chat_generate_user_reply(
 
     let api_key = resolve_api_key(&app, provider_cred, "help_me_reply")?;
 
-    let base_prompt = prompts::get_help_me_reply_prompt(&app);
+    // Get reply style from settings (default to roleplay)
+    let reply_style = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|advanced| advanced.help_me_reply_style.as_ref())
+        .map(|s| s.as_str())
+        .unwrap_or("roleplay");
+
+    let base_prompt = prompts::get_help_me_reply_prompt(&app, reply_style);
+
+    // Get max tokens from settings (default to 150)
+    let max_tokens = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|advanced| advanced.help_me_reply_max_tokens)
+        .unwrap_or(150) as u32;
+
+    // Get streaming setting (default to true)
+    let streaming_enabled = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|advanced| advanced.help_me_reply_streaming)
+        .unwrap_or(true);
 
     let char_name = &character.name;
     let char_desc = character
@@ -3799,19 +3839,19 @@ pub async fn chat_generate_user_reply(
         &api_key,
         &model.name,
         &messages_for_api,
-        None,  // system_prompt already in messages
-        0.8,   // temperature
-        1.0,   // top_p
-        20480, // max_tokens
-        false, // no streaming
-        None,  // request_id
-        None,  // frequency_penalty
-        None,  // presence_penalty
-        None,  // top_k
-        None,  // tool_config
-        false, // reasoning_enabled
-        None,  // reasoning_effort
-        None,  // reasoning_budget
+        None,               // system_prompt already in messages
+        0.8,                // temperature
+        1.0,                // top_p
+        max_tokens,         // max_tokens from settings
+        streaming_enabled,  // streaming from settings
+        request_id.clone(), // request_id for streaming
+        None,               // frequency_penalty
+        None,               // presence_penalty
+        None,               // top_k
+        None,               // tool_config
+        false,              // reasoning_enabled
+        None,               // reasoning_effort
+        None,               // reasoning_budget
     );
 
     log_info(
@@ -3827,8 +3867,8 @@ pub async fn chat_generate_user_reply(
         query: None,
         body: Some(built.body),
         timeout_ms: Some(60_000),
-        stream: Some(false),
-        request_id: None,
+        stream: Some(streaming_enabled),
+        request_id: request_id.clone(),
         provider_id: Some(provider_cred.provider_id.clone()),
     };
 

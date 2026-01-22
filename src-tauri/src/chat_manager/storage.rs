@@ -22,6 +22,7 @@ pub enum PromptType {
     DynamicMemoryPrompt,
     DynamicSummaryPrompt,
     HelpMeReplyPrompt,
+    HelpMeReplyConversationalPrompt,
     GroupChatPrompt,
     GroupChatRoleplayPrompt,
 }
@@ -32,6 +33,9 @@ pub fn get_base_prompt(prompt_type: PromptType) -> String {
         PromptType::DynamicMemoryPrompt => prompt_engine::default_dynamic_memory_prompt(),
         PromptType::DynamicSummaryPrompt => prompt_engine::default_dynamic_summary_prompt(),
         PromptType::HelpMeReplyPrompt => prompt_engine::default_help_me_reply_prompt(),
+        PromptType::HelpMeReplyConversationalPrompt => {
+            prompt_engine::default_help_me_reply_conversational_prompt()
+        }
         PromptType::GroupChatPrompt => prompt_engine::default_group_chat_system_prompt_template(),
         PromptType::GroupChatRoleplayPrompt => {
             prompt_engine::default_group_chat_roleplay_prompt_template()
@@ -82,6 +86,11 @@ fn default_settings() -> Settings {
             summarisation_model_id: None,
             creation_helper_enabled: None,
             creation_helper_model_id: None,
+            help_me_reply_enabled: None,
+            help_me_reply_model_id: None,
+            help_me_reply_streaming: None,
+            help_me_reply_max_tokens: None,
+            help_me_reply_style: None,
             dynamic_memory: None,
             group_dynamic_memory: None,
             manual_mode_context_window: None,

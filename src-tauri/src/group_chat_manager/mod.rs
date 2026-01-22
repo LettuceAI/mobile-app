@@ -3189,6 +3189,7 @@ pub async fn group_chat_generate_user_reply(
     app: AppHandle,
     session_id: String,
     current_draft: Option<String>,
+    request_id: Option<String>,
     pool: State<'_, SwappablePool>,
 ) -> Result<String, String> {
     log_info(
@@ -3233,16 +3234,26 @@ pub async fn group_chat_generate_user_reply(
         return Err("No characters found in group session".to_string());
     }
 
+    // Check if help me reply is enabled
+    if let Some(advanced) = &settings.advanced_settings {
+        if advanced.help_me_reply_enabled == Some(false) {
+            return Err("Help Me Reply is disabled in settings".to_string());
+        }
+    }
+
+    // Use help me reply model if configured, otherwise fall back to default
     let model_id = settings
-        .default_model_id
+        .advanced_settings
         .as_ref()
-        .ok_or_else(|| "No default model configured".to_string())?;
+        .and_then(|advanced| advanced.help_me_reply_model_id.as_ref())
+        .or(settings.default_model_id.as_ref())
+        .ok_or_else(|| "No model configured for Group Help Me Reply".to_string())?;
 
     let model = settings
         .models
         .iter()
         .find(|m| &m.id == model_id)
-        .ok_or_else(|| "Default model not found".to_string())?;
+        .ok_or_else(|| "Group Help Me Reply model not found".to_string())?;
 
     let provider_cred = settings
         .provider_credentials
@@ -3252,7 +3263,29 @@ pub async fn group_chat_generate_user_reply(
 
     let api_key = resolve_api_key(&app, provider_cred, "group_help_me_reply")?;
 
-    let base_prompt = prompts::get_help_me_reply_prompt(&app);
+    // Get reply style from settings (default to roleplay)
+    let reply_style = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|advanced| advanced.help_me_reply_style.as_ref())
+        .map(|s| s.as_str())
+        .unwrap_or("roleplay");
+
+    // Get max tokens from settings (default to 150)
+    let max_tokens = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|advanced| advanced.help_me_reply_max_tokens)
+        .unwrap_or(150) as u32;
+
+    // Get streaming setting (default to true)
+    let streaming_enabled = settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|advanced| advanced.help_me_reply_streaming)
+        .unwrap_or(true);
+
+    let base_prompt = prompts::get_help_me_reply_prompt(&app, reply_style);
 
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("User");
     let persona_desc = persona.map(|p| p.description.as_str()).unwrap_or("");
@@ -3340,19 +3373,19 @@ pub async fn group_chat_generate_user_reply(
         &api_key,
         &model.name,
         &messages_for_api,
-        None,  // system prompt already handled via push_system_message
-        0.8,   // temperature
-        1.0,   // top_p
-        20480, // max_tokens
-        false, // no streaming
-        None,  // request_id
-        None,  // frequency_penalty
-        None,  // presence_penalty
-        None,  // top_k
-        None,  // tool_config
-        false, // reasoning_enabled
-        None,  // reasoning_effort
-        None,  // reasoning_budget
+        None,               // system prompt already handled via push_system_message
+        0.8,                // temperature
+        1.0,                // top_p
+        max_tokens,         // max_tokens from settings
+        streaming_enabled,  // streaming from settings
+        request_id.clone(), // request_id for streaming
+        None,               // frequency_penalty
+        None,               // presence_penalty
+        None,               // top_k
+        None,               // tool_config
+        false,              // reasoning_enabled
+        None,               // reasoning_effort
+        None,               // reasoning_budget
     );
 
     log_info(
@@ -3368,8 +3401,8 @@ pub async fn group_chat_generate_user_reply(
         query: None,
         body: Some(built.body),
         timeout_ms: Some(60_000),
-        stream: Some(false),
-        request_id: None,
+        stream: Some(streaming_enabled),
+        request_id: request_id.clone(),
         provider_id: Some(provider_cred.provider_id.clone()),
     };
 

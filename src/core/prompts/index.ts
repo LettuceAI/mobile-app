@@ -9,7 +9,7 @@ export async function createPromptTemplate(
   name: string,
   scope: PromptScope,
   targetIds: string[],
-  content: string
+  content: string,
 ): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("create_prompt_template", {
     name,
@@ -26,7 +26,7 @@ export async function updatePromptTemplate(
     scope?: PromptScope;
     targetIds?: string[];
     content?: string;
-  }
+  },
 ): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("update_prompt_template", {
     id,
@@ -73,13 +73,17 @@ export async function resetHelpMeReplyTemplate(): Promise<SystemPromptTemplate> 
   return await invoke<SystemPromptTemplate>("reset_help_me_reply_template");
 }
 
+export async function resetHelpMeReplyConversationalTemplate(): Promise<SystemPromptTemplate> {
+  return await invoke<SystemPromptTemplate>("reset_help_me_reply_conversational_template");
+}
+
 export async function getRequiredTemplateVariables(templateId: string): Promise<string[]> {
   return await invoke<string[]>("get_required_template_variables", { templateId });
 }
 
 export async function validateTemplateVariables(
   templateId: string,
-  content: string
+  content: string,
 ): Promise<void> {
   await invoke("validate_template_variables", { templateId, content });
 }

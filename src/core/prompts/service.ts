@@ -15,6 +15,7 @@ export {
   resetDynamicSummaryTemplate,
   resetDynamicMemoryTemplate,
   resetHelpMeReplyTemplate,
+  resetHelpMeReplyConversationalTemplate,
   getRequiredTemplateVariables,
   validateTemplateVariables,
 } from "./index";
@@ -23,7 +24,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export async function renderPromptPreview(
   content: string,
-  opts: { characterId: string; sessionId?: string; personaId?: string }
+  opts: { characterId: string; sessionId?: string; personaId?: string },
 ): Promise<string> {
   return await invoke<string>("render_prompt_preview", {
     content,
