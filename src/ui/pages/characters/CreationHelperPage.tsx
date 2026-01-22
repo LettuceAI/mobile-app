@@ -176,6 +176,7 @@ export function CreationHelperPage() {
     result: ToolResult;
   } | null>(null);
   const [showToolDetail, setShowToolDetail] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load entity avatars for reference lookup
@@ -244,10 +245,31 @@ export function CreationHelperPage() {
     };
   }, [session?.id]);
 
-  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (!session?.id) return;
+
+    const eventName = `api-normalized://creation-helper-${session.id}`;
+    const unlisten = listen(eventName, (event) => {
+      const payload = event.payload as {
+        type: string;
+        data: { text?: string };
+      };
+
+      if (payload.type === "delta" && payload.data.text) {
+        setStreamingContent((prev) => prev + payload.data.text);
+      } else if (payload.type === "done" || payload.type === "error") {
+        setStreamingContent("");
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [session?.id]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [session?.messages]);
+  }, [session?.messages, streamingContent]);
 
   const handleSend = useCallback(async () => {
     if (!session || !inputValue.trim() || sending) return;
@@ -309,9 +331,9 @@ export function CreationHelperPage() {
     setSession((prev) =>
       prev
         ? {
-            ...prev,
-            messages: [...prev.messages, userMsg],
-          }
+          ...prev,
+          messages: [...prev.messages, userMsg],
+        }
         : null,
     );
 
@@ -322,10 +344,10 @@ export function CreationHelperPage() {
     const imagesToUpload =
       pendingAttachments.length > 0
         ? pendingAttachments.map((att) => ({
-            id: att.id,
-            data: att.data,
-            mimeType: att.mimeType,
-          }))
+          id: att.id,
+          data: att.data,
+          mimeType: att.mimeType,
+        }))
         : null;
 
     // Clear inputs immediately for better UX
@@ -369,9 +391,9 @@ export function CreationHelperPage() {
       setSession((prev) =>
         prev
           ? {
-              ...prev,
-              messages: prev.messages.filter((m) => m.id !== optimisticId),
-            }
+            ...prev,
+            messages: prev.messages.filter((m) => m.id !== optimisticId),
+          }
           : null,
       );
 
@@ -505,7 +527,7 @@ export function CreationHelperPage() {
   };
 
   // Thinking indicator component
-  const ThinkingIndicator = () => (
+  const TypingIndicator = () => (
     <motion.div
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
@@ -519,11 +541,11 @@ export function CreationHelperPage() {
           shadows.md,
         )}
       >
-        <div className="relative">
-          <Loader2 className="h-4 w-4 text-emerald-400 animate-spin" />
-          <div className="absolute inset-0 blur-sm bg-emerald-400/20 animate-pulse rounded-full" />
+        <div className="flex items-center gap-1" aria-label="Assistant is typing">
+          <span className="typing-dot" />
+          <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
+          <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
         </div>
-        <span className="text-sm font-medium text-white/50 tracking-wide">Thinking...</span>
       </div>
     </motion.div>
   );
@@ -758,8 +780,37 @@ export function CreationHelperPage() {
               </motion.div>
             )}
 
-          {/* Thinking Indicator */}
-          {sending && <ThinkingIndicator />}
+          {/* Streaming content / Thinking Indicator */}
+          {sending && (
+            streamingContent ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex justify-start"
+              >
+                <div
+                  className={cn(
+                    "max-w-[85%] rounded-2xl px-4 py-3",
+                    "bg-white/5 border border-white/10 text-white/90",
+                  )}
+                >
+                  <MarkdownRenderer
+                    content={streamingContent}
+                    className="text-sm leading-relaxed text-white/90"
+                  />
+                  <div className="flex items-center gap-1 mt-2">
+                    <div className="flex items-center gap-0.5" aria-label="Generating">
+                      <span className="typing-dot h-1! w-1!" />
+                      <span className="typing-dot h-1! w-1!" style={{ animationDelay: '0.2s' }} />
+                      <span className="typing-dot h-1! w-1!" style={{ animationDelay: '0.4s' }} />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <TypingIndicator />
+            )
+          )}
 
           <div ref={messagesEndRef} />
         </div>

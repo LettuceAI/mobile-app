@@ -70,6 +70,44 @@ pub fn accumulate_image_data_urls_from_sse(raw: &str) -> Vec<String> {
     out
 }
 
+pub fn accumulate_tool_calls_from_sse(
+    raw: &str,
+    provider_id: &str,
+) -> Vec<super::tooling::ToolCall> {
+    let mut out = Vec::new();
+    for line in raw.lines() {
+        let l = line.trim();
+        if !l.starts_with("data:") {
+            continue;
+        }
+        let payload = l[5..].trim();
+        if payload.is_empty() || payload == "[DONE]" {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<Value>(payload) {
+            let calls = parse_tool_calls(provider_id, &v);
+            for call in calls {
+                // If a call with this ID already exists, we might need to merge arguments if they are streamed.
+                // However, parse_tool_calls usually returns complete calls or snapshots.
+                // For simplicity in this helper, we'll collect all distinct calls.
+                if let Some(existing) = out
+                    .iter_mut()
+                    .find(|c: &&mut super::tooling::ToolCall| c.id == call.id)
+                {
+                    if let (Value::String(s1), Value::String(s2)) =
+                        (&mut existing.arguments, &call.arguments)
+                    {
+                        s1.push_str(s2);
+                    }
+                } else {
+                    out.push(call);
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn usage_from_sse(raw: &str) -> Option<UsageSummary> {
     let mut last: Option<UsageSummary> = None;
     for line in raw.lines() {

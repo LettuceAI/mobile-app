@@ -8,8 +8,9 @@ use super::tools::{get_creation_helper_system_prompt, get_creation_helper_tools}
 use super::types::*;
 use crate::abort_manager::AbortRegistry;
 use crate::api::{api_request, ApiRequest};
+use crate::chat_manager::request as chat_request;
 use crate::chat_manager::request_builder::build_chat_request;
-use crate::chat_manager::sse::usage_from_value;
+use crate::chat_manager::sse::accumulate_tool_calls_from_sse;
 use crate::chat_manager::tooling::{parse_tool_calls, ToolConfig};
 use crate::storage_manager::db::{now_ms, open_db};
 use crate::storage_manager::settings::internal_read_settings;
@@ -410,12 +411,20 @@ async fn process_assistant_turn(
         internal_read_settings(&app)?.ok_or_else(|| "No settings found".to_string())?;
     let settings: Value = serde_json::from_str(&settings_json).map_err(|e| e.to_string())?;
 
-    let model_id = settings
-        .get("advancedSettings")
+    let advanced_settings = settings.get("advancedSettings");
+
+    let model_id = advanced_settings
         .and_then(|a| a.get("creationHelperModelId"))
         .and_then(|v| v.as_str())
         .or_else(|| settings.get("defaultModelId").and_then(|v| v.as_str()))
         .ok_or_else(|| "No model configured".to_string())?;
+
+    let streaming_enabled = advanced_settings
+        .and_then(|a| a.get("creationHelperStreaming"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let stream_request_id = format!("creation-helper-{}", session_id);
 
     let models = settings.get("models").and_then(|v| v.as_array());
     let model = models
@@ -526,17 +535,27 @@ async fn process_assistant_turn(
         config: None,
     };
 
+    log_info(
+        &app,
+        "creation_helper",
+        format!("Streaming enabled: {}", streaming_enabled),
+    );
+
     let built = build_chat_request(
         &cred,
         api_key,
         model_name,
         &api_messages,
-        None,               // system_prompt (already in messages)
-        0.7,                // temperature
-        1.0,                // top_p
-        20480,              // max_tokens
-        false,              // not streaming for now
-        None,               // request_id
+        None,              // system_prompt (already in messages)
+        0.7,               // temperature
+        1.0,               // top_p
+        20480,             // max_tokens
+        streaming_enabled, // streaming based on settings
+        if streaming_enabled {
+            Some(stream_request_id.clone())
+        } else {
+            None
+        },
         None,               // frequency_penalty
         None,               // presence_penalty
         None,               // top_k
@@ -559,8 +578,12 @@ async fn process_assistant_turn(
         query: None,
         body: Some(built.body),
         timeout_ms: Some(120_000),
-        stream: Some(false),
-        request_id: None,
+        stream: Some(streaming_enabled),
+        request_id: if streaming_enabled {
+            Some(stream_request_id.clone())
+        } else {
+            None
+        },
         provider_id: Some(provider_id.to_string()),
     };
 
@@ -631,16 +654,12 @@ async fn process_assistant_turn(
         None,
     );
 
-    let mut content = response_data
-        .get("choices")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let mut tool_calls = parse_tool_calls(provider_id, response_data);
+    let mut content = chat_request::extract_text(response_data).unwrap_or_default();
+    let mut tool_calls = if response_data.is_string() {
+        accumulate_tool_calls_from_sse(response_data.as_str().unwrap(), provider_id)
+    } else {
+        parse_tool_calls(provider_id, response_data)
+    };
 
     let mut all_tool_calls = Vec::new();
     let mut all_tool_results = Vec::new();
@@ -718,8 +737,12 @@ async fn process_assistant_turn(
             0.7,
             1.0,
             20480,
-            false,
-            None,
+            streaming_enabled,
+            if streaming_enabled {
+                Some(stream_request_id.clone())
+            } else {
+                None
+            },
             None,
             None,
             None,
@@ -736,8 +759,12 @@ async fn process_assistant_turn(
             query: None,
             body: Some(followup_built.body),
             timeout_ms: Some(120_000),
-            stream: Some(false),
-            request_id: None,
+            stream: Some(streaming_enabled),
+            request_id: if streaming_enabled {
+                Some(stream_request_id.clone())
+            } else {
+                None
+            },
             provider_id: Some(provider_id.to_string()),
         };
 
@@ -808,16 +835,18 @@ async fn process_assistant_turn(
             None,
         );
 
-        content = followup_data
-            .get("choices")
-            .and_then(|c| c.get(0))
-            .and_then(|c| c.get("message"))
-            .and_then(|m| m.get("content"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        tool_calls = parse_tool_calls(provider_id, followup_data);
+        let new_content = chat_request::extract_text(followup_data).unwrap_or_default();
+        if !new_content.is_empty() {
+            if !content.is_empty() {
+                content.push_str("\n\n");
+            }
+            content.push_str(&new_content);
+        }
+        tool_calls = if followup_data.is_string() {
+            accumulate_tool_calls_from_sse(followup_data.as_str().unwrap(), provider_id)
+        } else {
+            parse_tool_calls(provider_id, followup_data)
+        };
     }
 
     if iteration >= MAX_TOOL_ITERATIONS {
@@ -950,7 +979,7 @@ fn record_creation_usage(
     success: bool,
     error_message: Option<String>,
 ) {
-    let usage_summary = usage_from_value(response_data);
+    let usage_summary = chat_request::extract_usage(response_data);
     let request_id = Uuid::new_v4().to_string();
 
     let usage = RequestUsage {
