@@ -1,5 +1,5 @@
 import { Brain, User, BookOpen, Loader2, Sparkles, Users } from "lucide-react";
-import { BottomMenu, MenuButton, MenuSection } from "../BottomMenu";
+import { BottomMenu, MenuButton, MenuDivider, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { readSettings, saveLorebook } from "../../../core/storage/repo";
@@ -52,11 +52,7 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       isOpen={isOpen}
       onClose={handleClose}
       title={
-        mode === "menu"
-          ? "Create New"
-          : mode === "ai-helper"
-            ? "AI Creator Helper"
-            : "Name Lorebook"
+        mode === "menu" ? "Create New" : mode === "ai-helper" ? "Smart Creator" : "Name Lorebook"
       }
       includeExitIcon={false}
       location="bottom"
@@ -65,8 +61,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         <MenuSection>
           <MenuButton
             icon={Sparkles}
-            title="AI Creator Helper"
-            description="Choose what you want the AI to create"
+            title="Smart Creator"
+            description="Let the assistant guide your creation"
             color="from-rose-500 to-rose-600"
             onClick={() => {
               if (smartToolSelection) {
@@ -78,10 +74,12 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             }}
           />
 
+          <MenuDivider label="Or create manually" />
+
           <MenuButton
             icon={User}
-            title="Create Character"
-            description="Design a unique AI character with personality traits"
+            title="Character"
+            description="Create a custom character"
             color="from-blue-500 to-blue-600"
             onClick={() => {
               onClose();
@@ -91,8 +89,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 
           <MenuButton
             icon={Brain}
-            title="Create Persona"
-            description="Define a reusable writing style or personality"
+            title="Persona"
+            description="Create a reusable voice"
             color="from-purple-500 to-purple-600"
             onClick={() => {
               onClose();
@@ -102,8 +100,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 
           <MenuButton
             icon={Users}
-            title="Create Group Chat"
-            description="Chat with multiple characters at once"
+            title="Group Chat"
+            description="Chat with multiple characters"
             color="from-emerald-500 to-emerald-600"
             onClick={() => {
               onClose();
@@ -113,8 +111,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 
           <MenuButton
             icon={BookOpen}
-            title="Create Lorebook"
-            description="Build a world bible or knowledge base"
+            title="Lorebook"
+            description="Build your world reference"
             color="from-amber-500 to-amber-600"
             onClick={() => setMode("lorebook-name")}
           />
@@ -123,28 +121,30 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         <MenuSection>
           <MenuButton
             icon={Sparkles}
-            title="Create Character"
-            description="AI helps build a new character"
+            title="Character"
+            description="Build a character with guided creation"
             color="from-rose-500 to-rose-600"
             onClick={() => {
               onClose();
               navigate("/create/character/helper?goal=character");
             }}
           />
+
           <MenuButton
             icon={Brain}
-            title="Create Persona"
-            description="AI helps craft a persona"
+            title="Persona"
+            description="Create a reusable voice or personality"
             color="from-purple-500 to-purple-600"
             onClick={() => {
               onClose();
               navigate("/create/character/helper?goal=persona");
             }}
           />
+
           <MenuButton
             icon={BookOpen}
-            title="Create Lorebook"
-            description="AI helps build a lorebook"
+            title="Lorebook"
+            description="Build a structured world reference"
             color="from-amber-500 to-amber-600"
             onClick={() => {
               onClose();
