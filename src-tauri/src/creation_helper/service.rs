@@ -1,5 +1,7 @@
+use base64::{engine::general_purpose, Engine as _};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::fs;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
@@ -12,6 +14,8 @@ use crate::chat_manager::request as chat_request;
 use crate::chat_manager::request_builder::build_chat_request;
 use crate::chat_manager::sse::accumulate_tool_calls_from_sse;
 use crate::chat_manager::tooling::{parse_tool_calls, ToolConfig};
+use crate::image_generator::commands::generate_image;
+use crate::image_generator::types::ImageGenerationRequest;
 use crate::storage_manager::db::{now_ms, open_db};
 use crate::storage_manager::lorebook as lorebook_storage;
 use crate::storage_manager::personas as personas_storage;
@@ -96,7 +100,7 @@ pub fn get_all_uploaded_images(session_id: &str) -> Result<Vec<UploadedImage>, S
         .unwrap_or_default())
 }
 
-fn execute_tool(
+async fn execute_tool(
     app: &AppHandle,
     session: &mut CreationSession,
     tool_call_id: &str,
@@ -234,6 +238,49 @@ fn execute_tool(
                 }
             } else {
                 json!({ "success": false, "error": "Missing 'image_id' argument" })
+            }
+        }
+        "generate_image" => {
+            let prompt = arguments.get("prompt").and_then(|v| v.as_str());
+            if let Some(prompt) = prompt {
+                match build_image_request(app, prompt, arguments) {
+                    Ok(request) => match generate_image(app.clone(), request).await {
+                        Ok(response) => {
+                            if let Some(image) = response.images.first() {
+                                match fs::read(&image.file_path) {
+                                    Ok(bytes) => {
+                                        let encoded = general_purpose::STANDARD.encode(bytes);
+                                        let data_url = format!("data:image/png;base64,{}", encoded);
+                                        let image_id = short_image_id();
+                                        if let Err(err) = save_uploaded_image(
+                                            &session.id,
+                                            image_id.clone(),
+                                            data_url,
+                                            "image/png".to_string(),
+                                        ) {
+                                            json!({ "success": false, "error": err })
+                                        } else {
+                                            json!({
+                                                "success": true,
+                                                "image_id": image_id,
+                                                "message": "Image generated"
+                                            })
+                                        }
+                                    }
+                                    Err(err) => {
+                                        json!({ "success": false, "error": err.to_string() })
+                                    }
+                                }
+                            } else {
+                                json!({ "success": false, "error": "No image returned" })
+                            }
+                        }
+                        Err(err) => json!({ "success": false, "error": err }),
+                    },
+                    Err(err) => json!({ "success": false, "error": err }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'prompt' argument" })
             }
         }
         "show_preview" => {
@@ -631,6 +678,106 @@ fn get_models(app: &AppHandle) -> Result<Vec<ModelInfo>, String> {
     Ok(vec![])
 }
 
+fn short_image_id() -> String {
+    let compact = Uuid::new_v4().to_string().replace('-', "");
+    compact.chars().take(8).collect()
+}
+
+fn build_image_request(
+    app: &AppHandle,
+    prompt: &str,
+    arguments: &Value,
+) -> Result<ImageGenerationRequest, String> {
+    let settings_json =
+        internal_read_settings(app)?.ok_or_else(|| "No settings found".to_string())?;
+    let settings: Value = serde_json::from_str(&settings_json).map_err(|e| e.to_string())?;
+    let advanced = settings.get("advancedSettings");
+    let image_model_id = advanced
+        .and_then(|a| a.get("creationHelperImageModelId"))
+        .and_then(|v| v.as_str());
+
+    let models = settings
+        .get("models")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "No models configured".to_string())?;
+
+    let image_models: Vec<&Value> = models
+        .iter()
+        .filter(|model| {
+            model
+                .get("outputScopes")
+                .and_then(|v| v.as_array())
+                .map(|scopes| scopes.iter().any(|s| s.as_str() == Some("image")))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    let model = if let Some(id) = image_model_id {
+        image_models
+            .iter()
+            .find(|m| m.get("id").and_then(|v| v.as_str()) == Some(id))
+            .copied()
+    } else {
+        image_models.first().copied()
+    }
+    .ok_or_else(|| "No image generation model configured".to_string())?;
+
+    let model_name = model
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Image model name missing".to_string())?;
+    let provider_id = model
+        .get("providerId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Image model provider missing".to_string())?;
+    let provider_label = model.get("providerLabel").and_then(|v| v.as_str());
+
+    let credentials = settings
+        .get("providerCredentials")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "No provider credentials configured".to_string())?;
+    let credential = credentials
+        .iter()
+        .find(|cred| {
+            let matches_label = provider_label
+                .map(|label| cred.get("label").and_then(|v| v.as_str()) == Some(label))
+                .unwrap_or(true);
+            cred.get("providerId").and_then(|v| v.as_str()) == Some(provider_id) && matches_label
+        })
+        .or_else(|| {
+            credentials
+                .iter()
+                .find(|cred| cred.get("providerId").and_then(|v| v.as_str()) == Some(provider_id))
+        })
+        .ok_or_else(|| "No credentials found for image model provider".to_string())?;
+
+    let credential_id = credential
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Credential ID missing".to_string())?;
+
+    Ok(ImageGenerationRequest {
+        prompt: prompt.to_string(),
+        model: model_name.to_string(),
+        provider_id: provider_id.to_string(),
+        credential_id: credential_id.to_string(),
+        size: arguments
+            .get("size")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| Some("1024x1024".to_string())),
+        quality: arguments
+            .get("quality")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        style: arguments
+            .get("style")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        n: Some(1),
+    })
+}
+
 pub async fn send_message(
     app: AppHandle,
     session_id: String,
@@ -1024,7 +1171,7 @@ async fn process_assistant_turn(
             };
             all_tool_calls.push(creation_call);
 
-            let result = execute_tool(&app, &mut session, &tc.id, &tc.name, &tc.arguments);
+            let result = execute_tool(&app, &mut session, &tc.id, &tc.name, &tc.arguments).await;
             all_tool_results.push(result);
         }
 

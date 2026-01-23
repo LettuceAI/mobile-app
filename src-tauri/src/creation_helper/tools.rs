@@ -180,6 +180,32 @@ fn character_tools() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "generate_image".to_string(),
+            description: Some("Generate an image for the character (avatar/background) based on a prompt.".to_string()),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Prompt describing the image to generate"
+                    },
+                    "size": {
+                        "type": "string",
+                        "description": "Optional image size (e.g., 1024x1024)"
+                    },
+                    "quality": {
+                        "type": "string",
+                        "description": "Optional quality setting for supported providers"
+                    },
+                    "style": {
+                        "type": "string",
+                        "description": "Optional style setting for supported providers"
+                    }
+                },
+                "required": ["prompt"]
+            }),
+        },
+        ToolDefinition {
             name: "show_preview".to_string(),
             description: Some("Show a preview of the character to the user. Use this when you have enough information to show them what the character looks like.".to_string()),
             parameters: json!({
@@ -257,8 +283,8 @@ pub fn get_creation_helper_system_prompt(goal: &CreationGoal, smart_selection: b
 - Use tools proactively once details are clear
 
 ## Tools Available
-- Character tools: set_character_name, set_character_definition, add_scene, update_scene, toggle_avatar_gradient, set_default_model, set_system_prompt, get_system_prompt_list, get_model_list, use_uploaded_image_as_avatar, use_uploaded_image_as_chat_background, show_preview, request_confirmation, list_character_lorebooks, set_character_lorebooks
-- Persona tools: list_personas, upsert_persona, use_uploaded_image_as_persona_avatar, delete_persona, get_default_persona
+- Character tools: set_character_name, set_character_definition, add_scene, update_scene, toggle_avatar_gradient, set_default_model, set_system_prompt, get_system_prompt_list, get_model_list, use_uploaded_image_as_avatar, use_uploaded_image_as_chat_background, generate_image, show_preview, request_confirmation, list_character_lorebooks, set_character_lorebooks
+- Persona tools: list_personas, upsert_persona, use_uploaded_image_as_persona_avatar, generate_image, delete_persona, get_default_persona
 - Lorebook tools: list_lorebooks, upsert_lorebook, delete_lorebook, list_lorebook_entries, get_lorebook_entry, upsert_lorebook_entry, delete_lorebook_entry, create_blank_lorebook_entry, reorder_lorebook_entries
 
 Remember: You are helping the user create something useful for roleplay. Make the process fun and collaborative!"#
@@ -294,6 +320,7 @@ Remember: You are helping the user create something useful for roleplay. Make th
 - get_model_list: See available models
 - use_uploaded_image_as_avatar: Use an uploaded image as avatar
 - use_uploaded_image_as_chat_background: Use an uploaded image as background
+- generate_image: Generate an image using the image model
 - show_preview: Let them see the character so far
 - request_confirmation: Ask if they're ready to save
 - list_character_lorebooks: List lorebooks on the character
@@ -317,6 +344,7 @@ Remember: You're helping create a character for roleplay. Make the process fun a
 - list_personas: List existing personas
 - upsert_persona: Create or update a persona
 - use_uploaded_image_as_persona_avatar: Set a persona avatar from an uploaded image
+- generate_image: Generate a persona avatar image
 - delete_persona: Remove a persona
 - get_default_persona: Check the current default persona
 
@@ -419,6 +447,32 @@ fn persona_tools() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["persona_id", "image_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "generate_image".to_string(),
+            description: Some("Generate a persona avatar image based on a prompt.".to_string()),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Prompt describing the image to generate"
+                    },
+                    "size": {
+                        "type": "string",
+                        "description": "Optional image size (e.g., 1024x1024)"
+                    },
+                    "quality": {
+                        "type": "string",
+                        "description": "Optional quality setting for supported providers"
+                    },
+                    "style": {
+                        "type": "string",
+                        "description": "Optional style setting for supported providers"
+                    }
+                },
+                "required": ["prompt"]
             }),
         },
         ToolDefinition {

@@ -105,6 +105,13 @@ const CREATION_HELPER_TOOLS = [
     category: "visual",
   },
   {
+    id: "generate_image",
+    name: "Generate Image",
+    description: "Generate an image with the AI model",
+    icon: Wand2,
+    category: "visual",
+  },
+  {
     id: "show_preview",
     name: "Show Preview",
     description: "Preview the character",

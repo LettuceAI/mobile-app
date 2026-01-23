@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -86,6 +86,14 @@ interface UploadedImage {
   mimeType: string;
 }
 
+interface ImageGenerationEntry {
+  id: string;
+  toolCallId: string;
+  status: "pending" | "done" | "error";
+  imageId?: string;
+  createdAt: number;
+}
+
 // Component to fetch and display uploaded image thumbnail
 function ImageThumbnail({
   sessionId,
@@ -153,6 +161,61 @@ function ImageThumbnail({
   );
 }
 
+function GeneratedImagePreview({
+  sessionId,
+  imageId,
+  label,
+}: {
+  sessionId: string;
+  imageId: string;
+  label: string;
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchImage = async () => {
+      try {
+        const img = await invoke<UploadedImage | null>("creation_helper_get_uploaded_image", {
+          sessionId,
+          imageId,
+        });
+        if (active && img) {
+          setImageUrl(img.data);
+        }
+      } catch (err) {
+        console.error("Failed to load generated image:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    fetchImage();
+    return () => {
+      active = false;
+    };
+  }, [sessionId, imageId]);
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="h-40 w-40 overflow-hidden rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
+        {loading ? (
+          <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+        ) : imageUrl ? (
+          <img
+            src={imageUrl.startsWith("data:") ? imageUrl : `data:image/png;base64,${imageUrl}`}
+            alt={label}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-xs text-white/40">Failed to load</span>
+        )}
+      </div>
+      <span className="text-[11px] uppercase tracking-wider text-white/40">{label}</span>
+    </div>
+  );
+}
+
 export function CreationHelperPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -191,6 +254,7 @@ export function CreationHelperPage() {
   const streamUnlistenRef = useRef<(() => void) | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const initGuardRef = useRef<string | null>(null);
+  const [imageGenerations, setImageGenerations] = useState<ImageGenerationEntry[]>([]);
   const activeGoal = session?.creationGoal ?? creationGoal;
   const goalLabel = smartToolSelection
     ? activeGoal === "persona"
@@ -279,11 +343,68 @@ export function CreationHelperPage() {
     setStreamingContent("");
     setStreamingReasoning("");
     setActiveTools([]);
+    setImageGenerations([]);
     if (streamUnlistenRef.current) {
       streamUnlistenRef.current();
       streamUnlistenRef.current = null;
     }
   }, [creationGoal]);
+
+  useEffect(() => {
+    if (activeTools.length === 0) return;
+    const generationCalls = activeTools.filter((call) => call.name === "generate_image");
+    if (generationCalls.length === 0) return;
+    setImageGenerations((prev) => {
+      const existingIds = new Set(prev.map((entry) => entry.toolCallId));
+      const next = [...prev];
+      for (const call of generationCalls) {
+        if (!existingIds.has(call.id)) {
+          next.push({
+            id: `__image_generation__${call.id}`,
+            toolCallId: call.id,
+            status: "pending",
+            createdAt: Date.now(),
+          });
+        }
+      }
+      return next;
+    });
+  }, [activeTools]);
+
+  useEffect(() => {
+    if (!session?.messages?.length) return;
+    setImageGenerations((prev) => {
+      const next = [...prev];
+      let changed = false;
+      for (const message of session.messages) {
+        if (!message.toolResults?.length || !message.toolCalls?.length) continue;
+        for (const result of message.toolResults) {
+          const toolCall = message.toolCalls.find((call) => call.id === result.toolCallId);
+          if (!toolCall || toolCall.name !== "generate_image") continue;
+          const entryIndex = next.findIndex((entry) => entry.toolCallId === result.toolCallId);
+          const resObj = result.result as { image_id?: string; imageId?: string };
+          const imageId = resObj?.image_id ?? resObj?.imageId;
+          if (entryIndex >= 0) {
+            next[entryIndex] = {
+              ...next[entryIndex],
+              status: result.success ? "done" : "error",
+              imageId,
+            };
+          } else {
+            next.push({
+              id: `__image_generation__${result.toolCallId}`,
+              toolCallId: result.toolCallId,
+              status: result.success ? "done" : "error",
+              imageId,
+              createdAt: message.createdAt ?? Date.now(),
+            });
+          }
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [session?.messages]);
 
   // Listen for updates from backend
   useEffect(() => {
@@ -743,6 +864,7 @@ export function CreationHelperPage() {
       reorder_lorebook_entries: "Reorder lorebook entries",
       list_character_lorebooks: "List character lorebooks",
       set_character_lorebooks: "Set character lorebooks",
+      generate_image: "Generate image",
     };
     return names[toolName] || toolName;
   };
@@ -781,8 +903,25 @@ export function CreationHelperPage() {
       });
     }
 
+    if (imageGenerations.length > 0) {
+      const imageMessages = imageGenerations.map((entry) => ({
+        id: entry.id,
+        role: "system" as const,
+        content: "",
+        toolCalls: [],
+        toolResults: [],
+        createdAt: entry.createdAt,
+      }));
+      msgs.push(...imageMessages);
+    }
+
     return msgs;
   })();
+
+  const imageGenerationLookup = useMemo(
+    () => new Map(imageGenerations.map((entry) => [entry.id, entry])),
+    [imageGenerations],
+  );
 
   return (
     <div className="flex h-screen flex-col bg-[#050505]">
@@ -845,199 +984,243 @@ export function CreationHelperPage() {
 
           {/* Messages */}
           <AnimatePresence mode="popLayout">
-            {displayMessages.map((message) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
-              >
-                <div
+            {displayMessages.map((message) => {
+              const imageEntry = imageGenerationLookup.get(message.id);
+              const isUser = message.role === "user";
+              const isSystem = message.role === "system";
+              return (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-3",
-                    message.role === "user"
-                      ? "bg-white/10 text-white"
-                      : "bg-white/5 border border-white/10 text-white/90",
+                    "flex",
+                    isSystem ? "justify-center" : isUser ? "justify-end" : "justify-start",
                   )}
                 >
-                  {/* Message Content */}
-                  {(() => {
-                    // Strip reference/attachment text if present (text after "---\n")
-                    let displayText = message.content;
-
-                    // Check for stored display content first
-                    if (messageDisplayContent[message.id]) {
-                      displayText = messageDisplayContent[message.id];
-                    } else {
-                      // Strip reference/attachment section if present
-                      const separator = "\n\n---\n";
-                      const sepIndex = displayText.indexOf(separator);
-                      if (sepIndex !== -1) {
-                        displayText = displayText.substring(0, sepIndex).trim();
-                      }
-                    }
-
-                    if (message.id === "__streaming__" && !displayText.trim()) {
-                      return <TypingIndicator />;
-                    }
-
-                    return (
-                      <MarkdownRenderer
-                        content={displayText}
-                        className={cn(
-                          "text-sm leading-relaxed",
-                          message.role === "user" ? "text-white" : "text-white/90",
-                        )}
-                      />
-                    );
-                  })()}
-
-                  {/* References & Attachments Display */}
-                  {(() => {
-                    // 1. References
-                    let refs = messageReferences[message.id];
-                    if (!refs || refs.length === 0) {
-                      // Parse reference names and IDs from content as fallback
-                      const refPattern =
-                        /\[Referenced (Character|Persona): "([^"]+)" \(id:([^)]+)\)\]/g;
-                      const matches = [...message.content.matchAll(refPattern)];
-                      if (matches.length > 0) {
-                        refs = matches.map((match) => ({
-                          type: match[1].toLowerCase() as "character" | "persona",
-                          id: match[3],
-                          name: match[2],
-                        }));
-                      }
-                    }
-
-                    // 2. Uploaded Images
-                    const imgPattern = /\[Uploaded Image: "([^"]+)" \(id:([^)]+)\)\]/g;
-                    const imgMatches = [...message.content.matchAll(imgPattern)];
-                    const images = imgMatches.map((match) => ({
-                      filename: match[1],
-                      id: match[2],
-                    }));
-
-                    if ((!refs || refs.length === 0) && images.length === 0) return null;
-
-                    return (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {/* References */}
-                        {refs?.map((ref) => (
-                          <div
-                            key={ref.id}
-                            className={cn(
-                              "flex items-center gap-1.5 px-2 py-1",
-                              "rounded-full text-xs",
-                              ref.type === "character"
-                                ? "bg-purple-500/20 text-purple-200"
-                                : "bg-amber-500/20 text-amber-200",
-                            )}
-                          >
-                            <ReferenceAvatar
-                              type={ref.type}
-                              id={ref.id}
-                              avatarPath={ref.avatarPath || entityAvatars[ref.id]}
-                              name={ref.name}
-                              size="sm"
-                            />
-                            <span>{ref.name}</span>
-                          </div>
-                        ))}
-
-                        {/* Images */}
-                        {images.map((img) => (
-                          <ImageThumbnail
-                            key={img.id}
-                            sessionId={session?.id as string}
-                            imageId={img.id}
-                            filename={img.filename}
-                            localCache={localImageCache}
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-2xl px-4 py-3",
+                      imageEntry
+                        ? "bg-white/5 border border-white/10 text-white/90"
+                        : isUser
+                          ? "bg-white/10 text-white"
+                          : "bg-white/5 border border-white/10 text-white/90",
+                    )}
+                  >
+                    {imageEntry ? (
+                      <div className="flex flex-col items-center gap-2">
+                        {imageEntry.status === "pending" ? (
+                          <>
+                            <div className="h-40 w-40 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
+                              <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+                            </div>
+                            <span className="text-[11px] uppercase tracking-wider text-white/40">
+                              Generating image
+                            </span>
+                          </>
+                        ) : imageEntry.status === "error" ? (
+                          <>
+                            <div className="h-40 w-40 rounded-2xl border border-red-500/30 bg-red-500/10 flex items-center justify-center">
+                              <span className="text-xs text-red-200">Generation failed</span>
+                            </div>
+                            <span className="text-[11px] uppercase tracking-wider text-red-200/70">
+                              Generation failed
+                            </span>
+                          </>
+                        ) : imageEntry.imageId ? (
+                          <GeneratedImagePreview
+                            sessionId={session?.id ?? ""}
+                            imageId={imageEntry.imageId}
+                            label="Image ready"
                           />
-                        ))}
+                        ) : (
+                          <span className="text-xs text-white/40">Image unavailable</span>
+                        )}
                       </div>
-                    );
-                  })()}
+                    ) : (
+                      <>
+                        {/* Message Content */}
+                        {(() => {
+                          // Strip reference/attachment text if present (text after "---\n")
+                          let displayText = message.content;
 
-                  {/* Tool Calls Display */}
-                  {(() => {
-                    const toolResults = message.toolResults || [];
-                    const toolCalls = message.toolCalls || [];
-                    const toolResultsById = new Map(
-                      toolResults.map((result) => [result.toolCallId, result]),
-                    );
-                    const toolCallIds = new Set(toolCalls.map((call) => call.id));
-                    const toolEntries = toolCalls.map((call) => ({
-                      call,
-                      result: toolResultsById.get(call.id),
-                    }));
-                    for (const result of toolResults) {
-                      if (!toolCallIds.has(result.toolCallId)) {
-                        toolEntries.push({
-                          call: {
-                            id: result.toolCallId,
-                            name: "Unknown Tool",
-                            arguments: {},
-                          },
-                          result,
-                        });
-                      }
-                    }
+                          // Check for stored display content first
+                          if (messageDisplayContent[message.id]) {
+                            displayText = messageDisplayContent[message.id];
+                          } else {
+                            // Strip reference/attachment section if present
+                            const separator = "\n\n---\n";
+                            const sepIndex = displayText.indexOf(separator);
+                            if (sepIndex !== -1) {
+                              displayText = displayText.substring(0, sepIndex).trim();
+                            }
+                          }
 
-                    if (toolEntries.length === 0) return null;
-
-                    return (
-                      <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
-                        {toolEntries.map(({ call, result }) => {
-                          const displayName = getToolDisplayName(call.name || "Unknown Tool");
-                          if (!result) {
-                            return (
-                              <div
-                                key={call.id}
-                                className={cn(
-                                  "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 text-left",
-                                  "bg-white/5 text-white/60 border border-white/10",
-                                )}
-                              >
-                                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-                                <span className="truncate flex-1">{displayName}</span>
-                              </div>
-                            );
+                          if (message.id === "__streaming__" && !displayText.trim()) {
+                            return <TypingIndicator />;
                           }
 
                           return (
-                            <button
-                              key={call.id}
-                              onClick={() => {
-                                setSelectedTool({ call, result });
-                                setShowToolDetail(true);
-                              }}
+                            <MarkdownRenderer
+                              content={displayText}
                               className={cn(
-                                "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 transition-all text-left group",
-                                result.success
-                                  ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
-                                  : "bg-red-500/10 text-red-300 hover:bg-red-500/20",
+                                "text-sm leading-relaxed",
+                                message.role === "user" ? "text-white" : "text-white/90",
                               )}
-                            >
-                              {result.success ? (
-                                <Check className="h-3 w-3 shrink-0" />
-                              ) : (
-                                <span className="h-3 w-3 shrink-0">✗</span>
-                              )}
-                              <span className="truncate flex-1">{displayName}</span>
-                              <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
-                                View Details
-                              </span>
-                            </button>
+                            />
                           );
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </motion.div>
-            ))}
+                        })()}
+
+                        {/* References & Attachments Display */}
+                        {(() => {
+                          // 1. References
+                          let refs = messageReferences[message.id];
+                          if (!refs || refs.length === 0) {
+                            // Parse reference names and IDs from content as fallback
+                            const refPattern =
+                              /\[Referenced (Character|Persona): "([^"]+)" \(id:([^)]+)\)\]/g;
+                            const matches = [...message.content.matchAll(refPattern)];
+                            if (matches.length > 0) {
+                              refs = matches.map((match) => ({
+                                type: match[1].toLowerCase() as "character" | "persona",
+                                id: match[3],
+                                name: match[2],
+                              }));
+                            }
+                          }
+
+                          // 2. Uploaded Images
+                          const imgPattern = /\[Uploaded Image: "([^"]+)" \(id:([^)]+)\)\]/g;
+                          const imgMatches = [...message.content.matchAll(imgPattern)];
+                          const images = imgMatches.map((match) => ({
+                            filename: match[1],
+                            id: match[2],
+                          }));
+
+                          if ((!refs || refs.length === 0) && images.length === 0) return null;
+
+                          return (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {/* References */}
+                              {refs?.map((ref) => (
+                                <div
+                                  key={ref.id}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1",
+                                    "rounded-full text-xs",
+                                    ref.type === "character"
+                                      ? "bg-purple-500/20 text-purple-200"
+                                      : "bg-amber-500/20 text-amber-200",
+                                  )}
+                                >
+                                  <ReferenceAvatar
+                                    type={ref.type}
+                                    id={ref.id}
+                                    avatarPath={ref.avatarPath || entityAvatars[ref.id]}
+                                    name={ref.name}
+                                    size="sm"
+                                  />
+                                  <span>{ref.name}</span>
+                                </div>
+                              ))}
+
+                              {/* Images */}
+                              {images.map((img) => (
+                                <ImageThumbnail
+                                  key={img.id}
+                                  sessionId={session?.id as string}
+                                  imageId={img.id}
+                                  filename={img.filename}
+                                  localCache={localImageCache}
+                                />
+                              ))}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Tool Calls Display */}
+                        {(() => {
+                          const toolResults = message.toolResults || [];
+                          const toolCalls = message.toolCalls || [];
+                          const toolResultsById = new Map(
+                            toolResults.map((result) => [result.toolCallId, result]),
+                          );
+                          const toolCallIds = new Set(toolCalls.map((call) => call.id));
+                          const toolEntries = toolCalls.map((call) => ({
+                            call,
+                            result: toolResultsById.get(call.id),
+                          }));
+                          for (const result of toolResults) {
+                            if (!toolCallIds.has(result.toolCallId)) {
+                              toolEntries.push({
+                                call: {
+                                  id: result.toolCallId,
+                                  name: "Unknown Tool",
+                                  arguments: {},
+                                },
+                                result,
+                              });
+                            }
+                          }
+
+                          if (toolEntries.length === 0) return null;
+
+                          return (
+                            <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
+                              {toolEntries.map(({ call, result }) => {
+                                const displayName = getToolDisplayName(call.name || "Unknown Tool");
+                                if (!result) {
+                                  return (
+                                    <div
+                                      key={call.id}
+                                      className={cn(
+                                        "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 text-left",
+                                        "bg-white/5 text-white/60 border border-white/10",
+                                      )}
+                                    >
+                                      <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                                      <span className="truncate flex-1">{displayName}</span>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <button
+                                    key={call.id}
+                                    onClick={() => {
+                                      setSelectedTool({ call, result });
+                                      setShowToolDetail(true);
+                                    }}
+                                    className={cn(
+                                      "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 transition-all text-left group",
+                                      result.success
+                                        ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                                        : "bg-red-500/10 text-red-300 hover:bg-red-500/20",
+                                    )}
+                                  >
+                                    {result.success ? (
+                                      <Check className="h-3 w-3 shrink-0" />
+                                    ) : (
+                                      <span className="h-3 w-3 shrink-0">✗</span>
+                                    )}
+                                    <span className="truncate flex-1">{displayName}</span>
+                                    <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
+                                      View Details
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
 
           {/* Regeneration Button */}
