@@ -100,6 +100,60 @@ pub fn get_all_uploaded_images(session_id: &str) -> Result<Vec<UploadedImage>, S
         .unwrap_or_default())
 }
 
+fn record_image_generation_usage(
+    app: &AppHandle,
+    session_id: &str,
+    model_id: &str,
+    model_name: &str,
+    provider_id: &str,
+    provider_label: &str,
+    character_name: &str,
+    success: bool,
+    error_message: Option<String>,
+) {
+    let request_id = Uuid::new_v4().to_string();
+    let mut metadata = HashMap::new();
+    metadata.insert("image_generation".to_string(), "true".to_string());
+    metadata.insert("tool".to_string(), "generate_image".to_string());
+
+    let usage = RequestUsage {
+        id: request_id,
+        timestamp: now_ms() as u64,
+        session_id: session_id.to_string(),
+        character_id: "creation_helper".to_string(),
+        character_name: if character_name.is_empty() {
+            "New Character".to_string()
+        } else {
+            character_name.to_string()
+        },
+        model_id: model_id.to_string(),
+        model_name: model_name.to_string(),
+        provider_id: provider_id.to_string(),
+        provider_label: provider_label.to_string(),
+        operation_type: UsageOperationType::AICreator,
+        finish_reason: None,
+        prompt_tokens: None,
+        completion_tokens: None,
+        total_tokens: None,
+        memory_tokens: None,
+        summary_tokens: None,
+        reasoning_tokens: None,
+        image_tokens: None,
+        cost: None,
+        success,
+        error_message,
+        metadata,
+    };
+
+    if let Err(e) = add_usage_record(app, usage) {
+        log_error(
+            app,
+            "creation_helper",
+            format!("Failed to record image generation usage: {}", e),
+        );
+    }
+}
+
 async fn execute_tool(
     app: &AppHandle,
     session: &mut CreationSession,
@@ -244,7 +298,7 @@ async fn execute_tool(
             let prompt = arguments.get("prompt").and_then(|v| v.as_str());
             if let Some(prompt) = prompt {
                 match build_image_request(app, prompt, arguments) {
-                    Ok(request) => match generate_image(app.clone(), request).await {
+                    Ok((request, meta)) => match generate_image(app.clone(), request).await {
                         Ok(response) => {
                             if let Some(image) = response.images.first() {
                                 match fs::read(&image.file_path) {
@@ -258,8 +312,30 @@ async fn execute_tool(
                                             data_url,
                                             "image/png".to_string(),
                                         ) {
+                                            record_image_generation_usage(
+                                                app,
+                                                &session.id,
+                                                &meta.model_id,
+                                                &meta.model_name,
+                                                &meta.provider_id,
+                                                &meta.provider_label,
+                                                session.draft.name.as_deref().unwrap_or(""),
+                                                false,
+                                                Some(err.clone()),
+                                            );
                                             json!({ "success": false, "error": err })
                                         } else {
+                                            record_image_generation_usage(
+                                                app,
+                                                &session.id,
+                                                &meta.model_id,
+                                                &meta.model_name,
+                                                &meta.provider_id,
+                                                &meta.provider_label,
+                                                session.draft.name.as_deref().unwrap_or(""),
+                                                true,
+                                                None,
+                                            );
                                             json!({
                                                 "success": true,
                                                 "image_id": image_id,
@@ -268,14 +344,49 @@ async fn execute_tool(
                                         }
                                     }
                                     Err(err) => {
+                                        record_image_generation_usage(
+                                            app,
+                                            &session.id,
+                                            &meta.model_id,
+                                            &meta.model_name,
+                                            &meta.provider_id,
+                                            &meta.provider_label,
+                                            session.draft.name.as_deref().unwrap_or(""),
+                                            false,
+                                            Some(err.to_string()),
+                                        );
                                         json!({ "success": false, "error": err.to_string() })
                                     }
                                 }
                             } else {
+                                record_image_generation_usage(
+                                    app,
+                                    &session.id,
+                                    &meta.model_id,
+                                    &meta.model_name,
+                                    &meta.provider_id,
+                                    &meta.provider_label,
+                                    session.draft.name.as_deref().unwrap_or(""),
+                                    false,
+                                    Some("No image returned".to_string()),
+                                );
                                 json!({ "success": false, "error": "No image returned" })
                             }
                         }
-                        Err(err) => json!({ "success": false, "error": err }),
+                        Err(err) => {
+                            record_image_generation_usage(
+                                app,
+                                &session.id,
+                                &meta.model_id,
+                                &meta.model_name,
+                                &meta.provider_id,
+                                &meta.provider_label,
+                                session.draft.name.as_deref().unwrap_or(""),
+                                false,
+                                Some(err.clone()),
+                            );
+                            json!({ "success": false, "error": err })
+                        }
                     },
                     Err(err) => json!({ "success": false, "error": err }),
                 }
@@ -683,11 +794,18 @@ fn short_image_id() -> String {
     compact.chars().take(8).collect()
 }
 
+struct ImageGenerationMeta {
+    model_id: String,
+    model_name: String,
+    provider_id: String,
+    provider_label: String,
+}
+
 fn build_image_request(
     app: &AppHandle,
     prompt: &str,
     arguments: &Value,
-) -> Result<ImageGenerationRequest, String> {
+) -> Result<(ImageGenerationRequest, ImageGenerationMeta), String> {
     let settings_json =
         internal_read_settings(app)?.ok_or_else(|| "No settings found".to_string())?;
     let settings: Value = serde_json::from_str(&settings_json).map_err(|e| e.to_string())?;
@@ -722,6 +840,10 @@ fn build_image_request(
     }
     .ok_or_else(|| "No image generation model configured".to_string())?;
 
+    let model_id = model
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Image model ID missing".to_string())?;
     let model_name = model
         .get("name")
         .and_then(|v| v.as_str())
@@ -756,26 +878,35 @@ fn build_image_request(
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Credential ID missing".to_string())?;
 
-    Ok(ImageGenerationRequest {
-        prompt: prompt.to_string(),
-        model: model_name.to_string(),
-        provider_id: provider_id.to_string(),
-        credential_id: credential_id.to_string(),
-        size: arguments
-            .get("size")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| Some("1024x1024".to_string())),
-        quality: arguments
-            .get("quality")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        style: arguments
-            .get("style")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        n: Some(1),
-    })
+    let provider_label_value = provider_label.unwrap_or(provider_id);
+    Ok((
+        ImageGenerationRequest {
+            prompt: prompt.to_string(),
+            model: model_name.to_string(),
+            provider_id: provider_id.to_string(),
+            credential_id: credential_id.to_string(),
+            size: arguments
+                .get("size")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| Some("1024x1024".to_string())),
+            quality: arguments
+                .get("quality")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            style: arguments
+                .get("style")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            n: Some(1),
+        },
+        ImageGenerationMeta {
+            model_id: model_id.to_string(),
+            model_name: model_name.to_string(),
+            provider_id: provider_id.to_string(),
+            provider_label: provider_label_value.to_string(),
+        },
+    ))
 }
 
 pub async fn send_message(
