@@ -1,14 +1,27 @@
 import { Brain, User, BookOpen, Loader2, Sparkles, Users } from "lucide-react";
 import { BottomMenu, MenuButton, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { saveLorebook } from "../../../core/storage/repo";
+import { useEffect, useState } from "react";
+import { readSettings, saveLorebook } from "../../../core/storage/repo";
 
 export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"menu" | "lorebook-name">("menu");
+  const [mode, setMode] = useState<"menu" | "lorebook-name" | "ai-helper">("menu");
   const [lorebookName, setLorebookName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [smartToolSelection, setSmartToolSelection] = useState(true);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await readSettings();
+        setSmartToolSelection(settings.advancedSettings?.creationHelperSmartToolSelection ?? true);
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
+    };
+    void loadSettings();
+  }, []);
 
   const handleClose = () => {
     onClose();
@@ -38,7 +51,13 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     <BottomMenu
       isOpen={isOpen}
       onClose={handleClose}
-      title={mode === "menu" ? "Create New" : "Name Lorebook"}
+      title={
+        mode === "menu"
+          ? "Create New"
+          : mode === "ai-helper"
+            ? "AI Creator Helper"
+            : "Name Lorebook"
+      }
       includeExitIcon={false}
       location="bottom"
     >
@@ -46,12 +65,16 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         <MenuSection>
           <MenuButton
             icon={Sparkles}
-            title="AI Character Creator"
-            description="Let AI help you design a character step-by-step"
+            title="AI Creator Helper"
+            description="Choose what you want the AI to create"
             color="from-rose-500 to-rose-600"
             onClick={() => {
-              onClose();
-              navigate("/create/character/helper");
+              if (smartToolSelection) {
+                setMode("ai-helper");
+              } else {
+                onClose();
+                navigate("/create/character/helper?goal=character");
+              }
             }}
           />
 
@@ -94,6 +117,39 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             description="Build a world bible or knowledge base"
             color="from-amber-500 to-amber-600"
             onClick={() => setMode("lorebook-name")}
+          />
+        </MenuSection>
+      ) : mode === "ai-helper" ? (
+        <MenuSection>
+          <MenuButton
+            icon={Sparkles}
+            title="Create Character"
+            description="AI helps build a new character"
+            color="from-rose-500 to-rose-600"
+            onClick={() => {
+              onClose();
+              navigate("/create/character/helper?goal=character");
+            }}
+          />
+          <MenuButton
+            icon={Brain}
+            title="Create Persona"
+            description="AI helps craft a persona"
+            color="from-purple-500 to-purple-600"
+            onClick={() => {
+              onClose();
+              navigate("/create/character/helper?goal=persona");
+            }}
+          />
+          <MenuButton
+            icon={BookOpen}
+            title="Create Lorebook"
+            description="AI helps build a lorebook"
+            color="from-amber-500 to-amber-600"
+            onClick={() => {
+              onClose();
+              navigate("/create/character/helper?goal=lorebook");
+            }}
           />
         </MenuSection>
       ) : (

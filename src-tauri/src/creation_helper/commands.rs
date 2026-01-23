@@ -1,11 +1,13 @@
 use tauri::AppHandle;
 
 use super::service;
-use super::types::{CreationSession, DraftCharacter, UploadedImage};
+use super::types::{CreationGoal, CreationSession, DraftCharacter, UploadedImage};
 
 #[tauri::command]
-pub fn creation_helper_start() -> Result<CreationSession, String> {
-    service::start_session()
+pub fn creation_helper_start(
+    creation_goal: Option<CreationGoal>,
+) -> Result<CreationSession, String> {
+    service::start_session(creation_goal.unwrap_or(CreationGoal::Character))
 }
 
 #[tauri::command]
@@ -19,21 +21,23 @@ pub async fn creation_helper_send_message(
     session_id: String,
     message: String,
     uploaded_images: Option<Vec<UploadedImageArg>>,
+    request_id: Option<String>,
 ) -> Result<CreationSession, String> {
     let images = uploaded_images.map(|imgs| {
         imgs.into_iter()
             .map(|img| (img.id, img.data, img.mime_type))
             .collect()
     });
-    service::send_message(app, session_id, message, images).await
+    service::send_message(app, session_id, message, images, request_id).await
 }
 
 #[tauri::command]
 pub async fn creation_helper_regenerate(
     app: AppHandle,
     session_id: String,
+    request_id: Option<String>,
 ) -> Result<CreationSession, String> {
-    service::regenerate_response(app, session_id).await
+    service::regenerate_response(app, session_id, request_id).await
 }
 
 #[derive(serde::Deserialize)]

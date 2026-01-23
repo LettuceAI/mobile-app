@@ -1021,7 +1021,7 @@ async fn summarize_group_messages(
         }
     }
 
-    extract_text(api_response.data())
+    extract_text(api_response.data(), Some(&provider_cred.provider_id))
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "Failed to summarize group messages".to_string())
 }
@@ -2172,7 +2172,7 @@ async fn select_speaker_via_llm_with_tracking(
     }
 
     // Fallback: try parsing from text response
-    if let Some(text) = extract_text(api_response.data()) {
+    if let Some(text) = extract_text(api_response.data(), Some(&cred.provider_id)) {
         if let Some(result) = selection::parse_tool_call_response(&text) {
             return Ok(result);
         }
@@ -2499,7 +2499,7 @@ async fn generate_character_response(
         format!("Response data type: {}", data_preview),
     );
 
-    let text = extract_text(api_response.data());
+    let text = extract_text(api_response.data(), Some(&model.provider_id));
 
     log_info(
         app,
@@ -2518,7 +2518,7 @@ async fn generate_character_response(
     let text = text.ok_or_else(|| "Empty response from provider".to_string())?;
 
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
+    let reasoning = extract_reasoning(api_response.data(), Some(&model.provider_id));
 
     log_info(
         app,
@@ -3437,7 +3437,7 @@ pub async fn group_chat_generate_user_reply(
         ));
     }
 
-    let generated_text = extract_text(&api_response.data)
+    let generated_text = extract_text(&api_response.data, Some(&provider_cred.provider_id))
         .ok_or_else(|| "Failed to extract text from response".to_string())?;
 
     let cleaned = generated_text

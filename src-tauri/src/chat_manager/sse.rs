@@ -1,25 +1,47 @@
 use serde_json::Value;
 
+use crate::chat_manager::tooling::ToolCall;
+
 use super::tooling::parse_tool_calls;
 use super::types::{NormalizedEvent, UsageSummary};
 
-pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
+//
+// ------------------------------------------------------------
+//  Helpers that operate on a *raw finished SSE dump*
+//  These MUST skip tool frames before extracting text/reasoning
+// ------------------------------------------------------------
+//
+
+pub fn accumulate_text_from_sse(raw: &str, provider_id: Option<&str>) -> Option<String> {
     let mut out = String::new();
+
     for line in raw.lines() {
         let l = line.trim();
         if !l.starts_with("data:") {
             continue;
         }
+
         let payload = l[5..].trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
         }
-        if let Ok(v) = serde_json::from_str::<Value>(payload) {
-            if let Some(piece) = extract_text_from_value(&v) {
-                out.push_str(&piece);
+
+        let Ok(v) = serde_json::from_str::<Value>(payload) else {
+            continue;
+        };
+
+        // HARD FILTER: skip tool frames
+        if let Some(pid) = provider_id {
+            if !parse_tool_calls(pid, &v).is_empty() {
+                continue;
             }
         }
+
+        if let Some(piece) = extract_text_from_value(&v) {
+            out.push_str(&piece);
+        }
     }
+
     if out.is_empty() {
         None
     } else {
@@ -27,24 +49,36 @@ pub fn accumulate_text_from_sse(raw: &str) -> Option<String> {
     }
 }
 
-/// Accumulate reasoning tokens from SSE response (for thinking models)
-pub fn accumulate_reasoning_from_sse(raw: &str) -> Option<String> {
+pub fn accumulate_reasoning_from_sse(raw: &str, provider_id: Option<&str>) -> Option<String> {
     let mut out = String::new();
+
     for line in raw.lines() {
         let l = line.trim();
         if !l.starts_with("data:") {
             continue;
         }
+
         let payload = l[5..].trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
         }
-        if let Ok(v) = serde_json::from_str::<Value>(payload) {
-            if let Some(piece) = extract_reasoning_from_value(&v) {
-                out.push_str(&piece);
+
+        let Ok(v) = serde_json::from_str::<Value>(payload) else {
+            continue;
+        };
+
+        // HARD FILTER
+        if let Some(pid) = provider_id {
+            if !parse_tool_calls(pid, &v).is_empty() {
+                continue;
             }
         }
+
+        if let Some(piece) = extract_reasoning_from_value(&v) {
+            out.push_str(&piece);
+        }
     }
+
     if out.is_empty() {
         None
     } else {
@@ -53,55 +87,55 @@ pub fn accumulate_reasoning_from_sse(raw: &str) -> Option<String> {
 }
 
 pub fn accumulate_image_data_urls_from_sse(raw: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+
     for line in raw.lines() {
         let l = line.trim();
         if !l.starts_with("data:") {
             continue;
         }
+
         let payload = l[5..].trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
         }
+
         if let Ok(v) = serde_json::from_str::<Value>(payload) {
             extract_image_data_urls_from_value(&v, &mut out);
         }
     }
+
     out
 }
 
-pub fn accumulate_tool_calls_from_sse(
-    raw: &str,
-    provider_id: &str,
-) -> Vec<super::tooling::ToolCall> {
-    let mut out = Vec::new();
+pub fn accumulate_tool_calls_from_sse(raw: &str, provider_id: &str) -> Vec<ToolCall> {
+    let mut out: Vec<ToolCall> = Vec::new();
+
     for line in raw.lines() {
         let l = line.trim();
         if !l.starts_with("data:") {
             continue;
         }
+
         let payload = l[5..].trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
         }
-        if let Ok(v) = serde_json::from_str::<Value>(payload) {
-            let calls = parse_tool_calls(provider_id, &v);
-            for call in calls {
-                // If a call with this ID already exists, we might need to merge arguments if they are streamed.
-                // However, parse_tool_calls usually returns complete calls or snapshots.
-                // For simplicity in this helper, we'll collect all distinct calls.
-                if let Some(existing) = out
-                    .iter_mut()
-                    .find(|c: &&mut super::tooling::ToolCall| c.id == call.id)
+
+        let Ok(v) = serde_json::from_str::<Value>(payload) else {
+            continue;
+        };
+
+        let calls = parse_tool_calls(provider_id, &v);
+        for call in calls {
+            if let Some(existing) = out.iter_mut().find(|c| c.id == call.id) {
+                if let (Value::String(a), Value::String(b)) =
+                    (&mut existing.arguments, &call.arguments)
                 {
-                    if let (Value::String(s1), Value::String(s2)) =
-                        (&mut existing.arguments, &call.arguments)
-                    {
-                        s1.push_str(s2);
-                    }
-                } else {
-                    out.push(call);
+                    a.push_str(&b);
                 }
+            } else {
+                out.push(call);
             }
         }
     }
@@ -109,27 +143,35 @@ pub fn accumulate_tool_calls_from_sse(
 }
 
 pub fn usage_from_sse(raw: &str) -> Option<UsageSummary> {
-    let mut last: Option<UsageSummary> = None;
+    let mut last = None;
+
     for line in raw.lines() {
         let l = line.trim();
         if !l.starts_with("data:") {
             continue;
         }
+
         let payload = l[5..].trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
         }
+
         if let Ok(v) = serde_json::from_str::<Value>(payload) {
             if let Some(u) = usage_from_value(&v) {
                 last = Some(u);
             }
         }
     }
+
     last
 }
 
-/// Buffered SSE decoder that can handle JSON fragments split across chunk boundaries
-/// and produce provider-agnostic normalized events.
+//
+// ------------------------------------------------------------
+//  Streaming decoder
+// ------------------------------------------------------------
+//
+
 #[derive(Default)]
 pub struct SseDecoder {
     buffer: String,
@@ -142,70 +184,90 @@ impl SseDecoder {
         }
     }
 
-    /// Feed a raw text chunk, returning any complete normalized events parsed from it.
     pub fn feed(&mut self, chunk: &str, provider_id: Option<&str>) -> Vec<NormalizedEvent> {
         self.buffer.push_str(chunk);
-        let mut events: Vec<NormalizedEvent> = Vec::new();
+        let mut events = Vec::new();
 
-        let mut last_newline = 0usize;
+        let mut last_newline = 0;
         for (idx, ch) in self.buffer.char_indices() {
-            if ch == '\n' {
-                let line = &self.buffer[last_newline..idx];
-                last_newline = idx + 1; // skip the newline
-                let l = line.trim();
-                if l.is_empty() {
-                    continue;
-                }
-                // data: <payload>
-                if let Some(rest) = l.strip_prefix("data:") {
-                    let payload = rest.trim();
-                    if payload.is_empty() {
-                        continue;
-                    }
-                    if payload == "[DONE]" {
-                        events.push(NormalizedEvent::Done);
-                        continue;
-                    }
-                    if let Ok(v) = serde_json::from_str::<Value>(payload) {
-                        if let Some(err) = extract_gemini_error(&v) {
-                            events.push(NormalizedEvent::Error {
-                                envelope: super::types::ErrorEnvelope {
-                                    code: Some("CONTENT_BLOCKED".to_string()),
-                                    message: err,
-                                    provider_id: Some("gemini".to_string()),
-                                    request_id: None,
-                                    retryable: Some(false),
-                                    status: Some(400),
-                                },
-                            });
-                            continue;
-                        }
-                        if let Some(piece) = extract_text_from_value(&v) {
-                            if !piece.is_empty() {
-                                events.push(NormalizedEvent::Delta { text: piece });
-                            }
-                        }
-                        if let Some(reasoning) = extract_reasoning_from_value(&v) {
-                            if !reasoning.is_empty() {
-                                events.push(NormalizedEvent::Reasoning { text: reasoning });
-                            }
-                        }
-                        if let Some(usage) = usage_from_value(&v) {
-                            events.push(NormalizedEvent::Usage { usage });
-                        }
-                        if let Some(provider) = provider_id {
-                            let calls = parse_tool_calls(provider, &v);
-                            if !calls.is_empty() {
-                                events.push(NormalizedEvent::ToolCall { calls });
-                            }
-                        }
-                    }
+            if ch != '\n' {
+                continue;
+            }
+
+            let line = &self.buffer[last_newline..idx];
+            last_newline = idx + 1;
+
+            let l = line.trim();
+            if l.is_empty() {
+                continue;
+            }
+
+            let Some(rest) = l.strip_prefix("data:") else {
+                continue;
+            };
+
+            let payload = rest.trim();
+            if payload.is_empty() {
+                continue;
+            }
+
+            if payload == "[DONE]" {
+                events.push(NormalizedEvent::Done);
+                continue;
+            }
+
+            let Ok(v) = serde_json::from_str::<Value>(payload) else {
+                continue;
+            };
+
+            // 1. Errors always win
+            if let Some(err) = extract_gemini_error(&v) {
+                events.push(NormalizedEvent::Error {
+                    envelope: super::types::ErrorEnvelope {
+                        code: Some("CONTENT_BLOCKED".to_string()),
+                        message: err,
+                        provider_id: Some("gemini".to_string()),
+                        request_id: None,
+                        retryable: Some(false),
+                        status: Some(400),
+                    },
+                });
+                continue;
+            }
+
+            // 2. Tool calls – HARD FILTER POINT
+            if let Some(provider) = provider_id {
+                let calls = parse_tool_calls(provider, &v);
+                if !calls.is_empty() {
+                    events.push(NormalizedEvent::ToolCall { calls });
+                    continue; // nothing else is allowed through
                 }
             }
+
+            // 3. Text
+            if let Some(piece) = extract_text_from_value(&v) {
+                if !piece.is_empty() {
+                    events.push(NormalizedEvent::Delta { text: piece });
+                }
+            }
+
+            // 4. Reasoning
+            if let Some(reasoning) = extract_reasoning_from_value(&v) {
+                if !reasoning.is_empty() {
+                    events.push(NormalizedEvent::Reasoning { text: reasoning });
+                }
+            }
+
+            // 5. Usage
+            if let Some(usage) = usage_from_value(&v) {
+                events.push(NormalizedEvent::Usage { usage });
+            }
         }
+
         if last_newline > 0 {
             self.buffer.drain(..last_newline);
         }
+
         events
     }
 }

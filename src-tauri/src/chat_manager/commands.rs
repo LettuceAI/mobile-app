@@ -997,9 +997,9 @@ pub async fn chat_completion(
         _ => Vec::new(),
     };
 
-    let text = extract_text(api_response.data()).unwrap_or_default();
+    let text = extract_text(api_response.data(), Some(&model.provider_id)).unwrap_or_default();
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
+    let reasoning = extract_reasoning(api_response.data(), Some(&model.provider_id));
 
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
@@ -1620,9 +1620,10 @@ pub async fn chat_regenerate(
         _ => Vec::new(),
     };
 
-    let text = extract_text(api_response.data()).unwrap_or_default();
+    let text =
+        extract_text(api_response.data(), Some(&provider_cred.provider_id)).unwrap_or_default();
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
+    let reasoning = extract_reasoning(api_response.data(), Some(&provider_cred.provider_id));
 
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
@@ -2149,9 +2150,10 @@ pub async fn chat_continue(
         _ => Vec::new(),
     };
 
-    let text = extract_text(api_response.data()).unwrap_or_default();
+    let text =
+        extract_text(api_response.data(), Some(&provider_cred.provider_id)).unwrap_or_default();
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data());
+    let reasoning = extract_reasoning(api_response.data(), Some(&provider_cred.provider_id));
 
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
@@ -3547,7 +3549,7 @@ async fn summarize_messages(
         }
     }
 
-    extract_text(api_response.data())
+    extract_text(api_response.data(), Some(&provider_cred.provider_id))
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "Failed to summarize recent messages".to_string())
 }
@@ -3881,7 +3883,7 @@ pub async fn chat_generate_user_reply(
         ));
     }
 
-    let generated_text = extract_text(&api_response.data)
+    let generated_text = extract_text(&api_response.data, Some(&provider_cred.provider_id))
         .ok_or_else(|| "Failed to extract text from response".to_string())?;
 
     let cleaned = generated_text

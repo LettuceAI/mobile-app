@@ -72,6 +72,7 @@ pub struct CreationSession {
     pub draft: DraftCharacter,
     #[serde(default)]
     pub draft_history: Vec<DraftCharacter>,
+    pub creation_goal: CreationGoal,
     pub status: CreationStatus,
     pub created_at: i64,
     pub updated_at: i64,
@@ -84,6 +85,14 @@ pub enum CreationStatus {
     PreviewShown,
     Completed,
     Cancelled,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CreationGoal {
+    Character,
+    Persona,
+    Lorebook,
 }
 
 /// Uploaded image reference for use by the AI

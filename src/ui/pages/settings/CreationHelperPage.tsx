@@ -13,9 +13,9 @@ import {
   FileImage,
   Palette,
   Settings2,
+  CheckCircle2,
   BookOpen,
   List,
-  CheckCircle2,
   Info,
   ChevronDown,
 } from "lucide-react";
@@ -118,6 +118,118 @@ const CREATION_HELPER_TOOLS = [
     icon: CheckCircle2,
     category: "flow",
   },
+  {
+    id: "list_personas",
+    name: "List Personas",
+    description: "Browse personas",
+    icon: List,
+    category: "persona",
+  },
+  {
+    id: "upsert_persona",
+    name: "Save Persona",
+    description: "Create or update a persona",
+    icon: User,
+    category: "persona",
+  },
+  {
+    id: "use_uploaded_image_as_persona_avatar",
+    name: "Persona Avatar",
+    description: "Use uploaded image as persona avatar",
+    icon: FileImage,
+    category: "persona",
+  },
+  {
+    id: "delete_persona",
+    name: "Delete Persona",
+    description: "Remove a persona",
+    icon: Check,
+    category: "persona",
+  },
+  {
+    id: "get_default_persona",
+    name: "Default Persona",
+    description: "Fetch the default persona",
+    icon: User,
+    category: "persona",
+  },
+  {
+    id: "list_lorebooks",
+    name: "List Lorebooks",
+    description: "Browse lorebooks",
+    icon: List,
+    category: "lorebook",
+  },
+  {
+    id: "upsert_lorebook",
+    name: "Save Lorebook",
+    description: "Create or update a lorebook",
+    icon: BookOpen,
+    category: "lorebook",
+  },
+  {
+    id: "delete_lorebook",
+    name: "Delete Lorebook",
+    description: "Remove a lorebook",
+    icon: Check,
+    category: "lorebook",
+  },
+  {
+    id: "list_lorebook_entries",
+    name: "List Entries",
+    description: "View lorebook entries",
+    icon: List,
+    category: "lorebook",
+  },
+  {
+    id: "get_lorebook_entry",
+    name: "Get Entry",
+    description: "Fetch a lorebook entry",
+    icon: BookOpen,
+    category: "lorebook",
+  },
+  {
+    id: "upsert_lorebook_entry",
+    name: "Save Entry",
+    description: "Create or update an entry",
+    icon: PenTool,
+    category: "lorebook",
+  },
+  {
+    id: "delete_lorebook_entry",
+    name: "Delete Entry",
+    description: "Remove a lorebook entry",
+    icon: Check,
+    category: "lorebook",
+  },
+  {
+    id: "create_blank_lorebook_entry",
+    name: "Blank Entry",
+    description: "Create a placeholder entry",
+    icon: PenTool,
+    category: "lorebook",
+  },
+  {
+    id: "reorder_lorebook_entries",
+    name: "Reorder Entries",
+    description: "Change entry ordering",
+    icon: List,
+    category: "lorebook",
+  },
+  {
+    id: "list_character_lorebooks",
+    name: "List Character Lorebooks",
+    description: "See lorebooks for a character",
+    icon: BookOpen,
+    category: "lorebook",
+  },
+  {
+    id: "set_character_lorebooks",
+    name: "Set Character Lorebooks",
+    description: "Assign lorebooks to a character",
+    icon: BookOpen,
+    category: "lorebook",
+  },
 ] as const;
 
 const TOOL_CATEGORIES = {
@@ -126,6 +238,8 @@ const TOOL_CATEGORIES = {
   visual: { label: "Visual", color: "amber" },
   settings: { label: "Settings", color: "rose" },
   flow: { label: "Flow", color: "cyan" },
+  persona: { label: "Personas", color: "purple" },
+  lorebook: { label: "Lorebooks", color: "amber" },
 } as const;
 
 const TOOL_PRESETS = [
@@ -145,6 +259,8 @@ const TOOL_PRESETS = [
       "add_scene",
       "show_preview",
       "request_confirmation",
+      "list_character_lorebooks",
+      "set_character_lorebooks",
     ],
   },
   {
@@ -482,6 +598,11 @@ export function CreationHelperPage() {
                     </div>
                   </label>
                 </div>
+                <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/60">
+                  {smartToolSelection
+                    ? "When enabled, the AI Creator Helper asks what you want to create and loads only the relevant tool set."
+                    : "When disabled, the AI Creator Helper opens directly and uses all enabled tools; the assistant decides what to build."}
+                </div>
               </div>
 
               {/* Tool Presets - shown when smart selection is OFF */}
@@ -533,9 +654,13 @@ export function CreationHelperPage() {
                         cyan: {
                           badge: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
                         },
+                        purple: {
+                          badge: "border-purple-400/30 bg-purple-500/10 text-purple-300",
+                        },
                       };
 
-                      const categoryColors = colorMap[categoryInfo.color as keyof typeof colorMap];
+                      const categoryColors =
+                        colorMap[categoryInfo.color as keyof typeof colorMap] ?? colorMap.blue;
 
                       return (
                         <div key={category} className="space-y-2">

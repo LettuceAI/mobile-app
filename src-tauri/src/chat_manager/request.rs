@@ -37,11 +37,11 @@ pub fn message_text_for_api(message: &StoredMessage) -> String {
 
 /// Extract reasoning tokens from API response (for thinking models)
 /// Returns None if no reasoning was found
-pub fn extract_reasoning(data: &Value) -> Option<String> {
+pub fn extract_reasoning(data: &Value, provider_id: Option<&str>) -> Option<String> {
     match data {
         Value::String(s) => {
             if s.contains("data:") {
-                return super::sse::accumulate_reasoning_from_sse(s);
+                return super::sse::accumulate_reasoning_from_sse(s, provider_id);
             }
             None
         }
@@ -77,18 +77,20 @@ pub fn extract_reasoning(data: &Value) -> Option<String> {
     }
 }
 
-pub fn extract_text(data: &Value) -> Option<String> {
+pub fn extract_text(data: &Value, provider_id: Option<&str>) -> Option<String> {
     match data {
         Value::String(s) => {
             if s.contains("data:") {
-                return Some(super::sse::accumulate_text_from_sse(s).unwrap_or_default());
+                return Some(
+                    super::sse::accumulate_text_from_sse(s, provider_id).unwrap_or_default(),
+                );
             }
             Some(s.clone())
         }
         Value::Array(items) => {
             let mut combined = String::new();
             for item in items {
-                if let Some(part) = extract_text(item) {
+                if let Some(part) = extract_text(item, provider_id) {
                     combined.push_str(&part);
                 }
             }

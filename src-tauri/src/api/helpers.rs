@@ -245,7 +245,7 @@ pub(crate) async fn handle_streaming_response(
     let value = parse_body_to_value(&text);
 
     if !text_emitted && ok {
-        if let Some(content) = chat_request::extract_text(&value) {
+        if let Some(content) = chat_request::extract_text(&value, req.provider_id.as_deref()) {
             if !content.is_empty() {
                 log_info(
                     app,

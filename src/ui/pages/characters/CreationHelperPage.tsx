@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,13 +13,13 @@ import {
   Eye,
 } from "lucide-react";
 import { TopNav } from "../../components/App";
-import { cn, typography, animations, radius, shadows } from "../../design-tokens";
+import { cn, typography, animations, radius } from "../../design-tokens";
 import { BottomMenu, MenuButton, MenuSection } from "../../components";
 import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
 import { CharacterPreviewCard } from "./components";
 import { CreationHelperFooter } from "./components/CreationHelperFooter";
 import { ReferenceSelector, ReferenceAvatar, Reference } from "./components/ReferenceSelector";
-import { listCharacters, listPersonas } from "../../../core/storage/repo";
+import { listCharacters, listPersonas, readSettings } from "../../../core/storage/repo";
 
 interface CreationMessage {
   id: string;
@@ -33,12 +33,13 @@ interface CreationMessage {
 interface ToolCall {
   id: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments: unknown;
+  rawArguments?: string | null;
 }
 
 interface ToolResult {
   toolCallId: string;
-  result: Record<string, unknown>;
+  result: unknown;
   success: boolean;
 }
 
@@ -66,6 +67,7 @@ interface CreationSession {
   messages: CreationMessage[];
   draft: DraftCharacter;
   draftHistory: DraftCharacter[];
+  creationGoal: "character" | "persona" | "lorebook";
   status: "active" | "previewShown" | "completed" | "cancelled";
   createdAt: number;
   updatedAt: number;
@@ -153,7 +155,14 @@ function ImageThumbnail({
 
 export function CreationHelperPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const creationGoalParam = searchParams.get("goal");
+  const creationGoal: CreationSession["creationGoal"] =
+    creationGoalParam === "persona" || creationGoalParam === "lorebook"
+      ? creationGoalParam
+      : "character";
   const [session, setSession] = useState<CreationSession | null>(null);
+  const [smartToolSelection, setSmartToolSelection] = useState(true);
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -169,7 +178,6 @@ export function CreationHelperPage() {
   );
   // Entity avatar lookup: maps entityId -> avatarPath
   const [entityAvatars, setEntityAvatars] = useState<Record<string, string>>({});
-  // Local image cache for optimistic/instant display: maps imageId -> base64 data
   const [localImageCache, setLocalImageCache] = useState<Record<string, string>>({});
   const [selectedTool, setSelectedTool] = useState<{
     call: ToolCall;
@@ -177,7 +185,20 @@ export function CreationHelperPage() {
   } | null>(null);
   const [showToolDetail, setShowToolDetail] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string>("");
+  const [streamingReasoning, setStreamingReasoning] = useState<string>("");
+  const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamUnlistenRef = useRef<(() => void) | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const initGuardRef = useRef<string | null>(null);
+  const activeGoal = session?.creationGoal ?? creationGoal;
+  const goalLabel = smartToolSelection
+    ? activeGoal === "persona"
+      ? "Persona"
+      : activeGoal === "lorebook"
+        ? "Lorebook"
+        : "Character"
+    : "Creator";
 
   // Load entity avatars for reference lookup
   useEffect(() => {
@@ -199,17 +220,37 @@ export function CreationHelperPage() {
     loadEntityAvatars();
   }, []);
 
+  useEffect(() => {
+    sessionIdRef.current = session?.id ?? null;
+  }, [session?.id]);
+
   // Initialize session
   useEffect(() => {
     const initSession = async () => {
+      if (initGuardRef.current === creationGoal) {
+        return;
+      }
+      initGuardRef.current = creationGoal;
       try {
-        const newSession = await invoke<CreationSession>("creation_helper_start");
+        const settings = await readSettings();
+        const smartSelection = settings.advancedSettings?.creationHelperSmartToolSelection ?? true;
+        setSmartToolSelection(smartSelection);
+
+        const newSession = await invoke<CreationSession>("creation_helper_start", {
+          creationGoal,
+        });
         setSession(newSession);
 
         // Send initial greeting
         const greetingSession = await invoke<CreationSession>("creation_helper_send_message", {
           sessionId: newSession.id,
-          message: "Hi! I want to create a new character.",
+          message: smartSelection
+            ? creationGoal === "persona"
+              ? "Hi! I want to create a new persona."
+              : creationGoal === "lorebook"
+                ? "Hi! I want to create a new lorebook."
+                : "Hi! I want to create a new character."
+            : "Hi! I want to create something new.",
           uploadedImages: null,
         });
         setSession(greetingSession);
@@ -220,20 +261,53 @@ export function CreationHelperPage() {
     };
 
     initSession();
-  }, []);
+  }, [creationGoal]);
+
+  useEffect(() => {
+    setSession(null);
+    setInputValue("");
+    setSending(false);
+    setShowPreview(false);
+    setShowConfirmation(false);
+    setError(null);
+    setPendingAttachments([]);
+    setReferences([]);
+    setMessageReferences({});
+    setMessageDisplayContent({});
+    setSelectedTool(null);
+    setShowToolDetail(false);
+    setStreamingContent("");
+    setStreamingReasoning("");
+    setActiveTools([]);
+    if (streamUnlistenRef.current) {
+      streamUnlistenRef.current();
+      streamUnlistenRef.current = null;
+    }
+  }, [creationGoal]);
 
   // Listen for updates from backend
   useEffect(() => {
     const unlisten = listen("creation-helper-update", (event) => {
-      const payload = event.payload as { sessionId: string; draft: DraftCharacter; status: string };
+      const payload = event.payload as {
+        sessionId: string;
+        draft: DraftCharacter;
+        status: string;
+        messages: CreationMessage[];
+      };
+
       if (session && payload.sessionId === session.id) {
         setSession((prev) =>
           prev
-            ? { ...prev, draft: payload.draft, status: payload.status as CreationSession["status"] }
+            ? {
+                ...prev,
+                draft: payload.draft,
+                status: payload.status as CreationSession["status"],
+                messages: payload.messages,
+              }
             : null,
         );
 
-        // Check if we should show preview
+        // Only UI state like preview:
         if (payload.status === "previewShown") {
           setShowPreview(true);
         }
@@ -246,26 +320,17 @@ export function CreationHelperPage() {
   }, [session?.id]);
 
   useEffect(() => {
-    if (!session?.id) return;
-
-    const eventName = `api-normalized://creation-helper-${session.id}`;
-    const unlisten = listen(eventName, (event) => {
-      const payload = event.payload as {
-        type: string;
-        data: { text?: string };
-      };
-
-      if (payload.type === "delta" && payload.data.text) {
-        setStreamingContent((prev) => prev + payload.data.text);
-      } else if (payload.type === "done" || payload.type === "error") {
-        setStreamingContent("");
-      }
-    });
-
     return () => {
-      unlisten.then((fn) => fn());
+      if (streamUnlistenRef.current) {
+        streamUnlistenRef.current();
+        streamUnlistenRef.current = null;
+      }
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        invoke("creation_helper_cancel", { sessionId }).catch(console.error);
+      }
     };
-  }, [session?.id]);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -331,23 +396,33 @@ export function CreationHelperPage() {
     setSession((prev) =>
       prev
         ? {
-          ...prev,
-          messages: [...prev.messages, userMsg],
-        }
+            ...prev,
+            messages: [...prev.messages, userMsg],
+          }
         : null,
     );
 
     setSending(true);
     setError(null);
+    setStreamingContent("");
+    setStreamingReasoning("");
+    setActiveTools([]);
+
+    const requestId = crypto.randomUUID();
+    let unlistenStream: (() => void) | null = null;
+    if (streamUnlistenRef.current) {
+      streamUnlistenRef.current();
+      streamUnlistenRef.current = null;
+    }
 
     // Prepare images for upload
     const imagesToUpload =
       pendingAttachments.length > 0
         ? pendingAttachments.map((att) => ({
-          id: att.id,
-          data: att.data,
-          mimeType: att.mimeType,
-        }))
+            id: att.id,
+            data: att.data,
+            mimeType: att.mimeType,
+          }))
         : null;
 
     // Clear inputs immediately for better UX
@@ -356,10 +431,53 @@ export function CreationHelperPage() {
     setPendingAttachments([]);
 
     try {
+      unlistenStream = await listen<any>(`api-normalized://${requestId}`, (event) => {
+        let payload: { type?: string; data?: any } | null = null;
+        try {
+          payload =
+            typeof event.payload === "string"
+              ? JSON.parse(event.payload)
+              : (event.payload as { type?: string; data?: any });
+        } catch (err) {
+          console.error("Failed to parse streaming payload:", err);
+          return;
+        }
+
+        if (!payload?.type) return;
+
+        if (payload.type === "delta" && payload.data?.text) {
+          setStreamingContent((prev) => prev + payload.data.text);
+        } else if (payload.type === "reasoning" || payload.type === "thought") {
+          if (payload.data?.text) {
+            setStreamingReasoning((prev) => prev + payload.data.text);
+          }
+        } else if (payload.type === "toolCall" || payload.type === "tool_call") {
+          const calls = Array.isArray(payload.data) ? payload.data : payload.data?.calls;
+          if (calls?.length) {
+            setActiveTools((prev) => {
+              const merged = new Map(prev.map((call) => [call.id, call]));
+              for (const call of calls) {
+                merged.set(call.id, call);
+              }
+              return Array.from(merged.values());
+            });
+          }
+        } else if (payload.type === "error") {
+          const message =
+            payload.data?.message || payload.data?.error || "Streaming error. Please try again.";
+          setError(String(message));
+          setStreamingContent("");
+          setStreamingReasoning("");
+          setActiveTools([]);
+        }
+      });
+      streamUnlistenRef.current = unlistenStream;
+
       const updatedSession = await invoke<CreationSession>("creation_helper_send_message", {
         sessionId: session.id,
         message,
         uploadedImages: imagesToUpload,
+        requestId,
       });
 
       setSession(updatedSession);
@@ -391,9 +509,9 @@ export function CreationHelperPage() {
       setSession((prev) =>
         prev
           ? {
-            ...prev,
-            messages: prev.messages.filter((m) => m.id !== optimisticId),
-          }
+              ...prev,
+              messages: prev.messages.filter((m) => m.id !== optimisticId),
+            }
           : null,
       );
 
@@ -402,7 +520,16 @@ export function CreationHelperPage() {
       setReferences(references);
       setPendingAttachments(pendingAttachments);
     } finally {
+      if (unlistenStream) {
+        unlistenStream();
+      }
+      if (streamUnlistenRef.current === unlistenStream) {
+        streamUnlistenRef.current = null;
+      }
       setSending(false);
+      setStreamingContent("");
+      setStreamingReasoning("");
+      setActiveTools([]);
     }
   }, [session, inputValue, sending, references, pendingAttachments]);
 
@@ -431,10 +558,63 @@ export function CreationHelperPage() {
 
     setSending(true);
     setError(null);
+    setStreamingContent("");
+    setStreamingReasoning("");
+    setActiveTools([]);
+
+    const requestId = crypto.randomUUID();
+    let unlistenStream: (() => void) | null = null;
+    if (streamUnlistenRef.current) {
+      streamUnlistenRef.current();
+      streamUnlistenRef.current = null;
+    }
 
     try {
+      unlistenStream = await listen<any>(`api-normalized://${requestId}`, (event) => {
+        let payload: { type?: string; data?: any } | null = null;
+        try {
+          payload =
+            typeof event.payload === "string"
+              ? JSON.parse(event.payload)
+              : (event.payload as { type?: string; data?: any });
+        } catch (err) {
+          console.error("Failed to parse streaming payload:", err);
+          return;
+        }
+
+        if (!payload?.type) return;
+
+        if (payload.type === "delta" && payload.data?.text) {
+          setStreamingContent((prev) => prev + payload.data.text);
+        } else if (payload.type === "reasoning" || payload.type === "thought") {
+          if (payload.data?.text) {
+            setStreamingReasoning((prev) => prev + payload.data.text);
+          }
+        } else if (payload.type === "toolCall" || payload.type === "tool_call") {
+          const calls = Array.isArray(payload.data) ? payload.data : payload.data?.calls;
+          if (calls?.length) {
+            setActiveTools((prev) => {
+              const merged = new Map(prev.map((call) => [call.id, call]));
+              for (const call of calls) {
+                merged.set(call.id, call);
+              }
+              return Array.from(merged.values());
+            });
+          }
+        } else if (payload.type === "error") {
+          const message =
+            payload.data?.message || payload.data?.error || "Streaming error. Please try again.";
+          setError(String(message));
+          setStreamingContent("");
+          setStreamingReasoning("");
+          setActiveTools([]);
+        }
+      });
+      streamUnlistenRef.current = unlistenStream;
+
       const updatedSession = await invoke<CreationSession>("creation_helper_regenerate", {
         sessionId: session.id,
+        requestId,
       });
 
       setSession(updatedSession);
@@ -461,7 +641,16 @@ export function CreationHelperPage() {
         typeof err === "string" ? err : err.message || "Failed to regenerate. Please try again.";
       setError(errorMsg);
     } finally {
+      if (unlistenStream) {
+        unlistenStream();
+      }
+      if (streamUnlistenRef.current === unlistenStream) {
+        streamUnlistenRef.current = null;
+      }
       setSending(false);
+      setStreamingContent("");
+      setStreamingReasoning("");
+      setActiveTools([]);
     }
   }, [session, sending]);
 
@@ -492,18 +681,33 @@ export function CreationHelperPage() {
 
   const handleAbort = useCallback(() => {
     if (!session) return;
+    if (streamUnlistenRef.current) {
+      streamUnlistenRef.current();
+      streamUnlistenRef.current = null;
+    }
     invoke("creation_helper_cancel", { sessionId: session.id })
       .then(() => {
         setSending(false);
-        setError("Generation stopped.");
+        setStreamingContent("");
+        setStreamingReasoning("");
+        setActiveTools([]);
+        setError("Generation cancelled.");
       })
       .catch(console.error);
   }, [session]);
 
   const handleBack = () => {
+    if (streamUnlistenRef.current) {
+      streamUnlistenRef.current();
+      streamUnlistenRef.current = null;
+    }
     if (session) {
       invoke("creation_helper_cancel", { sessionId: session.id }).catch(console.error);
     }
+    setSending(false);
+    setStreamingContent("");
+    setStreamingReasoning("");
+    setActiveTools([]);
     navigate(-1);
   };
 
@@ -522,6 +726,23 @@ export function CreationHelperPage() {
       use_uploaded_image_as_chat_background: "Set background",
       show_preview: "Show preview",
       request_confirmation: "Ready to save",
+      generate_avatar: "Generate avatar",
+      list_personas: "List personas",
+      upsert_persona: "Save persona",
+      use_uploaded_image_as_persona_avatar: "Set persona avatar",
+      delete_persona: "Delete persona",
+      get_default_persona: "Get default persona",
+      list_lorebooks: "List lorebooks",
+      upsert_lorebook: "Save lorebook",
+      delete_lorebook: "Delete lorebook",
+      list_lorebook_entries: "List lorebook entries",
+      get_lorebook_entry: "Get lorebook entry",
+      upsert_lorebook_entry: "Save lorebook entry",
+      delete_lorebook_entry: "Delete lorebook entry",
+      create_blank_lorebook_entry: "Create lorebook entry",
+      reorder_lorebook_entries: "Reorder lorebook entries",
+      list_character_lorebooks: "List character lorebooks",
+      set_character_lorebooks: "Set character lorebooks",
     };
     return names[toolName] || toolName;
   };
@@ -529,51 +750,71 @@ export function CreationHelperPage() {
   // Thinking indicator component
   const TypingIndicator = () => (
     <motion.div
-      initial={{ opacity: 0, y: 5 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start mb-6"
+      className="flex items-center gap-2"
+      aria-label="Assistant is typing"
+      aria-live="polite"
     >
-      <div
-        className={cn(
-          "flex items-center gap-3 px-4 py-3",
-          radius.lg,
-          "bg-white/5 border border-white/10 backdrop-blur-sm shadow-lg",
-          shadows.md,
-        )}
-      >
-        <div className="flex items-center gap-1" aria-label="Assistant is typing">
-          <span className="typing-dot" />
-          <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
-          <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
-        </div>
+      <div className="flex items-center gap-1">
+        <span className="typing-dot" />
+        <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+        <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
       </div>
+      <span className="text-[10px] uppercase tracking-wider text-white/40">Thinking</span>
     </motion.div>
   );
+
+  const displayMessages = (() => {
+    if (!session) return [];
+
+    const msgs = [...session.messages];
+
+    if (sending) {
+      msgs.push({
+        id: "__streaming__",
+        role: "assistant",
+        content: streamingContent || "",
+        toolCalls: activeTools,
+        toolResults: [],
+        createdAt: Date.now(),
+      });
+    }
+
+    return msgs;
+  })();
 
   return (
     <div className="flex h-screen flex-col bg-[#050505]">
       <TopNav
         currentPath="/create/character/helper"
         onBackOverride={handleBack}
-        titleOverride="AI Character Creator"
+        titleOverride={`AI ${goalLabel} Creator`}
         rightAction={
-          <button
-            onClick={() => setShowPreview(true)}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all",
-              "bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10",
-              "active:scale-95",
-            )}
-          >
-            <Eye className="h-4 w-4" />
-            <span className="text-xs font-medium">Preview</span>
-          </button>
+          activeGoal === "character" ? (
+            <button
+              onClick={() => setShowPreview(true)}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all",
+                "bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10",
+                "active:scale-95",
+              )}
+            >
+              <Eye className="h-4 w-4" />
+              <span className="text-xs font-medium">Preview</span>
+            </button>
+          ) : null
         }
       />
 
       {/* Messages Container */}
       <main className="flex-1 overflow-y-auto px-4 pt-[calc(72px+env(safe-area-inset-top))] pb-32">
         <div className="mx-auto max-w-2xl space-y-4 py-4">
+          <div className="flex justify-center">
+            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-wider text-white/50">
+              {goalLabel} Mode
+            </div>
+          </div>
           {/* Welcome Message */}
           {!session?.messages.length && (
             <motion.div
@@ -584,11 +825,16 @@ export function CreationHelperPage() {
                 <Sparkles className="h-8 w-8 text-rose-300" />
               </div>
               <h2 className={cn(typography.h2.size, typography.h2.weight, "text-white mb-2")}>
-                AI Character Creator
+                AI {goalLabel} Creator
               </h2>
               <p className="text-white/60 text-sm max-w-xs">
-                I'll help you create a character through conversation. Just tell me what you have in
-                mind!
+                {!smartToolSelection
+                  ? "Tell me what you'd like to create and I'll help you build it."
+                  : activeGoal === "persona"
+                    ? "I'll help you create a persona through conversation. Tell me who you want to be."
+                    : activeGoal === "lorebook"
+                      ? "I'll help you craft a lorebook through conversation. Tell me about your world."
+                      : "I'll help you create a character through conversation. Just tell me what you have in mind!"}
               </p>
               <div className="mt-4 flex items-center gap-1">
                 <Loader2 className="h-4 w-4 text-white/40 animate-spin" />
@@ -599,7 +845,7 @@ export function CreationHelperPage() {
 
           {/* Messages */}
           <AnimatePresence mode="popLayout">
-            {session?.messages.map((message) => (
+            {displayMessages.map((message) => (
               <motion.div
                 key={message.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -632,7 +878,11 @@ export function CreationHelperPage() {
                       }
                     }
 
-                    return displayText.trim() ? (
+                    if (message.id === "__streaming__" && !displayText.trim()) {
+                      return <TypingIndicator />;
+                    }
+
+                    return (
                       <MarkdownRenderer
                         content={displayText}
                         className={cn(
@@ -640,7 +890,7 @@ export function CreationHelperPage() {
                           message.role === "user" ? "text-white" : "text-white/90",
                         )}
                       />
-                    ) : null;
+                    );
                   })()}
 
                   {/* References & Attachments Display */}
@@ -700,7 +950,7 @@ export function CreationHelperPage() {
                         {images.map((img) => (
                           <ImageThumbnail
                             key={img.id}
-                            sessionId={session.id}
+                            sessionId={session?.id as string}
                             imageId={img.id}
                             filename={img.filename}
                             localCache={localImageCache}
@@ -711,45 +961,80 @@ export function CreationHelperPage() {
                   })()}
 
                   {/* Tool Calls Display */}
-                  {message.toolResults && message.toolResults.length > 0 && (
-                    <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
-                      {message.toolResults.map((result) => {
-                        // Find matching tool call by ID
-                        const toolCall = message.toolCalls.find(
-                          (tc) => tc.id === result.toolCallId,
-                        );
-                        return (
-                          <button
-                            key={result.toolCallId}
-                            onClick={() => {
-                              if (toolCall) {
-                                setSelectedTool({ call: toolCall, result });
+                  {(() => {
+                    const toolResults = message.toolResults || [];
+                    const toolCalls = message.toolCalls || [];
+                    const toolResultsById = new Map(
+                      toolResults.map((result) => [result.toolCallId, result]),
+                    );
+                    const toolCallIds = new Set(toolCalls.map((call) => call.id));
+                    const toolEntries = toolCalls.map((call) => ({
+                      call,
+                      result: toolResultsById.get(call.id),
+                    }));
+                    for (const result of toolResults) {
+                      if (!toolCallIds.has(result.toolCallId)) {
+                        toolEntries.push({
+                          call: {
+                            id: result.toolCallId,
+                            name: "Unknown Tool",
+                            arguments: {},
+                          },
+                          result,
+                        });
+                      }
+                    }
+
+                    if (toolEntries.length === 0) return null;
+
+                    return (
+                      <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
+                        {toolEntries.map(({ call, result }) => {
+                          const displayName = getToolDisplayName(call.name || "Unknown Tool");
+                          if (!result) {
+                            return (
+                              <div
+                                key={call.id}
+                                className={cn(
+                                  "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 text-left",
+                                  "bg-white/5 text-white/60 border border-white/10",
+                                )}
+                              >
+                                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                                <span className="truncate flex-1">{displayName}</span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <button
+                              key={call.id}
+                              onClick={() => {
+                                setSelectedTool({ call, result });
                                 setShowToolDetail(true);
-                              }
-                            }}
-                            className={cn(
-                              "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 transition-all text-left group",
-                              result.success
-                                ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
-                                : "bg-red-500/10 text-red-300 hover:bg-red-500/20",
-                            )}
-                          >
-                            {result.success ? (
-                              <Check className="h-3 w-3 shrink-0" />
-                            ) : (
-                              <span className="h-3 w-3 shrink-0">✗</span>
-                            )}
-                            <span className="truncate flex-1">
-                              {getToolDisplayName(toolCall?.name || "Unknown Tool")}
-                            </span>
-                            <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
-                              View Details
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                              }}
+                              className={cn(
+                                "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 transition-all text-left group",
+                                result.success
+                                  ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                                  : "bg-red-500/10 text-red-300 hover:bg-red-500/20",
+                              )}
+                            >
+                              {result.success ? (
+                                <Check className="h-3 w-3 shrink-0" />
+                              ) : (
+                                <span className="h-3 w-3 shrink-0">✗</span>
+                              )}
+                              <span className="truncate flex-1">{displayName}</span>
+                              <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
+                                View Details
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </motion.div>
             ))}
@@ -779,38 +1064,6 @@ export function CreationHelperPage() {
                 </button>
               </motion.div>
             )}
-
-          {/* Streaming content / Thinking Indicator */}
-          {sending && (
-            streamingContent ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex justify-start"
-              >
-                <div
-                  className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-3",
-                    "bg-white/5 border border-white/10 text-white/90",
-                  )}
-                >
-                  <MarkdownRenderer
-                    content={streamingContent}
-                    className="text-sm leading-relaxed text-white/90"
-                  />
-                  <div className="flex items-center gap-1 mt-2">
-                    <div className="flex items-center gap-0.5" aria-label="Generating">
-                      <span className="typing-dot h-1! w-1!" />
-                      <span className="typing-dot h-1! w-1!" style={{ animationDelay: '0.2s' }} />
-                      <span className="typing-dot h-1! w-1!" style={{ animationDelay: '0.4s' }} />
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <TypingIndicator />
-            )
-          )}
 
           <div ref={messagesEndRef} />
         </div>
@@ -856,47 +1109,49 @@ export function CreationHelperPage() {
       />
 
       {/* Preview Bottom Sheet */}
-      <BottomMenu
-        isOpen={showPreview}
-        onClose={() => {
-          setShowPreview(false);
-          setShowConfirmation(false);
-        }}
-        title={showConfirmation ? "Ready to Save?" : "Character Preview"}
-      >
-        {session?.draft && (
-          <div className="space-y-4">
-            <CharacterPreviewCard draft={session.draft} sessionId={session.id} />
+      {activeGoal === "character" && (
+        <BottomMenu
+          isOpen={showPreview}
+          onClose={() => {
+            setShowPreview(false);
+            setShowConfirmation(false);
+          }}
+          title={showConfirmation ? "Ready to Save?" : "Character Preview"}
+        >
+          {session?.draft && (
+            <div className="space-y-4">
+              <CharacterPreviewCard draft={session.draft} sessionId={session.id} />
 
-            <MenuSection>
-              <MenuButton
-                icon={Check}
-                title="Use This Character"
-                description="Save and start chatting"
-                color="from-emerald-500 to-teal-600"
-                onClick={handleUseCharacter}
-              />
-              <MenuButton
-                icon={RefreshCw}
-                title="Keep Editing"
-                description="Continue the conversation"
-                color="from-blue-500 to-cyan-600"
-                onClick={() => {
-                  setShowPreview(false);
-                  setShowConfirmation(false);
-                }}
-              />
-              <MenuButton
-                icon={PenLine}
-                title="Edit Manually"
-                description="Fine-tune in the editor"
-                color="from-amber-500 to-orange-600"
-                onClick={handleEditManually}
-              />
-            </MenuSection>
-          </div>
-        )}
-      </BottomMenu>
+              <MenuSection>
+                <MenuButton
+                  icon={Check}
+                  title="Use This Character"
+                  description="Save and start chatting"
+                  color="from-emerald-500 to-teal-600"
+                  onClick={handleUseCharacter}
+                />
+                <MenuButton
+                  icon={RefreshCw}
+                  title="Keep Editing"
+                  description="Continue the conversation"
+                  color="from-blue-500 to-cyan-600"
+                  onClick={() => {
+                    setShowPreview(false);
+                    setShowConfirmation(false);
+                  }}
+                />
+                <MenuButton
+                  icon={PenLine}
+                  title="Edit Manually"
+                  description="Fine-tune in the editor"
+                  color="from-amber-500 to-orange-600"
+                  onClick={handleEditManually}
+                />
+              </MenuSection>
+            </div>
+          )}
+        </BottomMenu>
+      )}
 
       {/* Tool Detail Bottom Sheet */}
       <BottomMenu

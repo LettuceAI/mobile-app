@@ -13,6 +13,8 @@ use crate::chat_manager::request_builder::build_chat_request;
 use crate::chat_manager::sse::accumulate_tool_calls_from_sse;
 use crate::chat_manager::tooling::{parse_tool_calls, ToolConfig};
 use crate::storage_manager::db::{now_ms, open_db};
+use crate::storage_manager::lorebook as lorebook_storage;
+use crate::storage_manager::personas as personas_storage;
 use crate::storage_manager::settings::internal_read_settings;
 use crate::usage::{
     add_usage_record,
@@ -25,7 +27,7 @@ lazy_static::lazy_static! {
     static ref UPLOADED_IMAGES: Mutex<HashMap<String, HashMap<String, UploadedImage>>> = Mutex::new(HashMap::new());
 }
 
-pub fn start_session() -> Result<CreationSession, String> {
+pub fn start_session(creation_goal: CreationGoal) -> Result<CreationSession, String> {
     let now = now_ms() as i64;
     let session_id = Uuid::new_v4().to_string();
 
@@ -34,6 +36,7 @@ pub fn start_session() -> Result<CreationSession, String> {
         messages: vec![],
         draft: DraftCharacter::default(),
         draft_history: vec![],
+        creation_goal,
         status: CreationStatus::Active,
         created_at: now,
         updated_at: now,
@@ -261,6 +264,312 @@ fn execute_tool(
                 "draft": session.draft
             })
         }
+        "list_personas" => match personas_storage::personas_list(app.clone()) {
+            Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                Ok(personas) => json!({ "success": true, "personas": personas }),
+                Err(e) => json!({ "success": false, "error": e.to_string() }),
+            },
+            Err(e) => json!({ "success": false, "error": e }),
+        },
+        "upsert_persona" => {
+            let title = arguments.get("title").and_then(|v| v.as_str());
+            let description = arguments.get("description").and_then(|v| v.as_str());
+            if let (Some(title), Some(description)) = (title, description) {
+                let now = now_ms() as i64;
+                let persona_json = json!({
+                    "id": arguments.get("id").and_then(|v| v.as_str()),
+                    "title": title,
+                    "description": description,
+                    "avatarPath": arguments.get("avatar_path").and_then(|v| v.as_str()),
+                    "isDefault": arguments.get("is_default").and_then(|v| v.as_bool()).unwrap_or(false),
+                    "createdAt": now,
+                    "updatedAt": now,
+                });
+                match personas_storage::persona_upsert(app.clone(), persona_json.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(persona) => json!({ "success": true, "persona": persona }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing required persona fields" })
+            }
+        }
+        "delete_persona" => {
+            if let Some(id) = arguments.get("id").and_then(|v| v.as_str()) {
+                match personas_storage::persona_delete(app.clone(), id.to_string()) {
+                    Ok(()) => json!({ "success": true }),
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'id' argument" })
+            }
+        }
+        "get_default_persona" => match personas_storage::persona_default_get(app.clone()) {
+            Ok(Some(raw)) => match serde_json::from_str::<Value>(&raw) {
+                Ok(persona) => json!({ "success": true, "persona": persona }),
+                Err(e) => json!({ "success": false, "error": e.to_string() }),
+            },
+            Ok(None) => json!({ "success": true, "persona": Value::Null }),
+            Err(e) => json!({ "success": false, "error": e }),
+        },
+        "use_uploaded_image_as_persona_avatar" => {
+            let persona_id = arguments.get("persona_id").and_then(|v| v.as_str());
+            let image_id = arguments.get("image_id").and_then(|v| v.as_str());
+            if let (Some(persona_id), Some(image_id)) = (persona_id, image_id) {
+                match get_uploaded_image(&session.id, image_id) {
+                    Ok(Some(image)) => match personas_storage::personas_list(app.clone()) {
+                        Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                            Ok(Value::Array(personas)) => {
+                                if let Some(persona) = personas.iter().find_map(|p| {
+                                    let id = p.get("id")?.as_str()?;
+                                    if id != persona_id {
+                                        return None;
+                                    }
+                                    Some(p)
+                                }) {
+                                    let title = persona.get("title").and_then(|v| v.as_str());
+                                    let description =
+                                        persona.get("description").and_then(|v| v.as_str());
+                                    let is_default =
+                                        persona.get("isDefault").and_then(|v| v.as_bool());
+                                    if let (Some(title), Some(description)) = (title, description) {
+                                        let persona_json = json!({
+                                            "id": persona_id,
+                                            "title": title,
+                                            "description": description,
+                                            "avatarPath": image.data,
+                                            "isDefault": is_default.unwrap_or(false),
+                                        });
+                                        match personas_storage::persona_upsert(
+                                            app.clone(),
+                                            persona_json.to_string(),
+                                        ) {
+                                            Ok(updated) => {
+                                                match serde_json::from_str::<Value>(&updated) {
+                                                    Ok(persona) => {
+                                                        json!({ "success": true, "persona": persona })
+                                                    }
+                                                    Err(e) => {
+                                                        json!({ "success": false, "error": e.to_string() })
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => json!({ "success": false, "error": e }),
+                                        }
+                                    } else {
+                                        json!({ "success": false, "error": "Persona missing title or description" })
+                                    }
+                                } else {
+                                    json!({ "success": false, "error": "Persona not found" })
+                                }
+                            }
+                            Ok(_) => {
+                                json!({ "success": false, "error": "Unexpected persona list format" })
+                            }
+                            Err(e) => json!({ "success": false, "error": e.to_string() }),
+                        },
+                        Err(e) => json!({ "success": false, "error": e }),
+                    },
+                    Ok(None) => json!({ "success": false, "error": "Image not found" }),
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'persona_id' or 'image_id' argument" })
+            }
+        }
+        "list_lorebooks" => match lorebook_storage::lorebooks_list(app.clone()) {
+            Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                Ok(lorebooks) => json!({ "success": true, "lorebooks": lorebooks }),
+                Err(e) => json!({ "success": false, "error": e.to_string() }),
+            },
+            Err(e) => json!({ "success": false, "error": e }),
+        },
+        "upsert_lorebook" => {
+            if let Some(name) = arguments.get("name").and_then(|v| v.as_str()) {
+                let now = now_ms() as i64;
+                let lorebook_id = arguments
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| Uuid::new_v4().to_string());
+                let lorebook_json = json!({
+                    "id": lorebook_id,
+                    "name": name,
+                    "createdAt": now,
+                    "updatedAt": now,
+                });
+                match lorebook_storage::lorebook_upsert(app.clone(), lorebook_json.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(lorebook) => json!({ "success": true, "lorebook": lorebook }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'name' argument" })
+            }
+        }
+        "delete_lorebook" => {
+            if let Some(id) = arguments.get("lorebook_id").and_then(|v| v.as_str()) {
+                match lorebook_storage::lorebook_delete(app.clone(), id.to_string()) {
+                    Ok(()) => json!({ "success": true }),
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'lorebook_id' argument" })
+            }
+        }
+        "list_lorebook_entries" => {
+            if let Some(id) = arguments.get("lorebook_id").and_then(|v| v.as_str()) {
+                match lorebook_storage::lorebook_entries_list(app.clone(), id.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(entries) => json!({ "success": true, "entries": entries }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'lorebook_id' argument" })
+            }
+        }
+        "get_lorebook_entry" => {
+            if let Some(id) = arguments.get("entry_id").and_then(|v| v.as_str()) {
+                match lorebook_storage::lorebook_entry_get(app.clone(), id.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(entry) => json!({ "success": true, "entry": entry }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'entry_id' argument" })
+            }
+        }
+        "upsert_lorebook_entry" => {
+            let lorebook_id = arguments.get("lorebook_id").and_then(|v| v.as_str());
+            let title = arguments.get("title").and_then(|v| v.as_str());
+            let content = arguments.get("content").and_then(|v| v.as_str());
+            if let (Some(lorebook_id), Some(title), Some(content)) = (lorebook_id, title, content) {
+                let now = now_ms() as i64;
+                let entry_id = arguments
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| Uuid::new_v4().to_string());
+                let keywords: Vec<String> = arguments
+                    .get("keywords")
+                    .and_then(|v| v.as_array())
+                    .map(|values| {
+                        values
+                            .iter()
+                            .filter_map(|value| value.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let entry_json = json!({
+                    "id": entry_id,
+                    "lorebookId": lorebook_id,
+                    "title": title,
+                    "enabled": arguments.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+                    "alwaysActive": arguments.get("always_active").and_then(|v| v.as_bool()).unwrap_or(false),
+                    "keywords": keywords,
+                    "caseSensitive": arguments.get("case_sensitive").and_then(|v| v.as_bool()).unwrap_or(false),
+                    "content": content,
+                    "priority": arguments.get("priority").and_then(|v| v.as_i64()).unwrap_or(0),
+                    "displayOrder": arguments.get("display_order").and_then(|v| v.as_i64()).unwrap_or(0),
+                    "createdAt": now,
+                    "updatedAt": now,
+                });
+                match lorebook_storage::lorebook_entry_upsert(app.clone(), entry_json.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(entry) => json!({ "success": true, "entry": entry }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing required lorebook entry fields" })
+            }
+        }
+        "delete_lorebook_entry" => {
+            if let Some(id) = arguments.get("entry_id").and_then(|v| v.as_str()) {
+                match lorebook_storage::lorebook_entry_delete(app.clone(), id.to_string()) {
+                    Ok(()) => json!({ "success": true }),
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'entry_id' argument" })
+            }
+        }
+        "create_blank_lorebook_entry" => {
+            if let Some(id) = arguments.get("lorebook_id").and_then(|v| v.as_str()) {
+                match lorebook_storage::lorebook_entry_create_blank(app.clone(), id.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(entry) => json!({ "success": true, "entry": entry }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'lorebook_id' argument" })
+            }
+        }
+        "reorder_lorebook_entries" => {
+            if let Some(updates) = arguments.get("updates").and_then(|v| v.as_array()) {
+                let mapped: Vec<(String, i32)> = updates
+                    .iter()
+                    .filter_map(|entry| {
+                        let entry_id = entry.get("entry_id").and_then(|v| v.as_str())?;
+                        let display_order = entry.get("display_order").and_then(|v| v.as_i64())?;
+                        Some((entry_id.to_string(), display_order as i32))
+                    })
+                    .collect();
+                match lorebook_storage::lorebook_entries_reorder(
+                    app.clone(),
+                    serde_json::to_string(&mapped).unwrap_or_default(),
+                ) {
+                    Ok(()) => json!({ "success": true }),
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'updates' argument" })
+            }
+        }
+        "list_character_lorebooks" => {
+            if let Some(id) = arguments.get("character_id").and_then(|v| v.as_str()) {
+                match lorebook_storage::character_lorebooks_list(app.clone(), id.to_string()) {
+                    Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+                        Ok(lorebooks) => json!({ "success": true, "lorebooks": lorebooks }),
+                        Err(e) => json!({ "success": false, "error": e.to_string() }),
+                    },
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing 'character_id' argument" })
+            }
+        }
+        "set_character_lorebooks" => {
+            let character_id = arguments.get("character_id").and_then(|v| v.as_str());
+            let lorebook_ids = arguments.get("lorebook_ids").and_then(|v| v.as_array());
+            if let (Some(character_id), Some(lorebook_ids)) = (character_id, lorebook_ids) {
+                let ids: Vec<String> = lorebook_ids
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|id| id.to_string()))
+                    .collect();
+                match lorebook_storage::character_lorebooks_set(
+                    app.clone(),
+                    character_id.to_string(),
+                    serde_json::to_string(&ids).unwrap_or_default(),
+                ) {
+                    Ok(()) => json!({ "success": true }),
+                    Err(e) => json!({ "success": false, "error": e }),
+                }
+            } else {
+                json!({ "success": false, "error": "Missing character or lorebook IDs" })
+            }
+        }
         _ => {
             json!({ "success": false, "error": format!("Unknown tool: {}", tool_name) })
         }
@@ -327,6 +636,7 @@ pub async fn send_message(
     session_id: String,
     user_message: String,
     uploaded_images: Option<Vec<(String, String, String)>>, // (id, data, mime_type)
+    request_id: Option<String>,
 ) -> Result<CreationSession, String> {
     let now = now_ms() as i64;
 
@@ -360,12 +670,13 @@ pub async fn send_message(
         session.draft_history.remove(0);
     }
 
-    process_assistant_turn(app, session_id, session).await
+    process_assistant_turn(app, session_id, session, request_id).await
 }
 
 pub async fn regenerate_response(
     app: AppHandle,
     session_id: String,
+    request_id: Option<String>,
 ) -> Result<CreationSession, String> {
     let mut session = {
         let sessions = SESSIONS.lock().map_err(|e| e.to_string())?;
@@ -396,7 +707,7 @@ pub async fn regenerate_response(
             session.draft_history.remove(0);
         }
 
-        process_assistant_turn(app, session_id, session).await
+        process_assistant_turn(app, session_id, session, request_id).await
     } else {
         Err("No assistant message to regenerate".to_string())
     }
@@ -406,6 +717,7 @@ async fn process_assistant_turn(
     app: AppHandle,
     session_id: String,
     mut session: CreationSession,
+    request_id: Option<String>,
 ) -> Result<CreationSession, String> {
     let settings_json =
         internal_read_settings(&app)?.ok_or_else(|| "No settings found".to_string())?;
@@ -424,7 +736,8 @@ async fn process_assistant_turn(
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let stream_request_id = format!("creation-helper-{}", session_id);
+    let stream_request_id =
+        request_id.unwrap_or_else(|| format!("creation-helper-{}-{}", session_id, Uuid::new_v4()));
 
     let models = settings.get("models").and_then(|v| v.as_array());
     let model = models
@@ -461,9 +774,24 @@ async fn process_assistant_turn(
         .and_then(|v| v.as_str())
         .unwrap_or(provider_id);
 
+    let smart_tool_selection = advanced_settings
+        .and_then(|a| a.get("creationHelperSmartToolSelection"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let enabled_tools: Option<Vec<String>> = advanced_settings
+        .and_then(|a| a.get("creationHelperEnabledTools"))
+        .and_then(|v| v.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        });
+
     let mut api_messages = vec![json!({
         "role": "system",
-        "content": get_creation_helper_system_prompt()
+        "content": get_creation_helper_system_prompt(&session.creation_goal, smart_tool_selection)
     })];
 
     for msg in &session.messages {
@@ -510,7 +838,15 @@ async fn process_assistant_turn(
         }
     }
 
-    let tools = get_creation_helper_tools();
+    let tools = get_creation_helper_tools(&session.creation_goal, smart_tool_selection);
+    let tools = if let Some(enabled_tools) = enabled_tools {
+        tools
+            .into_iter()
+            .filter(|tool| enabled_tools.contains(&tool.name))
+            .collect()
+    } else {
+        tools
+    };
     let tool_config = ToolConfig {
         tools,
         choice: None,
@@ -654,7 +990,8 @@ async fn process_assistant_turn(
         None,
     );
 
-    let mut content = chat_request::extract_text(response_data).unwrap_or_default();
+    let mut content =
+        chat_request::extract_text(response_data, Some(provider_id)).unwrap_or_default();
     let mut tool_calls = if response_data.is_string() {
         accumulate_tool_calls_from_sse(response_data.as_str().unwrap(), provider_id)
     } else {
@@ -835,9 +1172,19 @@ async fn process_assistant_turn(
             None,
         );
 
-        let new_content = chat_request::extract_text(followup_data).unwrap_or_default();
+        let new_content =
+            chat_request::extract_text(followup_data, Some(provider_id)).unwrap_or_default();
         if !new_content.is_empty() {
             if !content.is_empty() {
+                if streaming_enabled {
+                    crate::transport::emit_normalized(
+                        &app,
+                        &stream_request_id,
+                        crate::chat_manager::types::NormalizedEvent::Delta {
+                            text: "\n\n".to_string(),
+                        },
+                    );
+                }
                 content.push_str("\n\n");
             }
             content.push_str(&new_content);
@@ -879,6 +1226,7 @@ async fn process_assistant_turn(
             "sessionId": session_id,
             "draft": session.draft,
             "status": session.status,
+            "messages": session.messages,
         }),
     );
 
