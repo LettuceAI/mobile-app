@@ -165,13 +165,20 @@ function GeneratedImagePreview({
   sessionId,
   imageId,
   label,
+  size = "md",
+  showLabel = true,
+  className,
 }: {
   sessionId: string;
   imageId: string;
   label: string;
+  size?: "sm" | "md" | "lg";
+  showLabel?: boolean;
+  className?: string;
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const sizeClass = size === "lg" ? "h-72 w-72" : size === "sm" ? "h-36 w-36" : "h-40 w-40";
 
   useEffect(() => {
     let active = true;
@@ -197,8 +204,13 @@ function GeneratedImagePreview({
   }, [sessionId, imageId]);
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="h-40 w-40 overflow-hidden rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
+    <div className={cn("flex flex-col items-center gap-2", className)}>
+      <div
+        className={cn(
+          sizeClass,
+          "overflow-hidden rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center",
+        )}
+      >
         {loading ? (
           <Loader2 className="h-6 w-6 animate-spin text-white/40" />
         ) : imageUrl ? (
@@ -211,7 +223,11 @@ function GeneratedImagePreview({
           <span className="text-xs text-white/40">Failed to load</span>
         )}
       </div>
-      <span className="text-[11px] uppercase tracking-wider text-white/40">{label}</span>
+      {showLabel && (
+        <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-white/60">
+          {label}
+        </span>
+      )}
     </div>
   );
 }
@@ -247,6 +263,7 @@ export function CreationHelperPage() {
     result: ToolResult;
   } | null>(null);
   const [showToolDetail, setShowToolDetail] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{ id: string; label: string } | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [streamingReasoning, setStreamingReasoning] = useState<string>("");
   const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
@@ -915,7 +932,15 @@ export function CreationHelperPage() {
       msgs.push(...imageMessages);
     }
 
-    return msgs;
+    const indexed = msgs.map((msg, index) => ({ msg, index }));
+    indexed.sort((a, b) => {
+      if (a.msg.createdAt === b.msg.createdAt) {
+        return a.index - b.index;
+      }
+      return a.msg.createdAt - b.msg.createdAt;
+    });
+
+    return indexed.map((item) => item.msg);
   })();
 
   const imageGenerationLookup = useMemo(
@@ -988,16 +1013,20 @@ export function CreationHelperPage() {
               const imageEntry = imageGenerationLookup.get(message.id);
               const isUser = message.role === "user";
               const isSystem = message.role === "system";
+              const alignClass = imageEntry
+                ? "justify-start"
+                : isSystem
+                  ? "justify-center"
+                  : isUser
+                    ? "justify-end"
+                    : "justify-start";
               return (
                 <motion.div
                   key={message.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className={cn(
-                    "flex",
-                    isSystem ? "justify-center" : isUser ? "justify-end" : "justify-start",
-                  )}
+                  className={cn("flex", alignClass)}
                 >
                   <div
                     className={cn(
@@ -1013,28 +1042,41 @@ export function CreationHelperPage() {
                       <div className="flex flex-col items-center gap-2">
                         {imageEntry.status === "pending" ? (
                           <>
-                            <div className="h-40 w-40 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
+                            <div className="h-36 w-36 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
                               <Loader2 className="h-6 w-6 animate-spin text-white/40" />
                             </div>
-                            <span className="text-[11px] uppercase tracking-wider text-white/40">
+                            <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-white/60">
                               Generating image
                             </span>
                           </>
                         ) : imageEntry.status === "error" ? (
                           <>
-                            <div className="h-40 w-40 rounded-2xl border border-red-500/30 bg-red-500/10 flex items-center justify-center">
+                            <div className="h-36 w-36 rounded-2xl border border-red-500/30 bg-red-500/10 flex items-center justify-center">
                               <span className="text-xs text-red-200">Generation failed</span>
                             </div>
-                            <span className="text-[11px] uppercase tracking-wider text-red-200/70">
+                            <span className="rounded-full bg-red-500/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-red-200/80">
                               Generation failed
                             </span>
                           </>
                         ) : imageEntry.imageId ? (
-                          <GeneratedImagePreview
-                            sessionId={session?.id ?? ""}
-                            imageId={imageEntry.imageId}
-                            label="Image ready"
-                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setImagePreview({
+                                id: imageEntry.imageId as string,
+                                label: "Generated image",
+                              })
+                            }
+                            className="group flex flex-col items-center gap-2"
+                          >
+                            <GeneratedImagePreview
+                              sessionId={session?.id ?? ""}
+                              imageId={imageEntry.imageId}
+                              label="Image ready"
+                              size="sm"
+                              className="transition-transform group-hover:scale-[1.01]"
+                            />
+                          </button>
                         ) : (
                           <span className="text-xs text-white/40">Image unavailable</span>
                         )}
@@ -1399,6 +1441,23 @@ export function CreationHelperPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+      </BottomMenu>
+
+      <BottomMenu
+        isOpen={!!imagePreview}
+        onClose={() => setImagePreview(null)}
+        title={imagePreview?.label ?? "Generated Image"}
+      >
+        {imagePreview && session?.id && (
+          <div className="flex justify-center py-6">
+            <GeneratedImagePreview
+              sessionId={session.id}
+              imageId={imagePreview.id}
+              label={imagePreview.label}
+              size="lg"
+            />
           </div>
         )}
       </BottomMenu>
