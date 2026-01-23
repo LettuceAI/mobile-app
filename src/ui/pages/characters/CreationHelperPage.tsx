@@ -223,11 +223,6 @@ function GeneratedImagePreview({
           <span className="text-xs text-white/40">Failed to load</span>
         )}
       </div>
-      {showLabel && (
-        <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-white/60">
-          {label}
-        </span>
-      )}
     </div>
   );
 }
@@ -900,7 +895,6 @@ export function CreationHelperPage() {
         <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
         <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
       </div>
-      <span className="text-[10px] uppercase tracking-wider text-white/40">Thinking</span>
     </motion.div>
   );
 
@@ -1045,18 +1039,12 @@ export function CreationHelperPage() {
                             <div className="h-36 w-36 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
                               <Loader2 className="h-6 w-6 animate-spin text-white/40" />
                             </div>
-                            <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-white/60">
-                              Generating image
-                            </span>
                           </>
                         ) : imageEntry.status === "error" ? (
                           <>
                             <div className="h-36 w-36 rounded-2xl border border-red-500/30 bg-red-500/10 flex items-center justify-center">
                               <span className="text-xs text-red-200">Generation failed</span>
                             </div>
-                            <span className="rounded-full bg-red-500/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-red-200/80">
-                              Generation failed
-                            </span>
                           </>
                         ) : imageEntry.imageId ? (
                           <button
@@ -1085,14 +1073,11 @@ export function CreationHelperPage() {
                       <>
                         {/* Message Content */}
                         {(() => {
-                          // Strip reference/attachment text if present (text after "---\n")
                           let displayText = message.content;
 
-                          // Check for stored display content first
                           if (messageDisplayContent[message.id]) {
                             displayText = messageDisplayContent[message.id];
                           } else {
-                            // Strip reference/attachment section if present
                             const separator = "\n\n---\n";
                             const sepIndex = displayText.indexOf(separator);
                             if (sepIndex !== -1) {
