@@ -172,6 +172,32 @@ export function ProviderConfigForm({
               </label>
             </div>
           </div>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs font-medium text-white/70">Merge Same-role Messages</span>
+            <div className="flex items-center">
+              <input
+                id="mergeSameRoleMessages-onboarding"
+                type="checkbox"
+                checked={config?.mergeSameRoleMessages ?? true}
+                onChange={(e) =>
+                  onConfigChange({ ...config, mergeSameRoleMessages: e.target.checked })
+                }
+                className="peer sr-only"
+              />
+              <label
+                htmlFor="mergeSameRoleMessages-onboarding"
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out ${
+                  (config?.mergeSameRoleMessages ?? true) ? "bg-emerald-500" : "bg-white/20"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    (config?.mergeSameRoleMessages ?? true) ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </label>
+            </div>
+          </div>
         </>
       )}
 

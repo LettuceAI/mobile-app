@@ -26,6 +26,14 @@ impl CustomAnthropicAdapter {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
     }
+
+    fn merge_same_role_messages(&self) -> bool {
+        self.credential_config
+            .as_ref()
+            .and_then(|v| v.get("mergeSameRoleMessages"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+    }
 }
 
 #[derive(Serialize)]
@@ -142,8 +150,14 @@ impl ProviderAdapter for CustomAnthropicAdapter {
             .config_value("assistantRole")
             .unwrap_or_else(|| "assistant".to_string());
 
+        let source_messages = if self.merge_same_role_messages() {
+            combine_same_role_messages(messages_for_api)
+        } else {
+            messages_for_api.clone()
+        };
+
         let mut msgs: Vec<AnthropicMessage> = Vec::new();
-        for msg in messages_for_api {
+        for msg in &source_messages {
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
             if role == "system" || role == "developer" {
                 continue;
@@ -201,4 +215,40 @@ impl ProviderAdapter for CustomAnthropicAdapter {
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
     }
+}
+
+fn combine_same_role_messages(messages: &[Value]) -> Vec<Value> {
+    let mut combined: Vec<Value> = Vec::new();
+
+    for msg in messages {
+        let role = msg.get("role").and_then(|v| v.as_str());
+        let content = msg.get("content").and_then(|v| v.as_str());
+
+        if role.is_none() || content.is_none() {
+            combined.push(msg.clone());
+            continue;
+        }
+
+        let mut merged = false;
+        if let Some(last) = combined.last_mut() {
+            let last_role = last.get("role").and_then(|v| v.as_str());
+            if last_role == role {
+                if let Value::Object(map) = last {
+                    if let Some(Value::String(existing)) = map.get_mut("content") {
+                        if !existing.is_empty() {
+                            existing.push_str("\n\n");
+                        }
+                        existing.push_str(content.unwrap());
+                        merged = true;
+                    }
+                }
+            }
+        }
+
+        if !merged {
+            combined.push(msg.clone());
+        }
+    }
+
+    combined
 }
