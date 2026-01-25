@@ -589,6 +589,25 @@ export function EditCharacterPage() {
           {/* Character Tab: Personality & Scenes */}
           {activeTab === "character" && (
             <>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-1.5">
+                    <Info className="h-4 w-4 text-white/60" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Description</h3>
+                </div>
+                <textarea
+                  value={description}
+                  onChange={(e) => setFields({ description: e.target.value })}
+                  rows={3}
+                  placeholder="Short summary shown in lists and cards..."
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                />
+                <p className="text-xs text-white/50">
+                  Optional short description for display purposes.
+                </p>
+              </div>
+
               {/* Personality Section */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -604,10 +623,10 @@ export function EditCharacterPage() {
                   placeholder="Describe who this character is, their personality, background, speaking style, and how they should interact..."
                   className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
                 />
-                <div className="flex justify-end text-[11px] text-white/40">
-                  {wordCount(definition)} words
+                <div className="flex justify-between text-[11px] text-white/50">
+                  <span>Be detailed to create a unique personality</span>
+                  <span>{wordCount(definition)} words</span>
                 </div>
-                <p className="text-xs text-white/50">Be detailed to create a unique personality</p>
                 <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-3.5 py-3">
                   <div className="text-[11px] font-medium text-blue-200">
                     Available Placeholders
@@ -626,25 +645,6 @@ export function EditCharacterPage() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-1.5">
-                    <Info className="h-4 w-4 text-white/60" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-white">Description</h3>
-                </div>
-                <textarea
-                  value={description}
-                  onChange={(e) => setFields({ description: e.target.value })}
-                  rows={3}
-                  placeholder="Short summary shown in lists and cards..."
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
-                />
-                <p className="text-xs text-white/50">
-                  Optional short description for display purposes.
-                </p>
               </div>
 
               {/* Starting Scenes Section */}
