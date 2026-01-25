@@ -238,7 +238,7 @@ fn export_secrets(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
     let mut stmt = conn
-        .prepare("SELECT id, name, scope, target_ids, content, created_at, updated_at FROM prompt_templates")
+        .prepare("SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -249,8 +249,9 @@ fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, Str
                 "scope": r.get::<_, String>(2)?,
                 "target_ids": r.get::<_, String>(3)?,
                 "content": r.get::<_, String>(4)?,
-                "created_at": r.get::<_, i64>(5)?,
-                "updated_at": r.get::<_, i64>(6)?,
+                "entries": r.get::<_, String>(5)?,
+                "created_at": r.get::<_, i64>(6)?,
+                "updated_at": r.get::<_, i64>(7)?,
             }))
         })
         .map_err(|e| e.to_string())?;
@@ -1125,14 +1126,18 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
             // We now actively restore all templates, including prompt_app_default if present
 
             conn.execute(
-                "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     id,
                     item.get("name").and_then(|v| v.as_str()),
                     item.get("scope").and_then(|v| v.as_str()),
                     item.get("target_ids").and_then(|v| v.as_str()),
                     item.get("content").and_then(|v| v.as_str()),
+                    item
+                        .get("entries")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("[]"),
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],

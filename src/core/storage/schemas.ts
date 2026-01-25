@@ -6,12 +6,31 @@ const OptionalTokenCount = z.preprocess((v) => (v === null ? undefined : v), Tok
 export const PromptScopeSchema = z.enum(["appWide", "modelSpecific", "characterSpecific"]);
 export type PromptScope = z.infer<typeof PromptScopeSchema>;
 
+export const PromptEntryRoleSchema = z.enum(["system", "user", "assistant"]);
+export type PromptEntryRole = z.infer<typeof PromptEntryRoleSchema>;
+
+export const PromptEntryPositionSchema = z.enum(["relative", "inChat"]);
+export type PromptEntryPosition = z.infer<typeof PromptEntryPositionSchema>;
+
+export const SystemPromptEntrySchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  role: PromptEntryRoleSchema,
+  content: z.string(),
+  enabled: z.boolean().default(true),
+  injectionPosition: PromptEntryPositionSchema.default("relative"),
+  injectionDepth: z.number().int().min(0).default(0),
+  systemPrompt: z.boolean().default(false),
+});
+export type SystemPromptEntry = z.infer<typeof SystemPromptEntrySchema>;
+
 export const SystemPromptTemplateSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
   scope: PromptScopeSchema,
   targetIds: z.array(z.string()).default([]),
   content: z.string(),
+  entries: z.array(SystemPromptEntrySchema).default([]),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

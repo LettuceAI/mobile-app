@@ -69,6 +69,13 @@ function getTemplateIcon(templateId: string) {
   }
 }
 
+function getTemplatePreviewText(template: SystemPromptTemplate) {
+  if (template.entries && template.entries.length > 0) {
+    return template.entries.map((entry) => entry.content).join("\n");
+  }
+  return template.content;
+}
+
 function PromptCardSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -221,7 +228,7 @@ function PromptCard({
 
         {/* Content Preview */}
         <p className="text-xs text-white/40 line-clamp-2 mt-3 leading-relaxed">
-          {template.content}
+          {getTemplatePreviewText(template)}
         </p>
 
         {/* Footer */}
@@ -351,7 +358,10 @@ export function SystemPromptsPage() {
   async function handleDuplicate(template: SystemPromptTemplate) {
     try {
       const name = `${template.name} (Copy)`;
-      await createPromptTemplate(name, "appWide", [], template.content);
+      const contentToSave = template.content.trim()
+        ? template.content
+        : getTemplatePreviewText(template);
+      await createPromptTemplate(name, "appWide", [], contentToSave, template.entries);
       await loadData();
     } catch (error) {
       console.error("Failed to duplicate template:", error);
@@ -381,7 +391,9 @@ export function SystemPromptsPage() {
 
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      return t.name.toLowerCase().includes(q) || t.content.toLowerCase().includes(q);
+      return (
+        t.name.toLowerCase().includes(q) || getTemplatePreviewText(t).toLowerCase().includes(q)
+      );
     });
   }, [templates, activeTag, search]);
 

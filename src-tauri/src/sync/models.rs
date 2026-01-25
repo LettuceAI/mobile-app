@@ -73,6 +73,7 @@ pub struct PromptTemplate {
     pub scope: String,
     pub target_ids: String,
     pub content: String,
+    pub entries: String,
     pub created_at: i64,
     pub updated_at: i64,
 }

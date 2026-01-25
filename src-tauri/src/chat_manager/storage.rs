@@ -14,6 +14,7 @@ use super::prompt_engine;
 use super::types::{
     AccessibilitySettings, AccessibilitySoundSettings, AdvancedModelSettings, AdvancedSettings,
     Character, Model, Persona, ProviderCredential, Session, Settings, StoredMessage,
+    SystemPromptEntry,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -223,8 +224,8 @@ pub fn build_system_prompt(
     persona: Option<&Persona>,
     session: &Session,
     settings: &Settings,
-) -> Option<String> {
-    prompt_engine::build_system_prompt(app, character, model, persona, session, settings)
+) -> Vec<SystemPromptEntry> {
+    prompt_engine::build_system_prompt_entries(app, character, model, persona, session, settings)
 }
 
 pub fn recent_messages(session: &Session, limit: usize) -> Vec<StoredMessage> {

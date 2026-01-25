@@ -880,6 +880,7 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
                     None,             // keep scope as-is for App Default
                     Some(Vec::new()), // clear target ids
                     None,
+                    None,
                 )?;
                 changed += 1;
             }
@@ -908,6 +909,7 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
                 None,
                 Some(new_scope),
                 Some(new_target_ids),
+                None,
                 None,
             )?;
             changed += 1;
@@ -959,6 +961,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                             PromptScope::AppWide,
                             vec![],
                             prompt_content.clone(),
+                            None,
                         )?;
                         prompt_map.insert(prompt_content.clone(), template.id.clone());
                         templates_created += 1;
@@ -992,6 +995,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                                         PromptScope::ModelSpecific,
                                         vec![model_id.to_string()],
                                         prompt_content.clone(),
+                                        None,
                                     )?;
                                     prompt_map.insert(prompt_content.clone(), template.id.clone());
                                     templates_created += 1;

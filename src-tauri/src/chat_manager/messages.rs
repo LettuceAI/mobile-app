@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-use super::types::ImageAttachment;
+use super::types::{ImageAttachment, PromptEntryRole, SystemPromptEntry};
 
 /// Pushes a system message to the API message list if present.
 /// Uses the provider-specific system role.
@@ -12,6 +12,22 @@ pub fn push_system_message(
     if let Some(system) = system_prompt {
         target.push(serde_json::json!({ "role": system_role, "content": system }));
     }
+}
+
+pub fn push_prompt_entry_message(
+    target: &mut Vec<Value>,
+    system_role: &str,
+    entry: &SystemPromptEntry,
+) {
+    if entry.content.trim().is_empty() {
+        return;
+    }
+    let role = match entry.role {
+        PromptEntryRole::System => system_role,
+        PromptEntryRole::User => "user",
+        PromptEntryRole::Assistant => "assistant",
+    };
+    target.push(serde_json::json!({ "role": role, "content": entry.content }));
 }
 
 pub fn build_multimodal_content(text: &str, attachments: &[ImageAttachment]) -> Value {

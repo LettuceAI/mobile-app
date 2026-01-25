@@ -169,7 +169,7 @@ fn fetch_globals(conn: &DbConnection) -> Result<Vec<u8>, String> {
         .collect();
 
     // Prompt Templates
-    let mut stmt = conn.prepare("SELECT id, name, scope, target_ids, content, created_at, updated_at FROM prompt_templates").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates").map_err(|e| e.to_string())?;
     let templates: Vec<PromptTemplate> = stmt
         .query_map([], |r| {
             Ok(PromptTemplate {
@@ -178,8 +178,9 @@ fn fetch_globals(conn: &DbConnection) -> Result<Vec<u8>, String> {
                 scope: r.get(2)?,
                 target_ids: r.get(3)?,
                 content: r.get(4)?,
-                created_at: r.get(5)?,
-                updated_at: r.get(6)?,
+                entries: r.get(5)?,
+                created_at: r.get(6)?,
+                updated_at: r.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -578,8 +579,8 @@ fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
 
     // Prompt Templates
     for t in templates {
-        tx.execute(r#"INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
-                   params![t.id, t.name, t.scope, t.target_ids, t.content, t.created_at, t.updated_at]).map_err(|e| e.to_string())?;
+        tx.execute(r#"INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+                   params![t.id, t.name, t.scope, t.target_ids, t.content, t.entries, t.created_at, t.updated_at]).map_err(|e| e.to_string())?;
     }
 
     // Pricing

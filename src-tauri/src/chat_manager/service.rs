@@ -14,7 +14,8 @@ use super::storage::{
     load_settings, select_model,
 };
 use super::types::{
-    Character, Model, Persona, ProviderCredential, Session, Settings, UsageSummary,
+    Character, Model, Persona, ProviderCredential, Session, Settings, SystemPromptEntry,
+    UsageSummary,
 };
 
 pub struct ChatContext {
@@ -82,7 +83,7 @@ impl ChatContext {
         model: &Model,
         persona: Option<&Persona>,
         session: &Session,
-    ) -> Option<String> {
+    ) -> Vec<SystemPromptEntry> {
         build_system_prompt(
             &self.app,
             character,

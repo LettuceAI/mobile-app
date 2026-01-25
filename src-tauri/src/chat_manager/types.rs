@@ -12,6 +12,44 @@ pub enum PromptScope {
     CharacterSpecific,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum PromptEntryRole {
+    System,
+    User,
+    Assistant,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum PromptEntryPosition {
+    Relative,
+    InChat,
+}
+
+impl Default for PromptEntryPosition {
+    fn default() -> Self {
+        PromptEntryPosition::Relative
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemPromptEntry {
+    pub id: String,
+    pub name: String,
+    pub role: PromptEntryRole,
+    pub content: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub injection_position: PromptEntryPosition,
+    #[serde(default)]
+    pub injection_depth: u32,
+    #[serde(default)]
+    pub system_prompt: bool,
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemPromptTemplate {
@@ -22,6 +60,8 @@ pub struct SystemPromptTemplate {
     #[serde(default)]
     pub target_ids: Vec<String>,
     pub content: String,
+    #[serde(default)]
+    pub entries: Vec<SystemPromptEntry>,
     pub created_at: u64,
     pub updated_at: u64,
 }

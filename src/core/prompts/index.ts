@@ -10,12 +10,14 @@ export async function createPromptTemplate(
   scope: PromptScope,
   targetIds: string[],
   content: string,
+  entries?: SystemPromptTemplate["entries"],
 ): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("create_prompt_template", {
     name,
     scope,
     targetIds,
     content,
+    entries,
   });
 }
 
@@ -26,6 +28,7 @@ export async function updatePromptTemplate(
     scope?: PromptScope;
     targetIds?: string[];
     content?: string;
+    entries?: SystemPromptTemplate["entries"];
   },
 ): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("update_prompt_template", {
@@ -34,6 +37,7 @@ export async function updatePromptTemplate(
     scope: updates.scope,
     targetIds: updates.targetIds,
     content: updates.content,
+    entries: updates.entries,
   });
 }
 
@@ -84,6 +88,7 @@ export async function getRequiredTemplateVariables(templateId: string): Promise<
 export async function validateTemplateVariables(
   templateId: string,
   content: string,
+  entries?: SystemPromptTemplate["entries"],
 ): Promise<void> {
-  await invoke("validate_template_variables", { templateId, content });
+  await invoke("validate_template_variables", { templateId, content, entries });
 }

@@ -38,7 +38,8 @@ use crate::chat_manager::tooling::{
     parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition,
 };
 use crate::chat_manager::types::{
-    Character, DynamicMemorySettings, Model, Persona, ProviderCredential, Settings,
+    Character, DynamicMemorySettings, Model, Persona, PromptEntryPosition, PromptEntryRole,
+    ProviderCredential, Settings, SystemPromptEntry,
 };
 use crate::embedding_model;
 use crate::models::calculate_request_cost;
@@ -1849,6 +1850,68 @@ fn build_messages_for_api(
     messages
 }
 
+fn prompt_entry_message(system_role: &str, entry: &SystemPromptEntry) -> Value {
+    let role = match entry.role {
+        PromptEntryRole::System => system_role,
+        PromptEntryRole::User => "user",
+        PromptEntryRole::Assistant => "assistant",
+    };
+    json!({ "role": role, "content": entry.content })
+}
+
+fn partition_prompt_entries(
+    entries: Vec<SystemPromptEntry>,
+) -> (Vec<SystemPromptEntry>, Vec<SystemPromptEntry>) {
+    let mut relative = Vec::new();
+    let mut in_chat = Vec::new();
+    for entry in entries {
+        if entry.injection_position == PromptEntryPosition::InChat {
+            in_chat.push(entry);
+        } else {
+            relative.push(entry);
+        }
+    }
+    (relative, in_chat)
+}
+
+fn insert_in_chat_prompt_entries(
+    messages: &mut Vec<Value>,
+    system_role: &str,
+    entries: &[SystemPromptEntry],
+) {
+    if entries.is_empty() {
+        return;
+    }
+    let base_len = messages.len();
+    let mut inserts: Vec<(usize, usize, &SystemPromptEntry)> = entries
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let depth = entry.injection_depth as usize;
+            let pos = base_len.saturating_sub(depth);
+            (pos, idx, entry)
+        })
+        .collect();
+    inserts.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    let mut offset = 0usize;
+    for (pos, _, entry) in inserts {
+        if entry.content.trim().is_empty() {
+            continue;
+        }
+        let insert_at = pos.saturating_add(offset).min(messages.len());
+        messages.insert(insert_at, prompt_entry_message(system_role, entry));
+        offset += 1;
+    }
+}
+
+fn normalize_prompt_text(text: &str) -> String {
+    let mut result = text.to_string();
+    while result.contains("\n\n\n") {
+        result = result.replace("\n\n\n", "\n\n");
+    }
+    result.trim().to_string()
+}
+
 /// Build group chat system prompt for a specific character
 fn build_group_system_prompt(
     app: &AppHandle,
@@ -1858,16 +1921,40 @@ fn build_group_system_prompt(
     other_characters: &[CharacterInfo],
     settings: &Settings,
     retrieved_memories: &[MemoryEmbedding],
-) -> String {
-    use crate::chat_manager::prompts::{get_group_chat_prompt, get_group_chat_roleplay_prompt};
+) -> Vec<SystemPromptEntry> {
+    use crate::chat_manager::storage::{get_base_prompt, PromptType};
 
     // Select template based on chat type
     let is_roleplay = session.chat_type == "roleplay";
-    let template = if is_roleplay {
-        get_group_chat_roleplay_prompt(app)
+    let template_id = if is_roleplay {
+        prompts::APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID
     } else {
-        get_group_chat_prompt(app)
+        prompts::APP_GROUP_CHAT_TEMPLATE_ID
     };
+    let template = prompts::get_template(app, template_id)
+        .ok()
+        .flatten()
+        .map(|template| (template.content, template.entries))
+        .unwrap_or_else(|| {
+            let content = if is_roleplay {
+                get_base_prompt(PromptType::GroupChatRoleplayPrompt)
+            } else {
+                get_base_prompt(PromptType::GroupChatPrompt)
+            };
+            (
+                content.clone(),
+                vec![SystemPromptEntry {
+                    id: "entry_system".to_string(),
+                    name: "System Prompt".to_string(),
+                    role: PromptEntryRole::System,
+                    content,
+                    enabled: true,
+                    injection_position: PromptEntryPosition::Relative,
+                    injection_depth: 0,
+                    system_prompt: true,
+                }],
+            )
+        });
 
     // Character and persona descriptions are passed RAW to the LLM without any
     // translation or processing. The LLM receives the full description text as-is.
@@ -1965,29 +2052,55 @@ fn build_group_system_prompt(
         (String::new(), String::new())
     };
 
-    // Substitute placeholders (same pattern as normal chat)
-    let mut result = template;
-    result = result.replace("{{char.name}}", char_name);
-    result = result.replace("{{char.desc}}", char_desc);
-    result = result.replace("{{persona.name}}", persona_name);
-    result = result.replace("{{persona.desc}}", persona_desc);
-    result = result.replace("{{group_characters}}", &group_chars);
-    result = result.replace("{{context_summary}}", &context_summary_text);
-    result = result.replace("{{key_memories}}", &key_memories_text);
-    result = result.replace("{{content_rules}}", &content_rules);
-    result = result.replace("{{scene}}", &scene_content);
-    result = result.replace("{{scene_direction}}", &scene_direction);
+    let (template_content, template_entries) = template;
+    let entries = if template_entries.is_empty() && !template_content.trim().is_empty() {
+        vec![SystemPromptEntry {
+            id: "entry_system".to_string(),
+            name: "System Prompt".to_string(),
+            role: PromptEntryRole::System,
+            content: template_content,
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        }]
+    } else {
+        template_entries
+    };
 
-    // Legacy placeholder support
-    result = result.replace("{{char}}", char_name);
-    result = result.replace("{{persona}}", persona_name);
+    let mut rendered_entries = Vec::new();
+    for entry in entries {
+        if !entry.enabled && !entry.system_prompt {
+            continue;
+        }
+        let mut result = entry.content;
+        result = result.replace("{{char.name}}", char_name);
+        result = result.replace("{{char.desc}}", char_desc);
+        result = result.replace("{{persona.name}}", persona_name);
+        result = result.replace("{{persona.desc}}", persona_desc);
+        result = result.replace("{{group_characters}}", &group_chars);
+        result = result.replace("{{context_summary}}", &context_summary_text);
+        result = result.replace("{{key_memories}}", &key_memories_text);
+        result = result.replace("{{content_rules}}", &content_rules);
+        result = result.replace("{{scene}}", &scene_content);
+        result = result.replace("{{scene_direction}}", &scene_direction);
 
-    // Clean up multiple blank lines
-    while result.contains("\n\n\n") {
-        result = result.replace("\n\n\n", "\n\n");
+        // Legacy placeholder support
+        result = result.replace("{{char}}", char_name);
+        result = result.replace("{{persona}}", persona_name);
+
+        let result = normalize_prompt_text(&result);
+        if result.is_empty() {
+            continue;
+        }
+
+        rendered_entries.push(SystemPromptEntry {
+            content: result,
+            ..entry
+        });
     }
 
-    result.trim().to_string()
+    rendered_entries
 }
 
 /// Replace character name placeholders in scene content
@@ -2268,7 +2381,7 @@ async fn generate_character_response(
     }
 
     // Build system prompt with group context and retrieved memories
-    let system_prompt = build_group_system_prompt(
+    let system_prompt_entries = build_group_system_prompt(
         app,
         &character,
         persona.as_ref(),
@@ -2277,6 +2390,7 @@ async fn generate_character_response(
         settings,
         &retrieved_memories,
     );
+    let (relative_entries, in_chat_entries) = partition_prompt_entries(system_prompt_entries);
 
     // Convert group messages to API format
     let selected_char_info = context
@@ -2310,22 +2424,20 @@ async fn generate_character_response(
         conversation_window(&recent_messages, manual_window)
     };
 
-    let api_messages = build_messages_for_api(
+    let mut api_messages = build_messages_for_api(
         &messages_for_generation,
         &context.characters,
         selected_char_info,
         persona.as_ref(),
         true,
     );
-
-    // Use provider-specific system message handling (like regular chat)
     let system_role = crate::chat_manager::request_builder::system_role_for(cred);
+    insert_in_chat_prompt_entries(&mut api_messages, &system_role, &in_chat_entries);
+
     let mut messages_for_api = Vec::new();
-    crate::chat_manager::messages::push_system_message(
-        &mut messages_for_api,
-        &system_role,
-        Some(system_prompt),
-    );
+    for entry in &relative_entries {
+        messages_for_api.push(prompt_entry_message(&system_role, entry));
+    }
     messages_for_api.extend(api_messages);
 
     let persona_name = persona.as_ref().map(|p| p.title.as_str()).unwrap_or("User");

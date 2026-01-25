@@ -3,61 +3,18 @@ use tauri::AppHandle;
 
 use super::lorebook_matcher::{format_lorebook_for_prompt, get_active_lorebook_entries};
 use super::prompts;
-use super::types::{Character, Model, Persona, Session, Settings};
+use super::types::{
+    Character, Model, Persona, PromptEntryPosition, PromptEntryRole, Session, Settings,
+    SystemPromptEntry,
+};
 use crate::storage_manager::db::open_db;
 
 pub fn default_system_prompt_template() -> String {
-    "
-    You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.
-
-    # Scenario
-    {{scene}}
-
-    # Scene Direction
-    {{scene_direction}}
-
-    This is your hidden directive for how this scene should unfold. Guide the narrative toward this outcome naturally and organically through your character's actions, dialogue, and the world's events. NEVER explicitly mention or reveal this direction to {{persona.name}} - let it emerge through immersive roleplay.
-
-    # Your Character: {{char.name}}
-    {{char.desc}}
-
-    Embody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.
-
-    # {{persona.name}}'s Character
-    {{persona.desc}}
-
-    # World Information
-    The following is essential lore about this world, its characters, locations, items, and concepts. You MUST incorporate this information naturally into your roleplay when relevant. Treat this as established canon that shapes how characters behave, what they know, and how the world works.
-    {{lorebook}}
-
-    # Context Summary
-    {{context_summary}}
-
-    # Key Memories
-    Important facts to remember in this conversation:
-    {{key_memories}}
-
-    # Instructions
-    **Character & Roleplay:**
-    - Write as {{char.name}} from their perspective, responding based on their personality, background, and current situation
-    - You may also portray NPCs and background characters when relevant to the scene, but NEVER speak or act as {{persona.name}}
-    - Show emotions through actions, body language, and dialogue - don't just state them
-    - React authentically to {{persona.name}}'s actions and dialogue
-    - Never break character unless {{persona.name}} explicitly asks you to step out of roleplay
-
-    **World & Lore:**
-    - ACTIVELY incorporate the World Information above when locations, characters, items, or concepts from the lore are relevant
-    - Maintain consistency with established facts and the scenario
-
-    **Pacing & Style:**
-    - Keep responses concise and focused so {{persona.name}} can actively participate
-    - Let scenes unfold naturally - avoid summarizing or rushing
-    - Use vivid, sensory details for immersion
-    - If you see [CONTINUE], continue exactly where you left off without restarting
-
-    {{content_rules}}
-    "
-        .to_string()
+    default_modular_prompt_entries()
+        .iter()
+        .map(|entry| entry.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 pub fn default_dynamic_summary_prompt() -> String {
@@ -349,24 +306,133 @@ fn get_lorebook_content(
     Ok(format_lorebook_for_prompt(&active_entries))
 }
 
+fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "entry_base".to_string(),
+            name: "Base Directive".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "You are participating in an immersive roleplay. Your goal is to fully embody your character and create an engaging, authentic experience.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "entry_scenario".to_string(),
+            name: "Scenario".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Scenario\n{{scene}}\n\n# Scene Direction\n{{scene_direction}}\n\nThis is your hidden directive for how this scene should unfold. Guide the narrative toward this outcome naturally and organically through your character's actions, dialogue, and the world's events. NEVER explicitly mention or reveal this direction to {{persona.name}} - let it emerge through immersive roleplay."
+                .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+        SystemPromptEntry {
+            id: "entry_character".to_string(),
+            name: "Character Definition".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Your Character: {{char.name}}\n{{char.desc}}\n\nEmbody {{char.name}}'s personality, mannerisms, and speech patterns completely. Stay true to their character traits, background, and motivations in every response.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+        SystemPromptEntry {
+            id: "entry_persona".to_string(),
+            name: "Persona Definition".to_string(),
+            role: PromptEntryRole::System,
+            content: "# {{persona.name}}'s Character\n{{persona.desc}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+        SystemPromptEntry {
+            id: "entry_world_info".to_string(),
+            name: "World Information".to_string(),
+            role: PromptEntryRole::System,
+            content: "# World Information\n    The following is essential lore about this world, its characters, locations, items, and concepts. You MUST incorporate this information naturally into your roleplay when relevant. Treat this as established canon that shapes how characters behave, what they know, and how the world works.\n    {{lorebook}}"
+                .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+        SystemPromptEntry {
+            id: "entry_context_summary".to_string(),
+            name: "Context Summary".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Context Summary\n{{context_summary}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+        SystemPromptEntry {
+            id: "entry_key_memories".to_string(),
+            name: "Key Memories".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "# Key Memories\nImportant facts to remember in this conversation:\n{{key_memories}}"
+                    .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+        SystemPromptEntry {
+            id: "entry_instructions".to_string(),
+            name: "Instructions".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Instructions\n**Character & Roleplay:**\n- Write as {{char.name}} from their perspective, responding based on their personality, background, and current situation\n- You may also portray NPCs and background characters when relevant to the scene, but NEVER speak or act as {{persona.name}}\n- Show emotions through actions, body language, and dialogue - don't just state them\n- React authentically to {{persona.name}}'s actions and dialogue\n- Never break character unless {{persona.name}} explicitly asks you to step out of roleplay\n\n**World & Lore:**\n- ACTIVELY incorporate the World Information above when locations, characters, items, or concepts from the lore are relevant\n- Maintain consistency with established facts and the scenario\n\n**Pacing & Style:**\n- Keep responses concise and focused so {{persona.name}} can actively participate\n- Let scenes unfold naturally - avoid summarizing or rushing\n- Use vivid, sensory details for immersion\n- If you see [CONTINUE], continue exactly where you left off without restarting\n\n{{content_rules}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: false,
+        },
+    ]
+}
+
+fn single_entry_from_content(content: &str) -> Vec<SystemPromptEntry> {
+    vec![SystemPromptEntry {
+        id: "entry_system".to_string(),
+        name: "System Prompt".to_string(),
+        role: PromptEntryRole::System,
+        content: content.to_string(),
+        enabled: true,
+        injection_position: PromptEntryPosition::Relative,
+        injection_depth: 0,
+        system_prompt: true,
+    }]
+}
+
+fn has_placeholder(entries: &[SystemPromptEntry], placeholder: &str) -> bool {
+    entries
+        .iter()
+        .any(|entry| entry.content.contains(placeholder))
+}
+
 /// character template > model template > app default template (from database)
-pub fn build_system_prompt(
+pub fn build_system_prompt_entries(
     app: &AppHandle,
     character: &Character,
     model: &Model,
     persona: Option<&Persona>,
     session: &Session,
     settings: &Settings,
-) -> Option<String> {
+) -> Vec<SystemPromptEntry> {
     let mut debug_parts: Vec<Value> = Vec::new();
 
-    let base_template = if let Some(model_template_id) = &model.prompt_template_id {
+    let (base_content, base_entries) = if let Some(model_template_id) = &model.prompt_template_id {
         if let Ok(Some(template)) = prompts::get_template(app, model_template_id) {
             debug_parts.push(json!({
                 "source": "model_template",
                 "template_id": model_template_id
             }));
-            template.content
+            (template.content, template.entries)
         } else {
             debug_parts.push(json!({
                 "source": "model_template_not_found",
@@ -381,7 +447,7 @@ pub fn build_system_prompt(
                 "source": "character_template",
                 "template_id": char_template_id
             }));
-            template.content
+            (template.content, template.entries)
         } else {
             debug_parts.push(json!({
                 "source": "character_template_not_found",
@@ -394,42 +460,80 @@ pub fn build_system_prompt(
         get_app_default_template_content(app, settings, &mut debug_parts)
     };
 
-    let rendered = render_with_context(app, &base_template, character, persona, session, settings);
-
-    let final_prompt = {
-        let mut result = rendered;
-
-        if !base_template.contains("{{context_summary}}") {
-            if let Some(summary) = &session.memory_summary {
-                if !summary.trim().is_empty() {
-                    result.push_str("\n\n# Context Summary\n");
-                    result.push_str(summary);
-                }
-            }
-        }
-
-        if !base_template.contains("{{key_memories}}") {
-            if !session.memories.is_empty() {
-                result.push_str("\n\n# Key Memories\n");
-                result.push_str("Important facts to remember in this conversation:\n");
-                for memory in &session.memories {
-                    result.push_str(&format!("- {}\n", memory));
-                }
-            }
-        }
-        if !base_template.contains("{{lorebook}}") {
-            let lorebook_content = match get_lorebook_content(app, &character.id, session) {
-                Ok(content) => content,
-                Err(_) => String::new(),
-            };
-            if !lorebook_content.trim().is_empty() {
-                result.push_str("\n\n# World Information\n");
-                result.push_str(&lorebook_content);
-            }
-        }
-
-        result
+    let base_entries = if base_entries.is_empty() && !base_content.trim().is_empty() {
+        single_entry_from_content(&base_content)
+    } else {
+        base_entries
     };
+
+    let mut rendered_entries: Vec<SystemPromptEntry> = Vec::new();
+    for entry in base_entries.iter() {
+        if !entry.enabled && !entry.system_prompt {
+            continue;
+        }
+        let rendered =
+            render_with_context(app, &entry.content, character, persona, session, settings);
+        if rendered.trim().is_empty() {
+            continue;
+        }
+        let mut output_entry = entry.clone();
+        output_entry.content = rendered;
+        rendered_entries.push(output_entry);
+    }
+
+    if !has_placeholder(&base_entries, "{{context_summary}}") {
+        if let Some(summary) = &session.memory_summary {
+            if !summary.trim().is_empty() {
+                rendered_entries.push(SystemPromptEntry {
+                    id: "entry_context_summary".to_string(),
+                    name: "Context Summary".to_string(),
+                    role: PromptEntryRole::System,
+                    content: format!("# Context Summary\n{}", summary),
+                    enabled: true,
+                    injection_position: PromptEntryPosition::Relative,
+                    injection_depth: 0,
+                    system_prompt: true,
+                });
+            }
+        }
+    }
+
+    if !has_placeholder(&base_entries, "{{key_memories}}") && !session.memories.is_empty() {
+        let mut content = String::from("# Key Memories\n");
+        content.push_str("Important facts to remember in this conversation:\n");
+        for memory in &session.memories {
+            content.push_str(&format!("- {}\n", memory));
+        }
+        rendered_entries.push(SystemPromptEntry {
+            id: "entry_key_memories".to_string(),
+            name: "Key Memories".to_string(),
+            role: PromptEntryRole::System,
+            content: content.trim().to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        });
+    }
+
+    if !has_placeholder(&base_entries, "{{lorebook}}") {
+        let lorebook_content = match get_lorebook_content(app, &character.id, session) {
+            Ok(content) => content,
+            Err(_) => String::new(),
+        };
+        if !lorebook_content.trim().is_empty() {
+            rendered_entries.push(SystemPromptEntry {
+                id: "entry_lorebook".to_string(),
+                name: "World Information".to_string(),
+                role: PromptEntryRole::System,
+                content: format!("# World Information\n{}", lorebook_content.trim()),
+                enabled: true,
+                injection_position: PromptEntryPosition::Relative,
+                injection_depth: 0,
+                system_prompt: true,
+            });
+        }
+    }
 
     debug_parts.push(json!({
         "template_vars": build_debug_vars(character, persona, session, settings),
@@ -438,12 +542,7 @@ pub fn build_system_prompt(
 
     super::super::utils::emit_debug(app, "system_prompt_built", json!({ "debug": debug_parts }));
 
-    let trimmed = final_prompt.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+    rendered_entries
 }
 
 /// Helper function to check character template, then fall back to app default
@@ -452,7 +551,7 @@ fn get_character_or_app_template(
     character: &Character,
     settings: &Settings,
     debug_parts: &mut Vec<Value>,
-) -> String {
+) -> (String, Vec<SystemPromptEntry>) {
     // Try character template first
     if let Some(char_template_id) = &character.prompt_template_id {
         if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
@@ -460,7 +559,7 @@ fn get_character_or_app_template(
                 "source": "character_template",
                 "template_id": char_template_id
             }));
-            return template.content;
+            return (template.content, template.entries);
         }
     }
     // Fall back to app default
@@ -472,7 +571,7 @@ fn get_app_default_template_content(
     app: &AppHandle,
     settings: &Settings,
     debug_parts: &mut Vec<Value>,
-) -> String {
+) -> (String, Vec<SystemPromptEntry>) {
     // Try settings.prompt_template_id first (user's custom app default)
     if let Some(app_template_id) = &settings.prompt_template_id {
         if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
@@ -480,7 +579,7 @@ fn get_app_default_template_content(
                 "source": "app_wide_template",
                 "template_id": app_template_id
             }));
-            return template.content;
+            return (template.content, template.entries);
         }
     }
 
@@ -490,14 +589,15 @@ fn get_app_default_template_content(
                 "source": "app_default_template",
                 "template_id": prompts::APP_DEFAULT_TEMPLATE_ID
             }));
-            template.content
+            (template.content, template.entries)
         }
         _ => {
             debug_parts.push(json!({
                 "source": "emergency_hardcoded_fallback",
                 "warning": "app_default template not found in database"
             }));
-            default_system_prompt_template()
+            let content = default_system_prompt_template();
+            (content.clone(), default_modular_prompt_entries())
         }
     }
 }

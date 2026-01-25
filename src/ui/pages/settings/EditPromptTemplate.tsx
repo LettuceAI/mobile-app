@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, Reorder, motion, useDragControls } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   RotateCcw,
@@ -12,6 +12,9 @@ import {
   Lock,
   ChevronDown,
   ChevronUp,
+  GripVertical,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn, radius, interactive } from "../../design-tokens";
 import { BottomMenu } from "../../components";
@@ -28,7 +31,7 @@ import {
   getRequiredTemplateVariables,
 } from "../../../core/prompts/service";
 import { listCharacters, listPersonas } from "../../../core/storage";
-import type { Character, Persona } from "../../../core/storage/schemas";
+import type { Character, Persona, SystemPromptEntry } from "../../../core/storage/schemas";
 import {
   APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
   APP_DYNAMIC_MEMORY_TEMPLATE_ID,
@@ -110,6 +113,333 @@ const VARIABLES_BY_TYPE: Record<string, Variable[]> = {
   ],
 };
 
+const ENTRY_ROLE_OPTIONS = [
+  { value: "system", label: "System" },
+  { value: "user", label: "User" },
+  { value: "assistant", label: "Assistant" },
+] as const;
+
+const ENTRY_POSITION_OPTIONS = [
+  { value: "relative", label: "Relative" },
+  { value: "inChat", label: "In Chat" },
+] as const;
+
+const createEntryId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `entry_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+const DEFAULT_ENTRY_ROLE: SystemPromptEntry["role"] = "system";
+const DEFAULT_ENTRY_POSITION: SystemPromptEntry["injectionPosition"] = "relative";
+
+const createDefaultEntry = (
+  content: string,
+  overrides?: Partial<SystemPromptEntry>,
+): SystemPromptEntry => ({
+  id: createEntryId(),
+  name: "System Prompt",
+  role: DEFAULT_ENTRY_ROLE,
+  content,
+  enabled: true,
+  injectionPosition: DEFAULT_ENTRY_POSITION,
+  injectionDepth: 0,
+  systemPrompt: true,
+  ...overrides,
+});
+
+const createExtraEntry = (overrides?: Partial<SystemPromptEntry>) =>
+  createDefaultEntry("", { name: "Prompt Entry", systemPrompt: false, ...overrides });
+
+const entriesToContent = (entries: SystemPromptEntry[]) =>
+  entries
+    .map((entry) => entry.content.trim())
+    .filter(Boolean)
+    .join("\n\n");
+
+const ensureSystemEntry = (entries: SystemPromptEntry[]) => {
+  if (entries.length === 0) return [createDefaultEntry("")];
+  if (entries.some((entry) => entry.systemPrompt)) return entries;
+  return [{ ...entries[0], systemPrompt: true, enabled: true }, ...entries.slice(1)];
+};
+
+function PromptEntryCard({
+  entry,
+  onUpdate,
+  onDelete,
+  onToggle,
+  onToggleCollapse,
+  collapsed,
+}: {
+  entry: SystemPromptEntry;
+  onUpdate: (id: string, updates: Partial<SystemPromptEntry>) => void;
+  onDelete: (id: string) => void;
+  onToggle: (id: string) => void;
+  onToggleCollapse: (id: string) => void;
+  collapsed: boolean;
+}) {
+  const controls = useDragControls();
+  const toggleId = `prompt-entry-${entry.id}`;
+
+  return (
+    <Reorder.Item
+      value={entry}
+      dragListener={false}
+      dragControls={controls}
+      layout
+      className={cn("rounded-xl border border-white/10 bg-white/5 p-4", "space-y-3")}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onPointerDown={(event) => controls.start(event)}
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-lg",
+            "border border-white/10 bg-white/5 text-white/40",
+          )}
+          title="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => onToggleCollapse(entry.id)}
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-lg",
+            "border border-white/10 bg-white/5 text-white/40",
+          )}
+          title={collapsed ? "Expand entry" : "Collapse entry"}
+        >
+          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
+
+        <input
+          value={entry.name}
+          onChange={(event) => onUpdate(entry.id, { name: event.target.value })}
+          className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+          placeholder="Entry name"
+        />
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <input
+              id={toggleId}
+              type="checkbox"
+              checked={entry.enabled || entry.systemPrompt}
+              onChange={() => onToggle(entry.id)}
+              onClick={(event) => event.stopPropagation()}
+              disabled={entry.systemPrompt}
+              className="peer sr-only"
+            />
+            <label
+              htmlFor={toggleId}
+              onClick={(event) => event.stopPropagation()}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full",
+                "border-2 border-transparent transition-all duration-200 ease-in-out",
+                "focus:outline-none focus:ring-2 focus:ring-white/20",
+                entry.enabled || entry.systemPrompt ? "bg-emerald-500" : "bg-white/20",
+                entry.systemPrompt && "cursor-not-allowed opacity-60",
+              )}
+              title={entry.systemPrompt ? "System prompt entries are always enabled" : "Toggle"}
+            >
+              <span
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm",
+                  "ring-0 transition duration-200 ease-in-out",
+                  entry.enabled || entry.systemPrompt ? "translate-x-4" : "translate-x-0",
+                )}
+              />
+            </label>
+            <span className="text-xs text-white/50">
+              {entry.systemPrompt ? "Required" : entry.enabled ? "Enabled" : "Disabled"}
+            </span>
+          </div>
+
+          {!entry.systemPrompt && (
+            <button
+              onClick={() => onDelete(entry.id)}
+              className={cn(
+                "rounded-lg border border-white/10 p-2 text-white/40",
+                "hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300",
+              )}
+              title="Delete entry"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-3 overflow-hidden"
+          >
+            <div className="grid gap-2 md:grid-cols-3">
+              <select
+                value={entry.role}
+                onChange={(event) => onUpdate(entry.id, { role: event.target.value as any })}
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+              >
+                {ENTRY_ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={entry.injectionPosition}
+                onChange={(event) =>
+                  onUpdate(entry.id, { injectionPosition: event.target.value as any })
+                }
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+              >
+                {ENTRY_POSITION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              {entry.injectionPosition === "inChat" && (
+                <input
+                  type="number"
+                  min={0}
+                  value={entry.injectionDepth}
+                  onChange={(event) =>
+                    onUpdate(entry.id, { injectionDepth: Number(event.target.value) })
+                  }
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+                  placeholder="Depth"
+                />
+              )}
+            </div>
+
+            <textarea
+              value={entry.content}
+              onChange={(event) => onUpdate(entry.id, { content: event.target.value })}
+              rows={6}
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-white placeholder-white/30"
+              placeholder="Write the prompt entry..."
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Reorder.Item>
+  );
+}
+
+function PromptEntryListItem({
+  entry,
+  onToggle,
+  onDelete,
+  onEdit,
+}: {
+  entry: SystemPromptEntry;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onEdit: (id: string) => void;
+}) {
+  const controls = useDragControls();
+  const toggleId = `prompt-entry-mobile-${entry.id}`;
+
+  return (
+    <Reorder.Item
+      value={entry}
+      dragListener={false}
+      dragControls={controls}
+      layout
+      className={cn("rounded-xl border border-white/10 bg-white/5 p-3", "space-y-2")}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onPointerDown={(event) => controls.start(event)}
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg",
+              "border border-white/10 bg-white/5 text-white/40",
+            )}
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white truncate">{entry.name}</p>
+            <p className="text-[11px] text-white/40 uppercase tracking-wide">
+              {entry.role} · {entry.injectionPosition}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              id={toggleId}
+              type="checkbox"
+              checked={entry.enabled || entry.systemPrompt}
+              onChange={() => onToggle(entry.id)}
+              onClick={(event) => event.stopPropagation()}
+              disabled={entry.systemPrompt}
+              className="peer sr-only"
+            />
+            <label
+              htmlFor={toggleId}
+              onClick={(event) => event.stopPropagation()}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full",
+                "border-2 border-transparent transition-all duration-200 ease-in-out",
+                entry.enabled || entry.systemPrompt ? "bg-emerald-500" : "bg-white/20",
+                entry.systemPrompt && "cursor-not-allowed opacity-60",
+              )}
+              title={entry.systemPrompt ? "System prompt entries are always enabled" : "Toggle"}
+            >
+              <span
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm",
+                  "ring-0 transition duration-200 ease-in-out",
+                  entry.enabled || entry.systemPrompt ? "translate-x-4" : "translate-x-0",
+                )}
+              />
+            </label>
+          </div>
+
+          <button
+            onClick={() => onEdit(entry.id)}
+            className={cn(
+              "rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70",
+              "hover:bg-white/10 hover:text-white",
+            )}
+          >
+            Edit
+          </button>
+
+          {!entry.systemPrompt && (
+            <button
+              onClick={() => onDelete(entry.id)}
+              className={cn(
+                "rounded-lg border border-white/10 p-2 text-white/40",
+                "hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300",
+              )}
+              title="Delete entry"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <p className="text-xs text-white/50 line-clamp-2">
+        {entry.content?.trim() || "No content yet"}
+      </p>
+    </Reorder.Item>
+  );
+}
+
 function getPromptTypeName(type: PromptType): string {
   switch (type) {
     case "system":
@@ -151,6 +481,7 @@ export function EditPromptTemplate() {
   // Form state
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
+  const [entries, setEntries] = useState<SystemPromptEntry[]>([]);
 
   // Preview state
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -158,9 +489,12 @@ export function EditPromptTemplate() {
   const [previewCharacterId, setPreviewCharacterId] = useState<string | null>(null);
   const [previewPersonaId, setPreviewPersonaId] = useState<string | null>(null);
   const [preview, setPreview] = useState<string>("");
+  const [previewEntries, setPreviewEntries] = useState<SystemPromptEntry[]>([]);
   const [previewing, setPreviewing] = useState(false);
   const [previewMode, setPreviewMode] = useState<"rendered" | "raw">("rendered");
   const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [collapsedEntries, setCollapsedEntries] = useState<Record<string, boolean>>({});
+  const [mobileEntryEditorId, setMobileEntryEditorId] = useState<string | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(isEditing);
@@ -183,13 +517,21 @@ export function EditPromptTemplate() {
       promptType === "memory" ||
       promptType === "reply");
 
+  const usesEntryEditor =
+    promptType !== "summary" && promptType !== "memory" && promptType !== "reply";
+
   const variables = VARIABLES_BY_TYPE[promptType || "default"] || VARIABLES_BY_TYPE.default;
 
-  const charCount = content.length;
+  const contentValue = usesEntryEditor ? entriesToContent(entries) : content;
+  const charCount = contentValue.length;
   const charCountColor =
     charCount > 8000 ? "text-red-400" : charCount > 5000 ? "text-amber-400" : "text-white/40";
 
-  const canSave = name.trim().length > 0 && content.trim().length > 0;
+  const canSave =
+    name.trim().length > 0 &&
+    (usesEntryEditor
+      ? entries.some((entry) => entry.content.trim().length > 0)
+      : content.trim().length > 0);
 
   // Expose save state to TopNav via window globals
   useEffect(() => {
@@ -221,10 +563,11 @@ export function EditPromptTemplate() {
 
   useEffect(() => {
     if (isAppDefault && requiredVariables.length > 0) {
-      const missing = requiredVariables.filter((v) => !content.includes(v));
+      const source = usesEntryEditor ? entriesToContent(entries) : content;
+      const missing = requiredVariables.filter((v) => !source.includes(v));
       setMissingVariables(missing);
     }
-  }, [content, requiredVariables, isAppDefault]);
+  }, [content, entries, requiredVariables, isAppDefault, usesEntryEditor]);
 
   async function loadData() {
     try {
@@ -247,20 +590,38 @@ export function EditPromptTemplate() {
             template.id === appDefaultId || isProtectedPromptTemplate(template.id);
           setIsAppDefault(isProtected);
 
+          let detectedType: PromptType = null;
           if (template.id === appDefaultId) {
-            setPromptType("system");
+            detectedType = "system";
           } else if (template.id === APP_DYNAMIC_SUMMARY_TEMPLATE_ID) {
-            setPromptType("summary");
+            detectedType = "summary";
           } else if (template.id === APP_DYNAMIC_MEMORY_TEMPLATE_ID) {
-            setPromptType("memory");
+            detectedType = "memory";
           } else if (template.id === APP_HELP_ME_REPLY_TEMPLATE_ID) {
-            setPromptType("reply");
+            detectedType = "reply";
           } else if (template.id === APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID) {
-            setPromptType("reply");
+            detectedType = "reply";
           } else if (template.id === APP_GROUP_CHAT_TEMPLATE_ID) {
-            setPromptType("group_chat");
+            detectedType = "group_chat";
           } else if (template.id === APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID) {
-            setPromptType("group_chat_roleplay");
+            detectedType = "group_chat_roleplay";
+          }
+          setPromptType(detectedType);
+
+          const shouldUseEntries =
+            detectedType !== "summary" && detectedType !== "memory" && detectedType !== "reply";
+          if (shouldUseEntries) {
+            const nextEntries =
+              template.entries?.length > 0
+                ? template.entries
+                : [createDefaultEntry(template.content)];
+            const normalizedEntries = ensureSystemEntry(nextEntries);
+            setEntries(normalizedEntries);
+            setCollapsedEntries(
+              Object.fromEntries(normalizedEntries.map((entry) => [entry.id, true])),
+            );
+          } else {
+            setEntries([]);
           }
 
           if (isProtected) {
@@ -271,6 +632,9 @@ export function EditPromptTemplate() {
       } else {
         const def = await getDefaultSystemPromptTemplate();
         setContent(def);
+        const seedEntries = [createDefaultEntry(def)];
+        setEntries(seedEntries);
+        setCollapsedEntries(Object.fromEntries(seedEntries.map((entry) => [entry.id, true])));
       }
     } catch (error) {
       console.error("Failed to load data:", error);
@@ -279,8 +643,42 @@ export function EditPromptTemplate() {
     }
   }
 
+  const handleEntryUpdate = (id: string, updates: Partial<SystemPromptEntry>) => {
+    setEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...updates } : entry)));
+  };
+
+  const handleToggleEntryCollapse = (id: string) => {
+    setCollapsedEntries((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleEntryDelete = (id: string) => {
+    setEntries((prev) => prev.filter((entry) => entry.id !== id));
+  };
+
+  const handleEntryToggle = (id: string) => {
+    setEntries((prev) =>
+      prev.map((entry) => {
+        if (entry.id !== id || entry.systemPrompt) return entry;
+        return { ...entry, enabled: !entry.enabled };
+      }),
+    );
+  };
+
+  const handleAddEntry = () => {
+    const entry = createExtraEntry();
+    setEntries((prev) => [...prev, entry]);
+    setCollapsedEntries((prev) => ({ ...prev, [entry.id]: false }));
+  };
+
+  const selectedMobileEntry = mobileEntryEditorId
+    ? (entries.find((entry) => entry.id === mobileEntryEditorId) ?? null)
+    : null;
+
   async function handleSave_internal() {
-    if (!name.trim() || !content.trim()) return;
+    const hasContent = usesEntryEditor
+      ? entries.some((entry) => entry.content.trim().length > 0)
+      : content.trim().length > 0;
+    if (!name.trim() || !hasContent) return;
 
     if (isAppDefault && id && missingVariables.length > 0) {
       alert(`Cannot save: Missing required variables: ${missingVariables.join(", ")}`);
@@ -289,13 +687,21 @@ export function EditPromptTemplate() {
 
     setSaving(true);
     try {
+      const contentToSave = usesEntryEditor ? entriesToContent(entries) : content.trim();
       if (isEditing && id) {
         await updatePromptTemplate(id, {
           name: name.trim(),
-          content: content.trim(),
+          content: contentToSave,
+          entries: usesEntryEditor ? entries : undefined,
         });
       } else {
-        await createPromptTemplate(name.trim(), "appWide" as any, [], content.trim());
+        await createPromptTemplate(
+          name.trim(),
+          "appWide" as any,
+          [],
+          contentToSave,
+          usesEntryEditor ? entries : undefined,
+        );
       }
       navigate("/settings/prompts");
     } catch (error) {
@@ -329,6 +735,13 @@ export function EditPromptTemplate() {
         updated = await resetHelpMeReplyTemplate();
       }
       setContent(updated.content);
+      if (usesEntryEditor) {
+        const nextEntries =
+          updated.entries?.length > 0 ? updated.entries : [createDefaultEntry(updated.content)];
+        const normalizedEntries = ensureSystemEntry(nextEntries);
+        setEntries(normalizedEntries);
+        setCollapsedEntries(Object.fromEntries(normalizedEntries.map((entry) => [entry.id, true])));
+      }
     } catch (error) {
       console.error("Failed to reset template:", error);
       alert("Failed to reset template");
@@ -341,14 +754,34 @@ export function EditPromptTemplate() {
     if (!previewCharacterId) return;
     setPreviewing(true);
     try {
-      const rendered = await renderPromptPreview(content, {
-        characterId: previewCharacterId,
-        personaId: previewPersonaId ?? undefined,
-      });
-      setPreview(rendered);
+      if (usesEntryEditor) {
+        if (previewMode === "raw") {
+          setPreviewEntries(entries);
+        } else {
+          const renderedEntries = await Promise.all(
+            entries.map(async (entry) => {
+              const rendered = await renderPromptPreview(entry.content, {
+                characterId: previewCharacterId,
+                personaId: previewPersonaId ?? undefined,
+              });
+              return { ...entry, content: rendered };
+            }),
+          );
+          setPreviewEntries(renderedEntries);
+        }
+      } else {
+        const rendered = await renderPromptPreview(content, {
+          characterId: previewCharacterId,
+          personaId: previewPersonaId ?? undefined,
+        });
+        setPreview(rendered);
+      }
     } catch (e) {
       console.error("Preview failed", e);
       setPreview("<failed to render preview>");
+      if (usesEntryEditor) {
+        setPreviewEntries([]);
+      }
     } finally {
       setPreviewing(false);
     }
@@ -361,6 +794,20 @@ export function EditPromptTemplate() {
   }
 
   function insertVariable(variable: string) {
+    if (usesEntryEditor) {
+      setEntries((prev) => {
+        if (prev.length === 0) return prev;
+        const targetIndex = prev.findIndex((entry) => entry.systemPrompt);
+        const index = targetIndex >= 0 ? targetIndex : 0;
+        const next = [...prev];
+        next[index] = {
+          ...next[index],
+          content: `${next[index].content}${next[index].content ? "\n" : ""}${variable}`,
+        };
+        return next;
+      });
+      return;
+    }
     if (!textareaRef.current) return;
 
     const textarea = textareaRef.current;
@@ -485,7 +932,37 @@ export function EditPromptTemplate() {
           isMobile ? "max-h-80" : "max-h-64",
         )}
       >
-        {previewMode === "rendered" ? (
+        {usesEntryEditor ? (
+          (() => {
+            const entriesToShow = previewMode === "rendered" ? previewEntries : entries;
+            if (previewMode === "rendered" && entriesToShow.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+                  <Eye className="h-8 w-8 text-white/20 mb-2" />
+                  <p className="text-sm text-white/50">No preview yet</p>
+                  <p className="text-xs text-white/30">Select a character and generate</p>
+                </div>
+              );
+            }
+            if (entriesToShow.length === 0) {
+              return <p className="text-xs text-white/40">No entries to preview</p>;
+            }
+            return (
+              <div className="space-y-4">
+                {entriesToShow.map((entry) => (
+                  <div key={entry.id} className="space-y-1">
+                    <div className="text-[11px] uppercase tracking-wide text-white/40">
+                      {entry.role} · {entry.name}
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs leading-relaxed text-white/80 font-mono">
+                      {entry.content || "No content"}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            );
+          })()
+        ) : previewMode === "rendered" ? (
           preview ? (
             <pre className="whitespace-pre-wrap text-xs leading-relaxed text-white/80 font-mono">
               {preview}
@@ -597,11 +1074,27 @@ export function EditPromptTemplate() {
 
               {/* Content Editor */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-medium uppercase tracking-wider text-white/50">
-                    Prompt Content
+                    {usesEntryEditor ? "Prompt Entries" : "Prompt Content"}
                   </label>
-                  <div className="flex lg:hidden items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {usesEntryEditor && (
+                      <button
+                        onClick={handleAddEntry}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1.5",
+                          radius.md,
+                          "border border-emerald-400/30 bg-emerald-500/10",
+                          "text-xs font-medium text-emerald-200",
+                          interactive.transition.fast,
+                          "hover:bg-emerald-500/20",
+                        )}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Entry
+                      </button>
+                    )}
                     <button
                       onClick={() => setShowVariables(true)}
                       className={cn(
@@ -616,11 +1109,10 @@ export function EditPromptTemplate() {
                       <Sparkles className="h-3.5 w-3.5" />
                       Variables
                     </button>
-                    {/* Mobile preview button */}
                     <button
                       onClick={() => setShowMobilePreview(true)}
                       className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1.5",
+                        "flex items-center gap-1.5 px-2.5 py-1.5 lg:hidden",
                         radius.md,
                         "border border-white/10 bg-white/5",
                         "text-xs font-medium text-white/70",
@@ -634,34 +1126,86 @@ export function EditPromptTemplate() {
                   </div>
                 </div>
 
-                <div className="relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="You are a creative and engaging AI assistant..."
-                    rows={20}
-                    className={cn(
-                      "w-full px-4 py-3 resize-none",
-                      radius.lg,
-                      "border border-white/10 bg-white/5",
-                      "font-mono text-sm leading-relaxed text-white placeholder-white/30",
-                      interactive.transition.fast,
-                      "focus:border-white/20 focus:bg-white/10 focus:outline-none",
-                    )}
-                  />
-                  <div className="absolute bottom-3 right-3 pointer-events-none">
-                    <span
-                      className={cn(
-                        "px-2 py-1 rounded-md bg-black/60",
-                        "text-xs font-medium",
-                        charCountColor,
-                      )}
+                {usesEntryEditor ? (
+                  <div className="space-y-3">
+                    <Reorder.Group
+                      axis="y"
+                      values={entries}
+                      onReorder={setEntries}
+                      className="space-y-3 hidden lg:flex lg:flex-col"
                     >
-                      {charCount.toLocaleString()}
-                    </span>
+                      {entries.map((entry) => (
+                        <PromptEntryCard
+                          key={entry.id}
+                          entry={entry}
+                          onUpdate={handleEntryUpdate}
+                          onDelete={handleEntryDelete}
+                          onToggle={handleEntryToggle}
+                          onToggleCollapse={handleToggleEntryCollapse}
+                          collapsed={collapsedEntries[entry.id] ?? true}
+                        />
+                      ))}
+                    </Reorder.Group>
+
+                    <Reorder.Group
+                      axis="y"
+                      values={entries}
+                      onReorder={setEntries}
+                      className="space-y-2 lg:hidden"
+                    >
+                      {entries.map((entry) => (
+                        <PromptEntryListItem
+                          key={entry.id}
+                          entry={entry}
+                          onToggle={handleEntryToggle}
+                          onDelete={handleEntryDelete}
+                          onEdit={(id) => setMobileEntryEditorId(id)}
+                        />
+                      ))}
+                    </Reorder.Group>
+
+                    <div className="flex items-center justify-end">
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded-md bg-black/60",
+                          "text-xs font-medium",
+                          charCountColor,
+                        )}
+                      >
+                        {charCount.toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="relative">
+                    <textarea
+                      ref={textareaRef}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="You are a creative and engaging AI assistant..."
+                      rows={20}
+                      className={cn(
+                        "w-full px-4 py-3 resize-none",
+                        radius.lg,
+                        "border border-white/10 bg-white/5",
+                        "font-mono text-sm leading-relaxed text-white placeholder-white/30",
+                        interactive.transition.fast,
+                        "focus:border-white/20 focus:bg-white/10 focus:outline-none",
+                      )}
+                    />
+                    <div className="absolute bottom-3 right-3 pointer-events-none">
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded-md bg-black/60",
+                          "text-xs font-medium",
+                          charCountColor,
+                        )}
+                      >
+                        {charCount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Collapsible Preview Panel (Desktop - below content) */}
@@ -886,6 +1430,78 @@ export function EditPromptTemplate() {
         title="Prompt Preview"
       >
         <PreviewPanel isMobile />
+      </BottomMenu>
+
+      {/* Entry Editor Bottom Sheet (Mobile only) */}
+      <BottomMenu
+        isOpen={!!mobileEntryEditorId}
+        onClose={() => setMobileEntryEditorId(null)}
+        title="Edit Entry"
+      >
+        {selectedMobileEntry ? (
+          <div className="space-y-3">
+            <div className="grid gap-2">
+              <select
+                value={selectedMobileEntry.role}
+                onChange={(event) =>
+                  handleEntryUpdate(selectedMobileEntry.id, {
+                    role: event.target.value as any,
+                  })
+                }
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+              >
+                {ENTRY_ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedMobileEntry.injectionPosition}
+                onChange={(event) =>
+                  handleEntryUpdate(selectedMobileEntry.id, {
+                    injectionPosition: event.target.value as any,
+                  })
+                }
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+              >
+                {ENTRY_POSITION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              {selectedMobileEntry.injectionPosition === "inChat" && (
+                <input
+                  type="number"
+                  min={0}
+                  value={selectedMobileEntry.injectionDepth}
+                  onChange={(event) =>
+                    handleEntryUpdate(selectedMobileEntry.id, {
+                      injectionDepth: Number(event.target.value),
+                    })
+                  }
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  placeholder="Depth"
+                />
+              )}
+            </div>
+
+            <textarea
+              value={selectedMobileEntry.content}
+              onChange={(event) =>
+                handleEntryUpdate(selectedMobileEntry.id, { content: event.target.value })
+              }
+              rows={10}
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-white placeholder-white/30"
+              placeholder="Write the prompt entry..."
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-white/60">Select an entry to edit.</p>
+        )}
       </BottomMenu>
     </div>
   );

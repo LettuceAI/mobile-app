@@ -31,8 +31,9 @@ use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
     ChatAddMessageAttachmentArgs, ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs,
-    ChatTurnResult, ContinueResult, MemoryEmbedding, Model, PromptScope, ProviderCredential,
-    RegenerateResult, Session, Settings, StoredMessage, SystemPromptTemplate,
+    ChatTurnResult, ContinueResult, MemoryEmbedding, Model, PromptEntryPosition, PromptScope,
+    ProviderCredential, RegenerateResult, Session, Settings, StoredMessage, SystemPromptEntry,
+    SystemPromptTemplate,
 };
 use crate::storage_manager::sessions::{
     messages_upsert_batch, session_conversation_count, session_upsert_meta,
@@ -86,10 +87,64 @@ fn has_image_generation_model(settings: &Settings) -> bool {
 }
 
 fn append_image_directive_instructions(
-    system_prompt: Option<String>,
+    system_prompt_entries: Vec<SystemPromptEntry>,
     _settings: &Settings,
-) -> Option<String> {
-    return system_prompt;
+) -> Vec<SystemPromptEntry> {
+    system_prompt_entries
+}
+
+fn prompt_entry_to_message(system_role: &str, entry: &SystemPromptEntry) -> Value {
+    let role = match entry.role {
+        super::types::PromptEntryRole::System => system_role,
+        super::types::PromptEntryRole::User => "user",
+        super::types::PromptEntryRole::Assistant => "assistant",
+    };
+    json!({ "role": role, "content": entry.content })
+}
+
+fn partition_prompt_entries(
+    entries: Vec<SystemPromptEntry>,
+) -> (Vec<SystemPromptEntry>, Vec<SystemPromptEntry>) {
+    let mut relative = Vec::new();
+    let mut in_chat = Vec::new();
+    for entry in entries {
+        if entry.injection_position == PromptEntryPosition::InChat {
+            in_chat.push(entry);
+        } else {
+            relative.push(entry);
+        }
+    }
+    (relative, in_chat)
+}
+
+fn insert_in_chat_prompt_entries(
+    messages: &mut Vec<Value>,
+    system_role: &str,
+    entries: &[SystemPromptEntry],
+) {
+    if entries.is_empty() {
+        return;
+    }
+    let base_len = messages.len();
+    let mut inserts: Vec<(usize, usize, &SystemPromptEntry)> = entries
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let depth = entry.injection_depth as usize;
+            let pos = base_len.saturating_sub(depth);
+            (pos, idx, entry)
+        })
+        .collect();
+    inserts.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    let mut offset = 0usize;
+    for (pos, _, entry) in inserts {
+        if entry.content.trim().is_empty() {
+            continue;
+        }
+        let insert_at = pos.saturating_add(offset).min(messages.len());
+        messages.insert(insert_at, prompt_entry_to_message(system_role, entry));
+        offset += 1;
+    }
 }
 
 fn manual_window_size(settings: &Settings) -> usize {
@@ -634,10 +689,11 @@ pub async fn chat_completion(
         }),
     );
 
-    let system_prompt = append_image_directive_instructions(
+    let prompt_entries = append_image_directive_instructions(
         context.build_system_prompt(&character, model, persona, &session),
         settings,
     );
+    let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     // Determine message window: use conversation_window for dynamic memory (limited context),
     // or recent_messages for manual memory (includes all recent non-scene messages)
@@ -719,11 +775,13 @@ pub async fn chat_completion(
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
-    crate::chat_manager::messages::push_system_message(
-        &mut messages_for_api,
-        &system_role,
-        system_prompt,
-    );
+    for entry in &relative_entries {
+        crate::chat_manager::messages::push_prompt_entry_message(
+            &mut messages_for_api,
+            &system_role,
+            entry,
+        );
+    }
 
     // Inject memory context when available
     // - Dynamic memory: inject semantically relevant memories as context
@@ -768,12 +826,14 @@ pub async fn chat_completion(
         .iter()
         .any(|scope| scope.eq_ignore_ascii_case("image"));
 
+    let mut chat_messages = Vec::new();
+
     // Include pinned messages first (if dynamic memory is enabled)
     // Pinned messages are always included but don't count against the sliding window limit
     for msg in &pinned_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-            &mut messages_for_api,
+            &mut chat_messages,
             &msg_with_data,
             char_name,
             persona_name,
@@ -784,13 +844,16 @@ pub async fn chat_completion(
     for msg in &recent_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-            &mut messages_for_api,
+            &mut chat_messages,
             &msg_with_data,
             char_name,
             persona_name,
             allow_image_input,
         );
     }
+
+    insert_in_chat_prompt_entries(&mut chat_messages, &system_role, &in_chat_entries);
+    messages_for_api.extend(chat_messages);
 
     crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
         &mut messages_for_api,
@@ -1365,15 +1428,18 @@ pub async fn chat_regenerate(
         }
     }
 
-    let system_prompt = append_image_directive_instructions(
+    let prompt_entries = append_image_directive_instructions(
         context.build_system_prompt(&character, model, persona, &session),
         settings,
     );
+    let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let messages_for_api = {
         let mut out = Vec::new();
-        crate::chat_manager::messages::push_system_message(&mut out, &system_role, system_prompt);
+        for entry in &relative_entries {
+            crate::chat_manager::messages::push_prompt_entry_message(&mut out, &system_role, entry);
+        }
 
         let char_name = &character.name;
         let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -1390,6 +1456,7 @@ pub async fn chat_regenerate(
             .map(|(_, msg)| msg.clone())
             .collect();
 
+        let mut chat_messages = Vec::new();
         if dynamic_memory_enabled {
             let (pinned_msgs, recent_msgs) =
                 conversation_window_with_pinned(&messages_before_target, dynamic_window);
@@ -1397,7 +1464,7 @@ pub async fn chat_regenerate(
             for msg in &pinned_msgs {
                 let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-                    &mut out,
+                    &mut chat_messages,
                     &msg_with_data,
                     char_name,
                     persona_name,
@@ -1408,7 +1475,7 @@ pub async fn chat_regenerate(
             for msg in &recent_msgs {
                 let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-                    &mut out,
+                    &mut chat_messages,
                     &msg_with_data,
                     char_name,
                     persona_name,
@@ -1429,7 +1496,7 @@ pub async fn chat_regenerate(
                 }
                 let msg_with_data = load_attachment_data(&app, msg);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-                    &mut out,
+                    &mut chat_messages,
                     &msg_with_data,
                     char_name,
                     persona_name,
@@ -1437,6 +1504,9 @@ pub async fn chat_regenerate(
                 );
             }
         }
+
+        insert_in_chat_prompt_entries(&mut chat_messages, &system_role, &in_chat_entries);
+        out.extend(chat_messages);
 
         crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
             &mut out,
@@ -1913,10 +1983,11 @@ pub async fn chat_continue(
         }
     }
 
-    let system_prompt = append_image_directive_instructions(
+    let prompt_entries = append_image_directive_instructions(
         context.build_system_prompt(&character, model, persona, &session),
         settings,
     );
+    let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
         let (pinned, unpinned) = conversation_window_with_pinned(&session.messages, dynamic_window);
@@ -1930,11 +2001,13 @@ pub async fn chat_continue(
 
     let system_role = super::request_builder::system_role_for(provider_cred);
     let mut messages_for_api = Vec::new();
-    crate::chat_manager::messages::push_system_message(
-        &mut messages_for_api,
-        &system_role,
-        system_prompt,
-    );
+    for entry in &relative_entries {
+        crate::chat_manager::messages::push_prompt_entry_message(
+            &mut messages_for_api,
+            &system_role,
+            entry,
+        );
+    }
 
     let char_name = &character.name;
     let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
@@ -1943,10 +2016,11 @@ pub async fn chat_continue(
         .iter()
         .any(|scope| scope.eq_ignore_ascii_case("image"));
 
+    let mut chat_messages = Vec::new();
     for msg in &pinned_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-            &mut messages_for_api,
+            &mut chat_messages,
             &msg_with_data,
             char_name,
             persona_name,
@@ -1957,13 +2031,15 @@ pub async fn chat_continue(
     for msg in &recent_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
-            &mut messages_for_api,
+            &mut chat_messages,
             &msg_with_data,
             char_name,
             persona_name,
             allow_image_input,
         );
     }
+    insert_in_chat_prompt_entries(&mut chat_messages, &system_role, &in_chat_entries);
+    messages_for_api.extend(chat_messages);
     crate::chat_manager::messages::sanitize_placeholders_in_api_messages(
         &mut messages_for_api,
         char_name,
@@ -2334,8 +2410,9 @@ pub fn create_prompt_template(
     scope: PromptScope,
     target_ids: Vec<String>,
     content: String,
+    entries: Option<Vec<SystemPromptEntry>>,
 ) -> Result<SystemPromptTemplate, String> {
-    prompts::create_template(&app, name, scope, target_ids, content)
+    prompts::create_template(&app, name, scope, target_ids, content, entries)
 }
 
 #[tauri::command]
@@ -2346,8 +2423,9 @@ pub fn update_prompt_template(
     scope: Option<PromptScope>,
     target_ids: Option<Vec<String>>,
     content: Option<String>,
+    entries: Option<Vec<SystemPromptEntry>>,
 ) -> Result<SystemPromptTemplate, String> {
-    prompts::update_template(&app, id, name, scope, target_ids, content)
+    prompts::update_template(&app, id, name, scope, target_ids, content, entries)
 }
 
 #[tauri::command]
@@ -2406,8 +2484,25 @@ pub fn get_required_template_variables(template_id: String) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn validate_template_variables(template_id: String, content: String) -> Result<(), String> {
-    prompts::validate_required_variables(&template_id, &content)
+pub fn validate_template_variables(
+    template_id: String,
+    content: String,
+    entries: Option<Vec<SystemPromptEntry>>,
+) -> Result<(), String> {
+    let validation_text = if let Some(entries) = entries {
+        if entries.is_empty() {
+            content
+        } else {
+            entries
+                .iter()
+                .map(|entry| entry.content.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    } else {
+        content
+    };
+    prompts::validate_required_variables(&template_id, &validation_text)
         .map_err(|missing| format!("Missing required variables: {}", missing.join(", ")))
 }
 
