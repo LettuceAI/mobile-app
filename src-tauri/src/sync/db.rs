@@ -537,9 +537,54 @@ type GlobalsData = (
     Vec<ModelPricingCache>,
 );
 
+type LegacyGlobalsData = (
+    Vec<Settings>,
+    Vec<Persona>,
+    Vec<Model>,
+    Vec<Secret>,
+    Vec<ProviderCredential>,
+    Vec<LegacyPromptTemplate>,
+    Vec<ModelPricingCache>,
+);
+
+#[derive(serde::Deserialize)]
+struct LegacyPromptTemplate {
+    pub id: String,
+    pub name: String,
+    pub scope: String,
+    pub target_ids: String,
+    pub content: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
     let (settings, personas, models, secrets, creds, templates, pricing): GlobalsData =
-        bincode::deserialize(data).map_err(|e| e.to_string())?;
+        match bincode::deserialize(data) {
+            Ok(payload) => payload,
+            Err(_) => {
+                let legacy: LegacyGlobalsData =
+                    bincode::deserialize(data).map_err(|e| e.to_string())?;
+                let (settings, personas, models, secrets, creds, legacy_templates, pricing) =
+                    legacy;
+                let templates = legacy_templates
+                    .into_iter()
+                    .map(|template| PromptTemplate {
+                        id: template.id,
+                        name: template.name,
+                        scope: template.scope,
+                        target_ids: template.target_ids,
+                        content: template.content,
+                        entries: "[]".to_string(),
+                        created_at: template.created_at,
+                        updated_at: template.updated_at,
+                    })
+                    .collect();
+                (
+                    settings, personas, models, secrets, creds, templates, pricing,
+                )
+            }
+        };
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
