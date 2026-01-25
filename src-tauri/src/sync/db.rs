@@ -665,9 +665,111 @@ type CharactersData = (
     Vec<CharacterLorebookLink>,
 );
 
+type LegacyCharactersDataV1 = (
+    Vec<LegacyCharacterV1>,
+    Vec<CharacterRule>,
+    Vec<LegacySceneV1>,
+    Vec<SceneVariant>,
+    Vec<CharacterLorebookLink>,
+);
+
+type LegacyCharactersDataV0 = (
+    Vec<LegacyCharacterV0>,
+    Vec<CharacterRule>,
+    Vec<LegacySceneV1>,
+    Vec<SceneVariant>,
+    Vec<CharacterLorebookLink>,
+);
+
+type LegacyCharactersDataVMinus1 = (
+    Vec<LegacyCharacterVMinus1>,
+    Vec<CharacterRule>,
+    Vec<LegacySceneV0>,
+    Vec<SceneVariant>,
+    Vec<CharacterLorebookLink>,
+);
+
+#[derive(serde::Deserialize)]
+struct LegacyCharacterV1 {
+    pub id: String,
+    pub name: String,
+    pub avatar_path: Option<String>,
+    pub avatar_crop_x: Option<f64>,
+    pub avatar_crop_y: Option<f64>,
+    pub avatar_crop_scale: Option<f64>,
+    pub background_image_path: Option<String>,
+    pub description: Option<String>,
+    pub definition: Option<String>,
+    pub default_scene_id: Option<String>,
+    pub default_model_id: Option<String>,
+    pub memory_type: String,
+    pub prompt_template_id: Option<String>,
+    pub system_prompt: Option<String>,
+    pub voice_config: Option<String>,
+    pub voice_autoplay: i64,
+    pub disable_avatar_gradient: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacyCharacterV0 {
+    pub id: String,
+    pub name: String,
+    pub avatar_path: Option<String>,
+    pub avatar_crop_x: Option<f64>,
+    pub avatar_crop_y: Option<f64>,
+    pub avatar_crop_scale: Option<f64>,
+    pub background_image_path: Option<String>,
+    pub description: Option<String>,
+    pub definition: Option<String>,
+    pub default_scene_id: Option<String>,
+    pub default_model_id: Option<String>,
+    pub memory_type: String,
+    pub prompt_template_id: Option<String>,
+    pub system_prompt: Option<String>,
+    pub voice_config: Option<String>,
+    pub disable_avatar_gradient: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacyCharacterVMinus1 {
+    pub id: String,
+    pub name: String,
+    pub avatar_path: Option<String>,
+    pub background_image_path: Option<String>,
+    pub description: Option<String>,
+    pub default_scene_id: Option<String>,
+    pub default_model_id: Option<String>,
+    pub prompt_template_id: Option<String>,
+    pub system_prompt: Option<String>,
+    pub voice_config: Option<String>,
+    pub disable_avatar_gradient: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacySceneV1 {
+    pub id: String,
+    pub character_id: String,
+    pub content: String,
+    pub created_at: i64,
+    pub selected_variant_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacySceneV0 {
+    pub id: String,
+    pub character_id: String,
+    pub content: String,
+    pub created_at: i64,
+}
+
 fn apply_characters(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
-    let (chars, rules, scenes, variants, links): CharactersData =
-        bincode::deserialize(data).map_err(|e| e.to_string())?;
+    let (chars, rules, scenes, variants, links) = deserialize_characters(data)?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for c in chars {
@@ -711,6 +813,157 @@ fn apply_characters(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> 
     Ok(())
 }
 
+fn deserialize_characters(
+    data: &[u8],
+) -> Result<
+    (
+        Vec<Character>,
+        Vec<CharacterRule>,
+        Vec<Scene>,
+        Vec<SceneVariant>,
+        Vec<CharacterLorebookLink>,
+    ),
+    String,
+> {
+    if let Ok(payload) = bincode::deserialize::<CharactersData>(data) {
+        return Ok(payload);
+    }
+
+    if let Ok((chars, rules, scenes, variants, links)) =
+        bincode::deserialize::<LegacyCharactersDataV1>(data)
+    {
+        let mapped_chars = chars
+            .into_iter()
+            .map(|c| Character {
+                id: c.id,
+                name: c.name,
+                avatar_path: c.avatar_path,
+                avatar_crop_x: c.avatar_crop_x,
+                avatar_crop_y: c.avatar_crop_y,
+                avatar_crop_scale: c.avatar_crop_scale,
+                background_image_path: c.background_image_path,
+                description: c.description,
+                definition: c.definition,
+                default_scene_id: c.default_scene_id,
+                default_model_id: c.default_model_id,
+                memory_type: c.memory_type,
+                prompt_template_id: c.prompt_template_id,
+                system_prompt: c.system_prompt,
+                voice_config: c.voice_config,
+                voice_autoplay: c.voice_autoplay,
+                disable_avatar_gradient: c.disable_avatar_gradient,
+                custom_gradient_enabled: None,
+                custom_gradient_colors: None,
+                custom_text_color: None,
+                custom_text_secondary: None,
+                created_at: c.created_at,
+                updated_at: c.updated_at,
+            })
+            .collect();
+        let mapped_scenes = scenes
+            .into_iter()
+            .map(|s| Scene {
+                id: s.id,
+                character_id: s.character_id,
+                content: s.content,
+                created_at: s.created_at,
+                selected_variant_id: s.selected_variant_id,
+            })
+            .collect();
+        return Ok((mapped_chars, rules, mapped_scenes, variants, links));
+    }
+
+    if let Ok((chars, rules, scenes, variants, links)) =
+        bincode::deserialize::<LegacyCharactersDataV0>(data)
+    {
+        let mapped_chars = chars
+            .into_iter()
+            .map(|c| Character {
+                id: c.id,
+                name: c.name,
+                avatar_path: c.avatar_path,
+                avatar_crop_x: c.avatar_crop_x,
+                avatar_crop_y: c.avatar_crop_y,
+                avatar_crop_scale: c.avatar_crop_scale,
+                background_image_path: c.background_image_path,
+                description: c.description,
+                definition: c.definition,
+                default_scene_id: c.default_scene_id,
+                default_model_id: c.default_model_id,
+                memory_type: c.memory_type,
+                prompt_template_id: c.prompt_template_id,
+                system_prompt: c.system_prompt,
+                voice_config: c.voice_config,
+                voice_autoplay: 0,
+                disable_avatar_gradient: c.disable_avatar_gradient,
+                custom_gradient_enabled: None,
+                custom_gradient_colors: None,
+                custom_text_color: None,
+                custom_text_secondary: None,
+                created_at: c.created_at,
+                updated_at: c.updated_at,
+            })
+            .collect();
+        let mapped_scenes = scenes
+            .into_iter()
+            .map(|s| Scene {
+                id: s.id,
+                character_id: s.character_id,
+                content: s.content,
+                created_at: s.created_at,
+                selected_variant_id: s.selected_variant_id,
+            })
+            .collect();
+        return Ok((mapped_chars, rules, mapped_scenes, variants, links));
+    }
+
+    if let Ok((chars, rules, scenes, variants, links)) =
+        bincode::deserialize::<LegacyCharactersDataVMinus1>(data)
+    {
+        let mapped_chars = chars
+            .into_iter()
+            .map(|c| Character {
+                id: c.id,
+                name: c.name,
+                avatar_path: c.avatar_path,
+                avatar_crop_x: None,
+                avatar_crop_y: None,
+                avatar_crop_scale: None,
+                background_image_path: c.background_image_path,
+                description: c.description,
+                definition: None,
+                default_scene_id: c.default_scene_id,
+                default_model_id: c.default_model_id,
+                memory_type: "manual".to_string(),
+                prompt_template_id: c.prompt_template_id,
+                system_prompt: c.system_prompt,
+                voice_config: c.voice_config,
+                voice_autoplay: 0,
+                disable_avatar_gradient: c.disable_avatar_gradient,
+                custom_gradient_enabled: None,
+                custom_gradient_colors: None,
+                custom_text_color: None,
+                custom_text_secondary: None,
+                created_at: c.created_at,
+                updated_at: c.updated_at,
+            })
+            .collect();
+        let mapped_scenes = scenes
+            .into_iter()
+            .map(|s| Scene {
+                id: s.id,
+                character_id: s.character_id,
+                content: s.content,
+                created_at: s.created_at,
+                selected_variant_id: None,
+            })
+            .collect();
+        return Ok((mapped_chars, rules, mapped_scenes, variants, links));
+    }
+
+    bincode::deserialize::<CharactersData>(data).map_err(|e| e.to_string())
+}
+
 type SessionsData = (
     Vec<Session>,
     Vec<Message>,
@@ -719,9 +972,102 @@ type SessionsData = (
     Vec<UsageMetadata>,
 );
 
+type LegacySessionsDataV1 = (
+    Vec<LegacySessionV1>,
+    Vec<LegacyMessageV1>,
+    Vec<LegacyMessageVariantV1>,
+    Vec<UsageRecord>,
+    Vec<UsageMetadata>,
+);
+
+type LegacySessionsDataV0 = (
+    Vec<LegacySessionV0>,
+    Vec<LegacyMessageV1>,
+    Vec<LegacyMessageVariantV1>,
+    Vec<UsageRecord>,
+    Vec<UsageMetadata>,
+);
+
+#[derive(serde::Deserialize)]
+struct LegacySessionV1 {
+    pub id: String,
+    pub character_id: String,
+    pub title: String,
+    pub system_prompt: Option<String>,
+    pub selected_scene_id: Option<String>,
+    pub persona_id: Option<String>,
+    pub persona_disabled: Option<i64>,
+    pub voice_autoplay: Option<i64>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub max_output_tokens: Option<i64>,
+    pub frequency_penalty: Option<f64>,
+    pub presence_penalty: Option<f64>,
+    pub top_k: Option<i64>,
+    pub memories: String,
+    pub memory_embeddings: String,
+    pub memory_summary: Option<String>,
+    pub memory_summary_token_count: i64,
+    pub memory_tool_events: String,
+    pub archived: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacySessionV0 {
+    pub id: String,
+    pub character_id: String,
+    pub title: String,
+    pub system_prompt: Option<String>,
+    pub selected_scene_id: Option<String>,
+    pub persona_id: Option<String>,
+    pub persona_disabled: Option<i64>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub max_output_tokens: Option<i64>,
+    pub frequency_penalty: Option<f64>,
+    pub presence_penalty: Option<f64>,
+    pub top_k: Option<i64>,
+    pub memories: String,
+    pub memory_embeddings: String,
+    pub memory_summary: Option<String>,
+    pub memory_summary_token_count: i64,
+    pub memory_tool_events: String,
+    pub archived: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacyMessageV1 {
+    pub id: String,
+    pub session_id: String,
+    pub role: String,
+    pub content: String,
+    pub created_at: i64,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub selected_variant_id: Option<String>,
+    pub is_pinned: i64,
+    pub memory_refs: String,
+    pub attachments: String,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacyMessageVariantV1 {
+    pub id: String,
+    pub message_id: String,
+    pub content: String,
+    pub created_at: i64,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+}
+
 fn apply_sessions(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
-    let (sessions, messages, variants, usages, metadata): SessionsData =
-        bincode::deserialize(data).map_err(|e| e.to_string())?;
+    let (sessions, messages, variants, usages, metadata) = deserialize_sessions(data)?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for s in sessions {
@@ -758,6 +1104,169 @@ fn apply_sessions(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn deserialize_sessions(
+    data: &[u8],
+) -> Result<
+    (
+        Vec<Session>,
+        Vec<Message>,
+        Vec<MessageVariant>,
+        Vec<UsageRecord>,
+        Vec<UsageMetadata>,
+    ),
+    String,
+> {
+    if let Ok(payload) = bincode::deserialize::<SessionsData>(data) {
+        return Ok(payload);
+    }
+
+    if let Ok((sessions, messages, variants, usages, metadata)) =
+        bincode::deserialize::<LegacySessionsDataV1>(data)
+    {
+        let mapped_sessions = sessions
+            .into_iter()
+            .map(|s| Session {
+                id: s.id,
+                character_id: s.character_id,
+                title: s.title,
+                system_prompt: s.system_prompt,
+                selected_scene_id: s.selected_scene_id,
+                persona_id: s.persona_id,
+                persona_disabled: s.persona_disabled,
+                voice_autoplay: s.voice_autoplay,
+                temperature: s.temperature,
+                top_p: s.top_p,
+                max_output_tokens: s.max_output_tokens,
+                frequency_penalty: s.frequency_penalty,
+                presence_penalty: s.presence_penalty,
+                top_k: s.top_k,
+                memories: s.memories,
+                memory_embeddings: s.memory_embeddings,
+                memory_summary: s.memory_summary,
+                memory_summary_token_count: s.memory_summary_token_count,
+                memory_tool_events: s.memory_tool_events,
+                archived: s.archived,
+                created_at: s.created_at,
+                updated_at: s.updated_at,
+                memory_status: None,
+                memory_error: None,
+            })
+            .collect();
+        let mapped_messages = messages
+            .into_iter()
+            .map(|m| Message {
+                id: m.id,
+                session_id: m.session_id,
+                role: m.role,
+                content: m.content,
+                created_at: m.created_at,
+                prompt_tokens: m.prompt_tokens,
+                completion_tokens: m.completion_tokens,
+                total_tokens: m.total_tokens,
+                selected_variant_id: m.selected_variant_id,
+                is_pinned: m.is_pinned,
+                memory_refs: m.memory_refs,
+                attachments: m.attachments,
+                reasoning: None,
+            })
+            .collect();
+        let mapped_variants = variants
+            .into_iter()
+            .map(|v| MessageVariant {
+                id: v.id,
+                message_id: v.message_id,
+                content: v.content,
+                created_at: v.created_at,
+                prompt_tokens: v.prompt_tokens,
+                completion_tokens: v.completion_tokens,
+                total_tokens: v.total_tokens,
+                reasoning: None,
+            })
+            .collect();
+        return Ok((
+            mapped_sessions,
+            mapped_messages,
+            mapped_variants,
+            usages,
+            metadata,
+        ));
+    }
+
+    if let Ok((sessions, messages, variants, usages, metadata)) =
+        bincode::deserialize::<LegacySessionsDataV0>(data)
+    {
+        let mapped_sessions = sessions
+            .into_iter()
+            .map(|s| Session {
+                id: s.id,
+                character_id: s.character_id,
+                title: s.title,
+                system_prompt: s.system_prompt,
+                selected_scene_id: s.selected_scene_id,
+                persona_id: s.persona_id,
+                persona_disabled: s.persona_disabled,
+                voice_autoplay: None,
+                temperature: s.temperature,
+                top_p: s.top_p,
+                max_output_tokens: s.max_output_tokens,
+                frequency_penalty: s.frequency_penalty,
+                presence_penalty: s.presence_penalty,
+                top_k: s.top_k,
+                memories: s.memories,
+                memory_embeddings: s.memory_embeddings,
+                memory_summary: s.memory_summary,
+                memory_summary_token_count: s.memory_summary_token_count,
+                memory_tool_events: s.memory_tool_events,
+                archived: s.archived,
+                created_at: s.created_at,
+                updated_at: s.updated_at,
+                memory_status: None,
+                memory_error: None,
+            })
+            .collect();
+        let mapped_messages = messages
+            .into_iter()
+            .map(|m| Message {
+                id: m.id,
+                session_id: m.session_id,
+                role: m.role,
+                content: m.content,
+                created_at: m.created_at,
+                prompt_tokens: m.prompt_tokens,
+                completion_tokens: m.completion_tokens,
+                total_tokens: m.total_tokens,
+                selected_variant_id: m.selected_variant_id,
+                is_pinned: m.is_pinned,
+                memory_refs: m.memory_refs,
+                attachments: m.attachments,
+                reasoning: None,
+            })
+            .collect();
+        let mapped_variants = variants
+            .into_iter()
+            .map(|v| MessageVariant {
+                id: v.id,
+                message_id: v.message_id,
+                content: v.content,
+                created_at: v.created_at,
+                prompt_tokens: v.prompt_tokens,
+                completion_tokens: v.completion_tokens,
+                total_tokens: v.total_tokens,
+                reasoning: None,
+            })
+            .collect();
+        return Ok((
+            mapped_sessions,
+            mapped_messages,
+            mapped_variants,
+            usages,
+            metadata,
+        ));
+    }
+
+    bincode::deserialize::<SessionsData>(data).map_err(|e| e.to_string())
 }
 
 pub struct FileMeta {
