@@ -678,6 +678,7 @@ fn render_with_context_internal(
                     let mut dir_processed = dir_trimmed.to_string();
                     dir_processed = dir_processed.replace("{{char}}", char_name);
                     dir_processed = dir_processed.replace("{{persona}}", persona_name);
+                    dir_processed = dir_processed.replace("{{user}}", persona_name);
                     dir_processed
                 } else {
                     String::new()
@@ -691,6 +692,7 @@ fn render_with_context_internal(
                 let mut content_processed = content_trimmed.to_string();
                 content_processed = content_processed.replace("{{char}}", char_name);
                 content_processed = content_processed.replace("{{persona}}", persona_name);
+                content_processed = content_processed.replace("{{user}}", persona_name);
 
                 if let Some(app) = app {
                     super::super::utils::log_info(
@@ -733,10 +735,11 @@ fn render_with_context_internal(
     };
 
     // Process placeholders inside the character description itself
-    // Supports {{char}} -> character name and {{persona}} -> persona name (or empty string)
+    // Supports {{char}} -> character name and {{persona}}/{{user}} -> persona name (or empty string)
     let mut char_desc = raw_char_desc.to_string();
     char_desc = char_desc.replace("{{char}}", char_name);
     char_desc = char_desc.replace("{{persona}}", persona_name);
+    char_desc = char_desc.replace("{{user}}", persona_name);
 
     // Build rules - Note: NSFW toggle is ignored when using custom prompts
     let pure_mode_enabled = settings
@@ -779,6 +782,8 @@ fn render_with_context_internal(
     result = result.replace("{{char.desc}}", &char_desc);
     result = result.replace("{{persona.name}}", persona_name);
     result = result.replace("{{persona.desc}}", persona_desc);
+    result = result.replace("{{user.name}}", persona_name);
+    result = result.replace("{{user.desc}}", persona_desc);
     result = result.replace("{{content_rules}}", &content_rules);
     // Legacy support for {{rules}} placeholder
     result = result.replace("{{rules}}", "");
@@ -842,11 +847,14 @@ fn render_with_context_internal(
 
     result = result.replace("{{char}}", char_name);
     result = result.replace("{{persona}}", persona_name);
+    result = result.replace("{{user}}", persona_name);
     result = result.replace("{{ai_name}}", char_name);
     result = result.replace("{{ai_description}}", &char_desc);
     result = result.replace("{{ai_rules}}", "");
     result = result.replace("{{persona_name}}", persona_name);
     result = result.replace("{{persona_description}}", persona_desc);
+    result = result.replace("{{user_name}}", persona_name);
+    result = result.replace("{{user_description}}", persona_desc);
 
     result
 }
@@ -867,7 +875,8 @@ fn build_debug_vars(
         .filter(|s| !s.is_empty())
         .unwrap_or("")
         .replace("{{char}}", char_name)
-        .replace("{{persona}}", persona_name);
+        .replace("{{persona}}", persona_name)
+        .replace("{{user}}", persona_name);
     json!({
         "char_name": char_name,
         "char_desc": raw_char_desc,

@@ -586,7 +586,7 @@ export function EditCharacterPage() {
                   <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-1.5">
                     <Sparkles className="h-4 w-4 text-emerald-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Personality & Background</h3>
+                  <h3 className="text-sm font-semibold text-white">Definition</h3>
                 </div>
                 <textarea
                   value={definition}
@@ -608,8 +608,12 @@ export function EditCharacterPage() {
                       <code className="text-emerald-300">{"{{char}}"}</code> - Character name
                     </div>
                     <div>
+                      <code className="text-emerald-300">{"{{user}}"}</code> - Persona name
+                      (preferred, empty if none)
+                    </div>
+                    <div>
                       <code className="text-emerald-300">{"{{persona}}"}</code> - Persona name
-                      (empty if none)
+                      (alias)
                     </div>
                   </div>
                 </div>
@@ -620,7 +624,7 @@ export function EditCharacterPage() {
                   <div className="rounded-lg border border-white/10 bg-white/5 p-1.5">
                     <Info className="h-4 w-4 text-white/60" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Description (UI)</h3>
+                  <h3 className="text-sm font-semibold text-white">Description</h3>
                 </div>
                 <textarea
                   value={description}
@@ -812,6 +816,11 @@ export function EditCharacterPage() {
                   />
                   <div className="flex justify-end text-[11px] text-white/40">
                     {wordCount(newSceneContent)} words
+                  </div>
+                  <div className="text-[11px] text-white/50">
+                    Use <code className="text-emerald-300">{"{{char}}"}</code> for the character and{" "}
+                    <code className="text-emerald-300">{"{{user}}"}</code> (alias{" "}
+                    <code className="text-emerald-300">{"{{persona}}"}</code>) for the persona.
                   </div>
                   <motion.button
                     onClick={addScene}

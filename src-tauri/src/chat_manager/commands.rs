@@ -3885,11 +3885,14 @@ pub async fn chat_generate_user_reply(
     system_prompt = system_prompt.replace("{{char.desc}}", char_desc);
     system_prompt = system_prompt.replace("{{persona.name}}", persona_name);
     system_prompt = system_prompt.replace("{{persona.desc}}", persona_desc);
+    system_prompt = system_prompt.replace("{{user.name}}", persona_name);
+    system_prompt = system_prompt.replace("{{user.desc}}", persona_desc);
     let draft_str = current_draft.as_deref().unwrap_or("");
     system_prompt = system_prompt.replace("{{current_draft}}", draft_str);
     // Legacy placeholders
     system_prompt = system_prompt.replace("{{char}}", char_name);
     system_prompt = system_prompt.replace("{{persona}}", persona_name);
+    system_prompt = system_prompt.replace("{{user}}", persona_name);
 
     if let Some(ref draft) = current_draft {
         if !draft.trim().is_empty() {

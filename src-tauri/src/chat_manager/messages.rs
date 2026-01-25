@@ -74,7 +74,7 @@ pub fn build_multimodal_content(text: &str, attachments: &[ImageAttachment]) -> 
 }
 
 /// Pushes a user/assistant message to the API list, skipping scene messages, and performs
-/// minimal placeholder replacements ({{char}} and {{persona}}) based on provided names.
+/// minimal placeholder replacements ({{char}}, {{persona}}, {{user}}) based on provided names.
 pub fn push_user_or_assistant_message_with_context(
     target: &mut Vec<Value>,
     message: &super::types::StoredMessage,
@@ -88,7 +88,8 @@ pub fn push_user_or_assistant_message_with_context(
 
     let text = super::request::message_text_for_api(message)
         .replace("{{char}}", char_name)
-        .replace("{{persona}}", persona_name);
+        .replace("{{persona}}", persona_name)
+        .replace("{{user}}", persona_name);
 
     if allow_image_input && !message.attachments.is_empty() && message.role == "user" {
         let content = build_multimodal_content(&text, &message.attachments);
@@ -115,7 +116,8 @@ pub fn sanitize_placeholders_in_api_messages(
                 if let Some(s) = content.as_str() {
                     let updated = s
                         .replace("{{char}}", char_name)
-                        .replace("{{persona}}", persona_name);
+                        .replace("{{persona}}", persona_name)
+                        .replace("{{user}}", persona_name);
                     *content = serde_json::Value::String(updated);
                 } else if let Some(arr) = content.as_array_mut() {
                     for part in arr.iter_mut() {
@@ -125,7 +127,8 @@ pub fn sanitize_placeholders_in_api_messages(
                                     if let Some(s) = text.as_str() {
                                         let updated = s
                                             .replace("{{char}}", char_name)
-                                            .replace("{{persona}}", persona_name);
+                                            .replace("{{persona}}", persona_name)
+                                            .replace("{{user}}", persona_name);
                                         *text = Value::String(updated);
                                     }
                                 }

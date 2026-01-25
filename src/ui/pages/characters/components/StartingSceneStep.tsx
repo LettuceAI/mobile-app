@@ -293,6 +293,11 @@ export function StartingSceneStep({
           )}
           <span className="text-[11px] text-white/40">{wordCount(newSceneContent)} words</span>
         </div>
+        <div className="mt-2 text-[11px] text-white/50">
+          Use <code className="text-emerald-300">{"{{char}}"}</code> for the character and{" "}
+          <code className="text-emerald-300">{"{{user}}"}</code> (alias{" "}
+          <code className="text-emerald-300">{"{{persona}}"}</code>) for the persona.
+        </div>
 
         {/* Scene Direction Input - CSS grid for smooth height */}
         <div

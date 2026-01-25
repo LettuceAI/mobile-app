@@ -183,8 +183,11 @@ export function DescriptionStep({
               <code className="text-emerald-300">{"{{char}}"}</code> - Character name
             </div>
             <div>
-              <code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (empty if
-              none)
+              <code className="text-emerald-300">{"{{user}}"}</code> - Persona name (preferred,
+              empty if none)
+            </div>
+            <div>
+              <code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (alias)
             </div>
           </div>
         </div>
@@ -201,7 +204,7 @@ export function DescriptionStep({
               "uppercase text-white/70",
             )}
           >
-            Description (UI)
+            Description
           </label>
         </div>
         <textarea

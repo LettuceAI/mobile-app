@@ -2078,6 +2078,8 @@ fn build_group_system_prompt(
         result = result.replace("{{char.desc}}", char_desc);
         result = result.replace("{{persona.name}}", persona_name);
         result = result.replace("{{persona.desc}}", persona_desc);
+        result = result.replace("{{user.name}}", persona_name);
+        result = result.replace("{{user.desc}}", persona_desc);
         result = result.replace("{{group_characters}}", &group_chars);
         result = result.replace("{{context_summary}}", &context_summary_text);
         result = result.replace("{{key_memories}}", &key_memories_text);
@@ -2088,6 +2090,7 @@ fn build_group_system_prompt(
         // Legacy placeholder support
         result = result.replace("{{char}}", char_name);
         result = result.replace("{{persona}}", persona_name);
+        result = result.replace("{{user}}", persona_name);
 
         let result = normalize_prompt_text(&result);
         if result.is_empty() {
@@ -3425,11 +3428,14 @@ pub async fn group_chat_generate_user_reply(
     system_prompt = system_prompt.replace("{{char.desc}}", "participants in a group conversation");
     system_prompt = system_prompt.replace("{{persona.name}}", persona_name);
     system_prompt = system_prompt.replace("{{persona.desc}}", persona_desc);
+    system_prompt = system_prompt.replace("{{user.name}}", persona_name);
+    system_prompt = system_prompt.replace("{{user.desc}}", persona_desc);
     let draft_str = current_draft.as_deref().unwrap_or("");
     system_prompt = system_prompt.replace("{{current_draft}}", draft_str);
     // Legacy placeholders
     system_prompt = system_prompt.replace("{{char}}", &char_list);
     system_prompt = system_prompt.replace("{{persona}}", persona_name);
+    system_prompt = system_prompt.replace("{{user}}", persona_name);
 
     if let Some(ref draft) = current_draft {
         if !draft.trim().is_empty() {
