@@ -617,6 +617,7 @@ pub fn get_help_me_reply_prompt(app: &AppHandle, style: &str) -> String {
 }
 
 /// Get the Group Chat template from DB, falling back to default if not found
+#[allow(dead_code)]
 pub fn get_group_chat_prompt(app: &AppHandle) -> String {
     match get_template(app, APP_GROUP_CHAT_TEMPLATE_ID) {
         Ok(Some(template)) => template.content,
@@ -625,6 +626,7 @@ pub fn get_group_chat_prompt(app: &AppHandle) -> String {
 }
 
 /// Get the Group Chat Roleplay template from DB, falling back to default if not found
+#[allow(dead_code)]
 pub fn get_group_chat_roleplay_prompt(app: &AppHandle) -> String {
     match get_template(app, APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID) {
         Ok(Some(template)) => template.content,
