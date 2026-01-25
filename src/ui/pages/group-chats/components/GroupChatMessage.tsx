@@ -122,7 +122,7 @@ const MessageActions = React.memo(function MessageActions({
         onClick={onRegenerate}
         disabled={disabled}
         className={cn(
-          "flex items-center justify-center",
+          "flex items-center px-[0.6em] py-[0.3em] justify-center",
           radius.full,
           "border border-white/15 bg-white/10 text-white",
           interactive.transition.fast,

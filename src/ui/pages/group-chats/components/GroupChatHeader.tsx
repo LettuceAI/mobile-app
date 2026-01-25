@@ -30,7 +30,7 @@ export function GroupChatHeader({
       <div className="flex items-center">
         <button
           onClick={onBack}
-          className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+          className="flex shrink-0 px-[0.6em] py-[0.3em] items-center justify-center -ml-2 text-white transition hover:text-white/80"
           aria-label="Back"
         >
           <ArrowLeft size={14} strokeWidth={2.5} />
@@ -68,7 +68,7 @@ export function GroupChatHeader({
 
         <button
           onClick={onMemories}
-          className="flex items-center justify-center text-white/70 hover:text-white transition"
+          className="flex items-center px-[0.6em] py-[0.3em] justify-center text-white/70 hover:text-white transition"
           aria-label="Memories"
         >
           <Brain size={14} />
@@ -76,7 +76,7 @@ export function GroupChatHeader({
 
         <button
           onClick={onSettings}
-          className="flex items-center justify-center text-white/70 hover:text-white transition"
+          className="flex items-center px-[0.6em] py-[0.3em] justify-center text-white/70 hover:text-white transition"
           aria-label="Settings"
         >
           <Settings size={14} />
