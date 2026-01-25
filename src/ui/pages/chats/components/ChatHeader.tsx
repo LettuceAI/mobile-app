@@ -104,7 +104,7 @@ export function ChatHeader({
         <div className="flex items-center">
           <button
             onClick={() => navigate("/chat")}
-            className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+            className="flex px-[0.6em] py-[0.3em] shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
             aria-label="Back"
           >
             <ArrowLeft size={14} strokeWidth={2.5} />
@@ -141,7 +141,7 @@ export function ChatHeader({
                         ),
                       );
                     }}
-                    className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
+                    className="relative flex px-[0.6em] py-[0.3em] h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
                     aria-label="Manage memories"
                   >
                     {isBusy ? (
@@ -171,7 +171,7 @@ export function ChatHeader({
                   if (!characterId || !sessionId) return;
                   navigate(Routes.chatSearch(characterId, sessionId));
                 }}
-                className="flex items-center justify-center text-white/80 transition hover:text-white"
+                className="flex items-center px-[0.6em] py-[0.3em] justify-center text-white/80 transition hover:text-white"
                 aria-label="Search messages"
               >
                 <Search size={14} strokeWidth={2.5} />
@@ -184,7 +184,7 @@ export function ChatHeader({
                 if (!characterId) return;
                 navigate(Routes.characterLorebook(characterId));
               }}
-              className="flex items-center justify-center text-white/80 transition hover:text-white"
+              className="flex items-center px-[0.6em] py-[0.3em] justify-center text-white/80 transition hover:text-white"
               aria-label="Manage lorebooks"
             >
               <BookOpen size={14} strokeWidth={2.5} />

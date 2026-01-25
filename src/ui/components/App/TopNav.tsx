@@ -292,7 +292,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
                   transition={{ duration: 0.2 }}
                   onClick={handleBack}
                   className={cn(
-                    "flex items-center justify-center rounded-full p-2",
+                    "flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full p-2",
                     "text-white/70 hover:text-white hover:bg-white/10",
                     interactive.transition.fast,
                     interactive.active.scale,
@@ -325,7 +325,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
             <button
               onClick={() => navigate("/search")}
               className={cn(
-                "flex items-center justify-center rounded-full",
+                "flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
                 interactive.active.scale,
@@ -339,7 +339,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
             <button
               onClick={() => navigate("/settings")}
               className={cn(
-                "flex items-center justify-center rounded-full",
+                "flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
                 interactive.active.scale,
@@ -353,7 +353,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
             <button
               onClick={() => docsKeyForPath && openDocs(docsKeyForPath as any)}
               className={cn(
-                "flex items-center justify-center rounded-full",
+                "flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full",
                 "text-white/80 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
                 interactive.active.scale,
@@ -367,7 +367,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
             <button
               onClick={handleAddClick}
               className={cn(
-                "flex items-center justify-center rounded-full",
+                "flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
                 interactive.active.scale,
@@ -381,7 +381,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
             <button
               onClick={handleFilterClick}
               className={cn(
-                "flex items-center justify-center rounded-full",
+                "flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full",
                 "text-white/70 hover:text-white hover:bg-white/10",
                 interactive.transition.fast,
                 interactive.active.scale,

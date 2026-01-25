@@ -908,7 +908,7 @@ export function ChatMemoriesPage() {
                   characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat,
                 )
               }
-              className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+              className="flex shrink-0 px-[0.6em] py-[0.3em] items-center justify-center -ml-2 text-white transition hover:text-white/80"
               aria-label="Go back"
             >
               <ArrowLeft size={14} strokeWidth={2.5} />

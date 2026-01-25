@@ -459,7 +459,7 @@ const CharacterCard = memo(
         </div>
 
         {/* Content */}
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:gap-1.5 py-1">
+        <div className="flex  min-w-0 flex-1 flex-col gap-0.5 lg:gap-1.5 py-1">
           <h3
             className={cn(
               "truncate font-semibold text-[15px] lg:text-xl leading-tight",
@@ -480,7 +480,7 @@ const CharacterCard = memo(
           </p>
         </div>
 
-        {/* Subtle chevron */}
+        {/* chevron */}
         <svg
           width="20"
           height="20"

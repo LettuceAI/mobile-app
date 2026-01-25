@@ -696,7 +696,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
           <div className="flex flex-1 items-center min-w-0">
             <button
               onClick={handleBack}
-              className="flex shrink-0 items-center justify-center -ml-2 text-white transition hover:text-white/80"
+              className="flex shrink-0 px-[0.6em] py-[0.3em] items-center justify-center -ml-2 text-white transition hover:text-white/80"
               aria-label="Back to chat"
             >
               <ArrowLeft size={14} strokeWidth={2.5} />
