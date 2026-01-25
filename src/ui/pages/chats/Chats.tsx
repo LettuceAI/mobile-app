@@ -1,5 +1,5 @@
 import { useEffect, useState, memo, useRef } from "react";
-import { Edit2, Trash2, Download } from "lucide-react";
+import { Edit2, Trash2, Download, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
@@ -8,6 +8,7 @@ import {
   listCharacters,
   createSession,
   listSessionPreviews,
+  archiveSession,
   deleteCharacter,
 } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
@@ -32,12 +33,48 @@ export function ChatPage() {
   const [exporting, setExporting] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<Character | null>(null);
+  const [latestSessionByCharacter, setLatestSessionByCharacter] = useState<
+    Record<string, { id: string; updatedAt: number }>
+  >({});
+  const [hiding, setHiding] = useState(false);
   const navigate = useNavigate();
 
   const loadCharacters = async () => {
     try {
-      let list = await listCharacters();
-      setCharacters(list);
+      const [list, previews] = await Promise.all([
+        listCharacters(),
+        listSessionPreviews().catch(() => []),
+      ]);
+      const latestUnarchivedByCharacter: Record<string, { id: string; updatedAt: number }> = {};
+      const charactersWithSessions = new Set<string>();
+
+      previews.forEach((preview) => {
+        charactersWithSessions.add(preview.characterId);
+        if (preview.archived) return;
+        const current = latestUnarchivedByCharacter[preview.characterId];
+        if (!current || preview.updatedAt > current.updatedAt) {
+          latestUnarchivedByCharacter[preview.characterId] = {
+            id: preview.id,
+            updatedAt: preview.updatedAt,
+          };
+        }
+      });
+
+      const visible = list.filter((character) => {
+        if (!charactersWithSessions.has(character.id)) return true;
+        return Boolean(latestUnarchivedByCharacter[character.id]);
+      });
+
+      const sorted = [...visible].sort((a, b) => {
+        const aTime =
+          latestUnarchivedByCharacter[a.id]?.updatedAt ?? a.updatedAt ?? a.createdAt ?? 0;
+        const bTime =
+          latestUnarchivedByCharacter[b.id]?.updatedAt ?? b.updatedAt ?? b.createdAt ?? 0;
+        return bTime - aTime;
+      });
+
+      setLatestSessionByCharacter(latestUnarchivedByCharacter);
+      setCharacters(sorted);
     } catch (err) {
       console.error("Failed to load characters:", err);
     }
@@ -46,8 +83,7 @@ export function ChatPage() {
   useEffect(() => {
     (async () => {
       try {
-        let list = await listCharacters();
-        setCharacters(list);
+        await loadCharacters();
       } finally {
         setLoading(false);
       }
@@ -69,8 +105,7 @@ export function ChatPage() {
 
   const startChat = async (character: Character) => {
     try {
-      const previews = await listSessionPreviews(character.id, 1).catch(() => []);
-      const latestSessionId = previews[0]?.id;
+      const latestSessionId = latestSessionByCharacter[character.id]?.id;
       if (latestSessionId) {
         navigate(`/chat/${character.id}?sessionId=${latestSessionId}`);
         return;
@@ -113,6 +148,26 @@ export function ChatPage() {
     setExportTarget(selectedCharacter);
     setSelectedCharacter(null);
     setExportMenuOpen(true);
+  };
+
+  const handleHide = async () => {
+    if (!selectedCharacter) return;
+    const latestSessionId = latestSessionByCharacter[selectedCharacter.id]?.id;
+    if (!latestSessionId) {
+      setSelectedCharacter(null);
+      return;
+    }
+
+    try {
+      setHiding(true);
+      await archiveSession(latestSessionId, true);
+      await loadCharacters();
+      setSelectedCharacter(null);
+    } catch (err) {
+      console.error("Failed to hide character session:", err);
+    } finally {
+      setHiding(false);
+    }
   };
 
   const handleExportFormat = async (format: CharacterFileFormat) => {
@@ -177,6 +232,19 @@ export function ChatPage() {
               </div>
               <span className="text-sm font-medium text-blue-300">
                 {exporting ? "Exporting..." : "Export Character"}
+              </span>
+            </button>
+
+            <button
+              onClick={handleHide}
+              disabled={hiding || !latestSessionByCharacter[selectedCharacter.id]}
+              className="flex w-full items-center gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left transition hover:border-amber-400/50 hover:bg-amber-400/20 disabled:opacity-50"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/20">
+                <EyeOff className="h-4 w-4 text-amber-400" />
+              </div>
+              <span className="text-sm font-medium text-amber-200">
+                {hiding ? "Hiding..." : "Hide this character"}
               </span>
             </button>
 
