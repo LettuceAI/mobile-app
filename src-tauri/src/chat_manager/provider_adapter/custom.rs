@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use super::{OpenAIChatRequest, ProviderAdapter, ReasoningConfig};
-use crate::chat_manager::tooling::ToolConfig;
+use crate::chat_manager::tooling::{openai_tool_choice, openai_tools, ToolConfig};
 use crate::chat_manager::types::ProviderCredential;
 
 pub struct CustomGenericAdapter {
@@ -131,6 +131,18 @@ impl ProviderAdapter for CustomGenericAdapter {
             }
         }
 
+        let (tools, tool_choice) = if let Some(cfg) = tool_config {
+            let tools = openai_tools(cfg);
+            let choice = if tools.is_some() {
+                openai_tool_choice(cfg.choice.as_ref())
+            } else {
+                None
+            };
+            (tools, choice)
+        } else {
+            (None, None)
+        };
+
         let request = OpenAIChatRequest {
             model: model_name,
             messages: &mapped_messages,
@@ -150,13 +162,8 @@ impl ProviderAdapter for CustomGenericAdapter {
             } else {
                 None
             },
-            tools: tool_config.map(|c| {
-                c.tools
-                    .iter()
-                    .map(|t| serde_json::to_value(t).unwrap())
-                    .collect()
-            }),
-            tool_choice: tool_config.map(|c| serde_json::to_value(&c.choice).unwrap()),
+            tools,
+            tool_choice,
         };
 
         serde_json::to_value(request).unwrap()

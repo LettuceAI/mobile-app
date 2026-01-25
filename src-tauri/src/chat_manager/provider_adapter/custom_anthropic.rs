@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::ProviderAdapter;
-use crate::chat_manager::tooling::ToolConfig;
+use crate::chat_manager::tooling::{anthropic_tool_choice, anthropic_tools, ToolConfig};
 use crate::chat_manager::types::ProviderCredential;
 
 pub struct CustomAnthropicAdapter {
@@ -63,6 +63,10 @@ struct AnthropicMessagesRequest {
     system: Option<String>,
     #[serde(rename = "top_k", skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Value>>,
+    #[serde(rename = "tool_choice", skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thinking: Option<AnthropicThinking>,
 }
@@ -137,7 +141,7 @@ impl ProviderAdapter for CustomAnthropicAdapter {
         _frequency_penalty: Option<f64>,
         _presence_penalty: Option<f64>,
         top_k: Option<u32>,
-        _tool_config: Option<&ToolConfig>,
+        tool_config: Option<&ToolConfig>,
         reasoning_enabled: bool,
         _reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
@@ -202,6 +206,9 @@ impl ProviderAdapter for CustomAnthropicAdapter {
             max_tokens
         };
 
+        let tools = tool_config.and_then(anthropic_tools);
+        let tool_choice = tool_config.and_then(|cfg| anthropic_tool_choice(cfg.choice.as_ref()));
+
         let body = AnthropicMessagesRequest {
             model: model_name.to_string(),
             messages: msgs,
@@ -211,6 +218,8 @@ impl ProviderAdapter for CustomAnthropicAdapter {
             stream: should_stream,
             system: system_prompt.filter(|s| !s.is_empty()),
             top_k,
+            tools,
+            tool_choice,
             thinking,
         };
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
