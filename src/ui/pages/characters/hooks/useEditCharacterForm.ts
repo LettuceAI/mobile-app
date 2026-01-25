@@ -39,6 +39,7 @@ type EditCharacterState = {
   scenes: Scene[];
   defaultSceneId: string | null;
   newSceneContent: string;
+  newSceneDirection: string;
   selectedModelId: string | null;
   systemPromptTemplateId: string | null;
   voiceConfig: CharacterVoiceConfig | null;
@@ -82,6 +83,7 @@ const initialState: EditCharacterState = {
   scenes: [],
   defaultSceneId: null,
   newSceneContent: "",
+  newSceneDirection: "",
   selectedModelId: null,
   systemPromptTemplateId: null,
   voiceConfig: null,
@@ -451,6 +453,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
       {
         id: sceneId,
         content: state.newSceneContent.trim(),
+        direction: state.newSceneDirection.trim() || undefined,
         createdAt: timestamp,
       },
     ];
@@ -459,8 +462,15 @@ export function useEditCharacterForm(characterId: string | undefined) {
       scenes: newScenes,
       defaultSceneId: newScenes.length === 1 ? sceneId : state.defaultSceneId,
       newSceneContent: "",
+      newSceneDirection: "",
     });
-  }, [setFields, state.defaultSceneId, state.newSceneContent, state.scenes]);
+  }, [
+    setFields,
+    state.defaultSceneId,
+    state.newSceneContent,
+    state.newSceneDirection,
+    state.scenes,
+  ]);
 
   const deleteScene = useCallback(
     (sceneId: string) => {

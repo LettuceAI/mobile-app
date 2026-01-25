@@ -50,6 +50,7 @@ export function EditCharacterPage() {
   const { characterId } = useParams();
   const { state, actions, computed } = useEditCharacterForm(characterId);
   const [expandedSceneId, setExpandedSceneId] = React.useState<string | null>(null);
+  const [newSceneEditorOpen, setNewSceneEditorOpen] = React.useState(false);
 
   // Background image positioning state
   const [pendingBackgroundSrc, setPendingBackgroundSrc] = React.useState<string | null>(null);
@@ -83,6 +84,7 @@ export function EditCharacterPage() {
     scenes,
     defaultSceneId,
     newSceneContent,
+    newSceneDirection,
     selectedModelId,
 
     disableAvatarGradient,
@@ -117,6 +119,17 @@ export function EditCharacterPage() {
   } = actions;
 
   const { avatarInitial, canSave } = computed;
+
+  const closeNewSceneEditor = React.useCallback(() => {
+    setFields({ newSceneContent: "", newSceneDirection: "" });
+    setNewSceneEditorOpen(false);
+  }, [setFields]);
+
+  const saveNewScene = React.useCallback(() => {
+    if (!newSceneContent.trim()) return;
+    addScene();
+    setNewSceneEditorOpen(false);
+  }, [addScene, newSceneContent]);
 
   const handleExportFormat = React.useCallback(
     async (format: CharacterFileFormat) => {
@@ -771,6 +784,7 @@ export function EditCharacterPage() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            setNewSceneEditorOpen(false);
                                             startEditingScene(scene);
                                           }}
                                           className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/60 transition active:scale-95 active:bg-white/10"
@@ -803,34 +817,31 @@ export function EditCharacterPage() {
 
                 {/* Add New Scene */}
                 <motion.div layout className="space-y-2">
-                  <textarea
-                    value={newSceneContent}
-                    onChange={(e) => setFields({ newSceneContent: e.target.value })}
-                    rows={5}
-                    placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
-                    className="w-full resize-y rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none min-h-35 max-h-80 overflow-auto"
-                  />
-                  <div className="flex justify-end text-[11px] text-white/40">
-                    {wordCount(newSceneContent)} words
+                  <div className="rounded-xl border border-white/10 bg-black/20 px-3.5 py-3">
+                    <div className="text-sm font-medium text-white">New starting scene</div>
+                    <p className="mt-1 text-xs text-white/50">
+                      Create a scenario and optional direction for the opening moment.
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <motion.button
+                        onClick={() => setNewSceneEditorOpen(true)}
+                        whileTap={{ scale: 0.97 }}
+                        className="flex items-center gap-2 rounded-xl border border-blue-400/40 bg-blue-400/20 px-3.5 py-2 text-sm font-medium text-blue-100 transition active:bg-blue-400/30"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Scene
+                      </motion.button>
+                      {newSceneContent.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setNewSceneEditorOpen(true)}
+                          className="text-xs text-white/50 transition hover:text-white/70"
+                        >
+                          Continue draft
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-white/50">
-                    Use <code className="text-emerald-300">{"{{char}}"}</code> for the character and{" "}
-                    <code className="text-emerald-300">{"{{user}}"}</code> (alias{" "}
-                    <code className="text-emerald-300">{"{{persona}}"}</code>) for the persona.
-                  </div>
-                  <motion.button
-                    onClick={addScene}
-                    disabled={!newSceneContent.trim()}
-                    whileTap={{ scale: newSceneContent.trim() ? 0.97 : 1 }}
-                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-                      newSceneContent.trim()
-                        ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
-                        : "border border-white/10 bg-white/5 text-white/40"
-                    }`}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Scene
-                  </motion.button>
                 </motion.div>
 
                 <p className="text-xs text-white/50">
@@ -1152,9 +1163,9 @@ export function EditCharacterPage() {
         </div>
       </div>
 
-      {/* Edit Scene Fullscreen Panel */}
+      {/* Edit/New Scene Fullscreen Panel */}
       <AnimatePresence>
-        {editingSceneId !== null && (
+        {(editingSceneId !== null || newSceneEditorOpen) && (
           <motion.div
             className="fixed inset-0 z-50 flex h-full flex-col bg-black/90 backdrop-blur-sm"
             initial={{ opacity: 0, y: 20 }}
@@ -1163,19 +1174,23 @@ export function EditCharacterPage() {
             transition={{ duration: 0.2 }}
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div className="text-base font-semibold text-white">Edit Scene</div>
+              <div className="text-base font-semibold text-white">
+                {editingSceneId !== null ? "Edit Scene" : "New Scene"}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={cancelEditingScene}
+                  onClick={editingSceneId !== null ? cancelEditingScene : closeNewSceneEditor}
                   className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
                 >
                   Close
                 </button>
                 <button
                   type="button"
-                  onClick={saveEditedScene}
-                  disabled={!editingSceneContent.trim()}
+                  onClick={editingSceneId !== null ? saveEditedScene : saveNewScene}
+                  disabled={
+                    editingSceneId !== null ? !editingSceneContent.trim() : !newSceneContent.trim()
+                  }
                   className={cn(
                     "rounded-full px-3 py-1.5 text-xs font-semibold text-white transition",
                     "bg-linear-to-r from-emerald-500 to-green-500",
@@ -1183,7 +1198,7 @@ export function EditCharacterPage() {
                     "disabled:cursor-not-allowed disabled:opacity-50",
                   )}
                 >
-                  Save
+                  {editingSceneId !== null ? "Save" : "Add"}
                 </button>
               </div>
             </div>
@@ -1193,14 +1208,23 @@ export function EditCharacterPage() {
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-white/80">Scene</div>
                   <textarea
-                    value={editingSceneContent}
-                    onChange={(e) => setFields({ editingSceneContent: e.target.value })}
+                    value={editingSceneId !== null ? editingSceneContent : newSceneContent}
+                    onChange={(e) =>
+                      setFields(
+                        editingSceneId !== null
+                          ? { editingSceneContent: e.target.value }
+                          : { newSceneContent: e.target.value },
+                      )
+                    }
                     rows={14}
                     className="min-h-[40vh] w-full resize-none rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/20 focus:outline-none"
                     placeholder="Enter scene content..."
                   />
                   <div className="flex items-center justify-between text-[11px] text-white/40">
-                    <span>{wordCount(editingSceneContent)} words</span>
+                    <span>
+                      {wordCount(editingSceneId !== null ? editingSceneContent : newSceneContent)}{" "}
+                      words
+                    </span>
                     <span>
                       Use <code className="text-emerald-300">{"{{char}}"}</code>,{" "}
                       <code className="text-emerald-300">{"{{user}}"}</code>
@@ -1214,8 +1238,14 @@ export function EditCharacterPage() {
                     Scene Direction
                   </div>
                   <textarea
-                    value={editingSceneDirection}
-                    onChange={(e) => setFields({ editingSceneDirection: e.target.value })}
+                    value={editingSceneId !== null ? editingSceneDirection : newSceneDirection}
+                    onChange={(e) =>
+                      setFields(
+                        editingSceneId !== null
+                          ? { editingSceneDirection: e.target.value }
+                          : { newSceneDirection: e.target.value },
+                      )
+                    }
                     rows={6}
                     className="min-h-[18vh] w-full resize-none rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-white/20 focus:outline-none"
                     placeholder="e.g., 'The hostage will be rescued' or 'Build tension gradually'"
