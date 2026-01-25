@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, Reorder, motion, useDragControls } from "framer-motion";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   RotateCcw,
   Eye,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn, radius, interactive } from "../../design-tokens";
 import { BottomMenu } from "../../components";
+import { useNavigationManager } from "../../navigation";
 import {
   createPromptTemplate,
   updatePromptTemplate,
@@ -473,7 +474,7 @@ function LoadingSkeleton() {
 }
 
 export function EditPromptTemplate() {
-  const navigate = useNavigate();
+  const { backOrReplace } = useNavigationManager();
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -703,7 +704,7 @@ export function EditPromptTemplate() {
           usesEntryEditor ? entries : undefined,
         );
       }
-      navigate("/settings/prompts");
+      backOrReplace("/settings/prompts");
     } catch (error) {
       console.error("Failed to save template:", error);
       alert("Failed to save template: " + String(error));
