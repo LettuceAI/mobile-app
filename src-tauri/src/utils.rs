@@ -116,29 +116,8 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
     log_backend(app, component, LogLevel::Debug, message);
 }
 
-pub(crate) fn app_version() -> String {
-    let base_version = env!("CARGO_PKG_VERSION");
-    let is_dev = option_env!("DEV_BUILD").is_some();
-
-    let platform = if cfg!(target_os = "android") {
-        "android"
-    } else if cfg!(target_os = "ios") {
-        "ios"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "linux") {
-        "linux"
-    } else {
-        "unknown"
-    };
-
-    if is_dev {
-        format!("{}-dev-{}", base_version, platform)
-    } else {
-        format!("{}-{}", base_version, platform)
-    }
+pub(crate) fn app_version(app: &AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 pub fn get_local_ip() -> Result<String, String> {
@@ -210,6 +189,6 @@ pub fn accessibility_sound_base64(app: AppHandle) -> Result<AccessibilitySoundBa
 }
 
 #[tauri::command]
-pub fn get_app_version() -> String {
-    app_version()
+pub fn get_app_version(app: AppHandle) -> String {
+    app_version(&app)
 }
