@@ -3,6 +3,7 @@ import { Trash2, Edit2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Character } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
+import { AvatarImage } from "../../components/AvatarImage";
 import { typography, radius, interactive, cn } from "../../design-tokens";
 import { useCharactersController } from "../characters/hooks/useCharactersController";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -52,7 +53,9 @@ function CharacterAvatar({ character }: { character: Character }) {
   const avatarUrl = useAvatar("character", character.id, character.avatarPath);
 
   if (avatarUrl && isImageLike(avatarUrl)) {
-    return <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />;
+    return (
+      <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
+    );
   }
 
   const initials = character.name

@@ -1040,10 +1040,18 @@ export const CharacterVoiceConfigSchema = z.object({
 });
 export type CharacterVoiceConfig = z.infer<typeof CharacterVoiceConfigSchema>;
 
+export const AvatarCropSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  scale: z.number(),
+});
+export type AvatarCrop = z.infer<typeof AvatarCropSchema>;
+
 export const CharacterSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   avatarPath: z.string().optional(),
+  avatarCrop: AvatarCropSchema.optional(),
   backgroundImagePath: z.string().optional(),
   definition: z.string().optional(),
   description: z.string().optional(),
@@ -1131,6 +1139,7 @@ export const PersonaSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
   avatarPath: z.string().optional(),
+  avatarCrop: AvatarCropSchema.optional(),
   isDefault: z.boolean().default(false),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),

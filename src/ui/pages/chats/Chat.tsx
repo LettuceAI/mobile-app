@@ -61,6 +61,7 @@ import {
   EmptyState,
 } from "./components";
 import { BottomMenu, MenuButton } from "../../components";
+import { AvatarImage } from "../../components/AvatarImage";
 import { useAvatar } from "../../hooks/useAvatar";
 import { Image, RefreshCw, Sparkles, Check, PenLine } from "lucide-react";
 import { radius, cn } from "../../design-tokens";
@@ -1597,7 +1598,7 @@ export function ChatConversationPage() {
 }
 
 function CharacterOption({ character, onClick }: { character: Character; onClick: () => void }) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
   return (
     <button
@@ -1612,7 +1613,7 @@ function CharacterOption({ character, onClick }: { character: Character; onClick
     >
       <div className={cn("h-10 w-10 overflow-hidden shrink-0", radius.full, "bg-white/10")}>
         {avatarUrl ? (
-          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
+          <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-white/50 font-semibold">
             {character.name.charAt(0).toUpperCase()}

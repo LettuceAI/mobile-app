@@ -1,6 +1,7 @@
 import { ArrowLeft, Settings, Brain } from "lucide-react";
 
 import type { GroupSession, Character } from "../../../../core/storage/schemas";
+import { AvatarImage } from "../../../components/AvatarImage";
 import { cn } from "../../../design-tokens";
 import { useAvatar } from "../../../hooks/useAvatar";
 
@@ -94,7 +95,7 @@ function CharacterMiniAvatar({
   index: number;
   total: number;
 }) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
   return (
     <div
@@ -110,7 +111,7 @@ function CharacterMiniAvatar({
       }}
     >
       {avatarUrl ? (
-        <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
+        <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-purple-500/40 to-blue-500/40 text-[11px] font-bold text-white">
           {character.name.slice(0, 1).toUpperCase()}

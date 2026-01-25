@@ -926,10 +926,12 @@ pub async fn discovery_import_character(app: AppHandle, path: String) -> Result<
     let avatar_base64 =
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &avatar_data);
 
-    let avatar_path = storage_save_avatar(app.clone(), avatar_entity_id.clone(), avatar_base64)
-        .map_err(|e| format!("Failed to save avatar: {}", e))?;
+    let avatar_path =
+        storage_save_avatar(app.clone(), avatar_entity_id.clone(), avatar_base64, None)
+            .map_err(|e| format!("Failed to save avatar: {}", e))?;
 
-    if let Err(err) = generate_avatar_gradient(app.clone(), avatar_entity_id, "avatar.webp".into())
+    if let Err(err) =
+        generate_avatar_gradient(app.clone(), avatar_entity_id, "avatar_base.webp".into())
     {
         log_error(
             &app,

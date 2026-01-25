@@ -3,6 +3,7 @@ import { readSettings, saveCharacter } from "../../../../core/storage";
 import { saveAvatar } from "../../../../core/storage/avatars";
 import { convertToImageRef } from "../../../../core/storage/images";
 import type {
+  AvatarCrop,
   Model,
   Scene,
   SystemPromptTemplate,
@@ -39,6 +40,8 @@ interface CharacterFormState {
   step: Step;
   name: string;
   avatarPath: string;
+  avatarCrop: AvatarCrop | null;
+  avatarRoundPath: string | null;
   backgroundImagePath: string;
   scenes: Scene[];
   defaultSceneId: string | null;
@@ -69,6 +72,8 @@ type CharacterFormAction =
   | { type: "SET_STEP"; payload: Step }
   | { type: "SET_NAME"; payload: string }
   | { type: "SET_AVATAR_PATH"; payload: string }
+  | { type: "SET_AVATAR_CROP"; payload: AvatarCrop | null }
+  | { type: "SET_AVATAR_ROUND_PATH"; payload: string | null }
   | { type: "SET_BACKGROUND_IMAGE_PATH"; payload: string }
   | { type: "SET_SCENES"; payload: Scene[] }
   | { type: "SET_DEFAULT_SCENE_ID"; payload: string | null }
@@ -93,6 +98,8 @@ const initialState: CharacterFormState = {
   step: Step.Identity,
   name: "",
   avatarPath: "",
+  avatarCrop: null,
+  avatarRoundPath: null,
   backgroundImagePath: "",
   scenes: [],
   defaultSceneId: null,
@@ -124,6 +131,10 @@ function characterFormReducer(
       return { ...state, name: action.payload };
     case "SET_AVATAR_PATH":
       return { ...state, avatarPath: action.payload };
+    case "SET_AVATAR_CROP":
+      return { ...state, avatarCrop: action.payload };
+    case "SET_AVATAR_ROUND_PATH":
+      return { ...state, avatarRoundPath: action.payload };
     case "SET_BACKGROUND_IMAGE_PATH":
       return { ...state, backgroundImagePath: action.payload };
     case "SET_SCENES":
@@ -192,6 +203,10 @@ export function useCharacterForm(draftCharacter?: any) {
           });
           dispatch({ type: "SET_DESCRIPTION", payload: draftCharacter.description || "" });
           dispatch({ type: "SET_AVATAR_PATH", payload: draftCharacter.avatarPath || "" });
+          dispatch({
+            type: "SET_AVATAR_CROP",
+            payload: draftCharacter.avatarCrop ?? null,
+          });
           dispatch({
             type: "SET_BACKGROUND_IMAGE_PATH",
             payload: draftCharacter.backgroundImagePath || "",
@@ -287,6 +302,14 @@ export function useCharacterForm(draftCharacter?: any) {
     dispatch({ type: "SET_AVATAR_PATH", payload: path });
   }, []);
 
+  const setAvatarCrop = useCallback((crop: AvatarCrop | null) => {
+    dispatch({ type: "SET_AVATAR_CROP", payload: crop });
+  }, []);
+
+  const setAvatarRoundPath = useCallback((path: string | null) => {
+    dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: path });
+  }, []);
+
   const setBackgroundImagePath = useCallback((path: string) => {
     dispatch({ type: "SET_BACKGROUND_IMAGE_PATH", payload: path });
   }, []);
@@ -338,6 +361,8 @@ export function useCharacterForm(draftCharacter?: any) {
     const reader = new FileReader();
     reader.onload = () => {
       dispatch({ type: "SET_AVATAR_PATH", payload: reader.result as string });
+      dispatch({ type: "SET_AVATAR_CROP", payload: null });
+      dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
     };
     reader.readAsDataURL(file);
   }, []);
@@ -442,6 +467,10 @@ export function useCharacterForm(draftCharacter?: any) {
 
       if (characterData.avatarData) {
         dispatch({ type: "SET_AVATAR_PATH", payload: characterData.avatarData });
+        dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+      }
+      if (characterData.avatarCrop) {
+        dispatch({ type: "SET_AVATAR_CROP", payload: characterData.avatarCrop });
       }
 
       if (characterData.backgroundImageData) {
@@ -491,7 +520,12 @@ export function useCharacterForm(draftCharacter?: any) {
       // Save avatar using new centralized system
       let avatarFilename: string | undefined = undefined;
       if (state.avatarPath) {
-        avatarFilename = await saveAvatar("character", characterId, state.avatarPath);
+        avatarFilename = await saveAvatar(
+          "character",
+          characterId,
+          state.avatarPath,
+          state.avatarRoundPath,
+        );
         if (!avatarFilename) {
           console.error("[CreateCharacter] Failed to save avatar image");
         } else {
@@ -516,6 +550,7 @@ export function useCharacterForm(draftCharacter?: any) {
         id: characterId,
         name: state.name.trim(),
         avatarPath: avatarFilename || undefined,
+        avatarCrop: avatarFilename ? (state.avatarCrop ?? undefined) : undefined,
         backgroundImagePath: backgroundImageId || undefined,
         definition: state.definition.trim(),
         description: state.description.trim() || undefined,
@@ -547,6 +582,8 @@ export function useCharacterForm(draftCharacter?: any) {
   }, [
     state.name,
     state.avatarPath,
+    state.avatarCrop,
+    state.avatarRoundPath,
     state.backgroundImagePath,
     state.scenes,
     state.defaultSceneId,
@@ -575,6 +612,8 @@ export function useCharacterForm(draftCharacter?: any) {
       setStep,
       setName,
       setAvatarPath,
+      setAvatarCrop,
+      setAvatarRoundPath,
       setBackgroundImagePath,
       setScenes,
       setDefaultSceneId,

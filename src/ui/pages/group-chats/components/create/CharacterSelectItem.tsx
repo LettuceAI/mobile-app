@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 
 import type { Character } from "../../../../../core/storage/schemas";
+import { AvatarImage } from "../../../../components/AvatarImage";
 import { typography, radius, interactive, cn } from "../../../../design-tokens";
 import { useAvatar } from "../../../../hooks/useAvatar";
 
@@ -11,7 +12,7 @@ type CharacterSelectItemProps = {
 };
 
 export function CharacterSelectItem({ character, selected, onToggle }: CharacterSelectItemProps) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
   const description = character.description || character.definition;
 
   return (
@@ -35,7 +36,7 @@ export function CharacterSelectItem({ character, selected, onToggle }: Character
         )}
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
+          <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-sm font-bold text-white/60">
             {character.name.slice(0, 2).toUpperCase()}

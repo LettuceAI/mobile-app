@@ -2,15 +2,18 @@ import { memo, useState } from "react";
 import { Archive, ArchiveRestore, Edit3, Plus, Trash2 } from "lucide-react";
 
 import type { GroupSessionPreview, Character } from "../../../../../core/storage/schemas";
+import { AvatarImage } from "../../../../components/AvatarImage";
 import { useAvatar } from "../../../../hooks/useAvatar";
 import { typography, radius, cn } from "../../../../design-tokens";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
 const CharacterMiniAvatar = memo(({ character }: { character: Character }) => {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
   if (avatarUrl) {
-    return <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />;
+    return (
+      <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
+    );
   }
 
   const initials = character.name.slice(0, 2).toUpperCase();

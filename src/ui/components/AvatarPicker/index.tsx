@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Camera } from "lucide-react";
 import { cn, radius, interactive } from "../../design-tokens";
 import { readSettings } from "../../../core/storage/repo";
+import type { AvatarCrop } from "../../../core/storage/schemas";
+import { AvatarImage } from "../AvatarImage";
 
 import { AvatarSourceMenu } from "./AvatarSourceMenu";
 import { AvatarGenerationSheet } from "./AvatarGenerationSheet";
@@ -12,6 +14,10 @@ export { AvatarSourceMenu, AvatarGenerationSheet, AvatarPositionModal };
 interface AvatarPickerProps {
   currentAvatarPath: string;
   onAvatarChange: (path: string) => void;
+  avatarCrop?: AvatarCrop | null;
+  onAvatarCropChange?: (crop: AvatarCrop | null) => void;
+  avatarRoundPath?: string | null;
+  onAvatarRoundChange?: (path: string | null) => void;
   avatarPreview?: React.ReactNode;
   placeholder?: string;
   size?: "sm" | "md" | "lg";
@@ -22,6 +28,10 @@ interface AvatarPickerProps {
 export function AvatarPicker({
   currentAvatarPath,
   onAvatarChange,
+  avatarCrop,
+  onAvatarCropChange,
+  avatarRoundPath,
+  onAvatarRoundChange,
   avatarPreview,
   placeholder,
   size = "lg",
@@ -31,7 +41,7 @@ export function AvatarPicker({
   const [showPositionModal, setShowPositionModal] = useState(false);
   const [pendingImageSrc, setPendingImageSrc] = useState<string | null>(null);
   const [hasImageGenModels, setHasImageGenModels] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -89,11 +99,15 @@ export function AvatarPicker({
   }, [currentAvatarPath]);
 
   const handlePositionConfirm = useCallback(
-    (croppedImageDataUrl: string) => {
-      onAvatarChange(croppedImageDataUrl);
+    (roundImageData: string) => {
+      if (pendingImageSrc) {
+        onAvatarChange(pendingImageSrc);
+      }
+      onAvatarRoundChange?.(roundImageData);
+      onAvatarCropChange?.(null);
       setPendingImageSrc(null);
     },
-    [onAvatarChange]
+    [onAvatarChange, onAvatarRoundChange, onAvatarCropChange, pendingImageSrc],
   );
 
   const handlePositionModalClose = useCallback(() => {
@@ -110,24 +124,29 @@ export function AvatarPicker({
           sizeClasses[size],
           radius.full,
           "bg-[#111113]",
-          currentAvatarPath 
-            ? "border-[3px] border-white/10" 
-            : "border-2 border-dashed border-white/15"
+          currentAvatarPath
+            ? "border-[3px] border-white/10"
+            : "border-2 border-dashed border-white/15",
         )}
       >
         {avatarPreview ? (
           avatarPreview
-        ) : currentAvatarPath ? (
-          <img 
-            src={currentAvatarPath} 
-            alt="Avatar" 
-            className="h-full w-full object-cover"
+        ) : avatarRoundPath || currentAvatarPath ? (
+          <AvatarImage
+            src={avatarRoundPath || currentAvatarPath}
+            alt="Avatar"
+            crop={avatarCrop}
+            applyCrop
           />
         ) : placeholder ? (
-          <span className={cn(
-            "font-semibold text-white/30",
-            size === "sm" ? "text-base" : size === "md" ? "text-xl" : "text-2xl"
-          )}>{placeholder}</span>
+          <span
+            className={cn(
+              "font-semibold text-white/30",
+              size === "sm" ? "text-base" : size === "md" ? "text-xl" : "text-2xl",
+            )}
+          >
+            {placeholder}
+          </span>
         ) : null}
       </div>
 
@@ -143,7 +162,7 @@ export function AvatarPicker({
           "text-white/70",
           interactive.transition.default,
           "hover:bg-[#252528] hover:text-white hover:border-white/20",
-          "active:scale-95"
+          "active:scale-95",
         )}
       >
         <Camera size={16} strokeWidth={2} />

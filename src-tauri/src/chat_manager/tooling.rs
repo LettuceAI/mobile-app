@@ -203,11 +203,10 @@ pub fn zai_tool_choice(choice: Option<&ToolChoice>) -> Option<Value> {
     }
 }
 
-/// Parse provider responses into canonical tool calls.
 pub fn parse_tool_calls(provider_id: &str, payload: &Value) -> Vec<ToolCall> {
     let mut calls: Vec<ToolCall> = Vec::new();
 
-    // 1) OpenAI-style responses (including Groq, DeepSeek, etc.)
+    // 1) OpenAI-style responses 
     if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
         for choice in choices {
             if let Some(message) = choice.get("message") {

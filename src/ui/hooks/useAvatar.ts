@@ -1,33 +1,30 @@
 import { useEffect, useState } from "react";
-import { loadAvatar, type EntityType } from "../../core/storage/avatars";
+import { AVATAR_ROUND_FILENAME, loadAvatar, type EntityType } from "../../core/storage/avatars";
 
 const avatarCache = new Map<string, string | Promise<string>>();
+
+export type AvatarVariant = "base" | "round";
 
 /**
  * Invalidate cached avatar for a specific entity
  * Call this when an avatar is updated or deleted
  */
-export function invalidateAvatarCache(type: EntityType, entityId: string, avatarFilename?: string) {
-  if (avatarFilename) {
-    const cacheKey = `${type}:${entityId}:${avatarFilename}`;
-    avatarCache.delete(cacheKey);
-  } else {
-    const prefix = `${type}:${entityId}:`;
-    const keysToDelete: string[] = [];
-    avatarCache.forEach((_, key) => {
-      if (key.startsWith(prefix)) {
-        keysToDelete.push(key);
-      }
-    });
-    keysToDelete.forEach(key => avatarCache.delete(key));
-  }
+export function invalidateAvatarCache(type: EntityType, entityId: string) {
+  const prefix = `${type}:${entityId}:`;
+  const keysToDelete: string[] = [];
+  avatarCache.forEach((_, key) => {
+    if (key.startsWith(prefix)) {
+      keysToDelete.push(key);
+    }
+  });
+  keysToDelete.forEach((key) => avatarCache.delete(key));
 }
 
 /**
  * Hook to load and display character/persona avatars
  * Automatically fetches avatar from avatars/<type>-<entityId>/ directory
  * Uses global cache to prevent redundant loads
- * 
+ *
  * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
  * @param avatarFilename - The avatar filename stored in entity.avatarPath
@@ -36,13 +33,18 @@ export function invalidateAvatarCache(type: EntityType, entityId: string, avatar
 export function useAvatar(
   type: EntityType,
   entityId: string | undefined,
-  avatarFilename: string | undefined
+  avatarFilename: string | undefined,
+  variant: AvatarVariant = "base",
 ): string | undefined {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(() => {
     if (entityId && avatarFilename) {
-      const cacheKey = `${type}:${entityId}:${avatarFilename}`;
+      const resolvedFilename =
+        variant === "round" && !avatarFilename.startsWith("data:")
+          ? AVATAR_ROUND_FILENAME
+          : avatarFilename;
+      const cacheKey = `${type}:${entityId}:${variant}:${resolvedFilename}`;
       const cached = avatarCache.get(cacheKey);
-      if (typeof cached === 'string') {
+      if (typeof cached === "string") {
         return cached;
       }
     }
@@ -59,16 +61,17 @@ export function useAvatar(
       }
 
       if (avatarFilename.startsWith("data:")) {
-        const cacheKey = `${type}:${entityId}:${avatarFilename}`;
+        const cacheKey = `${type}:${entityId}:${variant}:${avatarFilename}`;
         avatarCache.set(cacheKey, avatarFilename);
         setAvatarUrl(avatarFilename);
         return;
       }
 
-      const cacheKey = `${type}:${entityId}:${avatarFilename}`;
+      const primaryFilename = variant === "round" ? AVATAR_ROUND_FILENAME : avatarFilename;
+      const cacheKey = `${type}:${entityId}:${variant}:${primaryFilename}`;
       const cached = avatarCache.get(cacheKey);
 
-      if (typeof cached === 'string') {
+      if (typeof cached === "string") {
         if (!cancelled) {
           setAvatarUrl(cached);
         }
@@ -89,18 +92,32 @@ export function useAvatar(
         return;
       }
 
-      const loadPromise = loadAvatar(type, entityId, avatarFilename)
-        .then((url) => {
-          if (url) {
-            avatarCache.set(cacheKey, url);
+      const loadPromise = (async () => {
+        const primary = await loadAvatar(type, entityId, primaryFilename);
+        if (primary) {
+          avatarCache.set(cacheKey, primary);
+          return primary;
+        }
+        if (variant === "round" && primaryFilename !== avatarFilename) {
+          const fallback = await loadAvatar(type, entityId, avatarFilename);
+          if (fallback) {
+            avatarCache.set(cacheKey, fallback);
           }
-          return url;
-        })
-        .catch((error) => {
-          console.error("[useAvatar] Failed to load avatar:", error);
-          avatarCache.delete(cacheKey);
-          throw error;
-        });
+          return fallback;
+        }
+        if (variant === "base" && primaryFilename === "avatar_base.webp") {
+          const fallback = await loadAvatar(type, entityId, "avatar.webp");
+          if (fallback) {
+            avatarCache.set(cacheKey, fallback);
+          }
+          return fallback;
+        }
+        return primary;
+      })().catch((error) => {
+        console.error("[useAvatar] Failed to load avatar:", error);
+        avatarCache.delete(cacheKey);
+        throw error;
+      });
 
       avatarCache.set(cacheKey, loadPromise as Promise<string>);
 
@@ -121,7 +138,7 @@ export function useAvatar(
     return () => {
       cancelled = true;
     };
-  }, [type, entityId, avatarFilename]);
+  }, [type, entityId, avatarFilename, variant]);
 
   return avatarUrl;
 }

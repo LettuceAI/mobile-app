@@ -3,7 +3,11 @@ import { useParams } from "react-router-dom";
 import { Loader2, X, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePersonaFormController } from "./hooks/usePersonaFormController";
-import { exportPersona, downloadJson, generateExportFilename } from "../../../core/storage/personaTransfer";
+import {
+  exportPersona,
+  downloadJson,
+  generateExportFilename,
+} from "../../../core/storage/personaTransfer";
 import { AvatarPicker } from "../../components/AvatarPicker";
 
 const wordCount = (text: string) => {
@@ -15,11 +19,23 @@ const wordCount = (text: string) => {
 export function EditPersonaPage() {
   const { personaId } = useParams();
   const {
-    state: { loading, saving, error, title, description, isDefault, avatarPath },
+    state: {
+      loading,
+      saving,
+      error,
+      title,
+      description,
+      isDefault,
+      avatarPath,
+      avatarCrop,
+      avatarRoundPath,
+    },
     setTitle,
     setDescription,
     setIsDefault,
     setAvatarPath,
+    setAvatarCrop,
+    setAvatarRoundPath,
     handleSave,
     canSave,
   } = usePersonaFormController(personaId);
@@ -75,7 +91,6 @@ export function EditPersonaPage() {
           transition={{ duration: 0.2, ease: "easeOut" }}
           className="space-y-6"
         >
-
           {/* Error Message */}
           {error && (
             <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3">
@@ -89,60 +104,46 @@ export function EditPersonaPage() {
               <AvatarPicker
                 currentAvatarPath={avatarPath ?? ""}
                 onAvatarChange={handleAvatarChange}
-                avatarPreview={
-                  avatarPath ? (
-                    <img
-                      src={avatarPath}
-                      alt="Persona avatar"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <span className="text-4xl font-bold text-white/30">
-                        {title.trim().charAt(0).toUpperCase() || "?"}
-                      </span>
-                    </div>
-                  )
-                }
+                avatarCrop={avatarCrop}
+                onAvatarCropChange={setAvatarCrop}
+                avatarRoundPath={avatarRoundPath}
+                onAvatarRoundChange={setAvatarRoundPath}
+                placeholder={title.trim().charAt(0).toUpperCase() || "?"}
               />
 
               {/* Remove Button */}
               {avatarPath && (
                 <button
                   type="button"
-                  onClick={() => setAvatarPath(null)}
+                  onClick={() => {
+                    setAvatarPath(null);
+                    setAvatarCrop(null);
+                    setAvatarRoundPath(null);
+                  }}
                   className="absolute -top-1 -left-1 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
                 >
                   <X size={14} strokeWidth={2.5} />
                 </button>
               )}
             </div>
-            <p className="mt-3 text-xs text-white/40">
-              Tap to add or generate avatar
-            </p>
+            <p className="mt-3 text-xs text-white/40">Tap to add or generate avatar</p>
           </div>
 
           {/* Title Input */}
           <div className="space-y-2">
-            <label className="text-[11px] font-medium text-white/70">
-              PERSONA NAME
-            </label>
+            <label className="text-[11px] font-medium text-white/70">PERSONA NAME</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g., Professional, Creative Writer, Student..."
               className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
             />
-            <p className="text-xs text-white/50">
-              Give your persona a descriptive name
-            </p>
+            <p className="text-xs text-white/50">Give your persona a descriptive name</p>
           </div>
 
           {/* Description Input */}
           <div className="space-y-2">
-            <label className="text-[11px] font-medium text-white/70">
-              DESCRIPTION
-            </label>
+            <label className="text-[11px] font-medium text-white/70">DESCRIPTION</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -153,18 +154,14 @@ export function EditPersonaPage() {
             <div className="flex justify-end text-[11px] text-white/40">
               {wordCount(description)} words
             </div>
-            <p className="text-xs text-white/50">
-              Be specific about how you want to be addressed
-            </p>
+            <p className="text-xs text-white/50">Be specific about how you want to be addressed</p>
           </div>
 
           {/* Default Toggle */}
           <div className="space-y-2">
             <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-4">
               <div className="flex-1">
-                <label className="block text-sm font-semibold text-white">
-                  Set as Default
-                </label>
+                <label className="block text-sm font-semibold text-white">Set as Default</label>
                 <p className="mt-1 text-xs text-gray-400">
                   Use this persona for all new conversations
                 </p>
@@ -179,14 +176,14 @@ export function EditPersonaPage() {
                 />
                 <label
                   htmlFor="set-as-default"
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${isDefault
-                    ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-                    : 'bg-white/20'
-                    }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${
+                    isDefault ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+                  }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDefault ? 'translate-x-5' : 'translate-x-0'
-                      }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isDefault ? "translate-x-5" : "translate-x-0"
+                    }`}
                   />
                 </label>
               </div>

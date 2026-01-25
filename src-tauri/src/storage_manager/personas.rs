@@ -6,7 +6,7 @@ use super::db::{now_ms, open_db};
 #[tauri::command]
 pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
     let conn = open_db(&app)?;
-    let mut stmt = conn.prepare("SELECT id, title, description, avatar_path, is_default, created_at, updated_at FROM personas ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas ORDER BY created_at ASC").map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
             Ok((
@@ -14,16 +14,29 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
                 r.get::<_, String>(1)?,
                 r.get::<_, String>(2)?,
                 r.get::<_, Option<String>>(3)?,
-                r.get::<_, i64>(4)?,
-                r.get::<_, i64>(5)?,
-                r.get::<_, i64>(6)?,
+                r.get::<_, Option<f64>>(4)?,
+                r.get::<_, Option<f64>>(5)?,
+                r.get::<_, Option<f64>>(6)?,
+                r.get::<_, i64>(7)?,
+                r.get::<_, i64>(8)?,
+                r.get::<_, i64>(9)?,
             ))
         })
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for row in rows {
-        let (id, title, description, avatar_path, is_default, created_at, updated_at) =
-            row.map_err(|e| e.to_string())?;
+        let (
+            id,
+            title,
+            description,
+            avatar_path,
+            avatar_crop_x,
+            avatar_crop_y,
+            avatar_crop_scale,
+            is_default,
+            created_at,
+            updated_at,
+        ) = row.map_err(|e| e.to_string())?;
         let mut obj = JsonMap::new();
         obj.insert("id".into(), JsonValue::String(id));
         obj.insert("title".into(), JsonValue::String(title.to_string()));
@@ -33,6 +46,13 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
         );
         if let Some(a) = avatar_path {
             obj.insert("avatarPath".into(), JsonValue::String(a));
+        }
+        if let (Some(x), Some(y), Some(scale)) = (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+            let mut crop = JsonMap::new();
+            crop.insert("x".into(), JsonValue::from(x));
+            crop.insert("y".into(), JsonValue::from(y));
+            crop.insert("scale".into(), JsonValue::from(scale));
+            obj.insert("avatarCrop".into(), JsonValue::Object(crop));
         }
         obj.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
         obj.insert("createdAt".into(), JsonValue::from(created_at));
@@ -63,6 +83,10 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
         .get("avatarPath")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let avatar_crop = p.get("avatarCrop").and_then(|v| v.as_object());
+    let avatar_crop_x = avatar_crop.and_then(|crop| crop.get("x").and_then(|v| v.as_f64()));
+    let avatar_crop_y = avatar_crop.and_then(|crop| crop.get("y").and_then(|v| v.as_f64()));
+    let avatar_crop_scale = avatar_crop.and_then(|crop| crop.get("scale").and_then(|v| v.as_f64()));
     let is_default = p
         .get("isDefault")
         .and_then(|v| v.as_bool())
@@ -81,15 +105,29 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO personas (id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               title=excluded.title,
               description=excluded.description,
               avatar_path=excluded.avatar_path,
+              avatar_crop_x=excluded.avatar_crop_x,
+              avatar_crop_y=excluded.avatar_crop_y,
+              avatar_crop_scale=excluded.avatar_crop_scale,
               is_default=excluded.is_default,
               updated_at=excluded.updated_at"#,
-        params![&id, title, description, avatar_path, is_default, created_at, now],
+        params![
+            &id,
+            title,
+            description,
+            avatar_path,
+            avatar_crop_x,
+            avatar_crop_y,
+            avatar_crop_scale,
+            is_default,
+            created_at,
+            now
+        ],
     ).map_err(|e| e.to_string())?;
 
     if is_default != 0 {
@@ -111,6 +149,13 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
     if let Some(a) = avatar_path {
         obj.insert("avatarPath".into(), JsonValue::String(a));
     }
+    if let (Some(x), Some(y), Some(scale)) = (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+        let mut crop = JsonMap::new();
+        crop.insert("x".into(), JsonValue::from(x));
+        crop.insert("y".into(), JsonValue::from(y));
+        crop.insert("scale".into(), JsonValue::from(scale));
+        obj.insert("avatarCrop".into(), JsonValue::Object(crop));
+    }
     obj.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
     obj.insert("createdAt".into(), JsonValue::from(created_at));
     obj.insert("updatedAt".into(), JsonValue::from(now));
@@ -128,10 +173,22 @@ pub fn persona_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn persona_default_get(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let conn = open_db(&app)?;
-    let row = conn.query_row("SELECT id, title, description, avatar_path, is_default, created_at, updated_at FROM personas WHERE is_default = 1 LIMIT 1", [], |r| Ok((
-        r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, i64>(6)?
+    let row = conn.query_row("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas WHERE is_default = 1 LIMIT 1", [], |r| Ok((
+        r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<f64>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?
     ))).optional().map_err(|e| e.to_string())?;
-    if let Some((id, title, description, avatar_path, is_default, created_at, updated_at)) = row {
+    if let Some((
+        id,
+        title,
+        description,
+        avatar_path,
+        avatar_crop_x,
+        avatar_crop_y,
+        avatar_crop_scale,
+        is_default,
+        created_at,
+        updated_at,
+    )) = row
+    {
         let mut obj = JsonMap::new();
         obj.insert("id".into(), JsonValue::String(id));
         obj.insert("title".into(), JsonValue::String(title.to_string()));
@@ -141,6 +198,13 @@ pub fn persona_default_get(app: tauri::AppHandle) -> Result<Option<String>, Stri
         );
         if let Some(a) = avatar_path {
             obj.insert("avatarPath".into(), JsonValue::String(a));
+        }
+        if let (Some(x), Some(y), Some(scale)) = (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+            let mut crop = JsonMap::new();
+            crop.insert("x".into(), JsonValue::from(x));
+            crop.insert("y".into(), JsonValue::from(y));
+            crop.insert("scale".into(), JsonValue::from(scale));
+            obj.insert("avatarCrop".into(), JsonValue::Object(crop));
         }
         obj.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
         obj.insert("createdAt".into(), JsonValue::from(created_at));

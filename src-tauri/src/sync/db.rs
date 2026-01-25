@@ -85,7 +85,9 @@ fn fetch_globals(conn: &DbConnection) -> Result<Vec<u8>, String> {
     let settings: Vec<Settings> = settings_iter.map(|r| r.unwrap()).collect(); // Expect safe unwrap if query OK
 
     // Personas
-    let mut stmt = conn.prepare("SELECT id, title, description, avatar_path, is_default, created_at, updated_at FROM personas").map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas")
+        .map_err(|e| e.to_string())?;
     let personas: Vec<Persona> = stmt
         .query_map([], |r| {
             Ok(Persona {
@@ -93,9 +95,12 @@ fn fetch_globals(conn: &DbConnection) -> Result<Vec<u8>, String> {
                 title: r.get(1)?,
                 description: r.get(2)?,
                 avatar_path: r.get(3)?,
-                is_default: r.get(4)?,
-                created_at: r.get(5)?,
-                updated_at: r.get(6)?,
+                avatar_crop_x: r.get(4)?,
+                avatar_crop_y: r.get(5)?,
+                avatar_crop_scale: r.get(6)?,
+                is_default: r.get(7)?,
+                created_at: r.get(8)?,
+                updated_at: r.get(9)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -262,7 +267,7 @@ fn fetch_characters(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, Stri
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
     // Characters
-    let sql = format!("SELECT id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id IN ({})", placeholders);
+    let sql = format!("SELECT id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id IN ({})", placeholders);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let chars: Vec<Character> = stmt
         .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
@@ -270,23 +275,26 @@ fn fetch_characters(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, Stri
                 id: r.get(0)?,
                 name: r.get(1)?,
                 avatar_path: r.get(2)?,
-                background_image_path: r.get(3)?,
-                description: r.get(4)?,
-                definition: r.get(5)?,
-                default_scene_id: r.get(6)?,
-                default_model_id: r.get(7)?,
-                memory_type: r.get(8)?,
-                prompt_template_id: r.get(9)?,
-                system_prompt: r.get(10)?,
-                voice_config: r.get(11)?,
-                voice_autoplay: r.get(12)?,
-                disable_avatar_gradient: r.get(13)?,
-                custom_gradient_enabled: r.get(14)?,
-                custom_gradient_colors: r.get(15)?,
-                custom_text_color: r.get(16)?,
-                custom_text_secondary: r.get(17)?,
-                created_at: r.get(18)?,
-                updated_at: r.get(19)?,
+                avatar_crop_x: r.get(3)?,
+                avatar_crop_y: r.get(4)?,
+                avatar_crop_scale: r.get(5)?,
+                background_image_path: r.get(6)?,
+                description: r.get(7)?,
+                definition: r.get(8)?,
+                default_scene_id: r.get(9)?,
+                default_model_id: r.get(10)?,
+                memory_type: r.get(11)?,
+                prompt_template_id: r.get(12)?,
+                system_prompt: r.get(13)?,
+                voice_config: r.get(14)?,
+                voice_autoplay: r.get(15)?,
+                disable_avatar_gradient: r.get(16)?,
+                custom_gradient_enabled: r.get(17)?,
+                custom_gradient_colors: r.get(18)?,
+                custom_text_color: r.get(19)?,
+                custom_text_secondary: r.get(20)?,
+                created_at: r.get(21)?,
+                updated_at: r.get(22)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -544,8 +552,8 @@ fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
 
     // Personas
     for p in personas {
-        tx.execute(r#"INSERT OR REPLACE INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
-                   params![p.id, p.title, p.description, p.avatar_path, p.is_default, p.created_at, p.updated_at]).map_err(|e| e.to_string())?;
+        tx.execute(r#"INSERT OR REPLACE INTO personas (id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+                   params![p.id, p.title, p.description, p.avatar_path, p.avatar_crop_x, p.avatar_crop_y, p.avatar_crop_scale, p.is_default, p.created_at, p.updated_at]).map_err(|e| e.to_string())?;
     }
 
     // Models
@@ -617,9 +625,9 @@ fn apply_characters(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for c in chars {
-        tx.execute(r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)"#,
-                    params![c.id, c.name, c.avatar_path, c.background_image_path, c.description, c.definition, c.default_scene_id, c.default_model_id, c.memory_type, c.prompt_template_id, c.system_prompt, c.voice_config, c.voice_autoplay, c.disable_avatar_gradient, c.custom_gradient_enabled, c.custom_gradient_colors, c.custom_text_color, c.custom_text_secondary, c.created_at, c.updated_at]).map_err(|e| e.to_string())?;
+        tx.execute(r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)"#,
+                    params![c.id, c.name, c.avatar_path, c.avatar_crop_x, c.avatar_crop_y, c.avatar_crop_scale, c.background_image_path, c.description, c.definition, c.default_scene_id, c.default_model_id, c.memory_type, c.prompt_template_id, c.system_prompt, c.voice_config, c.voice_autoplay, c.disable_avatar_gradient, c.custom_gradient_enabled, c.custom_gradient_colors, c.custom_text_color, c.custom_text_secondary, c.created_at, c.updated_at]).map_err(|e| e.to_string())?;
     }
 
     for r in &rules {

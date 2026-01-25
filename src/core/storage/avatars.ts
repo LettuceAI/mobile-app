@@ -3,10 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 /**
  * Centralized avatar management system
  * Handles avatar uploads, storage, and retrieval for characters and personas
- * Storage structure: avatars/character-<id>/avatar.webp or avatars/persona-<id>/avatar.webp
+ * Storage structure: avatars/<type>-<id>/avatar_base.webp and avatar_round.webp
  */
 
 export type EntityType = "character" | "persona";
+
+export const AVATAR_BASE_FILENAME = "avatar_base.webp";
+export const AVATAR_ROUND_FILENAME = "avatar_round.webp";
 
 export interface GradientColor {
   r: number;
@@ -36,13 +39,18 @@ function getPrefixedEntityId(type: EntityType, id: string): string {
 /**
  * Saves an avatar image for a character or persona
  * Copies the image to avatars/<type>-<id>/ directory and converts to WebP
- * 
+ *
  * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
  * @param imageData - Base64 data URL or file path
  * @returns The avatar filename (without path) or empty string on failure
  */
-export async function saveAvatar(type: EntityType, entityId: string, imageData: string): Promise<string> {
+export async function saveAvatar(
+  type: EntityType,
+  entityId: string,
+  imageData: string,
+  roundImageData?: string | null,
+): Promise<string> {
   if (!imageData || !entityId) {
     console.log("[saveAvatar] No image data or entity ID provided");
     return "";
@@ -51,16 +59,17 @@ export async function saveAvatar(type: EntityType, entityId: string, imageData: 
   try {
     const prefixedId = getPrefixedEntityId(type, entityId);
     console.log("[saveAvatar] Saving avatar for entity:", prefixedId);
-    
+
     const result = await invoke<string>("storage_save_avatar", {
       entityId: prefixedId,
       base64Data: imageData,
+      roundBase64Data: roundImageData ?? null,
     });
-    
+
     // Clear the gradient cache for this entity since avatar changed
     clearEntityGradientCache(type, entityId);
     console.log("[saveAvatar] Cleared gradient cache for entity:", prefixedId);
-    
+
     console.log("[saveAvatar] Successfully saved avatar:", result);
     return result;
   } catch (error) {
@@ -72,7 +81,7 @@ export async function saveAvatar(type: EntityType, entityId: string, imageData: 
 /**
  * Loads an avatar image as a data URL
  * Reads from avatars/<type>-<id>/ directory
- * 
+ *
  * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
  * @param avatarFilename - The avatar filename (from character.avatarPath)
@@ -81,7 +90,7 @@ export async function saveAvatar(type: EntityType, entityId: string, imageData: 
 export async function loadAvatar(
   type: EntityType,
   entityId: string,
-  avatarFilename: string | undefined
+  avatarFilename: string | undefined,
 ): Promise<string | undefined> {
   if (!entityId || !avatarFilename) {
     return undefined;
@@ -105,22 +114,36 @@ export async function loadAvatar(
 /**
  * Deletes an avatar image
  * Removes from avatars/<type>-<id>/ directory
- * 
+ *
  * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
  * @param avatarFilename - The avatar filename to delete
  */
-export async function deleteAvatar(type: EntityType, entityId: string, avatarFilename: string): Promise<void> {
+export async function deleteAvatar(
+  type: EntityType,
+  entityId: string,
+  avatarFilename: string,
+): Promise<void> {
   if (!entityId || !avatarFilename) {
     return;
   }
 
   try {
     const prefixedId = getPrefixedEntityId(type, entityId);
-    await invoke("storage_delete_avatar", {
-      entityId: prefixedId,
-      filename: avatarFilename,
-    });
+    const filenames = new Set([
+      avatarFilename,
+      AVATAR_BASE_FILENAME,
+      AVATAR_ROUND_FILENAME,
+      "avatar.webp",
+    ]);
+    await Promise.all(
+      Array.from(filenames).map((filename) =>
+        invoke("storage_delete_avatar", {
+          entityId: prefixedId,
+          filename,
+        }).catch(() => undefined),
+      ),
+    );
     console.log("[deleteAvatar] Deleted avatar for entity:", prefixedId);
   } catch (error) {
     console.error("[deleteAvatar] Failed to delete avatar:", error);
@@ -129,11 +152,11 @@ export async function deleteAvatar(type: EntityType, entityId: string, avatarFil
 
 /**
  * Preloads multiple avatars for performance optimization
- * 
+ *
  * @param avatars - Array of { type, entityId, filename } tuples
  */
 export async function preloadAvatars(
-  avatars: Array<{ type: EntityType; entityId: string; filename: string | undefined }>
+  avatars: Array<{ type: EntityType; entityId: string; filename: string | undefined }>,
 ): Promise<void> {
   const validAvatars = avatars.filter((a) => !!a.entityId && !!a.filename);
 
@@ -142,9 +165,7 @@ export async function preloadAvatars(
   }
 
   try {
-    await Promise.all(
-      validAvatars.map((a) => loadAvatar(a.type, a.entityId, a.filename!))
-    );
+    await Promise.all(validAvatars.map((a) => loadAvatar(a.type, a.entityId, a.filename!)));
   } catch (error) {
     console.error("[preloadAvatars] Failed to preload avatars:", error);
   }
@@ -153,7 +174,7 @@ export async function preloadAvatars(
 /**
  * Generates beautiful gradient colors from an avatar image
  * Uses color analysis and k-means clustering to extract dominant colors
- * 
+ *
  * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
  * @param avatarFilename - The avatar filename (from character.avatarPath)
@@ -162,7 +183,7 @@ export async function preloadAvatars(
 export async function generateGradientFromAvatar(
   type: EntityType,
   entityId: string,
-  avatarFilename: string | undefined
+  avatarFilename: string | undefined,
 ): Promise<AvatarGradient | undefined> {
   if (!entityId || !avatarFilename) {
     return undefined;
@@ -190,42 +211,42 @@ const gradientCache = new Map<string, AvatarGradient>();
 
 /**
  * Gets cached or generates a gradient for an avatar
- * 
+ *
  * @param type - Entity type (character or persona)
  * @param entityId - The character or persona ID
- * @param avatarFilename - The avatar filename (always "avatar.webp")
+ * @param avatarFilename - The avatar filename (typically "avatar_base.webp")
  * @returns Promise with gradient colors
  */
 export async function getCachedGradient(
   type: EntityType,
   entityId: string,
-  avatarFilename: string | undefined
+  avatarFilename: string | undefined,
 ): Promise<AvatarGradient | undefined> {
   if (!entityId) {
     return undefined;
   }
 
-  // Use just the entityId as cache key since filename is always "avatar.webp"
+  // Use just the entityId as cache key since filename is stable
   const cacheKey = `${type}-${entityId}`;
-  
+
   // Check cache first
   if (gradientCache.has(cacheKey)) {
     console.log(`[getCachedGradient] Using cached gradient for ${cacheKey}`);
     return gradientCache.get(cacheKey);
   }
 
-  // Generate new gradient (filename doesn't matter as it's always avatar.webp)
-  const gradient = await generateGradientFromAvatar(type, entityId, "avatar.webp");
-  
+  // Generate new gradient using the base avatar
+  const gradient = await generateGradientFromAvatar(type, entityId, AVATAR_BASE_FILENAME);
+
   // Cache the result
   if (gradient) {
     console.log(`[getCachedGradient] Cached new gradient for ${cacheKey}`);
     gradientCache.set(cacheKey, gradient);
   }
-  
+
   // Keep avatarFilename parameter for interface compatibility, even though it's not used
   void avatarFilename;
-  
+
   return gradient;
 }
 

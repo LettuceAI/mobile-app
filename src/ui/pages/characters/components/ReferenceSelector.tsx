@@ -5,7 +5,8 @@ import { cn, typography, radius, interactive } from "../../../design-tokens";
 import { BottomMenu } from "../../../components";
 import { listCharacters, listPersonas } from "../../../../core/storage/repo";
 import { useAvatar } from "../../../hooks/useAvatar";
-import type { Character, Persona } from "../../../../core/storage/schemas";
+import { AvatarImage } from "../../../components/AvatarImage";
+import type { AvatarCrop, Character, Persona } from "../../../../core/storage/schemas";
 
 export interface Reference {
   type: "character" | "persona";
@@ -13,6 +14,7 @@ export interface Reference {
   name: string;
   description?: string;
   avatarPath?: string;
+  avatarCrop?: AvatarCrop | null;
 }
 
 interface ReferenceSelectorProps {
@@ -37,26 +39,26 @@ export const ReferenceAvatar = memo(
     type,
     id,
     avatarPath,
+    avatarCrop,
     name,
     size = "md",
   }: {
     type: "character" | "persona";
     id: string;
     avatarPath?: string;
+    avatarCrop?: AvatarCrop | null;
     name: string;
     size?: "sm" | "md";
   }) => {
-    const avatarUrl = useAvatar(type, id, avatarPath);
+    const avatarUrl = useAvatar(type, id, avatarPath, "round");
     const sizeClasses = size === "sm" ? "h-5 w-5" : "h-10 w-10";
     const iconSize = size === "sm" ? "h-3 w-3" : "h-5 w-5";
 
     if (avatarUrl && isImageLike(avatarUrl)) {
       return (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className={cn(sizeClasses, "rounded-full object-cover shrink-0")}
-        />
+        <div className={cn(sizeClasses, "rounded-full overflow-hidden shrink-0")}>
+          <AvatarImage src={avatarUrl} alt={name} crop={avatarCrop} applyCrop />
+        </div>
       );
     }
 
@@ -147,6 +149,7 @@ export function ReferenceSelector({
         name: char.name,
         description: char.definition || char.description,
         avatarPath: char.avatarPath,
+        avatarCrop: char.avatarCrop ?? null,
       });
     } else {
       const persona = item as Persona;
@@ -156,6 +159,7 @@ export function ReferenceSelector({
         name: persona.title,
         description: persona.description,
         avatarPath: persona.avatarPath,
+        avatarCrop: persona.avatarCrop ?? null,
       });
     }
     onClose();
@@ -227,6 +231,10 @@ export function ReferenceSelector({
                     type === "character"
                       ? (item as Character).avatarPath
                       : (item as Persona).avatarPath;
+                  const avatarCrop =
+                    type === "character"
+                      ? (item as Character).avatarCrop
+                      : (item as Persona).avatarCrop;
 
                   return (
                     <motion.button
@@ -248,6 +256,7 @@ export function ReferenceSelector({
                           type={type}
                           id={item.id}
                           avatarPath={avatarPath}
+                          avatarCrop={avatarCrop}
                           name={name}
                           size="md"
                         />

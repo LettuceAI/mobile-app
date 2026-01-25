@@ -3,35 +3,30 @@ import { User, Trash2, Edit2, Star, ChevronRight, Download, Loader2 } from "luci
 import { motion, AnimatePresence } from "framer-motion";
 import type { Persona } from "../../../core/storage/schemas";
 import { BottomMenu } from "../../components";
+import { AvatarImage } from "../../components/AvatarImage";
 import { usePersonasController } from "../personas/hooks/usePersonasController";
 import { useAvatar } from "../../hooks/useAvatar";
 import { cn } from "../../design-tokens";
-import { exportPersona, downloadJson, generateExportFilename } from "../../../core/storage/personaTransfer";
+import {
+  exportPersona,
+  downloadJson,
+  generateExportFilename,
+} from "../../../core/storage/personaTransfer";
 import { useState } from "react";
 
 const PersonaAvatar = ({ persona }: { persona: Persona }) => {
   const avatarDataUrl = useAvatar("persona", persona.id, persona.avatarPath);
-  
+
   return (
     <div
       className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
-        persona.isDefault
-          ? "border-emerald-400/40 bg-emerald-400/20"
-          : "border-white/15 bg-white/8"
+        persona.isDefault ? "border-emerald-400/40 bg-emerald-400/20" : "border-white/15 bg-white/8"
       }`}
     >
       {avatarDataUrl ? (
-        <img
-          src={avatarDataUrl}
-          alt={persona.title}
-          className="h-full w-full object-cover"
-        />
+        <AvatarImage src={avatarDataUrl} alt={persona.title} crop={persona.avatarCrop} applyCrop />
       ) : (
-        <User
-          className={`h-5 w-5 ${
-            persona.isDefault ? "text-emerald-200" : "text-white/70"
-          }`}
-        />
+        <User className={`h-5 w-5 ${persona.isDefault ? "text-emerald-200" : "text-white/70"}`} />
       )}
     </div>
   );
@@ -136,32 +131,32 @@ export function PersonasPage() {
                       : "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
                   }`}
                 >
-                  <div className={cn(
-                    "absolute inset-y-0 right-0 w-1/4 transition",
-                    "bg-linear-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
-                  )} />
+                  <div
+                    className={cn(
+                      "absolute inset-y-0 right-0 w-1/4 transition",
+                      "bg-linear-to-l from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100",
+                    )}
+                  />
 
                   <PersonaAvatar persona={persona} />
 
                   <div className="relative min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="truncate text-sm font-semibold text-white">
-                        {persona.title}
-                      </h3>
+                      <h3 className="truncate text-sm font-semibold text-white">{persona.title}</h3>
                       {persona.isDefault && (
                         <Star className="h-3 w-3 shrink-0 fill-emerald-400 text-emerald-400" />
                       )}
                     </div>
-                    <p className="line-clamp-1 text-xs text-gray-400">
-                      {persona.description}
-                    </p>
+                    <p className="line-clamp-1 text-xs text-gray-400">{persona.description}</p>
                   </div>
 
-                  <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${
-                    persona.isDefault
-                      ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 group-hover:border-emerald-400/50"
-                      : "border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white"
-                  }`}>
+                  <span
+                    className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${
+                      persona.isDefault
+                        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 group-hover:border-emerald-400/50"
+                        : "border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white"
+                    }`}
+                  >
                     <ChevronRight size={16} />
                   </span>
                 </motion.button>
@@ -196,7 +191,9 @@ export function PersonasPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/10">
                 <Star
                   className={`h-4 w-4 ${
-                    selectedPersona.isDefault ? "fill-emerald-400 text-emerald-400" : "text-white/70"
+                    selectedPersona.isDefault
+                      ? "fill-emerald-400 text-emerald-400"
+                      : "text-white/70"
                   }`}
                 />
               </div>
@@ -252,7 +249,8 @@ export function PersonasPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-white/70">
-            Are you sure you want to delete "{selectedPersona?.title}"? This action cannot be undone.
+            Are you sure you want to delete "{selectedPersona?.title}"? This action cannot be
+            undone.
           </p>
           <div className="flex gap-3">
             <button

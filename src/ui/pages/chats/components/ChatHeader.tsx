@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { ArrowLeft, Brain, Loader2, AlertTriangle, Search, BookOpen } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Character, Session } from "../../../../core/storage/schemas";
+import { AvatarImage } from "../../../components/AvatarImage";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { listen } from "@tauri-apps/api/event";
 import { Routes } from "../../../navigation";
@@ -17,13 +18,21 @@ interface ChatHeaderProps {
 function isImageLike(value?: string) {
   if (!value) return false;
   const lower = value.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image");
+  return (
+    lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("data:image")
+  );
 }
 
-export function ChatHeader({ character, sessionId, session, hasBackgroundImage, onSessionUpdate }: ChatHeaderProps) {
+export function ChatHeader({
+  character,
+  sessionId,
+  session,
+  hasBackgroundImage,
+  onSessionUpdate,
+}: ChatHeaderProps) {
   const navigate = useNavigate();
   const { characterId } = useParams<{ characterId: string }>();
-  const avatarUrl = useAvatar("character", character?.id, character?.avatarPath);
+  const avatarUrl = useAvatar("character", character?.id, character?.avatarPath, "round");
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
 
@@ -35,7 +44,7 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
     const setupListeners = async () => {
       unlistenProcessing = await listen("dynamic-memory:processing", (event: any) => {
         // Check if event belongs to current session?
-        // Payload might have sessionId. 
+        // Payload might have sessionId.
         // For now, assuming global or checking payload if available.
         // User didn't specify sessionId filter strictly but it's good practice.
         // The event payload is { sessionId }.
@@ -53,7 +62,11 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
       unlistenError = await listen("dynamic-memory:error", (event: any) => {
         if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
         setMemoryBusy(false);
-        setMemoryError(typeof event.payload === 'string' ? event.payload : (event.payload?.error || "Unknown error"));
+        setMemoryError(
+          typeof event.payload === "string"
+            ? event.payload
+            : event.payload?.error || "Unknown error",
+        );
       });
     };
 
@@ -72,9 +85,7 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
   }, [avatarUrl]);
 
   const initials = useMemo(() => {
-    return character?.name
-      ? character.name.slice(0, 2).toUpperCase()
-      : "?";
+    return character?.name ? character.name.slice(0, 2).toUpperCase() : "?";
   }, [character]);
 
   const avatarFallback = (
@@ -87,7 +98,9 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
 
   return (
     <>
-      <header className={`z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-10 ${!hasBackgroundImage ? 'bg-[#050505]' : ''}`}>
+      <header
+        className={`z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-10 ${!hasBackgroundImage ? "bg-[#050505]" : ""}`}
+      >
         <div className="flex items-center">
           <button
             onClick={() => navigate("/chat")}
@@ -110,39 +123,46 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
 
           <div className="flex shrink-0 items-center gap-1">
             {/* Memory Button */}
-            {session && (() => {
-              const isBusy = memoryBusy || session.memoryStatus === "processing";
-              const isError = !!memoryError || session.memoryStatus === "failed";
-              const effectiveError = memoryError || session.memoryError;
+            {session &&
+              (() => {
+                const isBusy = memoryBusy || session.memoryStatus === "processing";
+                const isError = !!memoryError || session.memoryStatus === "failed";
+                const effectiveError = memoryError || session.memoryError;
 
-              return (
-                <button
-                  onClick={() => {
-                    if (!characterId || !sessionId) return;
-                    navigate(Routes.chatMemories(
-                      characterId,
-                      sessionId,
-                      effectiveError ? { error: effectiveError } : undefined
-                    ));
-                  }}
-                  className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
-                  aria-label="Manage memories"
-                >
-                  {isBusy ? (
-                    <Loader2 size={14} strokeWidth={2.5} className="animate-spin text-emerald-400" />
-                  ) : isError ? (
-                    <AlertTriangle size={14} strokeWidth={2.5} className="text-red-400" />
-                  ) : (
-                    <Brain size={14} strokeWidth={2.5} />
-                  )}
-                  {!isBusy && !isError && session.memories && session.memories.length > 0 && (
-                    <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-[3px] font-semibold leading-none text-[#050505]">
-                      {session.memories.length}
-                    </span>
-                  )}
-                </button>
-              );
-            })()}
+                return (
+                  <button
+                    onClick={() => {
+                      if (!characterId || !sessionId) return;
+                      navigate(
+                        Routes.chatMemories(
+                          characterId,
+                          sessionId,
+                          effectiveError ? { error: effectiveError } : undefined,
+                        ),
+                      );
+                    }}
+                    className="relative flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white"
+                    aria-label="Manage memories"
+                  >
+                    {isBusy ? (
+                      <Loader2
+                        size={14}
+                        strokeWidth={2.5}
+                        className="animate-spin text-emerald-400"
+                      />
+                    ) : isError ? (
+                      <AlertTriangle size={14} strokeWidth={2.5} className="text-red-400" />
+                    ) : (
+                      <Brain size={14} strokeWidth={2.5} />
+                    )}
+                    {!isBusy && !isError && session.memories && session.memories.length > 0 && (
+                      <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-[3px] font-semibold leading-none text-[#050505]">
+                        {session.memories.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })()}
 
             {/* Search Button */}
             {session && (
@@ -177,15 +197,22 @@ export function ChatHeader({ character, sessionId, session, hasBackgroundImage, 
                 navigate(Routes.chatSettingsSession(characterId, sessionId));
               }}
               className="relative shrink-0 rounded-full overflow-hidden ring-1 ring-white/20 transition hover:ring-white/40"
-              style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', flexShrink: 0 }}
+              style={{
+                width: "36px",
+                height: "36px",
+                minWidth: "36px",
+                minHeight: "36px",
+                flexShrink: 0,
+              }}
               aria-label="Conversation settings"
             >
               {avatarImageUrl ? (
-                <img
+                <AvatarImage
                   src={avatarImageUrl}
                   alt={character?.name || "Avatar"}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  style={{ width: '36px', height: '36px' }}
+                  crop={character?.avatarCrop}
+                  applyCrop
+                  className="absolute inset-0 z-10"
                 />
               ) : (
                 avatarFallback

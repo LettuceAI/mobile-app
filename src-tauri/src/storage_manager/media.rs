@@ -86,6 +86,7 @@ pub fn storage_save_avatar(
     app: tauri::AppHandle,
     entity_id: String,
     base64_data: String,
+    round_base64_data: Option<String>,
 ) -> Result<String, String> {
     let data = if let Some(comma_idx) = base64_data.find(',') {
         &base64_data[comma_idx + 1..]
@@ -97,7 +98,7 @@ pub fn storage_save_avatar(
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
     let avatars_dir = storage_root(&app)?.join("avatars").join(&entity_id);
     fs::create_dir_all(&avatars_dir).map_err(|e| e.to_string())?;
-    let webp_bytes = match image::load_from_memory(&bytes) {
+    let base_webp_bytes = match image::load_from_memory(&bytes) {
         Ok(img) => {
             let mut webp_data: Vec<u8> = Vec::new();
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
@@ -107,9 +108,38 @@ pub fn storage_save_avatar(
         }
         Err(_) => bytes,
     };
-    let filename = "avatar.webp";
-    let avatar_path = avatars_dir.join(filename);
-    fs::write(&avatar_path, webp_bytes).map_err(|e| e.to_string())?;
+    let base_filename = "avatar_base.webp";
+    let base_path = avatars_dir.join(base_filename);
+    fs::write(&base_path, &base_webp_bytes).map_err(|e| e.to_string())?;
+
+    let legacy_path = avatars_dir.join("avatar.webp");
+    fs::write(&legacy_path, &base_webp_bytes).map_err(|e| e.to_string())?;
+
+    let round_bytes = if let Some(round_data) = round_base64_data {
+        let round_payload = if let Some(comma_idx) = round_data.find(',') {
+            round_data[comma_idx + 1..].to_string()
+        } else {
+            round_data
+        };
+        general_purpose::STANDARD
+            .decode(round_payload)
+            .map_err(|e| format!("Failed to decode round avatar base64: {}", e))?
+    } else {
+        base_webp_bytes.clone()
+    };
+    let round_webp_bytes = match image::load_from_memory(&round_bytes) {
+        Ok(img) => {
+            let mut webp_data: Vec<u8> = Vec::new();
+            let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
+            img.write_with_encoder(encoder)
+                .map_err(|e| format!("Failed to encode WebP: {}", e))?;
+            webp_data
+        }
+        Err(_) => round_bytes,
+    };
+    let round_filename = "avatar_round.webp";
+    let round_path = avatars_dir.join(round_filename);
+    fs::write(&round_path, round_webp_bytes).map_err(|e| e.to_string())?;
     let gradient_cache_path = avatars_dir.join("gradient.json");
     if gradient_cache_path.exists() {
         let _ = fs::remove_file(&gradient_cache_path);
@@ -119,7 +149,7 @@ pub fn storage_save_avatar(
             format!("Deleted gradient cache for {}", entity_id),
         );
     }
-    Ok(filename.to_string())
+    Ok(base_filename.to_string())
 }
 
 #[tauri::command]
@@ -190,10 +220,16 @@ pub fn generate_avatar_gradient(
     _filename: String,
 ) -> Result<AvatarGradient, String> {
     let avatars_dir = storage_root(&app)?.join("avatars").join(&entity_id);
-    let avatar_path = avatars_dir.join("avatar.webp");
+    let base_path = avatars_dir.join("avatar_base.webp");
+    let legacy_path = avatars_dir.join("avatar.webp");
+    let avatar_path = if base_path.exists() {
+        base_path
+    } else {
+        legacy_path
+    };
     let gradient_cache_path = avatars_dir.join("gradient.json");
     if !avatar_path.exists() {
-        return Err(format!("Avatar not found: {}/avatar.webp", entity_id));
+        return Err(format!("Avatar not found for {}", entity_id));
     }
     if gradient_cache_path.exists() {
         if let Ok(avatar_meta) = fs::metadata(&avatar_path) {

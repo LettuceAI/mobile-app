@@ -2,12 +2,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Camera, Image, Upload, Sparkles } from "lucide-react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 import { AvatarPicker } from "../../../components/AvatarPicker";
+import type { AvatarCrop } from "../../../../core/storage/schemas";
 
 interface IdentityStepProps {
   name: string;
   onNameChange: (value: string) => void;
   avatarPath: string;
   onAvatarChange: (value: string) => void;
+  avatarCrop?: AvatarCrop | null;
+  onAvatarCropChange?: (value: AvatarCrop | null) => void;
+  avatarRoundPath?: string | null;
+  onAvatarRoundChange?: (value: string | null) => void;
   backgroundImagePath: string;
   onBackgroundImageChange: (value: string) => void;
   onBackgroundImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -23,6 +28,10 @@ export function IdentityStep({
   onNameChange,
   avatarPath,
   onAvatarChange,
+  avatarCrop,
+  onAvatarCropChange,
+  avatarRoundPath,
+  onAvatarRoundChange,
   backgroundImagePath,
   onBackgroundImageChange,
   onBackgroundImageUpload,
@@ -56,14 +65,12 @@ export function IdentityStep({
           <AvatarPicker
             currentAvatarPath={avatarPath}
             onAvatarChange={onAvatarChange}
+            avatarCrop={avatarCrop}
+            onAvatarCropChange={onAvatarCropChange}
+            avatarRoundPath={avatarRoundPath}
+            onAvatarRoundChange={onAvatarRoundChange}
             avatarPreview={
-              avatarPath ? (
-                <img
-                  src={avatarPath}
-                  alt="Character avatar"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
+              avatarPath ? undefined : (
                 <div className="flex h-full w-full items-center justify-center">
                   <Camera className="text-white/30" size={36} />
                 </div>
@@ -74,7 +81,11 @@ export function IdentityStep({
           {/* Remove Button - top left */}
           {avatarPath && (
             <button
-              onClick={() => onAvatarChange("")}
+              onClick={() => {
+                onAvatarChange("");
+                onAvatarCropChange?.(null);
+                onAvatarRoundChange?.(null);
+              }}
               className="absolute -top-1 -left-1 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
             >
               <X size={14} strokeWidth={2.5} />
@@ -298,11 +309,7 @@ export function IdentityStep({
           >
             <Upload className="h-4 w-4" />
             Import Character from File
-            <input
-              type="file"
-              onChange={onImport}
-              className="hidden"
-            />
+            <input type="file" onChange={onImport} className="hidden" />
           </label>
           <p className={cn(typography.bodySmall.size, "mt-2 text-center text-white/40")}>
             Load a character from a .uec (or .json) export file

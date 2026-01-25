@@ -166,14 +166,12 @@ function GeneratedImagePreview({
   imageId,
   label,
   size = "md",
-  showLabel = true,
   className,
 }: {
   sessionId: string;
   imageId: string;
   label: string;
   size?: "sm" | "md" | "lg";
-  showLabel?: boolean;
   className?: string;
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -260,7 +258,7 @@ export function CreationHelperPage() {
   const [showToolDetail, setShowToolDetail] = useState(false);
   const [imagePreview, setImagePreview] = useState<{ id: string; label: string } | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>("");
-  const [streamingReasoning, setStreamingReasoning] = useState<string>("");
+  const [, setStreamingReasoning] = useState<string>("");
   const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamUnlistenRef = useRef<(() => void) | null>(null);

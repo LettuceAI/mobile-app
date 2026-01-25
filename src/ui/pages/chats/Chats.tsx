@@ -13,6 +13,7 @@ import {
 import type { Character } from "../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../design-tokens";
 import { BottomMenu, CharacterExportMenu } from "../../components";
+import { AvatarImage } from "../../components/AvatarImage";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
 import {
@@ -331,14 +332,16 @@ function isImageLike(s?: string) {
 
 const CharacterAvatar = memo(
   ({ character, className }: { character: Character; className?: string }) => {
-    const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+    const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
     if (avatarUrl && isImageLike(avatarUrl)) {
       return (
-        <img
+        <AvatarImage
           src={avatarUrl}
           alt={`${character.name} avatar`}
-          className={cn("h-full w-full object-cover", className)}
+          crop={character.avatarCrop}
+          applyCrop
+          className={className}
         />
       );
     }

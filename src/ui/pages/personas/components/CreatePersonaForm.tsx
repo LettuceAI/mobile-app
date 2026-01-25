@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PersonaFormState, PersonaFormAction } from "../hooks/createPersonaReducer";
 import { AvatarPicker } from "../../../components/AvatarPicker";
 import { typography, radius, spacing, interactive, cn } from "../../../design-tokens";
+import type { AvatarCrop } from "../../../../core/storage/schemas";
 
 const wordCount = (text: string) => {
   const trimmed = text.trim();
@@ -26,10 +27,28 @@ export function CreatePersonaForm({
   onSave,
   onImport,
 }: CreatePersonaFormProps) {
-  const { title, description, avatarPath, isDefault, saving, importing, error } = state;
+  const {
+    title,
+    description,
+    avatarPath,
+    avatarCrop,
+    avatarRoundPath,
+    isDefault,
+    saving,
+    importing,
+    error,
+  } = state;
 
   const handleAvatarChange = (newPath: string) => {
     dispatch({ type: "set_avatar_path", value: newPath || null });
+  };
+
+  const handleAvatarCropChange = (crop: AvatarCrop | null) => {
+    dispatch({ type: "set_avatar_crop", value: crop });
+  };
+
+  const handleAvatarRoundChange = (roundPath: string | null) => {
+    dispatch({ type: "set_avatar_round_path", value: roundPath });
   };
 
   return (
@@ -53,15 +72,13 @@ export function CreatePersonaForm({
             <AvatarPicker
               currentAvatarPath={avatarPath ?? ""}
               onAvatarChange={handleAvatarChange}
+              avatarCrop={avatarCrop}
+              onAvatarCropChange={handleAvatarCropChange}
+              avatarRoundPath={avatarRoundPath}
+              onAvatarRoundChange={handleAvatarRoundChange}
               size={"lg"}
               avatarPreview={
-                avatarPath ? (
-                  <img
-                    src={avatarPath}
-                    alt="Persona avatar"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
+                avatarPath ? undefined : (
                   <div className="flex h-full w-full items-center justify-center">
                     <Camera className="text-white/30" size={36} />
                   </div>
@@ -72,16 +89,18 @@ export function CreatePersonaForm({
             {/* Remove Button - top left */}
             {avatarPath && (
               <button
-                onClick={() => dispatch({ type: "set_avatar_path", value: null })}
+                onClick={() => {
+                  dispatch({ type: "set_avatar_path", value: null });
+                  dispatch({ type: "set_avatar_crop", value: null });
+                  dispatch({ type: "set_avatar_round_path", value: null });
+                }}
                 className="absolute -top-1 -left-1 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
               >
                 <X size={14} strokeWidth={2.5} />
               </button>
             )}
           </div>
-          <p className="mt-3 text-xs text-white/40">
-            Tap camera to add or generate avatar
-          </p>
+          <p className="mt-3 text-xs text-white/40">Tap camera to add or generate avatar</p>
         </div>
 
         {/* Title Input */}
@@ -91,7 +110,7 @@ export function CreatePersonaForm({
               typography.label.size,
               typography.label.weight,
               typography.label.tracking,
-              "uppercase text-white/70"
+              "uppercase text-white/70",
             )}
           >
             Persona Title *
@@ -107,7 +126,7 @@ export function CreatePersonaForm({
                 typography.body.size,
                 interactive.transition.default,
                 "focus:border-white/30 focus:bg-black/30 focus:outline-none",
-                title.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10"
+                title.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10",
               )}
             />
             {title.trim() && (
@@ -120,7 +139,7 @@ export function CreatePersonaForm({
                   className={cn(
                     "flex h-6 w-6 items-center justify-center",
                     radius.full,
-                    "bg-emerald-400/20"
+                    "bg-emerald-400/20",
                   )}
                 >
                   <CheckCircle className="h-3 w-3 text-emerald-300" />
@@ -140,7 +159,7 @@ export function CreatePersonaForm({
               typography.label.size,
               typography.label.weight,
               typography.label.tracking,
-              "uppercase text-white/70"
+              "uppercase text-white/70",
             )}
           >
             Description
@@ -155,7 +174,7 @@ export function CreatePersonaForm({
               radius.md,
               interactive.transition.default,
               "focus:border-white/30 focus:bg-black/30 focus:outline-none",
-              description.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10"
+              description.trim() ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10",
             )}
           />
           <div className="flex justify-end text-[11px] text-white/40">
@@ -174,24 +193,22 @@ export function CreatePersonaForm({
               "flex w-full items-center justify-between border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
               radius.md,
               interactive.transition.default,
-              "hover:border-white/25 hover:bg-white/5 active:scale-[0.99]"
+              "hover:border-white/25 hover:bg-white/5 active:scale-[0.99]",
             )}
           >
             <div className="flex items-center gap-3">
-              <div className={cn(
-                "p-2 transition",
-                radius.lg,
-                isDefault ? "bg-emerald-400/20 text-emerald-300" : "bg-white/10 text-white/50"
-              )}>
+              <div
+                className={cn(
+                  "p-2 transition",
+                  radius.lg,
+                  isDefault ? "bg-emerald-400/20 text-emerald-300" : "bg-white/10 text-white/50",
+                )}
+              >
                 <Bookmark size={16} />
               </div>
               <div className="text-left">
-                <h3 className="text-sm font-medium text-white">
-                  Set as default persona
-                </h3>
-                <p className="text-xs text-white/40">
-                  Auto-apply to new chats
-                </p>
+                <h3 className="text-sm font-medium text-white">Set as default persona</h3>
+                <p className="text-xs text-white/40">Auto-apply to new chats</p>
               </div>
             </div>
 
@@ -200,14 +217,14 @@ export function CreatePersonaForm({
                 className={cn(
                   "h-6 w-11 transition-colors",
                   radius.full,
-                  isDefault ? "bg-emerald-400/40" : "bg-white/20"
+                  isDefault ? "bg-emerald-400/40" : "bg-white/20",
                 )}
               >
                 <div
                   className={cn(
                     "absolute top-0.5 h-5 w-5 transition-transform",
                     radius.full,
-                    isDefault ? "translate-x-5 bg-emerald-300" : "translate-x-0.5 bg-white"
+                    isDefault ? "translate-x-5 bg-emerald-300" : "translate-x-0.5 bg-white",
                   )}
                 />
               </div>
@@ -225,7 +242,7 @@ export function CreatePersonaForm({
             exit={{ opacity: 0, height: 0 }}
             className={cn(
               "overflow-hidden border border-red-400/20 bg-red-400/10 px-4 py-3 backdrop-blur-xl",
-              radius.md
+              radius.md,
             )}
           >
             <p className="text-sm text-red-200">{error}</p>
@@ -240,7 +257,7 @@ export function CreatePersonaForm({
         whileTap={{ scale: importing ? 1 : 0.98 }}
         className={cn(
           "w-full border border-blue-400/40 bg-blue-400/20 px-4 py-3.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50",
-          radius.md
+          radius.md,
         )}
       >
         {importing ? (
@@ -267,7 +284,7 @@ export function CreatePersonaForm({
             radius.md,
             canSave
               ? "border border-emerald-400/40 bg-emerald-400/20 text-emerald-100 shadow-[0_8px_24px_rgba(52,211,153,0.15)] hover:border-emerald-400/60 hover:bg-emerald-400/30"
-              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30"
+              : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30",
           )}
         >
           {saving ? (

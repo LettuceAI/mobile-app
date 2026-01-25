@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BottomMenu, MenuSection } from "../../../../components/BottomMenu";
 import { cn, typography, interactive, spacing } from "../../../../design-tokens";
 import { useAvatar } from "../../../../hooks/useAvatar";
+import { AvatarImage } from "../../../../components/AvatarImage";
 import type { Persona } from "../../../../../core/storage/schemas";
 
 interface PersonaAvatarProps {
@@ -14,7 +15,7 @@ interface PersonaAvatarProps {
 }
 
 function PersonaAvatar({ persona, size = "md", isSelected = false }: PersonaAvatarProps) {
-  const avatarDataUrl = useAvatar("persona", persona?.id ?? "", persona?.avatarPath);
+  const avatarDataUrl = useAvatar("persona", persona?.id ?? "", persona?.avatarPath, "round");
 
   const sizeClasses = {
     sm: "h-8 w-8",
@@ -55,7 +56,7 @@ function PersonaAvatar({ persona, size = "md", isSelected = false }: PersonaAvat
       )}
     >
       {avatarDataUrl ? (
-        <img src={avatarDataUrl} alt={persona.title} className="h-full w-full object-cover" />
+        <AvatarImage src={avatarDataUrl} alt={persona.title} crop={persona.avatarCrop} applyCrop />
       ) : (
         <User
           className={cn(

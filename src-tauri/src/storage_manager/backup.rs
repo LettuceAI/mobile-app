@@ -262,7 +262,7 @@ fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, Str
 fn export_personas(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
     let mut stmt = conn
-        .prepare("SELECT id, title, description, avatar_path, is_default, created_at, updated_at FROM personas")
+        .prepare("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -272,9 +272,12 @@ fn export_personas(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "title": r.get::<_, String>(1)?,
                 "description": r.get::<_, String>(2)?,
                 "avatar_path": r.get::<_, Option<String>>(3)?,
-                "is_default": r.get::<_, i64>(4)? != 0,
-                "created_at": r.get::<_, i64>(5)?,
-                "updated_at": r.get::<_, i64>(6)?,
+                "avatar_crop_x": r.get::<_, Option<f64>>(4)?,
+                "avatar_crop_y": r.get::<_, Option<f64>>(5)?,
+                "avatar_crop_scale": r.get::<_, Option<f64>>(6)?,
+                "is_default": r.get::<_, i64>(7)? != 0,
+                "created_at": r.get::<_, i64>(8)?,
+                "updated_at": r.get::<_, i64>(9)?,
             }))
         })
         .map_err(|e| e.to_string())?;
@@ -288,7 +291,7 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 
     // Get all characters
     let mut stmt = conn
-        .prepare("SELECT id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters")
+        .prepare("SELECT id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters")
         .map_err(|e| e.to_string())?;
 
     let characters: Vec<(String, JsonValue)> = stmt
@@ -298,23 +301,26 @@ fn export_characters(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "id": id.clone(),
                 "name": r.get::<_, String>(1)?,
                 "avatar_path": r.get::<_, Option<String>>(2)?,
-                "background_image_path": r.get::<_, Option<String>>(3)?,
-                "description": r.get::<_, Option<String>>(4)?,
-                "definition": r.get::<_, Option<String>>(5)?,
-                "default_scene_id": r.get::<_, Option<String>>(6)?,
-                "default_model_id": r.get::<_, Option<String>>(7)?,
-                "memory_type": r.get::<_, String>(8)?,
-                "prompt_template_id": r.get::<_, Option<String>>(9)?,
-                "system_prompt": r.get::<_, Option<String>>(10)?,
-                "voice_config": r.get::<_, Option<String>>(11)?,
-                "voice_autoplay": r.get::<_, Option<i64>>(12)?.unwrap_or(0) != 0,
-                "disable_avatar_gradient": r.get::<_, i64>(13)? != 0,
-                "custom_gradient_enabled": r.get::<_, i64>(14)? != 0,
-                "custom_gradient_colors": r.get::<_, Option<String>>(15)?,
-                "custom_text_color": r.get::<_, Option<String>>(16)?,
-                "custom_text_secondary": r.get::<_, Option<String>>(17)?,
-                "created_at": r.get::<_, i64>(18)?,
-                "updated_at": r.get::<_, i64>(19)?,
+                "avatar_crop_x": r.get::<_, Option<f64>>(3)?,
+                "avatar_crop_y": r.get::<_, Option<f64>>(4)?,
+                "avatar_crop_scale": r.get::<_, Option<f64>>(5)?,
+                "background_image_path": r.get::<_, Option<String>>(6)?,
+                "description": r.get::<_, Option<String>>(7)?,
+                "definition": r.get::<_, Option<String>>(8)?,
+                "default_scene_id": r.get::<_, Option<String>>(9)?,
+                "default_model_id": r.get::<_, Option<String>>(10)?,
+                "memory_type": r.get::<_, String>(11)?,
+                "prompt_template_id": r.get::<_, Option<String>>(12)?,
+                "system_prompt": r.get::<_, Option<String>>(13)?,
+                "voice_config": r.get::<_, Option<String>>(14)?,
+                "voice_autoplay": r.get::<_, Option<i64>>(15)?.unwrap_or(0) != 0,
+                "disable_avatar_gradient": r.get::<_, i64>(16)? != 0,
+                "custom_gradient_enabled": r.get::<_, i64>(17)? != 0,
+                "custom_gradient_colors": r.get::<_, Option<String>>(18)?,
+                "custom_text_color": r.get::<_, Option<String>>(19)?,
+                "custom_text_secondary": r.get::<_, Option<String>>(20)?,
+                "created_at": r.get::<_, i64>(21)?,
+                "updated_at": r.get::<_, i64>(22)?,
             });
             Ok((id, json))
         })
@@ -1144,13 +1150,16 @@ fn import_personas(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
     if let Some(arr) = data.as_array() {
         for item in arr {
             conn.execute(
-                "INSERT INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO personas (id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     item.get("id").and_then(|v| v.as_str()),
                     item.get("title").and_then(|v| v.as_str()),
                     item.get("description").and_then(|v| v.as_str()),
                     item.get("avatar_path").and_then(|v| v.as_str()),
+                    item.get("avatar_crop_x").and_then(|v| v.as_f64()),
+                    item.get("avatar_crop_y").and_then(|v| v.as_f64()),
+                    item.get("avatar_crop_scale").and_then(|v| v.as_f64()),
                     item.get("is_default").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
@@ -1195,15 +1204,18 @@ fn import_characters(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Str
 
             // Insert character
             conn.execute(
-                "INSERT INTO characters (id, name, avatar_path, background_image_path, description, definition,
+                "INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition,
                  default_scene_id, default_model_id, memory_type, prompt_template_id, system_prompt,
                  voice_config, voice_autoplay, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors,
                  custom_text_color, custom_text_secondary, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
                 params![
                     char_id,
                     item.get("name").and_then(|v| v.as_str()),
                     item.get("avatar_path").and_then(|v| v.as_str()),
+                    item.get("avatar_crop_x").and_then(|v| v.as_f64()),
+                    item.get("avatar_crop_y").and_then(|v| v.as_f64()),
+                    item.get("avatar_crop_scale").and_then(|v| v.as_f64()),
                     item.get("background_image_path").and_then(|v| v.as_str()),
                     item.get("description").and_then(|v| v.as_str()),
                     item.get("definition")

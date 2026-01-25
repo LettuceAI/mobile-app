@@ -5,6 +5,7 @@ import type { Character, ImageAttachment, Persona } from "../../../../core/stora
 import { radius, typography, interactive, shadows, cn } from "../../../design-tokens";
 import { getPlatform } from "../../../../core/utils/platform";
 import { useAvatar } from "../../../hooks/useAvatar";
+import { AvatarImage } from "../../../components/AvatarImage";
 
 interface GroupChatFooterProps {
   draft: string;
@@ -504,7 +505,7 @@ function MentionPickerItem({
   onClick: () => void;
   query: string;
 }) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
   // Highlight matching text
   const highlightMatch = (text: string) => {
@@ -545,7 +546,7 @@ function MentionPickerItem({
         )}
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
+          <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs font-bold text-white/60">
             {character.name.slice(0, 1).toUpperCase()}

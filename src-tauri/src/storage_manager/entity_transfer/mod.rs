@@ -27,6 +27,14 @@ pub struct CharacterExportPackage {
     pub background_image_data: Option<String>, // base64 data URL
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AvatarCrop {
+    pub x: f64,
+    pub y: f64,
+    pub scale: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterExportData {
@@ -45,6 +53,7 @@ pub struct CharacterExportData {
     pub voice_config: Option<JsonValue>,
     pub voice_autoplay: Option<bool>,
     pub disable_avatar_gradient: bool,
+    pub avatar_crop: Option<AvatarCrop>,
     pub custom_gradient_enabled: Option<bool>,
     pub custom_gradient_colors: Option<Vec<String>>,
     pub custom_text_color: Option<String>,
@@ -91,6 +100,7 @@ pub struct PersonaExportData {
     pub title: String,
     pub description: String,
     pub is_default: Option<bool>,
+    pub avatar_crop: Option<AvatarCrop>,
 }
 
 fn number_to_i64(value: &JsonValue) -> Option<i64> {
@@ -110,6 +120,16 @@ fn parse_system_prompt_fields(
         Some(value) => (None, Some(value.to_string())),
         None => (None, None),
     }
+}
+
+fn parse_avatar_crop(value: Option<&JsonValue>) -> Option<AvatarCrop> {
+    value.and_then(|crop| crop.as_object()).and_then(|crop| {
+        Some(AvatarCrop {
+            x: crop.get("x")?.as_f64()?,
+            y: crop.get("y")?.as_f64()?,
+            scale: crop.get("scale")?.as_f64()?,
+        })
+    })
 }
 
 fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, String> {
@@ -248,6 +268,7 @@ fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, Stri
     let custom_text_secondary = app_specific
         .and_then(|map| map.get("customTextSecondary").and_then(|v| v.as_str()))
         .map(|value| value.to_string());
+    let avatar_crop = parse_avatar_crop(app_specific.and_then(|map| map.get("avatarCrop")));
 
     let avatar_data = payload
         .get("avatar")
@@ -275,6 +296,7 @@ fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, Stri
             voice_config,
             voice_autoplay,
             disable_avatar_gradient,
+            avatar_crop,
             custom_gradient_enabled,
             custom_gradient_colors,
             custom_text_color,
@@ -311,6 +333,11 @@ fn parse_uec_persona(value: &JsonValue) -> Result<PersonaExportPackage, String> 
         .get("avatar")
         .and_then(|value| value.as_str())
         .map(|value| value.to_string());
+    let avatar_crop = parse_avatar_crop(
+        uec.app_specific_settings
+            .as_ref()
+            .and_then(|v| v.get("avatarCrop")),
+    );
 
     Ok(PersonaExportPackage {
         version: 1,
@@ -319,6 +346,7 @@ fn parse_uec_persona(value: &JsonValue) -> Result<PersonaExportPackage, String> 
             title,
             description,
             is_default,
+            avatar_crop,
         },
         avatar_data,
     })
@@ -416,6 +444,9 @@ fn load_character_export_snapshot(
         custom_gradient_colors,
         custom_text_color,
         custom_text_secondary,
+        avatar_crop_x,
+        avatar_crop_y,
+        avatar_crop_scale,
         created_at,
         updated_at,
     ): (
@@ -436,11 +467,14 @@ fn load_character_export_snapshot(
         Option<String>,
         Option<String>,
         Option<String>,
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
         i64,
         i64,
     ) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, avatar_crop_x, avatar_crop_y, avatar_crop_scale, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| {
                 Ok((
@@ -463,6 +497,9 @@ fn load_character_export_snapshot(
                     r.get(16)?,
                     r.get(17)?,
                     r.get(18)?,
+                    r.get(19)?,
+                    r.get(20)?,
+                    r.get(21)?,
                 ))
             },
         )
@@ -556,6 +593,10 @@ fn load_character_export_snapshot(
     let custom_gradient_colors = custom_gradient_colors
         .as_ref()
         .and_then(|colors_json| serde_json::from_str::<Vec<String>>(colors_json).ok());
+    let avatar_crop = match (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+        (Some(x), Some(y), Some(scale)) => Some(AvatarCrop { x, y, scale }),
+        _ => None,
+    };
 
     let package = CharacterExportPackage {
         version: 1,
@@ -574,6 +615,7 @@ fn load_character_export_snapshot(
             voice_config,
             voice_autoplay,
             disable_avatar_gradient: disable_avatar_gradient != 0,
+            avatar_crop,
             custom_gradient_enabled: Some(custom_gradient_enabled != 0),
             custom_gradient_colors,
             custom_text_color,
@@ -690,6 +732,16 @@ fn build_uec_from_package(
     if let Some(color) = package.character.custom_text_secondary.clone() {
         app_specific.insert("customTextSecondary".into(), JsonValue::String(color));
     }
+    if let Some(crop) = package.character.avatar_crop.clone() {
+        app_specific.insert(
+            "avatarCrop".into(),
+            serde_json::json!({
+                "x": crop.x,
+                "y": crop.y,
+                "scale": crop.scale,
+            }),
+        );
+    }
 
     let mut meta = JsonMap::new();
     meta.insert("createdAt".into(), JsonValue::from(created_at));
@@ -745,10 +797,22 @@ fn build_uec_from_persona_package(
     meta.insert("updatedAt".into(), JsonValue::from(updated_at));
     meta.insert("source".into(), JsonValue::String("lettuceai".to_string()));
 
+    let mut app_specific = JsonMap::new();
+    if let Some(crop) = package.persona.avatar_crop.clone() {
+        app_specific.insert(
+            "avatarCrop".into(),
+            serde_json::json!({
+                "x": crop.x,
+                "y": crop.y,
+                "scale": crop.scale,
+            }),
+        );
+    }
+
     let uec = create_persona_uec(
         payload,
         None,
-        Some(JsonValue::Object(JsonMap::new())),
+        Some(JsonValue::Object(app_specific)),
         Some(JsonValue::Object(meta)),
         Some(JsonValue::Object(JsonMap::new())),
     );
@@ -916,6 +980,12 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
         .and_then(|colors| serde_json::to_string(colors).ok());
     let custom_text_color = package.character.custom_text_color.clone();
     let custom_text_secondary = package.character.custom_text_secondary.clone();
+    let (avatar_crop_x, avatar_crop_y, avatar_crop_scale) = package
+        .character
+        .avatar_crop
+        .as_ref()
+        .map(|crop| (Some(crop.x), Some(crop.y), Some(crop.scale)))
+        .unwrap_or((None, None, None));
 
     let voice_config = package.character.voice_config.as_ref().and_then(|v| {
         if v.is_null() {
@@ -928,12 +998,15 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 
     // Insert character
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         params![
             &new_character_id,
             &package.character.name,
             avatar_path,
+            avatar_crop_x,
+            avatar_crop_y,
+            avatar_crop_scale,
             background_image_path,
             package.character.description,
             package
@@ -1094,6 +1167,7 @@ pub fn character_import_preview(import_json: String) -> Result<String, String> {
         "disableAvatarGradient": package.character.disable_avatar_gradient,
         "fileFormat": format,
         "avatarData": package.avatar_data,
+        "avatarCrop": package.character.avatar_crop,
         "backgroundImageData": package.background_image_data
     });
 
@@ -1236,6 +1310,16 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
             }
             if let Some(color) = package.character.custom_text_secondary.clone() {
                 app_specific.insert("customTextSecondary".into(), JsonValue::String(color));
+            }
+            if let Some(crop) = package.character.avatar_crop.clone() {
+                app_specific.insert(
+                    "avatarCrop".into(),
+                    serde_json::json!({
+                        "x": crop.x,
+                        "y": crop.y,
+                        "scale": crop.scale,
+                    }),
+                );
             }
 
             let fallback_ts = package.exported_at;
@@ -1420,11 +1504,15 @@ fn save_avatar_from_base64(
         Err(_) => bytes,
     };
 
-    let filename = "avatar.webp";
-    let avatar_path = avatars_dir.join(filename);
-    fs::write(&avatar_path, webp_bytes).map_err(|e| e.to_string())?;
+    let base_filename = "avatar_base.webp";
+    let base_path = avatars_dir.join(base_filename);
+    fs::write(&base_path, &webp_bytes).map_err(|e| e.to_string())?;
+    let legacy_path = avatars_dir.join("avatar.webp");
+    fs::write(&legacy_path, &webp_bytes).map_err(|e| e.to_string())?;
+    let round_path = avatars_dir.join("avatar_round.webp");
+    fs::write(&round_path, &webp_bytes).map_err(|e| e.to_string())?;
 
-    Ok(filename.to_string())
+    Ok(base_filename.to_string())
 }
 
 /// Helper: Save background image from base64 data URL
@@ -1474,6 +1562,9 @@ fn read_imported_character(
     let (
         name,
         avatar_path,
+        avatar_crop_x,
+        avatar_crop_y,
+        avatar_crop_scale,
         bg_path,
         description,
         definition,
@@ -1494,6 +1585,9 @@ fn read_imported_character(
     ): (
         String,
         Option<String>,
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
         Option<String>,
         Option<String>,
         Option<String>,
@@ -1513,7 +1607,7 @@ fn read_imported_character(
         i64,
     ) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| {
                 Ok((
@@ -1529,13 +1623,16 @@ fn read_imported_character(
                     r.get(9)?,
                     r.get(10)?,
                     r.get(11)?,
-                    r.get::<_, i64>(12)?,
-                    r.get::<_, i64>(13)?,
+                    r.get(12)?,
+                    r.get(13)?,
                     r.get(14)?,
-                    r.get(15)?,
-                    r.get(16)?,
+                    r.get::<_, i64>(15)?,
+                    r.get::<_, i64>(16)?,
                     r.get(17)?,
                     r.get(18)?,
+                    r.get(19)?,
+                    r.get(20)?,
+                    r.get(21)?,
                 ))
             },
         )
@@ -1622,6 +1719,12 @@ fn read_imported_character(
     if let Some(a) = avatar_path {
         root.insert("avatarPath".into(), JsonValue::String(a));
     }
+    if let (Some(x), Some(y), Some(scale)) = (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+        root.insert(
+            "avatarCrop".into(),
+            serde_json::json!({ "x": x, "y": y, "scale": scale }),
+        );
+    }
     if let Some(b) = bg_path {
         root.insert("backgroundImagePath".into(), JsonValue::String(b));
     }
@@ -1695,18 +1798,21 @@ pub fn persona_export(app: tauri::AppHandle, persona_id: String) -> Result<Strin
     let conn = open_db(&app)?;
 
     // Read persona data
-    let (title, description, avatar_path, is_default, created_at, updated_at): (
+    let (title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at): (
         String,
         String,
         Option<String>,
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
         i64,
         i64,
         i64,
     ) = conn
         .query_row(
-            "SELECT title, description, avatar_path, is_default, created_at, updated_at FROM personas WHERE id = ?",
+            "SELECT title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas WHERE id = ?",
             params![&persona_id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?)),
         )
         .map_err(|e| format!("Persona not found: {}", e))?;
 
@@ -1733,10 +1839,18 @@ pub fn persona_export(app: tauri::AppHandle, persona_id: String) -> Result<Strin
     meta.insert("updatedAt".into(), JsonValue::from(updated_at));
     meta.insert("source".into(), JsonValue::String("lettuceai".to_string()));
 
+    let mut app_specific = JsonMap::new();
+    if let (Some(x), Some(y), Some(scale)) = (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+        app_specific.insert(
+            "avatarCrop".into(),
+            serde_json::json!({ "x": x, "y": y, "scale": scale }),
+        );
+    }
+
     let export_card = create_persona_uec(
         payload,
         None,
-        Some(JsonValue::Object(JsonMap::new())),
+        Some(JsonValue::Object(app_specific)),
         Some(JsonValue::Object(meta)),
         Some(JsonValue::Object(JsonMap::new())),
     );
@@ -1819,19 +1933,28 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
     };
 
     let is_default = package.persona.is_default.unwrap_or(false);
+    let (avatar_crop_x, avatar_crop_y, avatar_crop_scale) = package
+        .persona
+        .avatar_crop
+        .as_ref()
+        .map(|crop| (Some(crop.x), Some(crop.y), Some(crop.scale)))
+        .unwrap_or((None, None, None));
     if is_default {
         tx.execute("UPDATE personas SET is_default = 0", [])
             .map_err(|e| format!("Failed to clear default persona: {}", e))?;
     }
 
     tx.execute(
-        r#"INSERT INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO personas (id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         params![
             &new_persona_id,
             &package.persona.title,
             &package.persona.description,
             avatar_path,
+            avatar_crop_x,
+            avatar_crop_y,
+            avatar_crop_scale,
             is_default as i64,
             now,
             now
@@ -1854,13 +1977,13 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
 
 /// Helper: Read imported persona and return as JSON
 fn read_imported_persona(conn: &rusqlite::Connection, persona_id: &str) -> Result<String, String> {
-    let (title, description, avatar_path, is_default, created_at, updated_at):
-        (String, String, Option<String>, i64, i64, i64) =
+    let (title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at):
+        (String, String, Option<String>, Option<f64>, Option<f64>, Option<f64>, i64, i64, i64) =
         conn.query_row(
-            "SELECT title, description, avatar_path, is_default, created_at, updated_at FROM personas WHERE id = ?",
+            "SELECT title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas WHERE id = ?",
             params![persona_id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, i64>(3)?, r.get(4)?, r.get(5)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get::<_, i64>(6)?, r.get(7)?, r.get(8)?
             )),
         )
         .map_err(|e| e.to_string())?;
@@ -1871,6 +1994,12 @@ fn read_imported_persona(conn: &rusqlite::Connection, persona_id: &str) -> Resul
     root.insert("description".into(), JsonValue::String(description));
     if let Some(a) = avatar_path {
         root.insert("avatarPath".into(), JsonValue::String(a));
+    }
+    if let (Some(x), Some(y), Some(scale)) = (avatar_crop_x, avatar_crop_y, avatar_crop_scale) {
+        root.insert(
+            "avatarCrop".into(),
+            serde_json::json!({ "x": x, "y": y, "scale": scale }),
+        );
     }
     root.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
     root.insert("createdAt".into(), JsonValue::from(created_at));

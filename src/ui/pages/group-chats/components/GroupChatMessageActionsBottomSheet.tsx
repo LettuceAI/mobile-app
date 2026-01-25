@@ -3,6 +3,7 @@ import { Copy, Trash2, RotateCcw, Edit3, Users } from "lucide-react";
 
 import type { Character, Settings, Model } from "../../../../core/storage/schemas";
 import { useAvatar } from "../../../hooks/useAvatar";
+import { AvatarImage } from "../../../components/AvatarImage";
 import { BottomMenu } from "../../../components/BottomMenu";
 import { MarkdownRenderer } from "../../chats/components/MarkdownRenderer";
 import { radius, cn, interactive } from "../../../design-tokens";
@@ -312,7 +313,7 @@ function CharacterPickerItem({
   character: Character;
   onClick: () => void;
 }) {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
   const description = character.description || character.definition;
 
   return (
@@ -334,7 +335,7 @@ function CharacterPickerItem({
         )}
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />
+          <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-sm font-bold text-white/60">
             {character.name.slice(0, 1).toUpperCase()}

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Persona } from "./schemas";
+import type { AvatarCrop, Persona } from "./schemas";
 
 /**
  * Persona export package format
@@ -17,6 +17,7 @@ export interface PersonaExportPackage {
 export interface PersonaExportData {
   title: string;
   description: string;
+  avatarCrop?: AvatarCrop;
 }
 
 /**

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import type { GroupSessionPreview, Character } from "../../../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../../../design-tokens";
 import { useAvatar } from "../../../../hooks/useAvatar";
+import { AvatarImage } from "../../../../components/AvatarImage";
 
 export function GroupSessionList({
   sessions,
@@ -104,10 +105,12 @@ function isImageLike(s?: string) {
 }
 
 const CharacterMiniAvatar = memo(({ character }: { character: Character }) => {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
   if (avatarUrl && isImageLike(avatarUrl)) {
-    return <img src={avatarUrl} alt={character.name} className="h-full w-full object-cover" />;
+    return (
+      <AvatarImage src={avatarUrl} alt={character.name} crop={character.avatarCrop} applyCrop />
+    );
   }
 
   const initials = character.name.slice(0, 2).toUpperCase();

@@ -188,6 +188,11 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
             .get("avatarPath")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let avatar_crop = c.get("avatarCrop").and_then(|v| v.as_object());
+        let avatar_crop_x = avatar_crop.and_then(|crop| crop.get("x").and_then(|v| v.as_f64()));
+        let avatar_crop_y = avatar_crop.and_then(|crop| crop.get("y").and_then(|v| v.as_f64()));
+        let avatar_crop_scale =
+            avatar_crop.and_then(|crop| crop.get("scale").and_then(|v| v.as_f64()));
         let bg_path = c
             .get("backgroundImagePath")
             .and_then(|v| v.as_str())
@@ -225,9 +230,26 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
         let updated_at = c.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(now);
 
         tx.execute(
-            r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-            params![id, name, avatar_path, bg_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at],
+            r#"INSERT OR REPLACE INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, disable_avatar_gradient, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            params![
+                id,
+                name,
+                avatar_path,
+                avatar_crop_x,
+                avatar_crop_y,
+                avatar_crop_scale,
+                bg_path,
+                description,
+                definition,
+                default_scene_id,
+                default_model_id,
+                prompt_template_id,
+                system_prompt,
+                disable_avatar_gradient,
+                created_at,
+                updated_at
+            ],
         ).map_err(|e| e.to_string())?;
 
         // Rules
@@ -305,6 +327,11 @@ fn import_personas(conn: &mut rusqlite::Connection, json: &str) -> Result<(), St
             .get("avatarPath")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let avatar_crop = p.get("avatarCrop").and_then(|v| v.as_object());
+        let avatar_crop_x = avatar_crop.and_then(|crop| crop.get("x").and_then(|v| v.as_f64()));
+        let avatar_crop_y = avatar_crop.and_then(|crop| crop.get("y").and_then(|v| v.as_f64()));
+        let avatar_crop_scale =
+            avatar_crop.and_then(|crop| crop.get("scale").and_then(|v| v.as_f64()));
         let is_default = p
             .get("isDefault")
             .and_then(|v| v.as_bool())
@@ -312,9 +339,20 @@ fn import_personas(conn: &mut rusqlite::Connection, json: &str) -> Result<(), St
         let created_at = p.get("createdAt").and_then(|v| v.as_i64()).unwrap_or(now);
         let updated_at = p.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(now);
         tx.execute(
-            r#"INSERT OR REPLACE INTO personas (id, title, description, avatar_path, is_default, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)"#,
-            params![&id, title, description, avatar_path, is_default, created_at, updated_at],
+            r#"INSERT OR REPLACE INTO personas (id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            params![
+                &id,
+                title,
+                description,
+                avatar_path,
+                avatar_crop_x,
+                avatar_crop_y,
+                avatar_crop_scale,
+                is_default,
+                created_at,
+                updated_at
+            ],
         ).map_err(|e| e.to_string())?;
     }
     tx.commit().map_err(|e| e.to_string())

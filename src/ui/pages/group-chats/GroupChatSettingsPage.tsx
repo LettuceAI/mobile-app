@@ -24,6 +24,7 @@ import { SectionHeader, CharacterAvatar, QuickChip, PersonaSelector } from "./co
 import { processBackgroundImage } from "../../../core/utils/image";
 import { storageBridge } from "../../../core/storage/files";
 import { useAvatar } from "../../hooks/useAvatar";
+import { AvatarImage } from "../../components/AvatarImage";
 import React, { useState } from "react";
 
 // Main Component
@@ -68,6 +69,7 @@ export function GroupChatSettingsPage() {
     "persona",
     currentPersona?.id ?? "",
     currentPersona?.avatarPath,
+    "round",
   );
 
   // Sync backgroundImagePath with session when it changes
@@ -450,11 +452,14 @@ export function GroupChatSettingsPage() {
             <QuickChip
               icon={
                 personaAvatarUrl ? (
-                  <img
-                    src={personaAvatarUrl}
-                    alt={currentPersona?.title ?? "Persona"}
-                    className="h-full w-full rounded-full object-cover"
-                  />
+                  <div className="h-full w-full overflow-hidden rounded-full">
+                    <AvatarImage
+                      src={personaAvatarUrl}
+                      alt={currentPersona?.title ?? "Persona"}
+                      crop={currentPersona?.avatarCrop}
+                      applyCrop
+                    />
+                  </div>
                 ) : (
                   <User className="h-4 w-4" />
                 )

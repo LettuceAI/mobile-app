@@ -37,6 +37,7 @@ import {
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { BottomMenu, MenuSection } from "../../components";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
+import { AvatarImage } from "../../components/AvatarImage";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useImageData } from "../../hooks/useImageData";
 import {
@@ -273,7 +274,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const [models, setModels] = useState<Model[]>([]);
   const [globalDefaultModelId, setGlobalDefaultModelId] = useState<string | null>(null);
   const [currentCharacter, setCurrentCharacter] = useState<Character>(character);
-  const avatarUrl = useAvatar("character", currentCharacter?.id, currentCharacter?.avatarPath);
+  const avatarUrl = useAvatar(
+    "character",
+    currentCharacter?.id,
+    currentCharacter?.avatarPath,
+    "round",
+  );
   const backgroundImageData = useImageData(currentCharacter?.backgroundImagePath);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -303,6 +309,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     "persona",
     personaForAvatar?.id ?? "",
     personaForAvatar?.avatarPath,
+    "round",
   );
 
   const loadModels = useCallback(async () => {
@@ -525,11 +532,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
   const avatarDisplay = useMemo(() => {
     if (avatarUrl && isImageLike(avatarUrl)) {
       return (
-        <img
-          src={avatarUrl}
-          alt={currentCharacter?.name ?? "avatar"}
-          className="h-12 w-12 rounded-full object-cover"
-        />
+        <div className="h-12 w-12 overflow-hidden rounded-full">
+          <AvatarImage
+            src={avatarUrl}
+            alt={currentCharacter?.name ?? "avatar"}
+            crop={currentCharacter?.avatarCrop}
+            applyCrop
+          />
+        </div>
       );
     }
     const initials = currentCharacter?.name ? currentCharacter.name.slice(0, 2).toUpperCase() : "?";
@@ -812,11 +822,14 @@ function ChatSettingsContent({ character }: { character: Character }) {
               <QuickChip
                 icon={
                   personaAvatarUrl ? (
-                    <img
-                      src={personaAvatarUrl}
-                      alt={personaForAvatar?.title ?? "Persona"}
-                      className="h-full w-full rounded-full object-cover"
-                    />
+                    <div className="h-full w-full overflow-hidden rounded-full">
+                      <AvatarImage
+                        src={personaAvatarUrl}
+                        alt={personaForAvatar?.title ?? "Persona"}
+                        crop={personaForAvatar?.avatarCrop}
+                        applyCrop
+                      />
+                    </div>
                   ) : (
                     <User className="h-4 w-4" />
                   )

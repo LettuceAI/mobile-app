@@ -13,6 +13,7 @@ import type { Character, Persona } from "../../../core/storage/schemas";
 import { cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
+import { AvatarImage } from "../../components/AvatarImage";
 
 type SearchTab = "characters" | "personas";
 
@@ -221,14 +222,15 @@ function TabButton({
 
 // Character Avatar with gradient support
 const CharacterAvatar = memo(({ character }: { character: Character }) => {
-  const avatarUrl = useAvatar("character", character.id, character.avatarPath);
+  const avatarUrl = useAvatar("character", character.id, character.avatarPath, "round");
 
   if (avatarUrl && isImageLike(avatarUrl)) {
     return (
-      <img
+      <AvatarImage
         src={avatarUrl}
         alt={`${character.name} avatar`}
-        className="h-full w-full object-cover"
+        crop={character.avatarCrop}
+        applyCrop
       />
     );
   }
@@ -351,7 +353,7 @@ function CharacterList({
 // Persona Card
 const PersonaCard = memo(
   ({ persona, onSelect }: { persona: Persona; onSelect: (p: Persona) => void }) => {
-    const avatarUrl = useAvatar("persona", persona.id, persona.avatarPath);
+    const avatarUrl = useAvatar("persona", persona.id, persona.avatarPath, "round");
 
     return (
       <motion.button

@@ -10,6 +10,7 @@ import type {
 } from "../../../../core/storage/schemas";
 import type { ThemeColors } from "../../../../core/utils/imageAnalysis";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
+import { AvatarImage } from "../../../components/AvatarImage";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { useSessionAttachments } from "../../../hooks/useSessionAttachment";
 import { replaceCharacterPlaceholders } from "../utils/replaceCharacterPlaceholders";
@@ -54,14 +55,19 @@ const MessageAvatar = React.memo(function MessageAvatar({
   character?: Character;
   persona?: Persona | null;
 }) {
-  const characterAvatar = useAvatar("character", character?.id ?? "", character?.avatarPath);
-  const personaAvatar = useAvatar("persona", persona?.id ?? "", persona?.avatarPath);
+  const characterAvatar = useAvatar(
+    "character",
+    character?.id ?? "",
+    character?.avatarPath,
+    "round",
+  );
+  const personaAvatar = useAvatar("persona", persona?.id ?? "", persona?.avatarPath, "round");
 
   if (role === "user") {
     return (
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {personaAvatar ? (
-          <img src={personaAvatar} alt="User" className="h-full w-full object-cover" />
+          <AvatarImage src={personaAvatar} alt="User" crop={persona?.avatarCrop} applyCrop />
         ) : (
           <User size={16} className="text-white/60" />
         )}
@@ -73,10 +79,11 @@ const MessageAvatar = React.memo(function MessageAvatar({
     return (
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {characterAvatar ? (
-          <img
+          <AvatarImage
             src={characterAvatar}
             alt={character?.name || "Assistant"}
-            className="h-full w-full object-cover"
+            crop={character?.avatarCrop}
+            applyCrop
           />
         ) : (
           <Bot size={16} className="text-white/60" />
@@ -637,6 +644,9 @@ export const GroupChatMessage = React.memo(GroupChatMessageInner, (prev, next) =
     prev.theme === next.theme &&
     prev.character?.id === next.character?.id &&
     prev.character?.avatarPath === next.character?.avatarPath &&
+    prev.character?.avatarCrop?.x === next.character?.avatarCrop?.x &&
+    prev.character?.avatarCrop?.y === next.character?.avatarCrop?.y &&
+    prev.character?.avatarCrop?.scale === next.character?.avatarCrop?.scale &&
     (() => {
       const aVoice = prev.character?.voiceConfig;
       const bVoice = next.character?.voiceConfig;
@@ -653,6 +663,9 @@ export const GroupChatMessage = React.memo(GroupChatMessageInner, (prev, next) =
     })() &&
     prev.persona?.id === next.persona?.id &&
     prev.persona?.avatarPath === next.persona?.avatarPath &&
+    prev.persona?.avatarCrop?.x === next.persona?.avatarCrop?.x &&
+    prev.persona?.avatarCrop?.y === next.persona?.avatarCrop?.y &&
+    prev.persona?.avatarCrop?.scale === next.persona?.avatarCrop?.scale &&
     prev.audioStatus === next.audioStatus &&
     a.reasoning === b.reasoning &&
     prev.reasoning === next.reasoning &&

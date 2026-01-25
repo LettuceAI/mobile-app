@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { getPersona, savePersona } from "../../../../core/storage/repo";
 import { loadAvatar, saveAvatar } from "../../../../core/storage/avatars";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
+import type { AvatarCrop } from "../../../../core/storage/schemas";
 
 type PersonaFormState = {
   loading: boolean;
@@ -13,13 +14,18 @@ type PersonaFormState = {
   description: string;
   isDefault: boolean;
   avatarPath: string | null;
+  avatarCrop: AvatarCrop | null;
+  avatarRoundPath: string | null;
 };
 
 type Action =
   | { type: "set_loading"; payload: boolean }
   | { type: "set_saving"; payload: boolean }
   | { type: "set_error"; payload: string | null }
-  | { type: "set_fields"; payload: Partial<Omit<PersonaFormState, "loading" | "saving" | "error">> };
+  | {
+      type: "set_fields";
+      payload: Partial<Omit<PersonaFormState, "loading" | "saving" | "error">>;
+    };
 
 const initialState: PersonaFormState = {
   loading: true,
@@ -29,6 +35,8 @@ const initialState: PersonaFormState = {
   description: "",
   isDefault: false,
   avatarPath: null,
+  avatarCrop: null,
+  avatarRoundPath: null,
 };
 
 function reducer(state: PersonaFormState, action: Action): PersonaFormState {
@@ -56,6 +64,8 @@ export function usePersonaFormController(personaId: string | undefined) {
     description: string;
     isDefault: boolean;
     avatarPath: string | null;
+    avatarCrop: string;
+    avatarRoundPath: string;
   } | null>(null);
 
   const loadPersona = useCallback(async () => {
@@ -74,9 +84,14 @@ export function usePersonaFormController(personaId: string | undefined) {
 
       // Load avatar if it exists
       let avatarDataUrl: string | null = null;
+      let avatarRoundDataUrl: string | null = null;
       if (persona.avatarPath) {
         const loadedAvatar = await loadAvatar("persona", personaId, persona.avatarPath);
+        const loadedRound = await loadAvatar("persona", personaId, "avatar_round.webp").catch(
+          () => undefined,
+        );
         avatarDataUrl = loadedAvatar ?? null;
+        avatarRoundDataUrl = loadedRound ?? null;
       }
 
       dispatch({
@@ -86,6 +101,8 @@ export function usePersonaFormController(personaId: string | undefined) {
           description: persona.description,
           isDefault: persona.isDefault ?? false,
           avatarPath: avatarDataUrl,
+          avatarCrop: persona.avatarCrop ?? null,
+          avatarRoundPath: avatarRoundDataUrl,
         },
       });
 
@@ -95,6 +112,8 @@ export function usePersonaFormController(personaId: string | undefined) {
         description: persona.description,
         isDefault: persona.isDefault ?? false,
         avatarPath: avatarDataUrl,
+        avatarCrop: JSON.stringify(persona.avatarCrop ?? null),
+        avatarRoundPath: JSON.stringify(avatarRoundDataUrl ?? null),
       };
       dispatch({ type: "set_error", payload: null });
     } catch (error) {
@@ -128,12 +147,20 @@ export function usePersonaFormController(personaId: string | undefined) {
     dispatch({ type: "set_fields", payload: { avatarPath: value } });
   }, []);
 
+  const setAvatarCrop = useCallback((value: AvatarCrop | null) => {
+    dispatch({ type: "set_fields", payload: { avatarCrop: value } });
+  }, []);
+
+  const setAvatarRoundPath = useCallback((value: string | null) => {
+    dispatch({ type: "set_fields", payload: { avatarRoundPath: value } });
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (!personaId) {
       return;
     }
 
-    const { title, description, isDefault, avatarPath } = state;
+    const { title, description, isDefault, avatarPath, avatarCrop, avatarRoundPath } = state;
     if (!title.trim() || !description.trim()) {
       return;
     }
@@ -145,7 +172,7 @@ export function usePersonaFormController(personaId: string | undefined) {
       // Save avatar if provided
       let avatarFilename: string | undefined = undefined;
       if (avatarPath) {
-        avatarFilename = await saveAvatar("persona", personaId, avatarPath);
+        avatarFilename = await saveAvatar("persona", personaId, avatarPath, avatarRoundPath);
         if (!avatarFilename) {
           console.error("[EditPersona] Failed to save avatar image");
         } else {
@@ -159,6 +186,7 @@ export function usePersonaFormController(personaId: string | undefined) {
         description: description.trim(),
         isDefault,
         avatarPath: avatarFilename,
+        avatarCrop: avatarFilename ? (avatarCrop ?? undefined) : undefined,
       });
 
       // Update initial state to match current (for change detection)
@@ -167,6 +195,8 @@ export function usePersonaFormController(personaId: string | undefined) {
         description: description.trim(),
         isDefault,
         avatarPath,
+        avatarCrop: JSON.stringify(avatarCrop ?? null),
+        avatarRoundPath: JSON.stringify(avatarRoundPath ?? null),
       };
 
       // Sync trimmed values
@@ -202,7 +232,9 @@ export function usePersonaFormController(personaId: string | undefined) {
       state.title !== initial.title ||
       state.description !== initial.description ||
       state.isDefault !== initial.isDefault ||
-      state.avatarPath !== initial.avatarPath;
+      state.avatarPath !== initial.avatarPath ||
+      JSON.stringify(state.avatarCrop ?? null) !== initial.avatarCrop ||
+      JSON.stringify(state.avatarRoundPath ?? null) !== initial.avatarRoundPath;
 
     return hasChanges;
   })();
@@ -213,6 +245,8 @@ export function usePersonaFormController(personaId: string | undefined) {
     setDescription,
     setIsDefault,
     setAvatarPath,
+    setAvatarCrop,
+    setAvatarRoundPath,
     handleSave,
     canSave,
   };

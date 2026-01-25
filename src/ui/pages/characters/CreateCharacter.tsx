@@ -113,6 +113,10 @@ export function CreateCharacterPage() {
               onNameChange={actions.setName}
               avatarPath={state.avatarPath}
               onAvatarChange={actions.setAvatarPath}
+              avatarCrop={state.avatarCrop}
+              onAvatarCropChange={actions.setAvatarCrop}
+              avatarRoundPath={state.avatarRoundPath}
+              onAvatarRoundChange={actions.setAvatarRoundPath}
               backgroundImagePath={state.backgroundImagePath}
               onBackgroundImageChange={actions.setBackgroundImagePath}
               onBackgroundImageUpload={actions.handleBackgroundImageUpload}

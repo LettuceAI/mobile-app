@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, type ChangeEvent } from "re
 import { useNavigate } from "react-router-dom";
 import { listCharacters, saveCharacter, readSettings } from "../../../../core/storage/repo";
 import type {
+  AvatarCrop,
   CharacterVoiceConfig,
   Model,
   Scene,
@@ -32,6 +33,8 @@ type EditCharacterState = {
   definition: string;
   description: string;
   avatarPath: string;
+  avatarCrop: AvatarCrop | null;
+  avatarRoundPath: string | null;
   backgroundImagePath: string;
   scenes: Scene[];
   defaultSceneId: string | null;
@@ -73,6 +76,8 @@ const initialState: EditCharacterState = {
   definition: "",
   description: "",
   avatarPath: "",
+  avatarCrop: null,
+  avatarRoundPath: null,
   backgroundImagePath: "",
   scenes: [],
   defaultSceneId: null,
@@ -126,6 +131,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
     definition: string;
     description: string;
     avatarPath: string;
+    avatarCrop: string;
+    avatarRoundPath: string;
     backgroundImagePath: string;
     scenes: string;
     defaultSceneId: string | null;
@@ -186,15 +193,23 @@ export function useEditCharacterForm(characterId: string | undefined) {
       }
 
       let loadedAvatarPath = "";
+      let loadedAvatarRoundPath: string | null = null;
       let backgroundImage = character.backgroundImagePath || "";
 
       if (character.avatarPath) {
         try {
           const avatarUrl = await loadAvatar("character", character.id, character.avatarPath);
+          const avatarRoundUrl = await loadAvatar(
+            "character",
+            character.id,
+            "avatar_round.webp",
+          ).catch(() => undefined);
           loadedAvatarPath = avatarUrl || "";
+          loadedAvatarRoundPath = avatarRoundUrl || null;
         } catch (err) {
           console.warn("Failed to load avatar:", err);
           loadedAvatarPath = "";
+          loadedAvatarRoundPath = null;
         }
       } else {
         loadedAvatarPath = "";
@@ -219,6 +234,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         definition: character.definition || character.description || "",
         description: character.description || "",
         avatarPath: loadedAvatarPath,
+        avatarCrop: character.avatarCrop ?? null,
+        avatarRoundPath: loadedAvatarRoundPath,
         backgroundImagePath: backgroundImage,
         scenes: character.scenes || [],
         defaultSceneId: character.defaultSceneId || null,
@@ -241,6 +258,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         definition: character.definition || character.description || "",
         description: character.description || "",
         avatarPath: loadedAvatarPath,
+        avatarCrop: JSON.stringify(character.avatarCrop ?? null),
+        avatarRoundPath: JSON.stringify(loadedAvatarRoundPath ?? null),
         backgroundImagePath: backgroundImage,
         scenes: JSON.stringify(character.scenes || []),
         defaultSceneId: character.defaultSceneId || null,
@@ -317,7 +336,12 @@ export function useEditCharacterForm(characterId: string | undefined) {
       let avatarFilename: string | undefined = undefined;
       if (state.avatarPath) {
         if (state.avatarPath.startsWith("data:")) {
-          avatarFilename = await saveAvatar("character", characterId, state.avatarPath);
+          avatarFilename = await saveAvatar(
+            "character",
+            characterId,
+            state.avatarPath,
+            state.avatarRoundPath,
+          );
           if (!avatarFilename) {
             console.error("[EditCharacter] Failed to save avatar image");
           } else {
@@ -342,6 +366,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         definition: state.definition.trim(),
         description: state.description.trim() || undefined,
         avatarPath: avatarFilename,
+        avatarCrop: avatarFilename ? (state.avatarCrop ?? undefined) : undefined,
         backgroundImagePath: backgroundImageId,
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId,
@@ -372,6 +397,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
         definition: state.definition.trim(),
         description: state.description.trim(),
         avatarPath: state.avatarPath,
+        avatarCrop: JSON.stringify(state.avatarCrop ?? null),
+        avatarRoundPath: JSON.stringify(state.avatarRoundPath ?? null),
         backgroundImagePath: state.backgroundImagePath,
         scenes: JSON.stringify(state.scenes),
         defaultSceneId: state.defaultSceneId,
@@ -523,7 +550,11 @@ export function useEditCharacterForm(characterId: string | undefined) {
 
       const reader = new FileReader();
       reader.onload = () => {
-        setFields({ avatarPath: reader.result as string });
+        setFields({
+          avatarPath: reader.result as string,
+          avatarCrop: null,
+          avatarRoundPath: null,
+        });
       };
       reader.readAsDataURL(file);
 
@@ -562,6 +593,8 @@ export function useEditCharacterForm(characterId: string | undefined) {
           state.definition !== initial.definition ||
           state.description !== initial.description ||
           state.avatarPath !== initial.avatarPath ||
+          JSON.stringify(state.avatarCrop ?? null) !== initial.avatarCrop ||
+          JSON.stringify(state.avatarRoundPath ?? null) !== initial.avatarRoundPath ||
           state.backgroundImagePath !== initial.backgroundImagePath ||
           JSON.stringify(state.scenes) !== initial.scenes ||
           state.defaultSceneId !== initial.defaultSceneId ||

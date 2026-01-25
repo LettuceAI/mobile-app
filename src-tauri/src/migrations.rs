@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 30;
+pub const CURRENT_MIGRATION_VERSION: u32 = 31;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -16,6 +16,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
 
     if current_version >= CURRENT_MIGRATION_VERSION {
         migrate_v29_to_v30(app)?;
+        migrate_v30_to_v31(app)?;
         log_info(
             app,
             "migrations",
@@ -338,6 +339,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v29_to_v30(app)?;
         version = 30;
+    }
+
+    if version < 31 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v30 -> v31: Add avatar crop columns",
+        );
+        migrate_v30_to_v31(app)?;
+        version = 31;
     }
 
     // Update the stored version
@@ -1186,6 +1197,77 @@ fn migrate_v29_to_v30(app: &AppHandle) -> Result<(), String> {
         "UPDATE characters SET definition = description WHERE (definition IS NULL OR definition = '') AND description IS NOT NULL",
         [],
     );
+
+    Ok(())
+}
+
+fn migrate_v30_to_v31(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    let mut has_avatar_crop_x = false;
+    let mut has_avatar_crop_y = false;
+    let mut has_avatar_crop_scale = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(characters)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        match name.as_str() {
+            "avatar_crop_x" => has_avatar_crop_x = true,
+            "avatar_crop_y" => has_avatar_crop_y = true,
+            "avatar_crop_scale" => has_avatar_crop_scale = true,
+            _ => {}
+        }
+    }
+
+    if !has_avatar_crop_x {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN avatar_crop_x REAL", []);
+    }
+    if !has_avatar_crop_y {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN avatar_crop_y REAL", []);
+    }
+    if !has_avatar_crop_scale {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN avatar_crop_scale REAL",
+            [],
+        );
+    }
+
+    let mut has_persona_avatar_crop_x = false;
+    let mut has_persona_avatar_crop_y = false;
+    let mut has_persona_avatar_crop_scale = false;
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(personas)")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+
+    for col in rows {
+        let name = col.map_err(|e| e.to_string())?;
+        match name.as_str() {
+            "avatar_crop_x" => has_persona_avatar_crop_x = true,
+            "avatar_crop_y" => has_persona_avatar_crop_y = true,
+            "avatar_crop_scale" => has_persona_avatar_crop_scale = true,
+            _ => {}
+        }
+    }
+
+    if !has_persona_avatar_crop_x {
+        let _ = conn.execute("ALTER TABLE personas ADD COLUMN avatar_crop_x REAL", []);
+    }
+    if !has_persona_avatar_crop_y {
+        let _ = conn.execute("ALTER TABLE personas ADD COLUMN avatar_crop_y REAL", []);
+    }
+    if !has_persona_avatar_crop_scale {
+        let _ = conn.execute("ALTER TABLE personas ADD COLUMN avatar_crop_scale REAL", []);
+    }
 
     Ok(())
 }

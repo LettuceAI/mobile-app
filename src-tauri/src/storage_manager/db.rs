@@ -241,6 +241,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           avatar_path TEXT,
+          avatar_crop_x REAL,
+          avatar_crop_y REAL,
+          avatar_crop_scale REAL,
           background_image_path TEXT,
           description TEXT,
           definition TEXT,
@@ -329,6 +332,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           title TEXT NOT NULL,
           description TEXT NOT NULL,
           avatar_path TEXT,
+          avatar_crop_x REAL,
+          avatar_crop_y REAL,
+          avatar_crop_scale REAL,
           is_default INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
@@ -698,6 +704,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut has_custom_text_secondary = false;
     let mut has_voice_config = false;
     let mut has_voice_autoplay = false;
+    let mut has_avatar_crop_x = false;
+    let mut has_avatar_crop_y = false;
+    let mut has_avatar_crop_scale = false;
     let mut rows2 = stmt2.query([]).map_err(|e| e.to_string())?;
     while let Some(row) = rows2.next().map_err(|e| e.to_string())? {
         let col_name: String = row.get(1).map_err(|e| e.to_string())?;
@@ -708,6 +717,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             "custom_text_secondary" => has_custom_text_secondary = true,
             "voice_config" => has_voice_config = true,
             "voice_autoplay" => has_voice_autoplay = true,
+            "avatar_crop_x" => has_avatar_crop_x = true,
+            "avatar_crop_y" => has_avatar_crop_y = true,
+            "avatar_crop_scale" => has_avatar_crop_scale = true,
             _ => {}
         }
     }
@@ -743,6 +755,44 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             "ALTER TABLE characters ADD COLUMN voice_autoplay INTEGER DEFAULT 0",
             [],
         );
+    }
+    if !has_avatar_crop_x {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN avatar_crop_x REAL", []);
+    }
+    if !has_avatar_crop_y {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN avatar_crop_y REAL", []);
+    }
+    if !has_avatar_crop_scale {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN avatar_crop_scale REAL",
+            [],
+        );
+    }
+
+    let mut stmt_personas = conn
+        .prepare("PRAGMA table_info(personas)")
+        .map_err(|e| e.to_string())?;
+    let mut has_persona_avatar_crop_x = false;
+    let mut has_persona_avatar_crop_y = false;
+    let mut has_persona_avatar_crop_scale = false;
+    let mut rows_personas = stmt_personas.query([]).map_err(|e| e.to_string())?;
+    while let Some(row) = rows_personas.next().map_err(|e| e.to_string())? {
+        let col_name: String = row.get(1).map_err(|e| e.to_string())?;
+        match col_name.as_str() {
+            "avatar_crop_x" => has_persona_avatar_crop_x = true,
+            "avatar_crop_y" => has_persona_avatar_crop_y = true,
+            "avatar_crop_scale" => has_persona_avatar_crop_scale = true,
+            _ => {}
+        }
+    }
+    if !has_persona_avatar_crop_x {
+        let _ = conn.execute("ALTER TABLE personas ADD COLUMN avatar_crop_x REAL", []);
+    }
+    if !has_persona_avatar_crop_y {
+        let _ = conn.execute("ALTER TABLE personas ADD COLUMN avatar_crop_y REAL", []);
+    }
+    if !has_persona_avatar_crop_scale {
+        let _ = conn.execute("ALTER TABLE personas ADD COLUMN avatar_crop_scale REAL", []);
     }
 
     // Migrations: add title to lorebook_entries if missing

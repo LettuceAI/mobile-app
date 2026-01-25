@@ -5,11 +5,14 @@ import { saveAvatar } from "../../../../core/storage/avatars";
 import { invalidateAvatarCache } from "../../../hooks/useAvatar";
 import { importPersona, readFileAsText } from "../../../../core/storage/personaTransfer";
 import { toast } from "../../../components/toast";
+import type { AvatarCrop } from "../../../../core/storage/schemas";
 
 export interface PersonaFormState {
   title: string;
   description: string;
   avatarPath: string | null;
+  avatarCrop: AvatarCrop | null;
+  avatarRoundPath: string | null;
   isDefault: boolean;
   saving: boolean;
   importing: boolean;
@@ -20,19 +23,29 @@ export type PersonaFormAction =
   | { type: "set_title"; value: string }
   | { type: "set_description"; value: string }
   | { type: "set_avatar_path"; value: string | null }
+  | { type: "set_avatar_crop"; value: AvatarCrop | null }
+  | { type: "set_avatar_round_path"; value: string | null }
   | { type: "set_default"; value: boolean }
   | { type: "set_saving"; value: boolean }
   | { type: "set_importing"; value: boolean }
   | { type: "set_error"; value: string | null }
   | {
       type: "hydrate_from_import";
-      payload: { title: string; description: string; avatarPath: string | null };
+      payload: {
+        title: string;
+        description: string;
+        avatarPath: string | null;
+        avatarCrop?: AvatarCrop | null;
+        avatarRoundPath?: string | null;
+      };
     };
 
 export const initialCreatePersonaState: PersonaFormState = {
   title: "",
   description: "",
   avatarPath: null,
+  avatarCrop: null,
+  avatarRoundPath: null,
   isDefault: false,
   saving: false,
   importing: false,
@@ -50,6 +63,10 @@ export function createPersonaReducer(
       return { ...state, description: action.value };
     case "set_avatar_path":
       return { ...state, avatarPath: action.value };
+    case "set_avatar_crop":
+      return { ...state, avatarCrop: action.value };
+    case "set_avatar_round_path":
+      return { ...state, avatarRoundPath: action.value };
     case "set_default":
       return { ...state, isDefault: action.value };
     case "set_saving":
@@ -64,6 +81,8 @@ export function createPersonaReducer(
         title: action.payload.title,
         description: action.payload.description,
         avatarPath: action.payload.avatarPath,
+        avatarCrop: action.payload.avatarCrop ?? null,
+        avatarRoundPath: action.payload.avatarRoundPath ?? null,
         isDefault: false,
       };
     default:
@@ -97,6 +116,8 @@ export function useCreatePersonaController() {
       const reader = new FileReader();
       reader.onload = () => {
         dispatch({ type: "set_avatar_path", value: reader.result as string });
+        dispatch({ type: "set_avatar_crop", value: null });
+        dispatch({ type: "set_avatar_round_path", value: null });
       };
       reader.readAsDataURL(file);
     };
@@ -127,6 +148,7 @@ export function useCreatePersonaController() {
             title: importedPersona.title,
             description: importedPersona.description,
             avatarPath: importedPersona.avatarPath || null,
+            avatarCrop: importedPersona.avatarCrop ?? null,
           },
         });
         dispatch({ type: "set_error", value: null });
@@ -155,7 +177,12 @@ export function useCreatePersonaController() {
 
       let avatarFilename: string | undefined;
       if (state.avatarPath) {
-        avatarFilename = await saveAvatar("persona", personaId, state.avatarPath);
+        avatarFilename = await saveAvatar(
+          "persona",
+          personaId,
+          state.avatarPath,
+          state.avatarRoundPath,
+        );
         if (!avatarFilename) {
           console.error("[CreatePersona] Failed to save avatar image");
         } else {
@@ -168,6 +195,7 @@ export function useCreatePersonaController() {
         title: state.title.trim(),
         description: state.description.trim(),
         avatarPath: avatarFilename,
+        avatarCrop: avatarFilename ? (state.avatarCrop ?? undefined) : undefined,
         isDefault: state.isDefault,
       });
 

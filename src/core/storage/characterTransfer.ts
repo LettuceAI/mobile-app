@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Character } from "./schemas";
+import type { AvatarCrop, Character } from "./schemas";
 
 export type CharacterFileFormat = "uec" | "legacy_json" | "chara_card_v2" | "chara_card_v1";
 
@@ -39,6 +39,7 @@ export interface CharacterImportPreview {
   disableAvatarGradient: boolean;
   fileFormat?: CharacterFileFormat;
   avatarData?: string | null;
+  avatarCrop?: AvatarCrop;
   backgroundImageData?: string | null;
 }
 

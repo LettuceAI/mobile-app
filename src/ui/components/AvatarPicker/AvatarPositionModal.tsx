@@ -12,7 +12,7 @@ interface AvatarPositionModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageSrc: string;
-  onConfirm: (croppedImageDataUrl: string) => void;
+  onConfirm: (roundImageData: string) => void;
 }
 
 export function AvatarPositionModal({
@@ -32,7 +32,6 @@ export function AvatarPositionModal({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const centerImage = useCallback((imgWidth: number, imgHeight: number, newScale: number) => {
     if (!containerRef.current) return { x: 0, y: 0 };
@@ -47,6 +46,17 @@ export function AvatarPositionModal({
     };
   }, []);
 
+  const applyInitialCrop = useCallback(
+    (imgWidth: number, imgHeight: number) => {
+      if (!containerRef.current) return;
+
+      const centered = centerImage(imgWidth, imgHeight, 1);
+      setPosition(centered);
+      setZoomInput("100");
+    },
+    [centerImage],
+  );
+
   useEffect(() => {
     if (isOpen && imageSrc) {
       setScale(1);
@@ -59,32 +69,33 @@ export function AvatarPositionModal({
         setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
         setImageLoaded(true);
         setTimeout(() => {
-          const centered = centerImage(img.naturalWidth, img.naturalHeight, 1);
-          setPosition(centered);
-          setZoomInput("100");
+          applyInitialCrop(img.naturalWidth, img.naturalHeight);
         }, 50);
       };
       img.onerror = () => setImageLoaded(true);
       img.src = imageSrc;
     }
-  }, [isOpen, imageSrc, centerImage]);
+  }, [isOpen, imageSrc, applyInitialCrop]);
 
-  const zoomToCenter = useCallback((newScale: number) => {
-    if (!containerRef.current || !imageSize) return;
+  const zoomToCenter = useCallback(
+    (newScale: number) => {
+      if (!containerRef.current || !imageSize) return;
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const containerCenterX = containerRect.width / 2;
-    const containerCenterY = containerRect.height / 2;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const containerCenterX = containerRect.width / 2;
+      const containerCenterY = containerRect.height / 2;
 
-    const imageCenterX = (containerCenterX - position.x) / scale;
-    const imageCenterY = (containerCenterY - position.y) / scale;
+      const imageCenterX = (containerCenterX - position.x) / scale;
+      const imageCenterY = (containerCenterY - position.y) / scale;
 
-    const newX = containerCenterX - imageCenterX * newScale;
-    const newY = containerCenterY - imageCenterY * newScale;
+      const newX = containerCenterX - imageCenterX * newScale;
+      const newY = containerCenterY - imageCenterY * newScale;
 
-    setScale(newScale);
-    setPosition({ x: newX, y: newY });
-  }, [scale, position, imageSize]);
+      setScale(newScale);
+      setPosition({ x: newX, y: newY });
+    },
+    [scale, position, imageSize],
+  );
 
   const handleZoomIn = useCallback(() => {
     const newScale = Math.min(scale + 0.1, 4);
@@ -119,7 +130,7 @@ export function AvatarPositionModal({
         y: clientY - position.y,
       });
     },
-    [position]
+    [position],
   );
 
   const handleDragMove = useCallback(
@@ -130,7 +141,7 @@ export function AvatarPositionModal({
         y: clientY - dragStart.y,
       });
     },
-    [isDragging, dragStart]
+    [isDragging, dragStart],
   );
 
   const handleDragEnd = useCallback(() => {
@@ -142,14 +153,14 @@ export function AvatarPositionModal({
       e.preventDefault();
       handleDragStart(e.clientX, e.clientY);
     },
-    [handleDragStart]
+    [handleDragStart],
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       handleDragMove(e.clientX, e.clientY);
     },
-    [handleDragMove]
+    [handleDragMove],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -171,7 +182,7 @@ export function AvatarPositionModal({
         lastPinchDistance.current = Math.sqrt(dx * dx + dy * dy);
       }
     },
-    [handleDragStart]
+    [handleDragStart],
   );
 
   const handleTouchMove = useCallback(
@@ -202,7 +213,7 @@ export function AvatarPositionModal({
         lastPinchDistance.current = distance;
       }
     },
-    [handleDragMove, scale, position, imageSize]
+    [handleDragMove, scale, position, imageSize],
   );
 
   const handleTouchEnd = useCallback(() => {
@@ -210,24 +221,27 @@ export function AvatarPositionModal({
     lastPinchDistance.current = null;
   }, [handleDragEnd]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    if (!containerRef.current || !imageSize) return;
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      if (!containerRef.current || !imageSize) return;
 
-    const delta = e.deltaY > 0 ? -0.08 : 0.08;
-    const newScale = Math.min(Math.max(scale + delta, 0.1), 4);
+      const delta = e.deltaY > 0 ? -0.08 : 0.08;
+      const newScale = Math.min(Math.max(scale + delta, 0.1), 4);
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const containerCenterX = containerRect.width / 2;
-    const containerCenterY = containerRect.height / 2;
-    const imageCenterX = (containerCenterX - position.x) / scale;
-    const imageCenterY = (containerCenterY - position.y) / scale;
-    const newX = containerCenterX - imageCenterX * newScale;
-    const newY = containerCenterY - imageCenterY * newScale;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const containerCenterX = containerRect.width / 2;
+      const containerCenterY = containerRect.height / 2;
+      const imageCenterX = (containerCenterX - position.x) / scale;
+      const imageCenterY = (containerCenterY - position.y) / scale;
+      const newX = containerCenterX - imageCenterX * newScale;
+      const newY = containerCenterY - imageCenterY * newScale;
 
-    setScale(newScale);
-    setPosition({ x: newX, y: newY });
-  }, [scale, position, imageSize]);
+      setScale(newScale);
+      setPosition({ x: newX, y: newY });
+    },
+    [scale, position, imageSize],
+  );
 
   const handleZoomInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -254,54 +268,43 @@ export function AvatarPositionModal({
     setZoomInput(constrainedNum.toFixed(2).replace(/\.?0+$/, ""));
   };
 
-  const handleConfirm = useCallback(async () => {
-    if (!imageRef.current || !canvasRef.current || !containerRef.current) return;
+  const handleConfirm = useCallback(() => {
+    if (!containerRef.current || !imageRef.current || !imageSize) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    if (!containerRect.width || !containerRect.height) return;
+    if (!imageSize.width || !imageSize.height) return;
 
-    const canvas = canvasRef.current;
+    const size = Math.min(containerRect.width, containerRect.height);
+    if (!size) return;
+
+    const outputSize = 512;
+    const exportScale = outputSize / size;
+    const canvas = document.createElement("canvas");
+    canvas.width = outputSize;
+    canvas.height = outputSize;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const img = imageRef.current;
-    const container = containerRef.current;
-
-    const outputSize = 512;
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-
-    const containerRect = container.getBoundingClientRect();
-    const containerSize = Math.min(containerRect.width, containerRect.height);
-    const circleRadius = containerSize * 0.45;
-
-    const circleCenterX = (containerSize / 2 - position.x) / scale;
-    const circleCenterY = (containerSize / 2 - position.y) / scale;
-
-    const cropRadius = circleRadius / scale;
-    const sourceX = circleCenterX - cropRadius;
-    const sourceY = circleCenterY - cropRadius;
-    const sourceSize = cropRadius * 2;
-
     ctx.clearRect(0, 0, outputSize, outputSize);
+    ctx.save();
     ctx.beginPath();
     ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
-    ctx.closePath();
     ctx.clip();
-
-    ctx.drawImage(
-      img,
-      sourceX,
-      sourceY,
-      sourceSize,
-      sourceSize,
+    ctx.setTransform(
+      scale * exportScale,
       0,
       0,
-      outputSize,
-      outputSize
+      scale * exportScale,
+      position.x * exportScale,
+      position.y * exportScale,
     );
+    ctx.drawImage(imageRef.current, 0, 0);
+    ctx.restore();
 
-    const dataUrl = canvas.toDataURL("image/png", 0.95);
-    onConfirm(dataUrl);
+    const roundImageData = canvas.toDataURL("image/png");
+    onConfirm(roundImageData);
     onClose();
-  }, [scale, position, onConfirm, onClose]);
+  }, [scale, position, onConfirm, onClose, imageSize]);
 
   return (
     <AnimatePresence>
@@ -321,7 +324,7 @@ export function AvatarPositionModal({
               "fixed left-1/2 top-1/2 z-210 w-[90vw] max-w-md -translate-x-1/2 -translate-y-1/2",
               "flex flex-col overflow-hidden border border-white/10 bg-[#0a0a0c]",
               "rounded-xl",
-              shadows.xl
+              shadows.xl,
             )}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -339,7 +342,7 @@ export function AvatarPositionModal({
                   "flex h-12 w-12 items-center justify-center text-white/50",
                   radius.full,
                   interactive.transition.default,
-                  "hover:bg-white/10 hover:text-white active:scale-95"
+                  "hover:bg-white/10 hover:text-white active:scale-95",
                 )}
               >
                 <X size={18} />
@@ -359,12 +362,12 @@ export function AvatarPositionModal({
                   "relative mx-auto aspect-square w-full max-w-70 overflow-hidden",
                   radius.lg,
                   "cursor-move touch-none select-none",
-                  "border border-white/10"
+                  "border border-white/10",
                 )}
                 style={{
-                  transform: 'translateZ(0)',
-                  isolation: 'isolate'
-                }} 
+                  transform: "translateZ(0)",
+                  isolation: "isolate",
+                }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -381,6 +384,8 @@ export function AvatarPositionModal({
                   alt="Avatar to position"
                   className="absolute pointer-events-none"
                   style={{
+                    top: 0,
+                    left: 0,
                     transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
                     transformOrigin: "top left",
                     maxWidth: "none",
@@ -394,18 +399,15 @@ export function AvatarPositionModal({
                 <div
                   className="absolute inset-0 z-10 pointer-events-none"
                   style={{
-                    background: 'radial-gradient(circle closest-side, transparent 90%, rgba(0, 0, 0, 0.7) 90%)',
-                    WebkitBackdropFilter: 'none', 
+                    background:
+                      "radial-gradient(circle closest-side, transparent 90%, rgba(0, 0, 0, 0.7) 90%)",
+                    WebkitBackdropFilter: "none",
                   }}
                 />
 
                 {/* SVG for guides and border */}
                 <div className="absolute inset-0 z-20 pointer-events-none">
-                  <svg
-                    className="h-full w-full"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                  >
+                  <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                     {/* Circle border */}
                     <circle
                       cx="50"
@@ -453,7 +455,7 @@ export function AvatarPositionModal({
                     "flex h-12 w-12 items-center justify-center border border-white/10 bg-white/5 text-white/60",
                     radius.md,
                     interactive.transition.default,
-                    "hover:bg-white/10 hover:text-white active:scale-95"
+                    "hover:bg-white/10 hover:text-white active:scale-95",
                   )}
                 >
                   <ZoomOut size={18} />
@@ -463,7 +465,7 @@ export function AvatarPositionModal({
                   className={cn(
                     "flex h-12 min-w-20 items-center justify-center border border-white/10 bg-white/5",
                     radius.md,
-                    "focus-within:border-white/20 focus-within:bg-white/8 transition-colors"
+                    "focus-within:border-white/20 focus-within:bg-white/8 transition-colors",
                   )}
                 >
                   <div className="flex items-center px-3">
@@ -492,7 +494,7 @@ export function AvatarPositionModal({
                     "flex h-12 w-12 items-center justify-center border border-white/10 bg-white/5 text-white/60",
                     radius.md,
                     interactive.transition.default,
-                    "hover:bg-white/10 hover:text-white active:scale-95"
+                    "hover:bg-white/10 hover:text-white active:scale-95",
                   )}
                 >
                   <ZoomIn size={18} />
@@ -504,7 +506,7 @@ export function AvatarPositionModal({
                     "flex h-12 items-center justify-center gap-1.5 border border-white/10 bg-white/5 px-3 text-white/60",
                     radius.md,
                     interactive.transition.default,
-                    "hover:bg-white/10 hover:text-white active:scale-95"
+                    "hover:bg-white/10 hover:text-white active:scale-95",
                   )}
                 >
                   <RotateCcw size={18} />
@@ -521,7 +523,7 @@ export function AvatarPositionModal({
                   radius.md,
                   "border border-white/10 bg-white/5",
                   interactive.transition.default,
-                  "hover:bg-white/10 hover:text-white active:scale-[0.98]"
+                  "hover:bg-white/10 hover:text-white active:scale-[0.98]",
                 )}
               >
                 Cancel
@@ -536,16 +538,13 @@ export function AvatarPositionModal({
                   interactive.transition.default,
                   imageLoaded
                     ? "hover:bg-emerald-500/90 active:scale-[0.98]"
-                    : "cursor-not-allowed opacity-50"
+                    : "cursor-not-allowed opacity-50",
                 )}
               >
                 <Check size={18} />
                 Confirm
               </button>
             </div>
-
-            {/* Hidden canvas for cropping */}
-            <canvas ref={canvasRef} className="hidden" />
           </motion.div>
         </>
       )}

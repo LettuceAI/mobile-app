@@ -78,6 +78,8 @@ export function EditCharacterPage() {
     definition,
     description,
     avatarPath,
+    avatarCrop,
+    avatarRoundPath,
     backgroundImagePath,
     scenes,
     defaultSceneId,
@@ -252,26 +254,20 @@ export function EditCharacterPage() {
                   <AvatarPicker
                     currentAvatarPath={avatarPath}
                     onAvatarChange={(path) => setFields({ avatarPath: path })}
-                    avatarPreview={
-                      avatarPath ? (
-                        <img
-                          src={avatarPath}
-                          alt="Character avatar"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <span className="text-4xl font-bold text-white/30">{avatarInitial}</span>
-                        </div>
-                      )
-                    }
+                    avatarCrop={avatarCrop}
+                    onAvatarCropChange={(crop) => setFields({ avatarCrop: crop })}
+                    avatarRoundPath={avatarRoundPath}
+                    onAvatarRoundChange={(roundPath) => setFields({ avatarRoundPath: roundPath })}
+                    placeholder={avatarInitial}
                   />
 
                   {/* Remove Button - top left */}
                   {avatarPath && (
                     <button
                       type="button"
-                      onClick={() => setFields({ avatarPath: "" })}
+                      onClick={() =>
+                        setFields({ avatarPath: "", avatarCrop: null, avatarRoundPath: null })
+                      }
                       className="absolute -top-1 -left-1 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
                       aria-label="Remove avatar"
                     >

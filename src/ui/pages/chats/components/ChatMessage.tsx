@@ -5,6 +5,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage, Character, Persona } from "../../../../core/storage/schemas";
 import { radius, typography, interactive, cn } from "../../../design-tokens";
 import type { ThemeColors } from "../../../../core/utils/imageAnalysis";
+import { AvatarImage } from "../../../components/AvatarImage";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { useSessionAttachments } from "../../../hooks/useSessionAttachment";
 
@@ -48,14 +49,19 @@ const MessageAvatar = React.memo(function MessageAvatar({
   character: Character | null;
   persona: Persona | null;
 }) {
-  const characterAvatar = useAvatar("character", character?.id ?? "", character?.avatarPath);
-  const personaAvatar = useAvatar("persona", persona?.id ?? "", persona?.avatarPath);
+  const characterAvatar = useAvatar(
+    "character",
+    character?.id ?? "",
+    character?.avatarPath,
+    "round",
+  );
+  const personaAvatar = useAvatar("persona", persona?.id ?? "", persona?.avatarPath, "round");
 
   if (role === "user") {
     return (
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {personaAvatar ? (
-          <img src={personaAvatar} alt="User" className="h-full w-full object-cover" />
+          <AvatarImage src={personaAvatar} alt="User" crop={persona?.avatarCrop} applyCrop />
         ) : (
           <User size={16} className="text-white/60" />
         )}
@@ -67,7 +73,12 @@ const MessageAvatar = React.memo(function MessageAvatar({
     return (
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/5 to-white/10">
         {characterAvatar ? (
-          <img src={characterAvatar} alt="Assistant" className="h-full w-full object-cover" />
+          <AvatarImage
+            src={characterAvatar}
+            alt="Assistant"
+            crop={character?.avatarCrop}
+            applyCrop
+          />
         ) : (
           <Bot size={16} className="text-white/60" />
         )}
@@ -97,7 +108,7 @@ const MessageActions = React.memo(function MessageActions({
         type: "tween",
         duration: 0.15,
         ease: [0.25, 0.46, 0.45, 0.94],
-        delay: 0.1
+        delay: 0.1,
       }}
     >
       <button
@@ -111,10 +122,10 @@ const MessageActions = React.memo(function MessageActions({
           interactive.transition.fast,
           "hover:border-white/30 hover:bg-white/20 hover:scale-105",
           interactive.active.scale,
-          "disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:scale-100"
+          "disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:scale-100",
         )}
         aria-label="Regenerate response"
-        style={{ willChange: 'transform' }}
+        style={{ willChange: "transform" }}
       >
         {isRegenerating ? (
           <RefreshCw size={14} className="animate-spin rounded-full" />
@@ -153,8 +164,6 @@ const ThinkingSection = React.memo(function ThinkingSection({
     return THINKING_TEXTS[Math.floor(Math.random() * THINKING_TEXTS.length)];
   }, [isStreaming]);
 
-
-
   if (!reasoning || reasoning.trim().length === 0) {
     return null;
   }
@@ -166,9 +175,7 @@ const ThinkingSection = React.memo(function ThinkingSection({
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           "flex items-center gap-2 py-1 text-left text-xs transition-colors",
-          isStreaming
-            ? "text-white/60 hover:text-white/80"
-            : "text-white/40 hover:text-white/60"
+          isStreaming ? "text-white/60 hover:text-white/80" : "text-white/40 hover:text-white/60",
         )}
       >
         <motion.div
@@ -179,12 +186,8 @@ const ThinkingSection = React.memo(function ThinkingSection({
           <ChevronDown size={12} />
         </motion.div>
         <span className="flex items-center gap-1.5">
-          {isStreaming && (
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
-          )}
-          <span className="font-medium">
-            {isStreaming ? thinkingText : "Thought process"}
-          </span>
+          {isStreaming && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />}
+          <span className="font-medium">{isStreaming ? thinkingText : "Thought process"}</span>
         </span>
       </button>
 
@@ -197,11 +200,13 @@ const ThinkingSection = React.memo(function ThinkingSection({
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className={cn(
-              "mt-1 pl-5 border-l border-white/10",
-              "text-xs text-white/40 italic leading-relaxed",
-              "max-h-40 overflow-y-auto"
-            )}>
+            <div
+              className={cn(
+                "mt-1 pl-5 border-l border-white/10",
+                "text-xs text-white/40 italic leading-relaxed",
+                "max-h-40 overflow-y-auto",
+              )}
+            >
               <MarkdownRenderer
                 content={reasoning}
                 className="text-xs text-white/40 **:text-white/40"
@@ -246,12 +251,16 @@ function ChatMessageInner({
     const actionable = (isAssistant || isUser || isScene) && !isPlaceholder;
     const isLatestAssistant = isAssistant && actionable && index === messagesLength - 1;
     const variantState = getVariantState(message);
-    const totalVariants = variantState.total || ((isAssistant || isScene) ? 1 : 0);
+    const totalVariants = variantState.total || (isAssistant || isScene ? 1 : 0);
     const selectedVariantIndex =
-      variantState.selectedIndex >= 0 ? variantState.selectedIndex : totalVariants > 0 ? totalVariants - 1 : -1;
+      variantState.selectedIndex >= 0
+        ? variantState.selectedIndex
+        : totalVariants > 0
+          ? totalVariants - 1
+          : -1;
 
     const enableSwipe = isStartingSceneMessage
-      ? (index === 0 && variantState.total > 1)
+      ? index === 0 && variantState.total > 1
       : isLatestAssistant && (variantState.variants?.length ?? 0) > 1;
 
     const showTypingIndicator = isAssistant && isPlaceholder && message.content.trim().length === 0;
@@ -271,15 +280,24 @@ function ChatMessageInner({
       showRegenerateButton,
       shouldAnimate,
     };
-  }, [message.role, message.id, message.content, index, messagesLength, getVariantState, isStartingSceneMessage]);
+  }, [
+    message.role,
+    message.id,
+    message.content,
+    index,
+    messagesLength,
+    getVariantState,
+    isStartingSceneMessage,
+  ]);
 
   const playText = displayContent ?? message.content;
   const voiceConfig = character?.voiceConfig;
-  const hasVoiceAssignment = voiceConfig?.source === "user"
-    ? !!voiceConfig.userVoiceId
-    : voiceConfig?.source === "provider"
-      ? !!voiceConfig.providerId && !!voiceConfig.voiceId
-      : false;
+  const hasVoiceAssignment =
+    voiceConfig?.source === "user"
+      ? !!voiceConfig.userVoiceId
+      : voiceConfig?.source === "provider"
+        ? !!voiceConfig.providerId && !!voiceConfig.voiceId
+        : false;
   const canPlayAudio =
     (computed.isAssistant || computed.isScene) &&
     !computed.isPlaceholder &&
@@ -288,43 +306,55 @@ function ChatMessageInner({
   const isAudioLoading = audioStatus === "loading";
   const isAudioPlaying = audioStatus === "playing";
 
-  const handlePlayAudio = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!canPlayAudio) return;
-    if (isAudioLoading) {
-      onCancelAudio?.(message);
-      return;
-    }
-    if (isAudioPlaying) {
-      onStopAudio?.(message);
-      return;
-    }
-    if (!onPlayAudio) return;
-    try {
-      await onPlayAudio(message, playText);
-    } catch (error) {
-      console.error("Failed to play message audio:", error);
-    }
-  }, [canPlayAudio, isAudioLoading, isAudioPlaying, message, onCancelAudio, onPlayAudio, onStopAudio, playText]);
+  const handlePlayAudio = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!canPlayAudio) return;
+      if (isAudioLoading) {
+        onCancelAudio?.(message);
+        return;
+      }
+      if (isAudioPlaying) {
+        onStopAudio?.(message);
+        return;
+      }
+      if (!onPlayAudio) return;
+      try {
+        await onPlayAudio(message, playText);
+      } catch (error) {
+        console.error("Failed to play message audio:", error);
+      }
+    },
+    [
+      canPlayAudio,
+      isAudioLoading,
+      isAudioPlaying,
+      message,
+      onCancelAudio,
+      onPlayAudio,
+      onStopAudio,
+      playText,
+    ],
+  );
 
   const dragProps = useMemo(
     () =>
       computed.enableSwipe
         ? {
-          drag: "x" as const,
-          dragConstraints: { left: -140, right: 140 },
-          dragElastic: 0.08,
-          dragMomentum: false,
-          dragSnapToOrigin: true,
-          dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
-          onDragEnd: (_: unknown, info: PanInfo) =>
-            void handleVariantDrag(message.id, info.offset.x),
-          whileDrag: { scale: 0.98 },
-          style: { willChange: "transform", transform: "translate3d(0,0,0)" },
-        }
+            drag: "x" as const,
+            dragConstraints: { left: -140, right: 140 },
+            dragElastic: 0.08,
+            dragMomentum: false,
+            dragSnapToOrigin: true,
+            dragTransition: { bounceStiffness: 600, bounceDamping: 40 },
+            onDragEnd: (_: unknown, info: PanInfo) =>
+              void handleVariantDrag(message.id, info.offset.x),
+            whileDrag: { scale: 0.98 },
+            style: { willChange: "transform", transform: "translate3d(0,0,0)" },
+          }
         : {},
-    [computed.enableSwipe, handleVariantDrag, message.id]
+    [computed.enableSwipe, handleVariantDrag, message.id],
   );
 
   const animTransition = useMemo(
@@ -332,7 +362,7 @@ function ChatMessageInner({
       computed.shouldAnimate
         ? { type: "tween" as const, duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] as const }
         : { duration: 0 },
-    [computed.shouldAnimate]
+    [computed.shouldAnimate],
   );
 
   // Load attachments with lazy loading support for persisted images
@@ -342,17 +372,13 @@ function ChatMessageInner({
     <div
       className={cn(
         "relative flex gap-2",
-        message.role === "user" ? "justify-end" : "justify-start"
+        message.role === "user" ? "justify-end" : "justify-start",
       )}
     >
       {/* Avatar for assistant/scene messages (left side) */}
       {(message.role === "assistant" || message.role === "scene") && (
         <div className="flex shrink-0 flex-col items-center gap-1">
-          <MessageAvatar
-            role={message.role}
-            character={character}
-            persona={persona}
-          />
+          <MessageAvatar role={message.role} character={character} persona={persona} />
           {canPlayAudio && (
             <button
               type="button"
@@ -361,14 +387,25 @@ function ChatMessageInner({
                 "audio-btn flex h-6 w-6 items-center justify-center rounded-full",
                 "border border-white/40 bg-white/10 text-white shadow-sm",
                 "transition hover:bg-white/20 active:scale-95",
-                "disabled:cursor-not-allowed disabled:opacity-70"
+                "disabled:cursor-not-allowed disabled:opacity-70",
               )}
-              aria-label={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play message audio"}
+              aria-label={
+                isAudioLoading
+                  ? "Cancel audio generation"
+                  : isAudioPlaying
+                    ? "Stop audio"
+                    : "Play message audio"
+              }
               aria-pressed={isAudioPlaying}
               aria-busy={isAudioLoading}
-              title={isAudioLoading ? "Cancel audio generation" : isAudioPlaying ? "Stop audio" : "Play audio"}
+              title={
+                isAudioLoading
+                  ? "Cancel audio generation"
+                  : isAudioPlaying
+                    ? "Stop audio"
+                    : "Play audio"
+              }
             >
-
               {isAudioLoading ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : isAudioPlaying ? (
@@ -378,8 +415,6 @@ function ChatMessageInner({
               )}
             </button>
           )}
-
-
         </div>
       )}
 
@@ -393,13 +428,13 @@ function ChatMessageInner({
           typography.body.size,
           message.role === "user"
             ? cn(
-              `ml-auto ${theme.userBg} ${theme.userText} border ${theme.userBorder}`,
-              heldMessageId === message.id && "ring-2 ring-emerald-400/50"
-            )
+                `ml-auto ${theme.userBg} ${theme.userText} border ${theme.userBorder}`,
+                heldMessageId === message.id && "ring-2 ring-emerald-400/50",
+              )
             : cn(
-              `border ${theme.assistantBg} ${theme.assistantText}`,
-              heldMessageId === message.id ? "border-white/30" : theme.assistantBorder
-            )
+                `border ${theme.assistantBg} ${theme.assistantText}`,
+                heldMessageId === message.id ? "border-white/30" : theme.assistantBorder,
+              ),
         )}
         {...eventHandlers}
         {...dragProps}
@@ -418,10 +453,7 @@ function ChatMessageInner({
 
         {/* Thinking/Reasoning section - shown even during typing indicator */}
         {computed.isAssistant && reasoning && (
-          <ThinkingSection
-            reasoning={reasoning}
-            isStreaming={computed.isPlaceholder && sending}
-          />
+          <ThinkingSection reasoning={reasoning} isStreaming={computed.isPlaceholder && sending} />
         )}
 
         {/* Show typing indicator only if no reasoning (reasoning section has its own indicator) */}
@@ -438,12 +470,14 @@ function ChatMessageInner({
                     className={cn(
                       radius.md,
                       "overflow-hidden border border-white/15",
-                      attachment.data && onImageClick && "cursor-pointer hover:border-white/30 transition-colors"
+                      attachment.data &&
+                        onImageClick &&
+                        "cursor-pointer hover:border-white/30 transition-colors",
                     )}
-                    onClick={() => attachment.data && onImageClick?.(
-                      attachment.data,
-                      attachment.filename || "Attached image"
-                    )}
+                    onClick={() =>
+                      attachment.data &&
+                      onImageClick?.(attachment.data, attachment.filename || "Attached image")
+                    }
                   >
                     {attachment.data ? (
                       <img
@@ -451,7 +485,10 @@ function ChatMessageInner({
                         alt={attachment.filename || "Attached image"}
                         className="max-h-48 max-w-full object-contain"
                         style={{
-                          maxWidth: attachment.width && attachment.width > 300 ? 300 : attachment.width || 300
+                          maxWidth:
+                            attachment.width && attachment.width > 300
+                              ? 300
+                              : attachment.width || 300,
                         }}
                       />
                     ) : (
@@ -460,7 +497,7 @@ function ChatMessageInner({
                         className="flex items-center justify-center bg-white/5"
                         style={{
                           width: Math.min(attachment.width || 150, 300),
-                          height: Math.min(attachment.height || 100, 192)
+                          height: Math.min(attachment.height || 100, 192),
                         }}
                       >
                         <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
@@ -485,14 +522,15 @@ function ChatMessageInner({
               "mt-2.5 flex items-center justify-between pr-2",
               typography.caption.size,
               typography.caption.weight,
-              "uppercase tracking-wider text-white/40"
+              "uppercase tracking-wider text-white/40",
             )}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, delay: 0.15 }}
           >
             <span className="text-white">
-              {isStartingSceneMessage ? "Scene" : "Variant"} {computed.selectedVariantIndex >= 0 ? computed.selectedVariantIndex + 1 : 1}
+              {isStartingSceneMessage ? "Scene" : "Variant"}{" "}
+              {computed.selectedVariantIndex >= 0 ? computed.selectedVariantIndex + 1 : 1}
               {computed.totalVariants > 0 ? ` / ${computed.totalVariants}` : ""}
             </span>
             {regeneratingMessageId === message.id && (
@@ -558,6 +596,9 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     prev.theme === next.theme &&
     prev.character?.id === next.character?.id &&
     prev.character?.avatarPath === next.character?.avatarPath &&
+    prev.character?.avatarCrop?.x === next.character?.avatarCrop?.x &&
+    prev.character?.avatarCrop?.y === next.character?.avatarCrop?.y &&
+    prev.character?.avatarCrop?.scale === next.character?.avatarCrop?.scale &&
     (() => {
       const aVoice = prev.character?.voiceConfig;
       const bVoice = next.character?.voiceConfig;
@@ -574,6 +615,9 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     })() &&
     prev.persona?.id === next.persona?.id &&
     prev.persona?.avatarPath === next.persona?.avatarPath &&
+    prev.persona?.avatarCrop?.x === next.persona?.avatarCrop?.x &&
+    prev.persona?.avatarCrop?.y === next.persona?.avatarCrop?.y &&
+    prev.persona?.avatarCrop?.scale === next.persona?.avatarCrop?.scale &&
     prev.audioStatus === next.audioStatus &&
     a.reasoning === b.reasoning &&
     prev.reasoning === next.reasoning &&
@@ -587,8 +631,8 @@ function TypingIndicator() {
   return (
     <div className="flex items-center gap-1" aria-label="Assistant is typing" aria-live="polite">
       <span className="typing-dot" />
-      <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
-      <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
+      <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+      <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
     </div>
   );
 }
