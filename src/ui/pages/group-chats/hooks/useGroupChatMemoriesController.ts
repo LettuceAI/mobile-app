@@ -260,30 +260,42 @@ export function useGroupChatMemoriesController(groupSessionId?: string) {
 
   const memoryItems: MemoryItem[] = useMemo(() => {
     if (!session?.memoryEmbeddings) return [];
-    return session.memoryEmbeddings.map((emb, index) => {
-      const id = emb.id || `mem-${index}`;
-      const isAi = id.length <= 6;
-      const tokenCount = emb.tokenCount || 0;
+    return session.memoryEmbeddings
+      .map((emb, index) => {
+        const id = emb.id || `mem-${index}`;
+        const isAi = id.length <= 6;
+        const tokenCount = emb.tokenCount || 0;
 
-      let cycle = cycleMap.map.get(id);
-      if (!cycle && cycleMap.textMap.has(emb.text)) {
-        cycle = cycleMap.textMap.get(emb.text);
-      }
+        let cycle = cycleMap.map.get(id);
+        if (!cycle && cycleMap.textMap.has(emb.text)) {
+          cycle = cycleMap.textMap.get(emb.text);
+        }
 
-      return {
-        text: emb.text,
-        index,
-        isAi,
-        id,
-        tokenCount,
-        isCold: emb.isCold ?? false,
-        importanceScore: emb.importanceScore ?? 1.0,
-        createdAt: emb.createdAt ?? 0,
-        lastAccessedAt: emb.lastAccessedAt ?? 0,
-        isPinned: emb.isPinned ?? false,
-        cycle,
-      };
-    });
+        return {
+          text: emb.text,
+          index,
+          isAi,
+          id,
+          tokenCount,
+          isCold: emb.isCold ?? false,
+          importanceScore: emb.importanceScore ?? 1.0,
+          createdAt: emb.createdAt ?? 0,
+          lastAccessedAt: emb.lastAccessedAt ?? 0,
+          isPinned: emb.isPinned ?? false,
+          cycle,
+        };
+      })
+      .sort((a, b) => {
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        if (a.isCold !== b.isCold) return a.isCold ? 1 : -1;
+        if (a.importanceScore !== b.importanceScore) {
+          return b.importanceScore - a.importanceScore;
+        }
+        if (a.lastAccessedAt !== b.lastAccessedAt) {
+          return b.lastAccessedAt - a.lastAccessedAt;
+        }
+        return b.createdAt - a.createdAt;
+      });
   }, [session, cycleMap]);
 
   const filteredMemories = useMemo(() => {
