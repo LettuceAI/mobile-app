@@ -130,6 +130,7 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         temperature: f64,
         top_p: f64,
         max_tokens: u32,
+        _context_length: Option<u32>,
         _should_stream: bool,
         _frequency_penalty: Option<f64>,
         _presence_penalty: Option<f64>,

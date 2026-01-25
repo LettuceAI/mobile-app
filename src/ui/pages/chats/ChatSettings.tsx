@@ -575,6 +575,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
       "topP",
       "topK",
       "maxOutputTokens",
+      "contextLength",
       "frequencyPenalty",
       "presencePenalty",
     ];

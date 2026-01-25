@@ -1208,6 +1208,7 @@ async fn process_assistant_turn(
         0.7,               // temperature
         1.0,               // top_p
         20480,             // max_tokens
+        None,              // context_length
         streaming_enabled, // streaming based on settings
         if streaming_enabled {
             Some(stream_request_id.clone())
@@ -1396,6 +1397,7 @@ async fn process_assistant_turn(
             0.7,
             1.0,
             20480,
+            None,
             streaming_enabled,
             if streaming_enabled {
                 Some(stream_request_id.clone())

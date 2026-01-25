@@ -60,6 +60,7 @@ impl ProviderAdapter for OpenAIAdapter {
         temperature: f64,
         top_p: f64,
         max_tokens: u32,
+        context_length: Option<u32>,
         should_stream: bool,
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
@@ -94,6 +95,7 @@ impl ProviderAdapter for OpenAIAdapter {
             } else {
                 Some(total_tokens)
             },
+            context_length,
             max_completion_tokens: if reasoning_enabled {
                 Some(total_tokens)
             } else {
@@ -170,6 +172,7 @@ impl ProviderAdapter for OpenRouterAdapter {
         temperature: f64,
         top_p: f64,
         max_tokens: u32,
+        context_length: Option<u32>,
         should_stream: bool,
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
@@ -220,6 +223,7 @@ impl ProviderAdapter for OpenRouterAdapter {
             } else {
                 Some(total_tokens)
             },
+            context_length,
             max_completion_tokens: if reasoning_enabled {
                 Some(total_tokens)
             } else {

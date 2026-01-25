@@ -291,6 +291,21 @@ fn resolve_max_tokens(session: &Session, model: &Model, settings: &Settings) -> 
         .unwrap_or(FALLBACK_MAX_OUTPUT_TOKENS)
 }
 
+fn resolve_context_length(session: &Session, model: &Model, settings: &Settings) -> Option<u32> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.context_length)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.context_length)
+        })
+        .or(settings.advanced_model_settings.context_length)
+        .filter(|v| *v > 0)
+}
+
 fn resolve_frequency_penalty(
     session: &Session,
     model: &Model,
@@ -871,6 +886,7 @@ pub async fn chat_completion(
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
+    let context_length = resolve_context_length(&session, &model, &settings);
     let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
     let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
     let top_k = resolve_top_k(&session, &model, &settings);
@@ -903,6 +919,7 @@ pub async fn chat_completion(
         temperature,
         top_p,
         max_tokens,
+        context_length,
         should_stream,
         request_id.clone(),
         frequency_penalty,
@@ -1534,6 +1551,7 @@ pub async fn chat_regenerate(
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
+    let context_length = resolve_context_length(&session, &model, &settings);
     let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
     let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
     let top_k = resolve_top_k(&session, &model, &settings);
@@ -1551,6 +1569,7 @@ pub async fn chat_regenerate(
         temperature,
         top_p,
         max_tokens,
+        context_length,
         should_stream,
         request_id.clone(),
         frequency_penalty,
@@ -2061,6 +2080,7 @@ pub async fn chat_continue(
     let temperature = resolve_temperature(&session, &model, &settings);
     let top_p = resolve_top_p(&session, &model, &settings);
     let max_tokens = resolve_max_tokens(&session, &model, &settings);
+    let context_length = resolve_context_length(&session, &model, &settings);
     let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
     let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
     let top_k = resolve_top_k(&session, &model, &settings);
@@ -2078,6 +2098,7 @@ pub async fn chat_continue(
         temperature,
         top_p,
         max_tokens,
+        context_length,
         should_stream,
         request_id.clone(),
         frequency_penalty,
@@ -3158,6 +3179,7 @@ async fn run_memory_tool_update(
         )
     }));
 
+    let context_length = resolve_context_length(session, model, settings);
     let built = super::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -3167,6 +3189,7 @@ async fn run_memory_tool_update(
         0.2,
         1.0,
         resolve_max_tokens(session, model, settings), // Dynamic max tokens
+        context_length,
         false,
         None,
         None,
@@ -3568,6 +3591,7 @@ async fn summarize_messages(
         "content": "Return only the concise summary for the above conversation window. Use the write_summary tool."
     }));
 
+    let context_length = resolve_context_length(session, model, settings);
     let built = super::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -3577,6 +3601,7 @@ async fn summarize_messages(
         0.2,
         1.0,
         resolve_max_tokens(session, model, settings),
+        context_length,
         false,
         None,
         None,
@@ -3934,15 +3959,17 @@ pub async fn chat_generate_user_reply(
         json!({ "role": "user", "content": user_prompt }),
     ];
 
+    let context_length = resolve_context_length(&session, model, settings);
     let built = super::request_builder::build_chat_request(
         provider_cred,
         &api_key,
         &model.name,
         &messages_for_api,
-        None,               // system_prompt already in messages
-        0.8,                // temperature
-        1.0,                // top_p
-        max_tokens,         // max_tokens from settings
+        None,       // system_prompt already in messages
+        0.8,        // temperature
+        1.0,        // top_p
+        max_tokens, // max_tokens from settings
+        context_length,
         streaming_enabled,  // streaming from settings
         request_id.clone(), // request_id for streaming
         None,               // frequency_penalty

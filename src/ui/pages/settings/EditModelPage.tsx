@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import {
   ADVANCED_TEMPERATURE_RANGE,
   ADVANCED_TOP_P_RANGE,
   ADVANCED_MAX_TOKENS_RANGE,
+  ADVANCED_CONTEXT_LENGTH_RANGE,
   ADVANCED_FREQUENCY_PENALTY_RANGE,
   ADVANCED_PRESENCE_PENALTY_RANGE,
   ADVANCED_TOP_K_RANGE,
@@ -23,6 +25,7 @@ import {
   Search,
   ChevronRight,
   HelpCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
@@ -34,6 +37,13 @@ import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { cn } from "../../design-tokens";
 import { openDocs } from "../../../core/utils/docs";
 
+type LlamaCppContextInfo = {
+  maxContextLength: number;
+  recommendedContextLength?: number | null;
+  availableMemoryBytes?: number | null;
+  modelSizeBytes?: number | null;
+};
+
 export function EditModelPage() {
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -43,6 +53,9 @@ export function EditModelPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [showPlatformSelector, setShowPlatformSelector] = useState(false);
+  const [llamaContextInfo, setLlamaContextInfo] = useState<LlamaCppContextInfo | null>(null);
+  const [llamaContextError, setLlamaContextError] = useState<string | null>(null);
+  const [llamaContextLoading, setLlamaContextLoading] = useState(false);
 
   const {
     state: {
@@ -64,6 +77,7 @@ export function EditModelPage() {
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
+    handleContextLengthChange,
     handleFrequencyPenaltyChange,
     handlePresencePenaltyChange,
     handleTopKChange,
@@ -118,6 +132,26 @@ export function EditModelPage() {
   const showEffortOptions = reasoningSupport === "effort" || reasoningSupport === "dynamic";
   const numberInputClassName =
     "w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none";
+  const contextLimit = llamaContextInfo?.maxContextLength ?? ADVANCED_CONTEXT_LENGTH_RANGE.max;
+  const recommendedContextLength = llamaContextInfo?.recommendedContextLength ?? null;
+  const selectedContextLength = modelAdvancedDraft.contextLength ?? null;
+  const showContextWarning =
+    isLocalModel &&
+    selectedContextLength &&
+    recommendedContextLength !== null &&
+    recommendedContextLength > 0 &&
+    selectedContextLength > recommendedContextLength;
+  const showContextCritical =
+    isLocalModel &&
+    selectedContextLength &&
+    recommendedContextLength !== null &&
+    recommendedContextLength === 0;
+  const formatGiB = (bytes?: number | null) => {
+    if (!bytes || bytes <= 0) return null;
+    return (bytes / 1024 ** 3).toFixed(1);
+  };
+  const availableRamGiB = formatGiB(llamaContextInfo?.availableMemoryBytes ?? null);
+  const modelSizeGiB = formatGiB(llamaContextInfo?.modelSizeBytes ?? null);
 
   // Register window globals for header save button
   useEffect(() => {
@@ -137,6 +171,55 @@ export function EditModelPage() {
       loadPromptTemplates();
     }
   }, [editorModel?.id]);
+
+  useEffect(() => {
+    if (!isLocalModel) {
+      setLlamaContextInfo(null);
+      setLlamaContextError(null);
+      setLlamaContextLoading(false);
+      return;
+    }
+
+    const modelPath = editorModel?.name?.trim();
+    if (!modelPath) {
+      setLlamaContextInfo(null);
+      setLlamaContextError(null);
+      setLlamaContextLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLlamaContextLoading(true);
+    setLlamaContextError(null);
+
+    const timer = setTimeout(async () => {
+      try {
+        const info = await invoke<LlamaCppContextInfo>("llamacpp_context_info", { modelPath });
+        if (!cancelled) {
+          setLlamaContextInfo(info);
+          setLlamaContextError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setLlamaContextInfo(null);
+          const errorMessage =
+            err?.message ??
+            (typeof err === "string" ? err : err?.toString?.()) ??
+            "Failed to load context limits";
+          setLlamaContextError(errorMessage);
+        }
+      } finally {
+        if (!cancelled) {
+          setLlamaContextLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [editorModel?.name, isLocalModel]);
 
   const loadPromptTemplates = async () => {
     try {
@@ -709,6 +792,110 @@ export function EditModelPage() {
                         <span>{ADVANCED_MAX_TOKENS_RANGE.max.toLocaleString()}</span>
                       </div>
                     </div>
+
+                    {isLocalModel && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Context Length
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Override llama.cpp context window
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openDocs("models", "context-length")}
+                              className="text-white/30 hover:text-white/60 transition"
+                              aria-label="Help with context length"
+                            >
+                              <HelpCircle size={12} />
+                            </button>
+                          </div>
+                          <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
+                            {modelAdvancedDraft.contextLength
+                              ? modelAdvancedDraft.contextLength.toLocaleString()
+                              : "Auto"}
+                          </span>
+                        </div>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={ADVANCED_CONTEXT_LENGTH_RANGE.min}
+                          max={contextLimit}
+                          step={1}
+                          value={modelAdvancedDraft.contextLength || ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const next = raw === "" ? null : Number(raw);
+                            handleContextLengthChange(
+                              next === null || !Number.isFinite(next) || next === 0
+                                ? null
+                                : Math.trunc(next),
+                            );
+                          }}
+                          placeholder="Auto"
+                          className={numberInputClassName}
+                        />
+                        <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                          <span>Auto</span>
+                          <span>{contextLimit.toLocaleString()}</span>
+                        </div>
+
+                        {llamaContextLoading && (
+                          <p className="text-[10px] text-white/40">
+                            Calculating memory limits for this model...
+                          </p>
+                        )}
+                        {llamaContextError && (
+                          <p className="text-[10px] text-amber-200">{llamaContextError}</p>
+                        )}
+                        {llamaContextInfo && (
+                          <div className="text-[10px] text-white/40 space-y-1">
+                            <p>
+                              Max supported: {llamaContextInfo.maxContextLength.toLocaleString()}{" "}
+                              tokens
+                              {recommendedContextLength !== null
+                                ? ` • Recommended: ${recommendedContextLength.toLocaleString()}`
+                                : ""}
+                            </p>
+                            {(availableRamGiB || modelSizeGiB) && (
+                              <p>
+                                {availableRamGiB ? `Available RAM: ${availableRamGiB} GB` : ""}
+                                {availableRamGiB && modelSizeGiB ? " • " : ""}
+                                {modelSizeGiB ? `Model size: ${modelSizeGiB} GB` : ""}
+                              </p>
+                            )}
+                            {!selectedContextLength &&
+                              recommendedContextLength &&
+                              recommendedContextLength > 0 && (
+                                <p>Auto will use the recommended context length.</p>
+                              )}
+                          </div>
+                        )}
+
+                        {showContextWarning && (
+                          <div className="flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                            <span>
+                              Are you sure? This may not run on your device. We recommend{" "}
+                              {recommendedContextLength?.toLocaleString()} tokens.
+                            </span>
+                          </div>
+                        )}
+                        {showContextCritical && (
+                          <div className="flex items-start gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                            <span>
+                              This model likely won't fit in memory on your device. Try a smaller
+                              model or a much shorter context.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Penalties */}
                     <div className="space-y-8">

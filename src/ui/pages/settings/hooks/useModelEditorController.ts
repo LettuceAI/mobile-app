@@ -41,6 +41,7 @@ type ControllerReturn = {
   handleTemperatureChange: (value: number | null) => void;
   handleTopPChange: (value: number | null) => void;
   handleMaxTokensChange: (value: number | null) => void;
+  handleContextLengthChange: (value: number | null) => void;
   handleFrequencyPenaltyChange: (value: number | null) => void;
   handlePresencePenaltyChange: (value: number | null) => void;
   handleTopKChange: (value: number | null) => void;
@@ -301,6 +302,19 @@ export function useModelEditorController(): ControllerReturn {
         payload: {
           ...state.modelAdvancedDraft,
           maxOutputTokens: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleContextLengthChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          contextLength: value,
         },
       });
     },
@@ -591,6 +605,7 @@ export function useModelEditorController(): ControllerReturn {
     handleTemperatureChange,
     handleTopPChange,
     handleMaxTokensChange,
+    handleContextLengthChange,
     handleFrequencyPenaltyChange,
     handlePresencePenaltyChange,
     handleTopKChange,

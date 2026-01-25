@@ -24,6 +24,15 @@ mod desktop {
     use std::sync::{Mutex, OnceLock};
     use tokio::sync::oneshot::error::TryRecvError;
 
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub(crate) struct LlamaCppContextInfo {
+        max_context_length: u32,
+        recommended_context_length: Option<u32>,
+        available_memory_bytes: Option<u64>,
+        model_size_bytes: Option<u64>,
+    }
+
     struct LlamaState {
         backend: Option<LlamaBackend>,
         model_path: Option<String>,
@@ -79,6 +88,56 @@ mod desktop {
 
     fn sanitize_text(value: &str) -> String {
         value.replace('\0', "")
+    }
+
+    fn get_available_memory_bytes() -> Option<u64> {
+        let mut sys = sysinfo::System::new();
+        sys.refresh_memory();
+        Some(sys.available_memory())
+    }
+
+    fn estimate_kv_bytes_per_token(model: &LlamaModel) -> Option<u64> {
+        let n_layer = u64::from(model.n_layer());
+        let n_embd = u64::try_from(model.n_embd()).ok()?;
+
+        // Default to n_head if n_head_kv is not available or zero (older models)
+        let n_head = u64::try_from(model.n_head()).unwrap_or(1).max(1);
+        let n_head_kv = u64::try_from(model.n_head_kv()).unwrap_or(n_head).max(1);
+
+        // GQA Ratio: In Llama 3, this is 8/32 = 0.25
+        // We calculate the effective embedding size for the KV cache
+        let gqa_correction = n_head_kv as f64 / n_head as f64;
+        let effective_n_embd = (n_embd as f64 * gqa_correction) as u64;
+
+        // F16 (2 bytes) is the default KV cache type in llama.cpp unless changed.
+        // K cache + V cache = 2 matrices
+        let bytes_per_value = 2_u64;
+
+        Some(
+            n_layer
+                .saturating_mul(effective_n_embd)
+                .saturating_mul(2 * bytes_per_value),
+        )
+    }
+
+    fn compute_recommended_context(
+        model: &LlamaModel,
+        available_memory_bytes: Option<u64>,
+        max_context_length: u32,
+    ) -> Option<u32> {
+        let available = available_memory_bytes?;
+        let model_size = model.size();
+        let reserve = (available / 5).max(512 * 1024 * 1024);
+        let available_for_ctx = available.saturating_sub(model_size.saturating_add(reserve));
+        let kv_bytes_per_token = estimate_kv_bytes_per_token(model)?;
+        if kv_bytes_per_token == 0 {
+            return None;
+        }
+        let mut recommended = available_for_ctx / kv_bytes_per_token;
+        if recommended > u64::from(max_context_length) {
+            recommended = u64::from(max_context_length);
+        }
+        Some(recommended as u32)
     }
 
     fn extract_text_content(message: &Value) -> String {
@@ -177,6 +236,35 @@ mod desktop {
         LlamaSampler::chain(samplers, false)
     }
 
+    pub async fn llamacpp_context_info(
+        _app: AppHandle,
+        model_path: String,
+    ) -> Result<LlamaCppContextInfo, String> {
+        if model_path.trim().is_empty() {
+            return Err("llama.cpp model path is empty".to_string());
+        }
+        if !Path::new(&model_path).exists() {
+            return Err(format!("llama.cpp model path not found: {}", model_path));
+        }
+
+        let engine = load_engine(&model_path)?;
+        let model = engine
+            .model
+            .as_ref()
+            .ok_or_else(|| "llama.cpp model unavailable".to_string())?;
+        let max_ctx = model.n_ctx_train().max(1);
+        let available_memory_bytes = get_available_memory_bytes();
+        let recommended_context_length =
+            compute_recommended_context(model, available_memory_bytes, max_ctx);
+
+        Ok(LlamaCppContextInfo {
+            max_context_length: max_ctx,
+            recommended_context_length,
+            available_memory_bytes,
+            model_size_bytes: Some(model.size()),
+        })
+    }
+
     pub async fn handle_local_request(
         app: AppHandle,
         req: ApiRequest,
@@ -209,6 +297,11 @@ mod desktop {
             .or_else(|| body.get("max_completion_tokens"))
             .and_then(|v| v.as_u64())
             .unwrap_or(512) as u32;
+        let requested_context = body
+            .get("context_length")
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0);
 
         let request_id = req.request_id.clone();
         let stream = req.stream.unwrap_or(false);
@@ -248,7 +341,22 @@ mod desktop {
                 .map_err(|e| format!("Failed to tokenize prompt: {e}"))?;
             prompt_tokens = tokens.len() as u64;
 
-            let ctx_size = model.n_ctx_train().max(128);
+            let max_ctx = model.n_ctx_train().max(1);
+            let available_memory_bytes = get_available_memory_bytes();
+            let recommended_ctx =
+                compute_recommended_context(model, available_memory_bytes, max_ctx);
+            let ctx_size = if let Some(requested) = requested_context {
+                requested.min(max_ctx)
+            } else if let Some(recommended) = recommended_ctx {
+                if recommended == 0 {
+                    return Err(
+                        "llama.cpp model likely won't fit in memory. Try a smaller model or set a shorter context.".to_string(),
+                    );
+                }
+                recommended.min(max_ctx).max(1)
+            } else {
+                max_ctx
+            };
             let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(ctx_size));
             let mut ctx = model
                 .new_context(backend, ctx_params)
@@ -389,13 +497,31 @@ mod desktop {
 
 #[cfg(not(mobile))]
 pub use desktop::handle_local_request;
-
 #[cfg(mobile)]
 pub async fn handle_local_request(
     _app: AppHandle,
     _req: ApiRequest,
 ) -> Result<ApiResponse, String> {
     Err("llama.cpp is only supported on desktop builds".to_string())
+}
+
+#[tauri::command]
+pub async fn llamacpp_context_info(
+    app: AppHandle,
+    model_path: String,
+) -> Result<serde_json::Value, String> {
+    #[cfg(not(mobile))]
+    {
+        let info = desktop::llamacpp_context_info(app, model_path).await?;
+        return serde_json::to_value(info)
+            .map_err(|e| format!("Failed to serialize context info: {e}"));
+    }
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        let _ = model_path;
+        Err("llama.cpp is only supported on desktop builds".to_string())
+    }
 }
 
 pub fn is_llama_cpp(provider_id: Option<&str>) -> bool {

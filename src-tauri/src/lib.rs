@@ -286,6 +286,7 @@ pub fn run() {
             discovery::discovery_fetch_tags,
             discovery::discovery_fetch_author_info,
             discovery::discovery_import_character,
+            llama_cpp::llamacpp_context_info,
             // Group chat commands
             storage_manager::group_sessions::group_sessions_list,
             storage_manager::group_sessions::group_sessions_list_all,

@@ -109,6 +109,15 @@ impl Drop for AbortGuard<'_> {
     }
 }
 
+fn resolve_context_length(model: &Model, settings: &Settings) -> Option<u32> {
+    model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.context_length)
+        .or(settings.advanced_model_settings.context_length)
+        .filter(|v| *v > 0)
+}
+
 // ============================================================================
 // Usage Tracking Helper
 // ============================================================================
@@ -966,6 +975,7 @@ async fn summarize_group_messages(
         .max_output_tokens
         .unwrap_or(2048);
 
+    let context_length = resolve_context_length(model, &settings);
     let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -975,6 +985,7 @@ async fn summarize_group_messages(
         0.2,
         1.0,
         max_tokens,
+        context_length,
         false,
         None,
         None,
@@ -1097,6 +1108,7 @@ async fn run_group_memory_tool_update(
         .max_output_tokens
         .unwrap_or(2048);
 
+    let context_length = resolve_context_length(model, &settings);
     let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -1106,6 +1118,7 @@ async fn run_group_memory_tool_update(
         0.2,
         1.0,
         max_tokens,
+        context_length,
         false,
         None,
         None,
@@ -2205,15 +2218,17 @@ async fn select_speaker_via_llm_with_tracking(
         choice: Some(ToolChoice::Required),
     };
 
+    let context_length = resolve_context_length(model, &settings);
     let built = crate::chat_manager::request_builder::build_chat_request(
         cred,
         &api_key,
         &model.name,
         &messages,
-        None,  // system_prompt
-        0.3,   // Low temperature for consistent selection
-        1.0,   // top_p
-        500,   // max_tokens - short response
+        None, // system_prompt
+        0.3,  // Low temperature for consistent selection
+        1.0,  // top_p
+        500,  // max_tokens - short response
+        context_length,
         false, // No streaming for selection
         None,  // request_id
         None,  // frequency_penalty
@@ -2464,6 +2479,7 @@ async fn generate_character_response(
         .as_ref()
         .and_then(|a| a.max_output_tokens)
         .unwrap_or(2048);
+    let context_length = resolve_context_length(model, &settings);
     let reasoning_enabled = model
         .advanced_model_settings
         .as_ref()
@@ -2496,6 +2512,7 @@ async fn generate_character_response(
         temperature,
         top_p,
         max_tokens,
+        context_length,
         true,              // Stream
         None,              // request_id will be passed via ApiRequest
         frequency_penalty, // frequency_penalty
@@ -3486,15 +3503,17 @@ pub async fn group_chat_generate_user_reply(
     );
     messages_for_api.push(json!({ "role": "user", "content": user_prompt }));
 
+    let context_length = resolve_context_length(model, &settings);
     let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         &api_key,
         &model.name,
         &messages_for_api,
-        None,               // system prompt already handled via push_system_message
-        0.8,                // temperature
-        1.0,                // top_p
-        max_tokens,         // max_tokens from settings
+        None,       // system prompt already handled via push_system_message
+        0.8,        // temperature
+        1.0,        // top_p
+        max_tokens, // max_tokens from settings
+        context_length,
         streaming_enabled,  // streaming from settings
         request_id.clone(), // request_id for streaming
         None,               // frequency_penalty

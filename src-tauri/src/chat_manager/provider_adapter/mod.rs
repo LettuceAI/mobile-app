@@ -48,6 +48,7 @@ pub trait ProviderAdapter {
         temperature: f64,
         top_p: f64,
         max_tokens: u32,
+        context_length: Option<u32>,
         should_stream: bool,
         frequency_penalty: Option<f64>,
         presence_penalty: Option<f64>,
@@ -115,6 +116,8 @@ pub(crate) struct OpenAIChatRequest<'a> {
     pub(crate) top_p: f64,
     #[serde(rename = "max_tokens", skip_serializing_if = "Option::is_none")]
     pub(crate) max_tokens: Option<u32>,
+    #[serde(rename = "context_length", skip_serializing_if = "Option::is_none")]
+    pub(crate) context_length: Option<u32>,
     #[serde(
         rename = "max_completion_tokens",
         skip_serializing_if = "Option::is_none"

@@ -6,6 +6,7 @@ import { cn } from "../design-tokens";
 export const ADVANCED_TEMPERATURE_RANGE = { min: 0, max: 2 };
 export const ADVANCED_TOP_P_RANGE = { min: 0, max: 1 };
 export const ADVANCED_MAX_TOKENS_RANGE = { min: 0, max: 32768 };
+export const ADVANCED_CONTEXT_LENGTH_RANGE = { min: 0, max: 262144 };
 export const ADVANCED_FREQUENCY_PENALTY_RANGE = { min: -2, max: 2 };
 export const ADVANCED_PRESENCE_PENALTY_RANGE = { min: -2, max: 2 };
 export const ADVANCED_TOP_K_RANGE = { min: 1, max: 500 };
@@ -36,6 +37,7 @@ export function sanitizeAdvancedModelSettings(input: AdvancedModelSettings): Adv
     temperature: sanitize(input.temperature, ADVANCED_TEMPERATURE_RANGE, false),
     topP: sanitize(input.topP, ADVANCED_TOP_P_RANGE, false),
     maxOutputTokens: sanitize(input.maxOutputTokens, ADVANCED_MAX_TOKENS_RANGE, true),
+    contextLength: sanitize(input.contextLength, ADVANCED_CONTEXT_LENGTH_RANGE, true),
     frequencyPenalty: sanitize(input.frequencyPenalty, ADVANCED_FREQUENCY_PENALTY_RANGE, false),
     presencePenalty: sanitize(input.presencePenalty, ADVANCED_PRESENCE_PENALTY_RANGE, false),
     topK: sanitize(input.topK, ADVANCED_TOP_K_RANGE, true),
@@ -83,6 +85,11 @@ export function formatAdvancedModelSettingsSummary(
   const maxTokensValue = formatValue(settings.maxOutputTokens, 0);
   if (maxTokensValue) {
     parts.push(`Max ${maxTokensValue}`);
+  }
+
+  const contextValue = formatValue(settings.contextLength, 0);
+  if (contextValue) {
+    parts.push(`Ctx ${contextValue}`);
   }
 
   const freqPenaltyValue = formatValue(settings.frequencyPenalty);
@@ -231,6 +238,45 @@ export function AdvancedModelSettingsForm({
           placeholder="1024"
           className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
         />
+      </div>
+
+      {/* Context Length */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wider text-white/70">
+              Context Length
+            </label>
+            <p className="mt-0.5 text-[11px] text-white/50">Local models only</p>
+          </div>
+          <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/90">
+            {settings.contextLength ? settings.contextLength : "Auto"}
+          </span>
+        </div>
+        <input
+          type="number"
+          min={ADVANCED_CONTEXT_LENGTH_RANGE.min}
+          max={ADVANCED_CONTEXT_LENGTH_RANGE.max}
+          value={settings.contextLength ?? ""}
+          onChange={(event) => {
+            const raw = event.target.value;
+            const nextValue = raw === "" ? null : Number(raw);
+            onChange({
+              ...settings,
+              contextLength:
+                nextValue === null || !Number.isFinite(nextValue) || nextValue === 0
+                  ? null
+                  : Math.trunc(nextValue),
+            });
+          }}
+          disabled={disabled}
+          placeholder="Auto"
+          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
+        />
+        <div className="mt-1.5 flex justify-between text-[10px] text-white/40">
+          <span>Auto</span>
+          <span>{ADVANCED_CONTEXT_LENGTH_RANGE.max.toLocaleString()}</span>
+        </div>
       </div>
 
       {/* Frequency Penalty */}
