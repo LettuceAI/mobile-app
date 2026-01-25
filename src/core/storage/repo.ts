@@ -182,6 +182,19 @@ export async function addOrUpdateModel(
 ): Promise<Model> {
   const entity: Model = await storageBridge.modelUpsert({ id: model.id ?? uuidv4(), ...model });
   const current = await readSettings();
+  if (entity.providerId === "llamacpp") {
+    const hasLocalProvider = current.providerCredentials.some(
+      (cred) => cred.providerId === "llamacpp",
+    );
+    if (!hasLocalProvider) {
+      await addOrUpdateProviderCredential({
+        id: uuidv4(),
+        providerId: "llamacpp",
+        label: "llama.cpp (Local)",
+        apiKey: "",
+      });
+    }
+  }
   if (!current.defaultModelId) {
     await setDefaultModel(entity.id);
   }

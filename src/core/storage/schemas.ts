@@ -564,6 +564,22 @@ export const PROVIDER_PARAMETER_SUPPORT = {
       reasoningBudgetTokens: true,
     },
   },
+  llamacpp: {
+    providerId: "llamacpp",
+    displayName: "llama.cpp",
+    reasoningSupport: "none" as ReasoningSupport,
+    supportedParameters: {
+      temperature: true,
+      topP: true,
+      maxOutputTokens: true,
+      frequencyPenalty: false,
+      presencePenalty: false,
+      topK: false,
+      reasoningEnabled: false,
+      reasoningEffort: false,
+      reasoningBudgetTokens: false,
+    },
+  },
   custom: {
     providerId: "custom",
     displayName: "Custom (OpenAI)",

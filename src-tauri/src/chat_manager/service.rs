@@ -105,6 +105,9 @@ pub fn resolve_api_key(
     provider_cred: &ProviderCredential,
     log_scope: &str,
 ) -> Result<String, String> {
+    if provider_cred.provider_id == "llamacpp" {
+        return Ok(String::new());
+    }
     // Prefer inline api_key on the credential
     if let Some(ref key) = provider_cred.api_key {
         if !key.is_empty() {

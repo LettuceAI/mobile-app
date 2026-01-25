@@ -73,6 +73,7 @@ export function EditModelPage() {
     handleSave,
     fetchModels,
   } = useModelEditorController();
+  const isLocalModel = editorModel?.providerId === "llamacpp";
 
   // Switch to select mode automatically if models are fetched
   useEffect(() => {
@@ -83,7 +84,7 @@ export function EditModelPage() {
 
   // Auto-fetch models when provider changes or initial load
   useEffect(() => {
-    if (editorModel?.providerId) {
+    if (editorModel?.providerId && editorModel.providerId !== "llamacpp") {
       fetchModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,6 +106,8 @@ export function EditModelPage() {
       (m.description && m.description.toLowerCase().includes(q))
     );
   });
+  const modelIdLabel = isLocalModel ? "Model Path (GGUF)" : "Model ID";
+  const modelIdPlaceholder = isLocalModel ? "/path/to/model.gguf" : "e.g. gpt-4o";
 
   // Get reasoning support for the current provider
   const reasoningSupport: ReasoningSupport = editorModel?.providerId
@@ -300,10 +303,10 @@ export function EditModelPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
-                  Model ID
+                  {modelIdLabel}
                 </label>
                 <div className="flex items-center gap-3">
-                  {fetchedModels.length > 0 && (
+                  {!isLocalModel && fetchedModels.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setIsManualInput(!isManualInput)}
@@ -312,19 +315,21 @@ export function EditModelPage() {
                       {isManualInput ? "Show List" : "Manual Input"}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={fetchModels}
-                    disabled={fetchingModels || !editorModel?.providerId}
-                    className="text-white/40 hover:text-white/80 transition disabled:opacity-30"
-                    title="Refresh model list"
-                  >
-                    <RefreshCw className={cn("h-3.5 w-3.5", fetchingModels && "animate-spin")} />
-                  </button>
+                  {!isLocalModel && (
+                    <button
+                      type="button"
+                      onClick={fetchModels}
+                      disabled={fetchingModels || !editorModel?.providerId}
+                      className="text-white/40 hover:text-white/80 transition disabled:opacity-30"
+                      title="Refresh model list"
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5", fetchingModels && "animate-spin")} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {!isManualInput && fetchedModels.length > 0 ? (
+              {!isLocalModel && !isManualInput && fetchedModels.length > 0 ? (
                 <>
                   <button
                     type="button"
@@ -385,13 +390,20 @@ export function EditModelPage() {
                   </BottomMenu>
                 </>
               ) : (
-                <input
-                  type="text"
-                  value={editorModel.name}
-                  onChange={(e) => handleModelNameChange(e.target.value)}
-                  placeholder="e.g. gpt-4o"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={editorModel.name}
+                    onChange={(e) => handleModelNameChange(e.target.value)}
+                    placeholder={modelIdPlaceholder}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                  />
+                  {isLocalModel && (
+                    <p className="text-[11px] text-white/40">
+                      Use the full file path to a local GGUF model.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>

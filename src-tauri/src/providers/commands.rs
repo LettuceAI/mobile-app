@@ -17,6 +17,9 @@ pub async fn get_remote_models(
 
     // 1. Fetch credential
     let credential = get_provider_credential(&app, &credential_id)?;
+    if credential.provider_id == "llamacpp" {
+        return Ok(Vec::new());
+    }
 
     // 2. Get adapter and endpoint
     let adapter = adapter_for(&credential);

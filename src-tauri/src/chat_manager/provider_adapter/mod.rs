@@ -151,6 +151,7 @@ mod deepseek;
 mod featherless;
 mod google_gemini;
 mod groq;
+mod llamacpp;
 mod lmstudio;
 mod mistral;
 mod moonshot;
@@ -169,6 +170,7 @@ pub fn adapter_for(credential: &ProviderCredential) -> Box<dyn ProviderAdapter +
         "custom" => Box::new(custom::CustomGenericAdapter::new(credential)),
         "custom-anthropic" => Box::new(custom_anthropic::CustomAnthropicAdapter::new(credential)),
         "ollama" => Box::new(ollama::OllamaAdapter),
+        "llamacpp" => Box::new(llamacpp::LlamaCppAdapter),
         "lmstudio" => Box::new(lmstudio::LMStudioAdapter),
         "chutes" | "chutes.ai" => Box::new(chutes::ChutesAdapter),
         "anthropic" => Box::new(anthropic::AnthropicAdapter),

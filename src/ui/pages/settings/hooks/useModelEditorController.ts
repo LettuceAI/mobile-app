@@ -67,6 +67,24 @@ export function useModelEditorController(): ControllerReturn {
     (_: ProviderCapabilitiesCamel[], a: ProviderCapabilitiesCamel[]) => a,
     [],
   );
+  const localProvider = useMemo<ProviderCredential>(
+    () => ({
+      id: "local-llamacpp",
+      providerId: "llamacpp",
+      label: "llama.cpp (Local)",
+      apiKey: "",
+    }),
+    [],
+  );
+
+  const ensureLocalProvider = useCallback(
+    (providers: ProviderCredential[]) => {
+      const hasLocal = providers.some((p) => p.providerId === localProvider.providerId);
+      if (hasLocal) return providers;
+      return providers.length === 0 ? [localProvider] : [...providers, localProvider];
+    },
+    [localProvider],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -91,7 +109,7 @@ export function useModelEditorController(): ControllerReturn {
       dispatch({ type: "set_error", payload: null });
       try {
         const settings = await readSettings();
-        const providers = settings.providerCredentials;
+        const providers = ensureLocalProvider(settings.providerCredentials);
         const defaultModelId = settings.defaultModelId ?? null;
 
         // Use a standard default if no settings exist
@@ -168,10 +186,13 @@ export function useModelEditorController(): ControllerReturn {
     return () => {
       cancelled = true;
     };
-  }, [isNew, modelId, toModelsList]);
+  }, [ensureLocalProvider, isNew, modelId, toModelsList]);
 
   const providerDisplay = useMemo(() => {
     return (prov: ProviderCredential) => {
+      if (prov.providerId === "llamacpp") {
+        return prov.label;
+      }
       const cap = capabilities.find((p) => p.id === prov.providerId);
       return `${prov.label} (${cap?.name || prov.providerId})`;
     };
@@ -519,6 +540,10 @@ export function useModelEditorController(): ControllerReturn {
   const fetchModels = useCallback(async () => {
     const { editorModel, providers } = state;
     if (!editorModel) return;
+    if (editorModel.providerId === "llamacpp") {
+      dispatch({ type: "set_fetched_models", payload: [] });
+      return;
+    }
 
     const providerCred =
       providers.find(

@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::abort_manager::AbortRegistry;
+use crate::llama_cpp;
 use crate::serde_utils::truncate_for_log;
 use crate::transport;
 use crate::utils::{log_error, log_info};
@@ -45,6 +46,10 @@ impl ApiResponse {
 #[tauri::command]
 pub async fn api_request(app: tauri::AppHandle, req: ApiRequest) -> Result<ApiResponse, String> {
     log_info(&app, "api_request", "started");
+
+    if llama_cpp::is_llama_cpp(req.provider_id.as_deref()) {
+        return llama_cpp::handle_local_request(app, req).await;
+    }
 
     let client = match transport::build_client(req.timeout_ms) {
         Ok(c) => c,

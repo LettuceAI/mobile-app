@@ -7,7 +7,11 @@ import {
   removeProviderCredential,
   SETTINGS_UPDATED_EVENT,
 } from "../../../../core/storage/repo";
-import { getProviderCapabilities, toCamel, type ProviderCapabilitiesCamel } from "../../../../core/providers/capabilities";
+import {
+  getProviderCapabilities,
+  toCamel,
+  type ProviderCapabilitiesCamel,
+} from "../../../../core/providers/capabilities";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
 import {
   initialProvidersPageState,
@@ -37,22 +41,23 @@ type ControllerReturn = {
 };
 
 export function useProvidersPageController(): ControllerReturn {
-  const [state, dispatch] = useReducer(
-    providersPageReducer,
-    initialProvidersPageState,
-  );
+  const [state, dispatch] = useReducer(providersPageReducer, initialProvidersPageState);
 
   const reload = useCallback(async () => {
     const settings = await readSettings();
-    console.log("[ProvidersPage] Loaded providers from storage:",
-      settings.providerCredentials.map(p => ({
+    console.log(
+      "[ProvidersPage] Loaded providers from storage:",
+      settings.providerCredentials.map((p) => ({
         id: p.id,
         label: p.label,
         baseUrl: p.baseUrl,
         providerId: p.providerId,
-      }))
+      })),
     );
-    dispatch({ type: "set_providers", payload: settings.providerCredentials });
+    const visibleProviders = settings.providerCredentials.filter(
+      (provider) => provider.providerId !== "llamacpp",
+    );
+    dispatch({ type: "set_providers", payload: visibleProviders });
   }, []);
 
   useEffect(() => {
@@ -72,7 +77,9 @@ export function useProvidersPageController(): ControllerReturn {
         console.warn("[ProvidersPage] Failed to load provider capabilities", e);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -83,36 +90,33 @@ export function useProvidersPageController(): ControllerReturn {
     return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
   }, [reload]);
 
-  const openEditor = useCallback(
-    (provider?: ProviderCredential) => {
-      const newId = provider?.id ?? crypto.randomUUID();
-      const firstCap: ProviderCapabilitiesCamel | undefined = state.capabilities[0];
-      const baseProvider: ProviderCredential = provider
-        ? { ...provider }
-        : ({
+  const openEditor = useCallback((provider?: ProviderCredential) => {
+    const newId = provider?.id ?? crypto.randomUUID();
+    const firstCap: ProviderCapabilitiesCamel | undefined = state.capabilities[0];
+    const baseProvider: ProviderCredential = provider
+      ? { ...provider }
+      : ({
           id: newId,
           providerId: firstCap?.id || "openai",
           label: "",
           apiKey: "",
         } as ProviderCredential);
 
-      console.log("[ProvidersPage] Opening editor with provider:", {
-        id: baseProvider.id,
-        label: baseProvider.label,
-        baseUrl: baseProvider.baseUrl,
-        providerId: baseProvider.providerId,
-      });
+    console.log("[ProvidersPage] Opening editor with provider:", {
+      id: baseProvider.id,
+      label: baseProvider.label,
+      baseUrl: baseProvider.baseUrl,
+      providerId: baseProvider.providerId,
+    });
 
-      dispatch({ type: "set_selected_provider", payload: null });
-      dispatch({
-        type: "open_editor",
-        payload: { provider: baseProvider, apiKey: "" },
-      });
+    dispatch({ type: "set_selected_provider", payload: null });
+    dispatch({
+      type: "open_editor",
+      payload: { provider: baseProvider, apiKey: "" },
+    });
 
-      dispatch({ type: "set_api_key", payload: provider?.apiKey || "" });
-    },
-    [],
-  );
+    dispatch({ type: "set_api_key", payload: provider?.apiKey || "" });
+  }, []);
 
   const closeEditor = useCallback(() => {
     dispatch({ type: "close_editor" });
@@ -130,12 +134,9 @@ export function useProvidersPageController(): ControllerReturn {
     dispatch({ type: "set_validation_error", payload: message });
   }, []);
 
-  const updateEditorProvider = useCallback(
-    (updates: Partial<ProviderCredential>) => {
-      dispatch({ type: "update_editor_provider", payload: updates });
-    },
-    [],
-  );
+  const updateEditorProvider = useCallback((updates: Partial<ProviderCredential>) => {
+    dispatch({ type: "update_editor_provider", payload: updates });
+  }, []);
 
   const handleSaveProvider = useCallback(async () => {
     const { editorProvider, apiKey } = state;
@@ -145,8 +146,11 @@ export function useProvidersPageController(): ControllerReturn {
     dispatch({ type: "set_is_saving", payload: true });
 
     try {
-      const isLocalProvider = ["custom", "custom-anthropic", "ollama", "lmstudio"].includes(editorProvider.providerId);
-      const requiresVerification = !isLocalProvider &&
+      const isLocalProvider = ["custom", "custom-anthropic", "ollama", "lmstudio"].includes(
+        editorProvider.providerId,
+      );
+      const requiresVerification =
+        !isLocalProvider &&
         ["chutes", "openai", "anthropic", "openrouter", "groq", "mistral"].includes(
           editorProvider.providerId,
         );
@@ -172,20 +176,16 @@ export function useProvidersPageController(): ControllerReturn {
 
         let verification: VerifyProviderApiKeyResult;
         try {
-          verification = await invoke<VerifyProviderApiKeyResult>(
-            "verify_provider_api_key",
-            {
-              providerId: editorProvider.providerId,
-              credentialId: editorProvider.id,
-              apiKey: trimmedKey,
-              baseUrl: editorProvider.baseUrl ?? null,
-            },
-          );
+          verification = await invoke<VerifyProviderApiKeyResult>("verify_provider_api_key", {
+            providerId: editorProvider.providerId,
+            credentialId: editorProvider.id,
+            apiKey: trimmedKey,
+            baseUrl: editorProvider.baseUrl ?? null,
+          });
         } catch (error) {
           dispatch({
             type: "set_validation_error",
-            payload:
-              error instanceof Error ? error.message : String(error),
+            payload: error instanceof Error ? error.message : String(error),
           });
           return;
         }

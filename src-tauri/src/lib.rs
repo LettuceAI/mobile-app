@@ -7,6 +7,7 @@ mod embedding_model;
 mod error;
 mod group_chat_manager;
 mod image_generator;
+mod llama_cpp;
 mod logger;
 pub mod migrations;
 pub mod models;

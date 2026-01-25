@@ -166,7 +166,9 @@ export function ProviderSetupPage() {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-white/70">API Key</label>
+          <label className="text-xs font-medium text-white/70">
+            API Key{isLocalProvider ? " (Optional)" : ""}
+          </label>
           <button
             onClick={() =>
               navigate(`/wheretofind${selectedProviderId ? `?provider=${selectedProviderId}` : ""}`)
@@ -180,7 +182,7 @@ export function ProviderSetupPage() {
           type="text"
           value={apiKey}
           onChange={(e) => handleApiKeyChange(e.target.value)}
-          placeholder="sk-..."
+          placeholder={isLocalProvider ? "Usually not required" : "sk-..."}
           className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
         />
         <p className="text-[11px] text-gray-500">Keys are encrypted locally</p>
