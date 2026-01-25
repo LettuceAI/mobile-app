@@ -50,7 +50,6 @@ export function EditCharacterPage() {
   const { characterId } = useParams();
   const { state, actions, computed } = useEditCharacterForm(characterId);
   const [expandedSceneId, setExpandedSceneId] = React.useState<string | null>(null);
-  const [directionExpanded, setDirectionExpanded] = React.useState(false);
 
   // Background image positioning state
   const [pendingBackgroundSrc, setPendingBackgroundSrc] = React.useState<string | null>(null);
@@ -105,9 +104,6 @@ export function EditCharacterPage() {
     editingSceneContent,
     editingSceneDirection,
   } = state;
-
-  // Show direction input if scene has a direction or user expanded it
-  const showDirectionInput = Boolean(editingSceneDirection) || directionExpanded;
 
   const {
     setFields,
@@ -1156,105 +1152,83 @@ export function EditCharacterPage() {
         </div>
       </div>
 
-      {/* Edit Scene Bottom Menu */}
-      <BottomMenu
-        isOpen={editingSceneId !== null}
-        onClose={() => {
-          cancelEditingScene();
-          setDirectionExpanded(false);
-        }}
-        title="Edit Scene"
-      >
-        <div className="space-y-4">
-          {/* Scene Content */}
-          <div>
-            <textarea
-              value={editingSceneContent}
-              onChange={(e) => setFields({ editingSceneContent: e.target.value })}
-              rows={10}
-              className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/20 focus:outline-none"
-              placeholder="Enter scene content..."
-            />
-            <div className="mt-1 flex justify-end text-[11px] text-white/40">
-              {wordCount(editingSceneContent)} words
-            </div>
-          </div>
-
-          {/* Scene Direction */}
-          <div className="border-t border-white/10 pt-3">
-            {!showDirectionInput ? (
-              <button
-                type="button"
-                onClick={() => setDirectionExpanded(true)}
-                className="flex w-full items-center justify-between py-1"
-              >
-                <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
-                  <EyeOff className="h-3 w-3" />
-                  Scene Direction
-                </span>
-                <span className="text-[11px] text-white/40">+ Add</span>
-              </button>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
-                    <EyeOff className="h-3 w-3" />
-                    Scene Direction
-                  </span>
-                  {!editingSceneDirection && (
-                    <button
-                      type="button"
-                      onClick={() => setDirectionExpanded(false)}
-                      className="text-[11px] text-white/40 hover:text-white/60"
-                    >
-                      Cancel
-                    </button>
+      {/* Edit Scene Fullscreen Panel */}
+      <AnimatePresence>
+        {editingSceneId !== null && (
+          <motion.div
+            className="fixed inset-0 z-50 flex h-full flex-col bg-black/90 backdrop-blur-sm"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div className="text-base font-semibold text-white">Edit Scene</div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={cancelEditingScene}
+                  className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEditedScene}
+                  disabled={!editingSceneContent.trim()}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-semibold text-white transition",
+                    "bg-linear-to-r from-emerald-500 to-green-500",
+                    "hover:from-emerald-400 hover:to-green-400",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
                   )}
-                </div>
-                <textarea
-                  value={editingSceneDirection}
-                  onChange={(e) => setFields({ editingSceneDirection: e.target.value })}
-                  rows={2}
-                  className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-white/20 focus:outline-none"
-                  placeholder="e.g., 'The hostage will be rescued' or 'Build tension gradually'"
-                />
-                <p className="text-[10px] text-white/30">
-                  Hidden guidance for the AI on how this scene should unfold
-                </p>
+                >
+                  Save
+                </button>
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={cancelEditingScene}
-              className={cn(
-                "flex-1 py-3 text-sm font-medium text-white/70 transition",
-                "border border-white/10 bg-white/5",
-                "hover:bg-white/10 hover:text-white",
-                "active:scale-[0.98]",
-                radius.lg,
-              )}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={saveEditedScene}
-              disabled={!editingSceneContent.trim()}
-              className={cn(
-                "flex-1 py-3 text-sm font-semibold text-white transition",
-                "bg-linear-to-r from-emerald-500 to-green-500",
-                "hover:from-emerald-400 hover:to-green-400",
-                "active:scale-[0.98]",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                radius.lg,
-              )}
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </BottomMenu>
+            <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-white/80">Scene</div>
+                  <textarea
+                    value={editingSceneContent}
+                    onChange={(e) => setFields({ editingSceneContent: e.target.value })}
+                    rows={14}
+                    className="min-h-[40vh] w-full resize-none rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/20 focus:outline-none"
+                    placeholder="Enter scene content..."
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-white/40">
+                    <span>{wordCount(editingSceneContent)} words</span>
+                    <span>
+                      Use <code className="text-emerald-300">{"{{char}}"}</code>,{" "}
+                      <code className="text-emerald-300">{"{{user}}"}</code>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-white/80">
+                    <EyeOff className="h-4 w-4 text-white/50" />
+                    Scene Direction
+                  </div>
+                  <textarea
+                    value={editingSceneDirection}
+                    onChange={(e) => setFields({ editingSceneDirection: e.target.value })}
+                    rows={6}
+                    className="min-h-[18vh] w-full resize-none rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-white/20 focus:outline-none"
+                    placeholder="e.g., 'The hostage will be rescued' or 'Build tension gradually'"
+                  />
+                  <p className="text-[11px] text-white/40">
+                    Hidden guidance for the AI on how this scene should unfold.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Background Upload Choice Menu */}
       <BottomMenu
