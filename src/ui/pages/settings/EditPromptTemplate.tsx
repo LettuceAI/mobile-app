@@ -1441,51 +1441,66 @@ export function EditPromptTemplate() {
         {selectedMobileEntry ? (
           <div className="space-y-3">
             <div className="grid gap-2">
-              <select
-                value={selectedMobileEntry.role}
-                onChange={(event) =>
-                  handleEntryUpdate(selectedMobileEntry.id, {
-                    role: event.target.value as any,
-                  })
-                }
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
-              >
-                {ENTRY_ROLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedMobileEntry.injectionPosition}
-                onChange={(event) =>
-                  handleEntryUpdate(selectedMobileEntry.id, {
-                    injectionPosition: event.target.value as any,
-                  })
-                }
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
-              >
-                {ENTRY_POSITION_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              {selectedMobileEntry.injectionPosition === "inChat" && (
-                <input
-                  type="number"
-                  min={0}
-                  value={selectedMobileEntry.injectionDepth}
+              <div className="space-y-1">
+                <select
+                  value={selectedMobileEntry.role}
                   onChange={(event) =>
                     handleEntryUpdate(selectedMobileEntry.id, {
-                      injectionDepth: Number(event.target.value),
+                      role: event.target.value as any,
                     })
                   }
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
-                  placeholder="Depth"
-                />
+                >
+                  {ENTRY_ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-white/50">
+                  Select which role the model receives for this entry.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <select
+                  value={selectedMobileEntry.injectionPosition}
+                  onChange={(event) =>
+                    handleEntryUpdate(selectedMobileEntry.id, {
+                      injectionPosition: event.target.value as any,
+                    })
+                  }
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                >
+                  {ENTRY_POSITION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-white/50">
+                  Relative adds before chat, in-chat places inside history.
+                </p>
+              </div>
+
+              {selectedMobileEntry.injectionPosition === "inChat" && (
+                <div className="space-y-1">
+                  <input
+                    type="number"
+                    min={0}
+                    value={selectedMobileEntry.injectionDepth}
+                    onChange={(event) =>
+                      handleEntryUpdate(selectedMobileEntry.id, {
+                        injectionDepth: Number(event.target.value),
+                      })
+                    }
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                    placeholder="Depth"
+                  />
+                  <p className="text-[11px] text-white/50">
+                    Depth 0 is newest; higher numbers insert earlier.
+                  </p>
+                </div>
               )}
             </div>
 
