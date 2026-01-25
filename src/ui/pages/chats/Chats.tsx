@@ -9,6 +9,7 @@ import {
   createSession,
   listSessionPreviews,
   archiveSession,
+  SESSION_UPDATED_EVENT,
   deleteCharacter,
 } from "../../../core/storage/repo";
 import type { Character } from "../../../core/storage/schemas";
@@ -34,7 +35,7 @@ export function ChatPage() {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<Character | null>(null);
   const [latestSessionByCharacter, setLatestSessionByCharacter] = useState<
-    Record<string, { id: string; updatedAt: number }>
+    Record<string, { id: string; updatedAt: number; archived: boolean }>
   >({});
   const [hiding, setHiding] = useState(false);
   const navigate = useNavigate();
@@ -45,35 +46,36 @@ export function ChatPage() {
         listCharacters(),
         listSessionPreviews().catch(() => []),
       ]);
-      const latestUnarchivedByCharacter: Record<string, { id: string; updatedAt: number }> = {};
+      const latestByCharacter: Record<
+        string,
+        { id: string; updatedAt: number; archived: boolean }
+      > = {};
       const charactersWithSessions = new Set<string>();
 
       previews.forEach((preview) => {
         charactersWithSessions.add(preview.characterId);
-        if (preview.archived) return;
-        const current = latestUnarchivedByCharacter[preview.characterId];
+        const current = latestByCharacter[preview.characterId];
         if (!current || preview.updatedAt > current.updatedAt) {
-          latestUnarchivedByCharacter[preview.characterId] = {
+          latestByCharacter[preview.characterId] = {
             id: preview.id,
             updatedAt: preview.updatedAt,
+            archived: preview.archived,
           };
         }
       });
 
       const visible = list.filter((character) => {
         if (!charactersWithSessions.has(character.id)) return true;
-        return Boolean(latestUnarchivedByCharacter[character.id]);
+        return !latestByCharacter[character.id]?.archived;
       });
 
       const sorted = [...visible].sort((a, b) => {
-        const aTime =
-          latestUnarchivedByCharacter[a.id]?.updatedAt ?? a.updatedAt ?? a.createdAt ?? 0;
-        const bTime =
-          latestUnarchivedByCharacter[b.id]?.updatedAt ?? b.updatedAt ?? b.createdAt ?? 0;
+        const aTime = latestByCharacter[a.id]?.updatedAt ?? a.updatedAt ?? a.createdAt ?? 0;
+        const bTime = latestByCharacter[b.id]?.updatedAt ?? b.updatedAt ?? b.createdAt ?? 0;
         return bTime - aTime;
       });
 
-      setLatestSessionByCharacter(latestUnarchivedByCharacter);
+      setLatestSessionByCharacter(latestByCharacter);
       setCharacters(sorted);
     } catch (err) {
       console.error("Failed to load characters:", err);
@@ -98,8 +100,14 @@ export function ChatPage() {
       });
     })();
 
+    const handleSessionUpdated = () => {
+      loadCharacters();
+    };
+    window.addEventListener(SESSION_UPDATED_EVENT, handleSessionUpdated);
+
     return () => {
       if (unlisten) unlisten();
+      window.removeEventListener(SESSION_UPDATED_EVENT, handleSessionUpdated);
     };
   }, []);
 
