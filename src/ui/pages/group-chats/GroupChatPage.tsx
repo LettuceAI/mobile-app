@@ -36,6 +36,7 @@ import {
   isImageLight,
   type ThemeColors,
 } from "../../../core/utils/imageAnalysis";
+import { splitThinkTags } from "../../../core/utils/thinkTags";
 
 import { Routes } from "../../navigation";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
@@ -1058,28 +1059,35 @@ export function GroupChatPage() {
               </div>
             ) : (
               <AnimatePresence initial={false}>
-                {messages.map((message, index) => (
-                  <GroupChatMessage
-                    key={message.id}
-                    message={message}
-                    index={index}
-                    messagesLength={messages.length}
-                    heldMessageId={heldMessageId}
-                    regeneratingMessageId={regeneratingMessageId}
-                    sending={sending}
-                    character={getCharacterById(message.speakerCharacterId)}
-                    persona={currentPersona}
-                    characters={groupCharacters}
-                    theme={theme}
-                    getVariantState={getVariantState}
-                    handleVariantDrag={handleVariantDrag}
-                    handleRegenerate={async (msg) => {
-                      await handleRegenerate(msg.id);
-                    }}
-                    onLongPress={(msg) => openMessageActions(msg)}
-                    reasoning={message.reasoning ?? undefined}
-                  />
-                ))}
+                {messages.map((message, index) => {
+                  const parsed = splitThinkTags(message.content);
+                  const combinedReasoning = [message.reasoning ?? "", parsed.reasoning]
+                    .filter(Boolean)
+                    .join("\n");
+                  return (
+                    <GroupChatMessage
+                      key={message.id}
+                      message={message}
+                      index={index}
+                      messagesLength={messages.length}
+                      heldMessageId={heldMessageId}
+                      regeneratingMessageId={regeneratingMessageId}
+                      sending={sending}
+                      character={getCharacterById(message.speakerCharacterId)}
+                      persona={currentPersona}
+                      characters={groupCharacters}
+                      theme={theme}
+                      getVariantState={getVariantState}
+                      handleVariantDrag={handleVariantDrag}
+                      handleRegenerate={async (msg) => {
+                        await handleRegenerate(msg.id);
+                      }}
+                      onLongPress={(msg) => openMessageActions(msg)}
+                      displayContent={parsed.content}
+                      reasoning={combinedReasoning || undefined}
+                    />
+                  );
+                })}
               </AnimatePresence>
             )}
 

@@ -52,6 +52,7 @@ import { playAccessibilitySound } from "../../../core/utils/accessibilityAudio";
 
 import { useChatController } from "./hooks/useChatController";
 import { replacePlaceholders } from "../../../core/utils/placeholders";
+import { splitThinkTags } from "../../../core/utils/thinkTags";
 import {
   ChatHeader,
   ChatFooter,
@@ -1288,7 +1289,11 @@ export function ChatConversationPage() {
             // Replace placeholders for display only
             const charName = character?.name ?? "";
             const personaName = chatController.persona?.title ?? "";
-            const displayContent = replacePlaceholders(message.content, charName, personaName);
+            const parsed = splitThinkTags(message.content);
+            const displayContent = replacePlaceholders(parsed.content, charName, personaName);
+            const combinedReasoning = [message.reasoning ?? "", parsed.reasoning]
+              .filter(Boolean)
+              .join("\n");
             const eventHandlers = actionable
               ? {
                   onMouseDown: handlePressStart(message),
@@ -1331,7 +1336,7 @@ export function ChatConversationPage() {
                   onStopAudio={handleStopAudio}
                   onCancelAudio={handleCancelAudio}
                   onImageClick={handleImageClick}
-                  reasoning={streamingReasoning[message.id] || (message.reasoning ?? undefined)}
+                  reasoning={streamingReasoning[message.id] || combinedReasoning || undefined}
                 />
               </div>
             );

@@ -116,6 +116,20 @@ pub(crate) fn log_debug(app: &AppHandle, component: &str, message: impl AsRef<st
     log_backend(app, component, LogLevel::Debug, message);
 }
 
+pub fn emit_toast(
+    app: &AppHandle,
+    variant: &str,
+    title: impl AsRef<str>,
+    description: Option<String>,
+) {
+    let payload = json!({
+        "variant": variant,
+        "title": title.as_ref(),
+        "description": description,
+    });
+    let _ = app.emit("app://toast", payload);
+}
+
 pub(crate) fn app_version(app: &AppHandle) -> String {
     app.package_info().version.to_string()
 }

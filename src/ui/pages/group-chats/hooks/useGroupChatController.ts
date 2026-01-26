@@ -11,6 +11,11 @@ import type {
   Character,
   Persona,
 } from "../../../../core/storage/schemas";
+import {
+  consumeThinkDelta,
+  createThinkStreamState,
+  finalizeThinkStream,
+} from "../../../../core/utils/thinkTags";
 import type { VariantState } from "../components";
 import {
   groupChatUiReducer,
@@ -251,6 +256,7 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
     scrollToBottom();
 
     let unlistenNormalized: (() => void) | null = null;
+    const thinkState = createThinkStreamState();
 
     try {
       unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
@@ -259,13 +265,23 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
             typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
 
           if (payload && payload.type === "delta" && payload.data?.text) {
-            setMessages((prev) => {
-              return prev.map((m) =>
-                m.id === assistantPlaceholderId
-                  ? { ...m, content: m.content + String(payload.data.text) }
-                  : m,
-              );
-            });
+            const { content, reasoning } = consumeThinkDelta(thinkState, String(payload.data.text));
+            if (content) {
+              setMessages((prev) => {
+                return prev.map((m) =>
+                  m.id === assistantPlaceholderId ? { ...m, content: m.content + content } : m,
+                );
+              });
+            }
+            if (reasoning) {
+              setMessages((prev) => {
+                return prev.map((m) =>
+                  m.id === assistantPlaceholderId
+                    ? { ...m, reasoning: (m.reasoning || "") + reasoning }
+                    : m,
+                );
+              });
+            }
           } else if (payload && payload.type === "reasoning" && payload.data?.text) {
             setMessages((prev) => {
               return prev.map((m) =>
@@ -302,6 +318,23 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
         prev.filter((m) => m.id !== userPlaceholderId && m.id !== assistantPlaceholderId),
       );
     } finally {
+      const tail = finalizeThinkStream(thinkState);
+      if (tail.content) {
+        setMessages((prev) => {
+          return prev.map((m) =>
+            m.id === assistantPlaceholderId ? { ...m, content: m.content + tail.content } : m,
+          );
+        });
+      }
+      if (tail.reasoning) {
+        setMessages((prev) => {
+          return prev.map((m) =>
+            m.id === assistantPlaceholderId
+              ? { ...m, reasoning: (m.reasoning || "") + tail.reasoning }
+              : m,
+          );
+        });
+      }
       if (unlistenNormalized) unlistenNormalized();
       assistantPlaceholderIdRef.current = null;
       setUi({
@@ -326,6 +359,7 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
       );
 
       let unlistenNormalized: (() => void) | null = null;
+      const thinkState = createThinkStreamState();
 
       try {
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
@@ -334,11 +368,24 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
               typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
 
             if (payload && payload.type === "delta" && payload.data?.text) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === messageId ? { ...m, content: m.content + String(payload.data.text) } : m,
-                ),
+              const { content, reasoning } = consumeThinkDelta(
+                thinkState,
+                String(payload.data.text),
               );
+              if (content) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === messageId ? { ...m, content: m.content + content } : m,
+                  ),
+                );
+              }
+              if (reasoning) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === messageId ? { ...m, reasoning: (m.reasoning || "") + reasoning } : m,
+                  ),
+                );
+              }
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -377,6 +424,19 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
         );
         setMessages(updatedMessages);
       } finally {
+        const tail = finalizeThinkStream(thinkState);
+        if (tail.content) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? { ...m, content: m.content + tail.content } : m)),
+          );
+        }
+        if (tail.reasoning) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId ? { ...m, reasoning: (m.reasoning || "") + tail.reasoning } : m,
+            ),
+          );
+        }
         if (unlistenNormalized) unlistenNormalized();
         setUi({ regeneratingMessageId: null });
       }
@@ -415,6 +475,7 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
       scrollToBottom();
 
       let unlistenNormalized: (() => void) | null = null;
+      const thinkState = createThinkStreamState();
 
       try {
         unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
@@ -423,13 +484,26 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
               typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
 
             if (payload && payload.type === "delta" && payload.data?.text) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantPlaceholderId
-                    ? { ...m, content: m.content + String(payload.data.text) }
-                    : m,
-                ),
+              const { content, reasoning } = consumeThinkDelta(
+                thinkState,
+                String(payload.data.text),
               );
+              if (content) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantPlaceholderId ? { ...m, content: m.content + content } : m,
+                  ),
+                );
+              }
+              if (reasoning) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantPlaceholderId
+                      ? { ...m, reasoning: (m.reasoning || "") + reasoning }
+                      : m,
+                  ),
+                );
+              }
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -463,6 +537,23 @@ export function useGroupChatController(groupSessionId?: string): GroupChatContro
         setUi({ error: err instanceof Error ? err.message : "Failed to continue" });
         setMessages((prev) => prev.filter((m) => m.id !== assistantPlaceholderId));
       } finally {
+        const tail = finalizeThinkStream(thinkState);
+        if (tail.content) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantPlaceholderId ? { ...m, content: m.content + tail.content } : m,
+            ),
+          );
+        }
+        if (tail.reasoning) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantPlaceholderId
+                ? { ...m, reasoning: (m.reasoning || "") + tail.reasoning }
+                : m,
+            ),
+          );
+        }
         if (unlistenNormalized) unlistenNormalized();
         assistantPlaceholderIdRef.current = null;
         setUi({

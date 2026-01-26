@@ -6,7 +6,8 @@ use tauri::AppHandle;
 use crate::api::{ApiRequest, ApiResponse};
 use crate::chat_manager::types::{ErrorEnvelope, NormalizedEvent, UsageSummary};
 use crate::transport;
-use crate::utils::{log_error, log_info};
+#[cfg(not(mobile))]
+use crate::utils::{emit_toast, log_error, log_info, log_warn};
 
 const LOCAL_PROVIDER_ID: &str = "llamacpp";
 
@@ -41,7 +42,10 @@ mod desktop {
 
     static ENGINE: OnceLock<Mutex<LlamaState>> = OnceLock::new();
 
-    fn load_engine(model_path: &str) -> Result<std::sync::MutexGuard<'static, LlamaState>, String> {
+    fn load_engine(
+        app: Option<&AppHandle>,
+        model_path: &str,
+    ) -> Result<std::sync::MutexGuard<'static, LlamaState>, String> {
         let engine = ENGINE.get_or_init(|| {
             Mutex::new(LlamaState {
                 backend: None,
@@ -63,13 +67,44 @@ mod desktop {
 
         let should_reload = guard.model_path.as_deref() != Some(model_path);
         if guard.model.is_none() || should_reload {
-            let params = LlamaModelParams::default();
             let backend = guard
                 .backend
                 .as_ref()
                 .ok_or_else(|| "llama.cpp backend unavailable".to_string())?;
-            let model = LlamaModel::load_from_file(backend, model_path, &params)
-                .map_err(|e| format!("Failed to load llama model: {e}"))?;
+            let supports_gpu = backend.supports_gpu_offload();
+            let gpu_params = LlamaModelParams::default().with_n_gpu_layers(u32::MAX);
+            let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
+
+            let model = if supports_gpu {
+                match LlamaModel::load_from_file(backend, model_path, &gpu_params) {
+                    Ok(model) => model,
+                    Err(err) => {
+                        if let Some(app) = app {
+                            log_warn(
+                                app,
+                                "llama_cpp",
+                                format!("GPU model load failed, falling back to CPU: {err}"),
+                            );
+                            emit_toast(
+                                app,
+                                "warning",
+                                "GPU memory is insufficient for this model",
+                                Some(
+                                    "Falling back to CPU + RAM. Performance may be slower."
+                                        .to_string(),
+                                ),
+                            );
+                        }
+                        LlamaModel::load_from_file(backend, model_path, &cpu_params).map_err(
+                            |e| format!("Failed to load llama model with CPU fallback: {e}"),
+                        )?
+                    }
+                }
+            } else {
+                LlamaModel::load_from_file(backend, model_path, &cpu_params)
+                    .map_err(|e| format!("Failed to load llama model: {e}"))?
+            };
+
             guard.model = Some(model);
             guard.model_path = Some(model_path.to_string());
         }
@@ -237,7 +272,7 @@ mod desktop {
     }
 
     pub async fn llamacpp_context_info(
-        _app: AppHandle,
+        app: AppHandle,
         model_path: String,
     ) -> Result<LlamaCppContextInfo, String> {
         if model_path.trim().is_empty() {
@@ -247,7 +282,7 @@ mod desktop {
             return Err(format!("llama.cpp model path not found: {}", model_path));
         }
 
-        let engine = load_engine(&model_path)?;
+        let engine = load_engine(Some(&app), &model_path)?;
         let model = engine
             .model
             .as_ref()
@@ -326,7 +361,7 @@ mod desktop {
         let mut completion_tokens = 0u64;
 
         let result = (|| -> Result<(), String> {
-            let engine = load_engine(model_path)?;
+            let engine = load_engine(Some(&app), model_path)?;
             let model = engine
                 .model
                 .as_ref()

@@ -38,6 +38,7 @@ import {
   SearchMessagesPage,
 } from "./ui/pages/chats";
 import { ThemeProvider } from "./core/theme/ThemeContext";
+import { toast } from "./ui/components/toast";
 import {
   CreateCharacterPage,
   EditCharacterPage,
@@ -137,6 +138,45 @@ function App() {
         });
       } catch (err) {
         console.error("Failed to attach debug listener:", err);
+      }
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+    (async () => {
+      try {
+        unlisten = await listen("app://toast", (event) => {
+          const payload = event.payload as Record<string, unknown> | null;
+          if (!payload || typeof payload !== "object") {
+            return;
+          }
+          const variant = payload.variant;
+          const title = payload.title;
+          const description = payload.description;
+          if (typeof title !== "string") {
+            return;
+          }
+          const detail = typeof description === "string" ? description : undefined;
+          switch (variant) {
+            case "success":
+              toast.success(title, detail);
+              break;
+            case "warning":
+              toast.warning(title, detail);
+              break;
+            case "error":
+              toast.error(title, detail);
+              break;
+            default:
+              toast.info(title, detail);
+          }
+        });
+      } catch (err) {
+        console.error("Failed to attach toast listener:", err);
       }
     })();
     return () => {

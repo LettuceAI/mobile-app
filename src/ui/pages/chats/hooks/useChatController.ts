@@ -41,6 +41,11 @@ import type { GeneratedImage } from "../../../../core/image-generation";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { type as getPlatform } from "@tauri-apps/plugin-os";
 import { impactFeedback } from "@tauri-apps/plugin-haptics";
+import {
+  consumeThinkDelta,
+  createThinkStreamState,
+  finalizeThinkStream,
+} from "../../../../core/utils/thinkTags";
 
 const INITIAL_MESSAGE_LIMIT = 50;
 const OLDER_MESSAGE_PAGE = 50;
@@ -956,6 +961,7 @@ export function useChatController(
 
       let unlistenNormalized: UnlistenFn | null = null;
       const streamBatcher = createStreamBatcher(dispatch);
+      const thinkState = createThinkStreamState();
 
       try {
         // Only use normalized provider-agnostic stream
@@ -964,8 +970,25 @@ export function useChatController(
             const payload =
               typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
-              streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
-              void triggerTypingHaptic();
+              const { content, reasoning } = consumeThinkDelta(
+                thinkState,
+                String(payload.data.text),
+              );
+              if (content) {
+                streamBatcher.update(assistantPlaceholder.id, content);
+              }
+              if (reasoning) {
+                dispatch({
+                  type: "UPDATE_MESSAGE_REASONING",
+                  payload: {
+                    messageId: assistantPlaceholder.id,
+                    reasoning,
+                  },
+                });
+              }
+              if (content || reasoning) {
+                void triggerTypingHaptic();
+              }
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
@@ -1022,6 +1045,19 @@ export function useChatController(
         messagesRef.current = cleaned;
         dispatch({ type: "SET_MESSAGES", payload: cleaned });
       } finally {
+        const tail = finalizeThinkStream(thinkState);
+        if (tail.content) {
+          dispatch({
+            type: "UPDATE_MESSAGE_CONTENT",
+            payload: { messageId: assistantPlaceholder.id, content: tail.content },
+          });
+        }
+        if (tail.reasoning) {
+          dispatch({
+            type: "UPDATE_MESSAGE_REASONING",
+            payload: { messageId: assistantPlaceholder.id, reasoning: tail.reasoning },
+          });
+        }
         streamBatcher.cancel();
         if (unlistenNormalized) unlistenNormalized();
         dispatch({
@@ -1059,6 +1095,7 @@ export function useChatController(
 
     let unlistenNormalized: UnlistenFn | null = null;
     const streamBatcher = createStreamBatcher(dispatch);
+    const thinkState = createThinkStreamState();
 
     try {
       // Only use normalized provider-agnostic stream
@@ -1067,8 +1104,19 @@ export function useChatController(
           const payload =
             typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
           if (payload && payload.type === "delta" && payload.data?.text) {
-            streamBatcher.update(assistantPlaceholder.id, String(payload.data.text));
-            void triggerTypingHaptic();
+            const { content, reasoning } = consumeThinkDelta(thinkState, String(payload.data.text));
+            if (content) {
+              streamBatcher.update(assistantPlaceholder.id, content);
+            }
+            if (reasoning) {
+              dispatch({
+                type: "UPDATE_MESSAGE_REASONING",
+                payload: { messageId: assistantPlaceholder.id, reasoning },
+              });
+            }
+            if (content || reasoning) {
+              void triggerTypingHaptic();
+            }
           } else if (payload && payload.type === "reasoning" && payload.data?.text) {
             dispatch({
               type: "UPDATE_MESSAGE_REASONING",
@@ -1123,6 +1171,19 @@ export function useChatController(
         dispatch({ type: "SET_MESSAGES", payload: cleaned });
       }
     } finally {
+      const tail = finalizeThinkStream(thinkState);
+      if (tail.content) {
+        dispatch({
+          type: "UPDATE_MESSAGE_CONTENT",
+          payload: { messageId: assistantPlaceholder.id, content: tail.content },
+        });
+      }
+      if (tail.reasoning) {
+        dispatch({
+          type: "UPDATE_MESSAGE_REASONING",
+          payload: { messageId: assistantPlaceholder.id, reasoning: tail.reasoning },
+        });
+      }
       streamBatcher.cancel();
       if (unlistenNormalized) unlistenNormalized();
       dispatch({
@@ -1181,6 +1242,7 @@ export function useChatController(
       });
 
       const streamBatcher = createStreamBatcher(dispatch);
+      const thinkState = createThinkStreamState();
 
       try {
         // Only use normalized provider-agnostic stream
@@ -1189,8 +1251,22 @@ export function useChatController(
             const payload =
               typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
             if (payload && payload.type === "delta" && payload.data?.text) {
-              streamBatcher.update(message.id, String(payload.data.text));
-              void triggerTypingHaptic();
+              const { content, reasoning } = consumeThinkDelta(
+                thinkState,
+                String(payload.data.text),
+              );
+              if (content) {
+                streamBatcher.update(message.id, content);
+              }
+              if (reasoning) {
+                dispatch({
+                  type: "UPDATE_MESSAGE_REASONING",
+                  payload: { messageId: message.id, reasoning },
+                });
+              }
+              if (content || reasoning) {
+                void triggerTypingHaptic();
+              }
             } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
@@ -1253,6 +1329,19 @@ export function useChatController(
           dispatch({ type: "SET_MESSAGES", payload: ordered });
         }
       } finally {
+        const tail = finalizeThinkStream(thinkState);
+        if (tail.content) {
+          dispatch({
+            type: "UPDATE_MESSAGE_CONTENT",
+            payload: { messageId: message.id, content: tail.content },
+          });
+        }
+        if (tail.reasoning) {
+          dispatch({
+            type: "UPDATE_MESSAGE_REASONING",
+            payload: { messageId: message.id, reasoning: tail.reasoning },
+          });
+        }
         streamBatcher.cancel();
         if (unlistenNormalized) unlistenNormalized();
         dispatch({
