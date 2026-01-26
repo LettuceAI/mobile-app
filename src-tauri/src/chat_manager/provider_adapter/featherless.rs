@@ -52,7 +52,7 @@ impl ProviderAdapter for FeatherlessAdapter {
             .or_insert_with(|| "LettuceAI/0.1".into());
         // Default attribution as recommended by Featherless
         out.entry("HTTP-Referer".into())
-            .or_insert_with(|| "https://lettuceai.app".into());
+            .or_insert_with(|| "https://www.lettuceai.app/".into());
         out.entry("X-Title".into())
             .or_insert_with(|| "LettuceAI".into());
 

@@ -68,7 +68,7 @@ impl ImageProviderAdapter for OpenRouterAdapter {
         let mut headers = HashMap::new();
         headers.insert("Authorization".into(), format!("Bearer {}", api_key));
         headers.insert("Content-Type".into(), "application/json".into());
-        headers.insert("HTTP-Referer".into(), "https://lettuceai.app".into());
+        headers.insert("HTTP-Referer".into(), "https://www.lettuceai.app/".into());
 
         if let Some(extra) = extra {
             for (k, v) in extra.iter() {
