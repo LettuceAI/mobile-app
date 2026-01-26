@@ -528,11 +528,9 @@ export function EditPromptTemplate() {
   const charCountColor =
     charCount > 8000 ? "text-red-400" : charCount > 5000 ? "text-amber-400" : "text-white/40";
 
-  const canSave =
-    name.trim().length > 0 &&
-    (usesEntryEditor
-      ? entries.some((entry) => entry.content.trim().length > 0)
-      : content.trim().length > 0);
+  const hasEntryContent = entries.some((entry) => entry.content.trim().length > 0);
+  const hasContent = content.trim().length > 0;
+  const canSave = name.trim().length > 0 && (hasEntryContent || hasContent);
 
   // Expose save state to TopNav via window globals
   useEffect(() => {
