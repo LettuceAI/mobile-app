@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -347,6 +348,155 @@ fn resolve_top_k(session: &Session, model: &Model, _settings: &Settings) -> Opti
                 .as_ref()
                 .and_then(|cfg| cfg.top_k)
         })
+}
+
+fn resolve_llama_gpu_layers(session: &Session, model: &Model, settings: &Settings) -> Option<u32> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_gpu_layers)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_gpu_layers)
+        })
+        .or(settings.advanced_model_settings.llama_gpu_layers)
+}
+
+fn resolve_llama_threads(session: &Session, model: &Model, settings: &Settings) -> Option<u32> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_threads)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_threads)
+        })
+        .or(settings.advanced_model_settings.llama_threads)
+}
+
+fn resolve_llama_threads_batch(
+    session: &Session,
+    model: &Model,
+    settings: &Settings,
+) -> Option<u32> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_threads_batch)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_threads_batch)
+        })
+        .or(settings.advanced_model_settings.llama_threads_batch)
+}
+
+fn resolve_llama_seed(session: &Session, model: &Model, settings: &Settings) -> Option<u32> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_seed)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_seed)
+        })
+        .or(settings.advanced_model_settings.llama_seed)
+}
+
+fn resolve_llama_rope_freq_base(
+    session: &Session,
+    model: &Model,
+    settings: &Settings,
+) -> Option<f64> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_rope_freq_base)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_rope_freq_base)
+        })
+        .or(settings.advanced_model_settings.llama_rope_freq_base)
+}
+
+fn resolve_llama_rope_freq_scale(
+    session: &Session,
+    model: &Model,
+    settings: &Settings,
+) -> Option<f64> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_rope_freq_scale)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_rope_freq_scale)
+        })
+        .or(settings.advanced_model_settings.llama_rope_freq_scale)
+}
+
+fn resolve_llama_offload_kqv(
+    session: &Session,
+    model: &Model,
+    settings: &Settings,
+) -> Option<bool> {
+    session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.llama_offload_kqv)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.llama_offload_kqv)
+        })
+        .or(settings.advanced_model_settings.llama_offload_kqv)
+}
+
+fn build_llama_extra_fields(
+    session: &Session,
+    model: &Model,
+    settings: &Settings,
+) -> Option<HashMap<String, Value>> {
+    let mut extra = HashMap::new();
+    if let Some(v) = resolve_llama_gpu_layers(session, model, settings) {
+        extra.insert("llamaGpuLayers".to_string(), json!(v));
+    }
+    if let Some(v) = resolve_llama_threads(session, model, settings) {
+        extra.insert("llamaThreads".to_string(), json!(v));
+    }
+    if let Some(v) = resolve_llama_threads_batch(session, model, settings) {
+        extra.insert("llamaThreadsBatch".to_string(), json!(v));
+    }
+    if let Some(v) = resolve_llama_seed(session, model, settings) {
+        extra.insert("llamaSeed".to_string(), json!(v));
+    }
+    if let Some(v) = resolve_llama_rope_freq_base(session, model, settings) {
+        extra.insert("llamaRopeFreqBase".to_string(), json!(v));
+    }
+    if let Some(v) = resolve_llama_rope_freq_scale(session, model, settings) {
+        extra.insert("llamaRopeFreqScale".to_string(), json!(v));
+    }
+    if let Some(v) = resolve_llama_offload_kqv(session, model, settings) {
+        extra.insert("llamaOffloadKqv".to_string(), json!(v));
+    }
+
+    if extra.is_empty() {
+        None
+    } else {
+        Some(extra)
+    }
 }
 
 fn resolve_reasoning_enabled(session: &Session, model: &Model, _settings: &Settings) -> bool {
@@ -894,6 +1044,11 @@ pub async fn chat_completion(
     let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
     let reasoning_budget =
         resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(&session, &model, &settings)
+    } else {
+        None
+    };
 
     log_info(
         &app,
@@ -929,6 +1084,7 @@ pub async fn chat_completion(
         reasoning_enabled,
         reasoning_effort,
         reasoning_budget,
+        llama_extra_fields,
     );
 
     log_info(
@@ -1559,6 +1715,11 @@ pub async fn chat_regenerate(
     let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
     let reasoning_budget =
         resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(&session, &model, &settings)
+    } else {
+        None
+    };
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -1579,6 +1740,7 @@ pub async fn chat_regenerate(
         reasoning_enabled,
         reasoning_effort,
         reasoning_budget,
+        llama_extra_fields,
     );
 
     emit_debug(
@@ -2088,6 +2250,11 @@ pub async fn chat_continue(
     let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
     let reasoning_budget =
         resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(&session, &model, &settings)
+    } else {
+        None
+    };
 
     let built = super::request_builder::build_chat_request(
         provider_cred,
@@ -2108,6 +2275,7 @@ pub async fn chat_continue(
         reasoning_enabled,
         reasoning_effort,
         reasoning_budget,
+        llama_extra_fields,
     );
 
     emit_debug(
@@ -3180,6 +3348,11 @@ async fn run_memory_tool_update(
     }));
 
     let context_length = resolve_context_length(session, model, settings);
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(session, model, settings)
+    } else {
+        None
+    };
     let built = super::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -3199,6 +3372,7 @@ async fn run_memory_tool_update(
         false,
         None,
         None,
+        llama_extra_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -3592,6 +3766,11 @@ async fn summarize_messages(
     }));
 
     let context_length = resolve_context_length(session, model, settings);
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(session, model, settings)
+    } else {
+        None
+    };
     let built = super::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -3611,6 +3790,7 @@ async fn summarize_messages(
         false,
         None,
         None,
+        llama_extra_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -3960,6 +4140,11 @@ pub async fn chat_generate_user_reply(
     ];
 
     let context_length = resolve_context_length(&session, model, settings);
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(&session, model, settings)
+    } else {
+        None
+    };
     let built = super::request_builder::build_chat_request(
         provider_cred,
         &api_key,
@@ -3979,6 +4164,7 @@ pub async fn chat_generate_user_reply(
         false,              // reasoning_enabled
         None,               // reasoning_effort
         None,               // reasoning_budget
+        llama_extra_fields,
     );
 
     log_info(

@@ -11,6 +11,12 @@ export const ADVANCED_FREQUENCY_PENALTY_RANGE = { min: -2, max: 2 };
 export const ADVANCED_PRESENCE_PENALTY_RANGE = { min: -2, max: 2 };
 export const ADVANCED_TOP_K_RANGE = { min: 1, max: 500 };
 export const ADVANCED_REASONING_BUDGET_RANGE = { min: 1024, max: 32768 };
+export const ADVANCED_LLAMA_GPU_LAYERS_RANGE = { min: 0, max: 512 };
+export const ADVANCED_LLAMA_THREADS_RANGE = { min: 1, max: 256 };
+export const ADVANCED_LLAMA_THREADS_BATCH_RANGE = { min: 1, max: 256 };
+export const ADVANCED_LLAMA_SEED_RANGE = { min: 0, max: 2_147_483_647 };
+export const ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE = { min: 0, max: 1_000_000 };
+export const ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE = { min: 0, max: 10 };
 
 function clampValue(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -41,6 +47,21 @@ export function sanitizeAdvancedModelSettings(input: AdvancedModelSettings): Adv
     frequencyPenalty: sanitize(input.frequencyPenalty, ADVANCED_FREQUENCY_PENALTY_RANGE, false),
     presencePenalty: sanitize(input.presencePenalty, ADVANCED_PRESENCE_PENALTY_RANGE, false),
     topK: sanitize(input.topK, ADVANCED_TOP_K_RANGE, true),
+    llamaGpuLayers: sanitize(input.llamaGpuLayers, ADVANCED_LLAMA_GPU_LAYERS_RANGE, true),
+    llamaThreads: sanitize(input.llamaThreads, ADVANCED_LLAMA_THREADS_RANGE, true),
+    llamaThreadsBatch: sanitize(input.llamaThreadsBatch, ADVANCED_LLAMA_THREADS_BATCH_RANGE, true),
+    llamaSeed: sanitize(input.llamaSeed, ADVANCED_LLAMA_SEED_RANGE, true),
+    llamaRopeFreqBase: sanitize(
+      input.llamaRopeFreqBase,
+      ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE,
+      false,
+    ),
+    llamaRopeFreqScale: sanitize(
+      input.llamaRopeFreqScale,
+      ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE,
+      false,
+    ),
+    llamaOffloadKqv: input.llamaOffloadKqv ?? null,
     reasoningEnabled: input.reasoningEnabled ?? null,
     reasoningEffort: input.reasoningEffort ?? null,
     reasoningBudgetTokens: sanitize(

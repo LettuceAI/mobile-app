@@ -37,6 +37,7 @@ mod desktop {
     struct LlamaState {
         backend: Option<LlamaBackend>,
         model_path: Option<String>,
+        model_params_key: Option<String>,
         model: Option<LlamaModel>,
     }
 
@@ -45,11 +46,13 @@ mod desktop {
     fn load_engine(
         app: Option<&AppHandle>,
         model_path: &str,
+        requested_gpu_layers: Option<u32>,
     ) -> Result<std::sync::MutexGuard<'static, LlamaState>, String> {
         let engine = ENGINE.get_or_init(|| {
             Mutex::new(LlamaState {
                 backend: None,
                 model_path: None,
+                model_params_key: None,
                 model: None,
             })
         });
@@ -65,14 +68,22 @@ mod desktop {
             );
         }
 
-        let should_reload = guard.model_path.as_deref() != Some(model_path);
-        if guard.model.is_none() || should_reload {
-            let backend = guard
-                .backend
-                .as_ref()
-                .ok_or_else(|| "llama.cpp backend unavailable".to_string())?;
-            let supports_gpu = backend.supports_gpu_offload();
-            let gpu_params = LlamaModelParams::default().with_n_gpu_layers(u32::MAX);
+        let backend = guard
+            .backend
+            .as_ref()
+            .ok_or_else(|| "llama.cpp backend unavailable".to_string())?;
+        let supports_gpu = backend.supports_gpu_offload();
+        let resolved_gpu_layers = if supports_gpu {
+            requested_gpu_layers.unwrap_or(u32::MAX)
+        } else {
+            0
+        };
+        let model_params_key = format!("gpu_layers={}", resolved_gpu_layers);
+        let should_reload = guard.model.is_none()
+            || guard.model_path.as_deref() != Some(model_path)
+            || guard.model_params_key.as_deref() != Some(&model_params_key);
+        if should_reload {
+            let gpu_params = LlamaModelParams::default().with_n_gpu_layers(resolved_gpu_layers);
             let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
 
             let model = if supports_gpu {
@@ -107,6 +118,7 @@ mod desktop {
 
             guard.model = Some(model);
             guard.model_path = Some(model_path.to_string());
+            guard.model_params_key = Some(model_params_key);
         }
 
         Ok(guard)
@@ -117,6 +129,7 @@ mod desktop {
             Mutex::new(LlamaState {
                 backend: None,
                 model_path: None,
+                model_params_key: None,
                 model: None,
             })
         });
@@ -128,6 +141,7 @@ mod desktop {
         if guard.model.is_some() {
             guard.model = None;
             guard.model_path = None;
+            guard.model_params_key = None;
             log_info(app, "llama_cpp", "unloaded llama.cpp model");
         }
 
@@ -275,8 +289,26 @@ mod desktop {
         Ok(prompt)
     }
 
-    fn build_sampler(temperature: f64, top_p: f64, top_k: Option<u32>) -> LlamaSampler {
+    fn build_sampler(
+        temperature: f64,
+        top_p: f64,
+        top_k: Option<u32>,
+        frequency_penalty: Option<f64>,
+        presence_penalty: Option<f64>,
+        seed: Option<u32>,
+    ) -> LlamaSampler {
         let mut samplers = Vec::new();
+        let penalty_freq = frequency_penalty.unwrap_or(0.0);
+        let penalty_present = presence_penalty.unwrap_or(0.0);
+        if penalty_freq != 0.0 || penalty_present != 0.0 {
+            samplers.push(LlamaSampler::penalties(
+                -1,
+                1.0,
+                penalty_freq as f32,
+                penalty_present as f32,
+            ));
+        }
+
         let k = top_k.unwrap_or(40) as i32;
         samplers.push(LlamaSampler::top_k(k));
 
@@ -285,7 +317,7 @@ mod desktop {
 
         if temperature > 0.0 {
             samplers.push(LlamaSampler::temp(temperature as f32));
-            samplers.push(LlamaSampler::dist(rand::random::<u32>()));
+            samplers.push(LlamaSampler::dist(seed.unwrap_or_else(rand::random::<u32>)));
         } else {
             samplers.push(LlamaSampler::greedy());
         }
@@ -304,7 +336,7 @@ mod desktop {
             return Err(format!("llama.cpp model path not found: {}", model_path));
         }
 
-        let engine = load_engine(Some(&app), &model_path)?;
+        let engine = load_engine(Some(&app), &model_path, None)?;
         let model = engine
             .model
             .as_ref()
@@ -354,6 +386,48 @@ mod desktop {
             .or_else(|| body.get("max_completion_tokens"))
             .and_then(|v| v.as_u64())
             .unwrap_or(512) as u32;
+        let llama_gpu_layers = body
+            .get("llamaGpuLayers")
+            .or_else(|| body.get("llama_gpu_layers"))
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok());
+        let top_k = body
+            .get("top_k")
+            .or_else(|| body.get("topK"))
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0);
+        let frequency_penalty = body.get("frequency_penalty").and_then(|v| v.as_f64());
+        let presence_penalty = body.get("presence_penalty").and_then(|v| v.as_f64());
+        let llama_threads = body
+            .get("llamaThreads")
+            .or_else(|| body.get("llama_threads"))
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0);
+        let llama_threads_batch = body
+            .get("llamaThreadsBatch")
+            .or_else(|| body.get("llama_threads_batch"))
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0);
+        let llama_seed = body
+            .get("llamaSeed")
+            .or_else(|| body.get("llama_seed"))
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok());
+        let llama_rope_freq_base = body
+            .get("llamaRopeFreqBase")
+            .or_else(|| body.get("llama_rope_freq_base"))
+            .and_then(|v| v.as_f64());
+        let llama_rope_freq_scale = body
+            .get("llamaRopeFreqScale")
+            .or_else(|| body.get("llama_rope_freq_scale"))
+            .and_then(|v| v.as_f64());
+        let llama_offload_kqv = body
+            .get("llamaOffloadKqv")
+            .or_else(|| body.get("llama_offload_kqv"))
+            .and_then(|v| v.as_bool());
         let requested_context = body
             .get("context_length")
             .and_then(|v| v.as_u64())
@@ -383,7 +457,7 @@ mod desktop {
         let mut completion_tokens = 0u64;
 
         let result = (|| -> Result<(), String> {
-            let engine = load_engine(Some(&app), model_path)?;
+            let engine = load_engine(Some(&app), model_path, llama_gpu_layers)?;
             let model = engine
                 .model
                 .as_ref()
@@ -423,9 +497,24 @@ mod desktop {
             }
 
             let n_batch = ctx_size;
-            let ctx_params = LlamaContextParams::default()
+            let mut ctx_params = LlamaContextParams::default()
                 .with_n_ctx(NonZeroU32::new(ctx_size))
                 .with_n_batch(n_batch);
+            if let Some(n_threads) = llama_threads {
+                ctx_params = ctx_params.with_n_threads(n_threads as i32);
+            }
+            if let Some(n_threads_batch) = llama_threads_batch {
+                ctx_params = ctx_params.with_n_threads_batch(n_threads_batch as i32);
+            }
+            if let Some(offload) = llama_offload_kqv {
+                ctx_params = ctx_params.with_offload_kqv(offload);
+            }
+            if let Some(base) = llama_rope_freq_base {
+                ctx_params = ctx_params.with_rope_freq_base(base as f32);
+            }
+            if let Some(scale) = llama_rope_freq_scale {
+                ctx_params = ctx_params.with_rope_freq_scale(scale as f32);
+            }
             let mut ctx = model
                 .new_context(backend, ctx_params)
                 .map_err(|e| format!("Failed to create llama context: {e}"))?;
@@ -448,7 +537,14 @@ mod desktop {
             let mut n_cur = prompt_len;
             let max_new = max_tokens.min(ctx_size.saturating_sub(n_cur as u32 + 1));
 
-            let mut sampler = build_sampler(temperature, top_p, None);
+            let mut sampler = build_sampler(
+                temperature,
+                top_p,
+                top_k,
+                frequency_penalty,
+                presence_penalty,
+                llama_seed,
+            );
 
             let target_len = prompt_len + max_new as i32;
             while n_cur < target_len {

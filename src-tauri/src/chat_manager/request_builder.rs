@@ -37,6 +37,7 @@ pub fn build_chat_request(
     reasoning_enabled: bool,
     reasoning_effort: Option<String>,
     reasoning_budget: Option<u32>,
+    extra_body_fields: Option<HashMap<String, Value>>,
 ) -> BuiltRequest {
     let base_url = provider_base_url(provider_cred);
 
@@ -62,6 +63,12 @@ pub fn build_chat_request(
         reasoning_effort,
         reasoning_budget,
     );
+    let mut body = body;
+    if let (Some(extra), Some(map)) = (extra_body_fields, body.as_object_mut()) {
+        for (key, value) in extra {
+            map.insert(key, value);
+        }
+    }
 
     BuiltRequest {
         url,

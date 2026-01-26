@@ -11,6 +11,12 @@ import {
   ADVANCED_PRESENCE_PENALTY_RANGE,
   ADVANCED_TOP_K_RANGE,
   ADVANCED_REASONING_BUDGET_RANGE,
+  ADVANCED_LLAMA_GPU_LAYERS_RANGE,
+  ADVANCED_LLAMA_THREADS_RANGE,
+  ADVANCED_LLAMA_THREADS_BATCH_RANGE,
+  ADVANCED_LLAMA_SEED_RANGE,
+  ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE,
+  ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
 import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
 import {
@@ -81,6 +87,13 @@ export function EditModelPage() {
     handleFrequencyPenaltyChange,
     handlePresencePenaltyChange,
     handleTopKChange,
+    handleLlamaGpuLayersChange,
+    handleLlamaThreadsChange,
+    handleLlamaThreadsBatchChange,
+    handleLlamaSeedChange,
+    handleLlamaRopeFreqBaseChange,
+    handleLlamaRopeFreqScaleChange,
+    handleLlamaOffloadKqvChange,
     handleReasoningEnabledChange,
     handleReasoningEffortChange,
     handleReasoningBudgetChange,
@@ -1035,6 +1048,263 @@ export function EditModelPage() {
                         <span>{ADVANCED_TOP_K_RANGE.max}</span>
                       </div>
                     </div>
+
+                    {isLocalModel && (
+                      <div className="space-y-6 border-t border-white/5 pt-6">
+                        <div className="space-y-1">
+                          <span className="block text-xs font-semibold text-white/70">
+                            llama.cpp Settings
+                          </span>
+                          <span className="block text-[10px] text-white/40">
+                            Performance and runtime controls for local inference
+                          </span>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                GPU Layers
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Offload layers to GPU (0 = CPU only)
+                              </span>
+                            </div>
+                            <span className="rounded-lg bg-black/30 px-2 py-1 font-mono text-xs text-emerald-400">
+                              {modelAdvancedDraft.llamaGpuLayers !== null &&
+                              modelAdvancedDraft.llamaGpuLayers !== undefined
+                                ? modelAdvancedDraft.llamaGpuLayers
+                                : "Auto"}
+                            </span>
+                          </div>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={ADVANCED_LLAMA_GPU_LAYERS_RANGE.min}
+                            max={ADVANCED_LLAMA_GPU_LAYERS_RANGE.max}
+                            step={1}
+                            value={modelAdvancedDraft.llamaGpuLayers ?? ""}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const next = raw === "" ? null : Number(raw);
+                              handleLlamaGpuLayersChange(
+                                next === null || !Number.isFinite(next) || next < 0
+                                  ? null
+                                  : Math.trunc(next),
+                              );
+                            }}
+                            placeholder="Auto"
+                            className={numberInputClassName}
+                          />
+                          <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                            <span>Auto</span>
+                            <span>{ADVANCED_LLAMA_GPU_LAYERS_RANGE.max}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Threads
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                CPU threads for generation
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_LLAMA_THREADS_RANGE.min}
+                              max={ADVANCED_LLAMA_THREADS_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.llamaThreads ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleLlamaThreadsChange(
+                                  next === null || !Number.isFinite(next) || next <= 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                            <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                              <span>Auto</span>
+                              <span>{ADVANCED_LLAMA_THREADS_RANGE.max}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Batch Threads
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                CPU threads for batch processing
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_LLAMA_THREADS_BATCH_RANGE.min}
+                              max={ADVANCED_LLAMA_THREADS_BATCH_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.llamaThreadsBatch ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleLlamaThreadsBatchChange(
+                                  next === null || !Number.isFinite(next) || next <= 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                            <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                              <span>Auto</span>
+                              <span>{ADVANCED_LLAMA_THREADS_BATCH_RANGE.max}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">Seed</span>
+                              <span className="block text-[10px] text-white/40">
+                                Leave blank for random
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_LLAMA_SEED_RANGE.min}
+                              max={ADVANCED_LLAMA_SEED_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.llamaSeed ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleLlamaSeedChange(
+                                  next === null || !Number.isFinite(next) || next < 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Random"
+                              className={numberInputClassName}
+                            />
+                            <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                              <span>Random</span>
+                              <span>{ADVANCED_LLAMA_SEED_RANGE.max.toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Offload KQV
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                KV cache &amp; KQV ops on GPU
+                              </span>
+                            </div>
+                            <select
+                              value={
+                                modelAdvancedDraft.llamaOffloadKqv === null ||
+                                modelAdvancedDraft.llamaOffloadKqv === undefined
+                                  ? "auto"
+                                  : modelAdvancedDraft.llamaOffloadKqv
+                                    ? "on"
+                                    : "off"
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                handleLlamaOffloadKqvChange(val === "auto" ? null : val === "on");
+                              }}
+                              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white transition focus:border-white/30 focus:outline-none"
+                            >
+                              <option value="auto" className="bg-[#16171d]">
+                                Auto
+                              </option>
+                              <option value="on" className="bg-[#16171d]">
+                                On
+                              </option>
+                              <option value="off" className="bg-[#16171d]">
+                                Off
+                              </option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                RoPE Base
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Frequency base override
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE.min}
+                              max={ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE.max}
+                              step={0.1}
+                              value={modelAdvancedDraft.llamaRopeFreqBase ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleLlamaRopeFreqBaseChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                            <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                              <span>Auto</span>
+                              <span>
+                                {ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE.max.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                RoPE Scale
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Frequency scale override
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE.min}
+                              max={ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE.max}
+                              step={0.01}
+                              value={modelAdvancedDraft.llamaRopeFreqScale ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleLlamaRopeFreqScaleChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                            <div className="flex justify-between text-[10px] text-white/30 px-0.5 mt-1">
+                              <span>Auto</span>
+                              <span>{ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE.max}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Reasoning Section (Thinking) */}
                     {showReasoningSection && (

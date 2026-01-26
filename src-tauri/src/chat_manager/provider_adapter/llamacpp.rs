@@ -121,6 +121,14 @@ impl ProviderAdapter for LlamaCppAdapter {
             tools,
             tool_choice,
         };
-        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
+        let mut value = serde_json::to_value(body).unwrap_or_else(|_| json!({}));
+        if let Some(top_k) = _top_k {
+            if top_k > 0 {
+                if let Some(map) = value.as_object_mut() {
+                    map.insert("top_k".to_string(), json!(top_k));
+                }
+            }
+        }
+        value
     }
 }

@@ -1222,6 +1222,7 @@ async fn process_assistant_turn(
         false,              // reasoning_enabled
         None,               // reasoning_effort
         None,               // reasoning_budget
+        None,               // extra_body_fields
     );
 
     log_info(
@@ -1409,6 +1410,7 @@ async fn process_assistant_turn(
             None,
             Some(&tool_config),
             false,
+            None,
             None,
             None,
         );

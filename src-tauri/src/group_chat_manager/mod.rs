@@ -11,6 +11,7 @@ mod selection;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
@@ -116,6 +117,72 @@ fn resolve_context_length(model: &Model, settings: &Settings) -> Option<u32> {
         .and_then(|cfg| cfg.context_length)
         .or(settings.advanced_model_settings.context_length)
         .filter(|v| *v > 0)
+}
+
+fn build_llama_extra_fields(model: &Model, settings: &Settings) -> Option<HashMap<String, Value>> {
+    let mut extra = HashMap::new();
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_gpu_layers)
+        .or(settings.advanced_model_settings.llama_gpu_layers)
+    {
+        extra.insert("llamaGpuLayers".to_string(), json!(v));
+    }
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_threads)
+        .or(settings.advanced_model_settings.llama_threads)
+    {
+        extra.insert("llamaThreads".to_string(), json!(v));
+    }
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_threads_batch)
+        .or(settings.advanced_model_settings.llama_threads_batch)
+    {
+        extra.insert("llamaThreadsBatch".to_string(), json!(v));
+    }
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_seed)
+        .or(settings.advanced_model_settings.llama_seed)
+    {
+        extra.insert("llamaSeed".to_string(), json!(v));
+    }
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_rope_freq_base)
+        .or(settings.advanced_model_settings.llama_rope_freq_base)
+    {
+        extra.insert("llamaRopeFreqBase".to_string(), json!(v));
+    }
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_rope_freq_scale)
+        .or(settings.advanced_model_settings.llama_rope_freq_scale)
+    {
+        extra.insert("llamaRopeFreqScale".to_string(), json!(v));
+    }
+    if let Some(v) = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.llama_offload_kqv)
+        .or(settings.advanced_model_settings.llama_offload_kqv)
+    {
+        extra.insert("llamaOffloadKqv".to_string(), json!(v));
+    }
+
+    if extra.is_empty() {
+        None
+    } else {
+        Some(extra)
+    }
 }
 
 // ============================================================================
@@ -976,6 +1043,11 @@ async fn summarize_group_messages(
         .unwrap_or(2048);
 
     let context_length = resolve_context_length(model, &settings);
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(model, &settings)
+    } else {
+        None
+    };
     let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -995,6 +1067,7 @@ async fn summarize_group_messages(
         false,
         None,
         None,
+        llama_extra_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -1109,6 +1182,11 @@ async fn run_group_memory_tool_update(
         .unwrap_or(2048);
 
     let context_length = resolve_context_length(model, &settings);
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(model, &settings)
+    } else {
+        None
+    };
     let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         api_key,
@@ -1128,6 +1206,7 @@ async fn run_group_memory_tool_update(
         false,
         None,
         None,
+        llama_extra_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -2219,6 +2298,11 @@ async fn select_speaker_via_llm_with_tracking(
     };
 
     let context_length = resolve_context_length(model, &settings);
+    let llama_extra_fields = if cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(model, &settings)
+    } else {
+        None
+    };
     let built = crate::chat_manager::request_builder::build_chat_request(
         cred,
         &api_key,
@@ -2238,6 +2322,7 @@ async fn select_speaker_via_llm_with_tracking(
         false, // reasoning_enabled
         None,  // reasoning_effort
         None,  // reasoning_budget
+        llama_extra_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -2502,6 +2587,11 @@ async fn generate_character_response(
         .as_ref()
         .and_then(|a| a.frequency_penalty);
     let top_k = model.advanced_model_settings.as_ref().and_then(|a| a.top_k);
+    let llama_extra_fields = if cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(model, &settings)
+    } else {
+        None
+    };
 
     let built = crate::chat_manager::request_builder::build_chat_request(
         cred,
@@ -2522,6 +2612,7 @@ async fn generate_character_response(
         reasoning_enabled, // reasoning_enabled
         reasoning_effort,  // reasoning_effort
         reasoning_budget,  // reasoning_budget
+        llama_extra_fields,
     );
 
     log_info(
@@ -3504,6 +3595,11 @@ pub async fn group_chat_generate_user_reply(
     messages_for_api.push(json!({ "role": "user", "content": user_prompt }));
 
     let context_length = resolve_context_length(model, &settings);
+    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+        build_llama_extra_fields(model, &settings)
+    } else {
+        None
+    };
     let built = crate::chat_manager::request_builder::build_chat_request(
         provider_cred,
         &api_key,
@@ -3523,6 +3619,7 @@ pub async fn group_chat_generate_user_reply(
         false,              // reasoning_enabled
         None,               // reasoning_effort
         None,               // reasoning_budget
+        llama_extra_fields,
     );
 
     log_info(

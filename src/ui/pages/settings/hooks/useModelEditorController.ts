@@ -45,6 +45,13 @@ type ControllerReturn = {
   handleFrequencyPenaltyChange: (value: number | null) => void;
   handlePresencePenaltyChange: (value: number | null) => void;
   handleTopKChange: (value: number | null) => void;
+  handleLlamaGpuLayersChange: (value: number | null) => void;
+  handleLlamaThreadsChange: (value: number | null) => void;
+  handleLlamaThreadsBatchChange: (value: number | null) => void;
+  handleLlamaSeedChange: (value: number | null) => void;
+  handleLlamaRopeFreqBaseChange: (value: number | null) => void;
+  handleLlamaRopeFreqScaleChange: (value: number | null) => void;
+  handleLlamaOffloadKqvChange: (value: boolean | null) => void;
   handleReasoningEnabledChange: (value: boolean) => void;
   handleReasoningEffortChange: (value: "low" | "medium" | "high" | null) => void;
   handleReasoningBudgetChange: (value: number | null) => void;
@@ -362,6 +369,97 @@ export function useModelEditorController(): ControllerReturn {
     [dispatch, state.modelAdvancedDraft],
   );
 
+  const handleLlamaGpuLayersChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaGpuLayers: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleLlamaThreadsChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaThreads: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleLlamaThreadsBatchChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaThreadsBatch: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleLlamaSeedChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaSeed: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleLlamaRopeFreqBaseChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaRopeFreqBase: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleLlamaRopeFreqScaleChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaRopeFreqScale: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleLlamaOffloadKqvChange = useCallback(
+    (value: boolean | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          llamaOffloadKqv: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
   const handleReasoningEnabledChange = useCallback(
     (value: boolean) => {
       const effortBudgets: Record<string, number> = {
@@ -609,6 +707,13 @@ export function useModelEditorController(): ControllerReturn {
     handleFrequencyPenaltyChange,
     handlePresencePenaltyChange,
     handleTopKChange,
+    handleLlamaGpuLayersChange,
+    handleLlamaThreadsChange,
+    handleLlamaThreadsBatchChange,
+    handleLlamaSeedChange,
+    handleLlamaRopeFreqBaseChange,
+    handleLlamaRopeFreqScaleChange,
+    handleLlamaOffloadKqvChange,
     handleReasoningEnabledChange,
     handleReasoningEffortChange,
     handleReasoningBudgetChange,
