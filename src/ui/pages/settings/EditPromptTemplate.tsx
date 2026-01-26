@@ -125,6 +125,8 @@ const ENTRY_POSITION_OPTIONS = [
   { value: "inChat", label: "In Chat" },
 ] as const;
 
+const DRAG_HOLD_MS = 2000;
+
 const createEntryId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -186,7 +188,7 @@ function PromptEntryCard({
       value={entry}
       dragListener={false}
       dragControls={controls}
-      layout
+      layout="position"
       className={cn("rounded-xl border border-white/10 bg-white/5 p-4", "space-y-3")}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -347,20 +349,42 @@ function PromptEntryListItem({
   onEdit: (id: string) => void;
 }) {
   const controls = useDragControls();
+  const dragTimeoutRef = useRef<number | null>(null);
   const toggleId = `prompt-entry-mobile-${entry.id}`;
+
+  const scheduleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.persist?.();
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+    }
+    dragTimeoutRef.current = window.setTimeout(() => {
+      dragTimeoutRef.current = null;
+      controls.start(event);
+    }, DRAG_HOLD_MS);
+  };
+
+  const cancelDragStart = () => {
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+  };
 
   return (
     <Reorder.Item
       value={entry}
       dragListener={false}
       dragControls={controls}
-      layout
+      layout="position"
       className={cn("rounded-xl border border-white/10 bg-white/5 p-3", "space-y-2")}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <button
-            onPointerDown={(event) => controls.start(event)}
+            onPointerDown={scheduleDragStart}
+            onPointerUp={cancelDragStart}
+            onPointerLeave={cancelDragStart}
+            onPointerCancel={cancelDragStart}
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-lg",
               "border border-white/10 bg-white/5 text-white/40",
