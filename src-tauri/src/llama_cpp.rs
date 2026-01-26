@@ -392,12 +392,6 @@ mod desktop {
                 .backend
                 .as_ref()
                 .ok_or_else(|| "llama.cpp backend unavailable".to_string())?;
-            let prompt = build_prompt(model, messages)?;
-            let tokens = model
-                .str_to_token(&prompt, AddBos::Always)
-                .map_err(|e| format!("Failed to tokenize prompt: {e}"))?;
-            prompt_tokens = tokens.len() as u64;
-
             let max_ctx = model.n_ctx_train().max(1);
             let available_memory_bytes = get_available_memory_bytes();
             let recommended_ctx =
@@ -414,12 +408,29 @@ mod desktop {
             } else {
                 max_ctx
             };
-            let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(ctx_size));
+            let prompt = build_prompt(model, messages)?;
+            let tokens = model
+                .str_to_token(&prompt, AddBos::Always)
+                .map_err(|e| format!("Failed to tokenize prompt: {e}"))?;
+            prompt_tokens = tokens.len() as u64;
+
+            if tokens.len() as u32 >= ctx_size {
+                return Err(format!(
+                    "Prompt is too long for the context window (prompt tokens: {}, context: {}). Reduce messages or lower context length.",
+                    tokens.len(),
+                    ctx_size
+                ));
+            }
+
+            let n_batch = ctx_size;
+            let ctx_params = LlamaContextParams::default()
+                .with_n_ctx(NonZeroU32::new(ctx_size))
+                .with_n_batch(n_batch);
             let mut ctx = model
                 .new_context(backend, ctx_params)
                 .map_err(|e| format!("Failed to create llama context: {e}"))?;
 
-            let batch_size = tokens.len().max(512);
+            let batch_size = n_batch as usize;
             let mut batch = LlamaBatch::new(batch_size, 1);
 
             let last_index = tokens.len().saturating_sub(1) as i32;
