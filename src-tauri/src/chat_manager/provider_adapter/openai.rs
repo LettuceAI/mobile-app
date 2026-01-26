@@ -140,7 +140,7 @@ impl ProviderAdapter for OpenRouterAdapter {
         let mut out = HashMap::new();
         out.insert("Authorization".into(), "Bearer <apiKey>".into());
         out.insert("Content-Type".into(), "application/json".into());
-        out.insert("HTTP-Referer".into(), "https://lettuce.ai".into()); // OpenRouter specific
+        out.insert("HTTP-Referer".into(), "https://www.lettuceai.app/".into()); // OpenRouter specific
         out.insert("X-Title".into(), "Lettuce AI".into()); // OpenRouter specific
         out
     }
@@ -153,7 +153,7 @@ impl ProviderAdapter for OpenRouterAdapter {
         let mut out: HashMap<String, String> = HashMap::new();
         out.insert("Authorization".into(), format!("Bearer {}", api_key));
         out.insert("Content-Type".into(), "application/json".into());
-        out.insert("HTTP-Referer".into(), "https://lettuce.ai".into());
+        out.insert("HTTP-Referer".into(), "https://www.lettuceai.app/".into());
         out.insert("X-Title".into(), "Lettuce AI".into());
 
         if let Some(extra) = extra {

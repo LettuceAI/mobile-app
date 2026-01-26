@@ -202,11 +202,19 @@ impl SseDecoder {
                 continue;
             }
 
-            let Some(rest) = l.strip_prefix("data:") else {
-                continue;
+            let payload = if provider_id == Some("ollama") {
+                if let Some(rest) = l.strip_prefix("data:") {
+                    rest.trim()
+                } else {
+                    l
+                }
+            } else {
+                let Some(rest) = l.strip_prefix("data:") else {
+                    continue;
+                };
+                rest.trim()
             };
 
-            let payload = rest.trim();
             if payload.is_empty() {
                 continue;
             }
@@ -235,6 +243,8 @@ impl SseDecoder {
                 continue;
             }
 
+            let is_done = v.get("done").and_then(|d| d.as_bool()).unwrap_or(false);
+
             // 2. Tool calls – HARD FILTER POINT
             if let Some(provider) = provider_id {
                 let calls = parse_tool_calls(provider, &v);
@@ -261,6 +271,10 @@ impl SseDecoder {
             // 5. Usage
             if let Some(usage) = usage_from_value(&v) {
                 events.push(NormalizedEvent::Usage { usage });
+            }
+
+            if is_done {
+                events.push(NormalizedEvent::Done);
             }
         }
 
@@ -451,56 +465,73 @@ fn extract_image_data_urls_from_value(v: &Value, out: &mut Vec<String>) {
 
 pub fn usage_from_value(v: &Value) -> Option<UsageSummary> {
     // Support both snake_case "usage" (OpenAI) and camelCase "usageMetadata" (Gemini)
-    let u = v.get("usage").or_else(|| v.get("usageMetadata"))?;
+    let u = v.get("usage").or_else(|| v.get("usageMetadata"));
 
-    // Log the usage metadata for debugging
-    eprintln!("[DEBUG] Usage metadata received: {:?}", u);
+    let (prompt_tokens, completion_tokens, reasoning_tokens, image_tokens, total_tokens) =
+        if let Some(u) = u {
+            // Log the usage metadata for debugging
+            eprintln!("[DEBUG] Usage metadata received: {:?}", u);
 
-    let prompt_tokens = take_first(
-        u,
-        &[
-            "prompt_tokens",
-            "input_tokens",
-            "promptTokens",
-            "inputTokens",
-            "promptTokenCount", // Gemini-specific
-        ],
-    );
-    let completion_tokens = take_first(
-        u,
-        &[
-            "completion_tokens",
-            "output_tokens",
-            "completionTokens",
-            "outputTokens",
-            "candidatesTokenCount", // Gemini-specific
-        ],
-    );
-    let reasoning_tokens = take_first(
-        u,
-        &[
-            "reasoning_tokens",
-            "reasoningTokens",
-            "thinking_tokens",
-            "thinkingTokens",
-            "thoughtsTokenCount", // Gemini-specific
-        ],
-    )
-    .or_else(|| {
-        u.get("completion_tokens_details")
-            .and_then(|d| take_first(d, &["reasoning_tokens", "reasoningTokens"]))
-    });
-    let image_tokens = take_first(u, &["image_tokens", "imageTokens"]).or_else(|| {
-        u.get("prompt_tokens_details")
-            .and_then(|d| take_first(d, &["image_tokens", "imageTokens", "cached_tokens"]))
-    });
-    let total_tokens =
-        take_first(u, &["total_tokens", "totalTokens", "totalTokenCount"]).or_else(|| {
-            match (prompt_tokens, completion_tokens) {
+            let prompt_tokens = take_first(
+                u,
+                &[
+                    "prompt_tokens",
+                    "input_tokens",
+                    "promptTokens",
+                    "inputTokens",
+                    "promptTokenCount", // Gemini-specific
+                ],
+            );
+            let completion_tokens = take_first(
+                u,
+                &[
+                    "completion_tokens",
+                    "output_tokens",
+                    "completionTokens",
+                    "outputTokens",
+                    "candidatesTokenCount", // Gemini-specific
+                ],
+            );
+            let reasoning_tokens = take_first(
+                u,
+                &[
+                    "reasoning_tokens",
+                    "reasoningTokens",
+                    "thinking_tokens",
+                    "thinkingTokens",
+                    "thoughtsTokenCount", // Gemini-specific
+                ],
+            )
+            .or_else(|| {
+                u.get("completion_tokens_details")
+                    .and_then(|d| take_first(d, &["reasoning_tokens", "reasoningTokens"]))
+            });
+            let image_tokens = take_first(u, &["image_tokens", "imageTokens"]).or_else(|| {
+                u.get("prompt_tokens_details")
+                    .and_then(|d| take_first(d, &["image_tokens", "imageTokens", "cached_tokens"]))
+            });
+            let total_tokens = take_first(u, &["total_tokens", "totalTokens", "totalTokenCount"])
+                .or_else(|| match (prompt_tokens, completion_tokens) {
+                    (Some(p), Some(c)) => Some(p + c),
+                    _ => None,
+                });
+
+            (
+                prompt_tokens,
+                completion_tokens,
+                reasoning_tokens,
+                image_tokens,
+                total_tokens,
+            )
+        } else {
+            let prompt_tokens = take_first(v, &["prompt_eval_count", "prompt_tokens"]);
+            let completion_tokens = take_first(v, &["eval_count", "completion_tokens"]);
+            let total_tokens = match (prompt_tokens, completion_tokens) {
                 (Some(p), Some(c)) => Some(p + c),
                 _ => None,
-            }
-        });
+            };
+            (prompt_tokens, completion_tokens, None, None, total_tokens)
+        };
 
     let finish_reason = v
         .get("choices")

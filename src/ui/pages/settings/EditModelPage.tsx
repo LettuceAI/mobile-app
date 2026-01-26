@@ -17,6 +17,19 @@ import {
   ADVANCED_LLAMA_SEED_RANGE,
   ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE,
   ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE,
+  ADVANCED_OLLAMA_NUM_CTX_RANGE,
+  ADVANCED_OLLAMA_NUM_PREDICT_RANGE,
+  ADVANCED_OLLAMA_NUM_KEEP_RANGE,
+  ADVANCED_OLLAMA_NUM_BATCH_RANGE,
+  ADVANCED_OLLAMA_NUM_GPU_RANGE,
+  ADVANCED_OLLAMA_NUM_THREAD_RANGE,
+  ADVANCED_OLLAMA_TFS_Z_RANGE,
+  ADVANCED_OLLAMA_TYPICAL_P_RANGE,
+  ADVANCED_OLLAMA_MIN_P_RANGE,
+  ADVANCED_OLLAMA_MIROSTAT_TAU_RANGE,
+  ADVANCED_OLLAMA_MIROSTAT_ETA_RANGE,
+  ADVANCED_OLLAMA_REPEAT_PENALTY_RANGE,
+  ADVANCED_OLLAMA_SEED_RANGE,
 } from "../../components/AdvancedModelSettingsForm";
 import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
 import {
@@ -94,6 +107,21 @@ export function EditModelPage() {
     handleLlamaRopeFreqBaseChange,
     handleLlamaRopeFreqScaleChange,
     handleLlamaOffloadKqvChange,
+    handleOllamaNumCtxChange,
+    handleOllamaNumPredictChange,
+    handleOllamaNumKeepChange,
+    handleOllamaNumBatchChange,
+    handleOllamaNumGpuChange,
+    handleOllamaNumThreadChange,
+    handleOllamaTfsZChange,
+    handleOllamaTypicalPChange,
+    handleOllamaMinPChange,
+    handleOllamaMirostatChange,
+    handleOllamaMirostatTauChange,
+    handleOllamaMirostatEtaChange,
+    handleOllamaRepeatPenaltyChange,
+    handleOllamaSeedChange,
+    handleOllamaStopChange,
     handleReasoningEnabledChange,
     handleReasoningEffortChange,
     handleReasoningBudgetChange,
@@ -101,6 +129,7 @@ export function EditModelPage() {
     fetchModels,
   } = useModelEditorController();
   const isLocalModel = editorModel?.providerId === "llamacpp";
+  const isOllamaModel = editorModel?.providerId === "ollama";
 
   // Switch to select mode automatically if models are fetched
   useEffect(() => {
@@ -165,6 +194,7 @@ export function EditModelPage() {
   };
   const availableRamGiB = formatGiB(llamaContextInfo?.availableMemoryBytes ?? null);
   const modelSizeGiB = formatGiB(llamaContextInfo?.modelSizeBytes ?? null);
+  const ollamaStopText = (modelAdvancedDraft.ollamaStop ?? []).join("\n");
 
   // Register window globals for header save button
   useEffect(() => {
@@ -1302,6 +1332,447 @@ export function EditModelPage() {
                               <span>{ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE.max}</span>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {isOllamaModel && (
+                      <div className="space-y-6 border-t border-white/5 pt-6">
+                        <div className="space-y-1">
+                          <span className="block text-xs font-semibold text-white/70">
+                            Ollama Settings
+                          </span>
+                          <span className="block text-[10px] text-white/40">
+                            Advanced generation and performance options
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Num Ctx
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Context window size
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_NUM_CTX_RANGE.min}
+                              max={ADVANCED_OLLAMA_NUM_CTX_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaNumCtx ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaNumCtxChange(
+                                  next === null || !Number.isFinite(next) || next < 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Num Predict
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Max tokens to generate
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_NUM_PREDICT_RANGE.min}
+                              max={ADVANCED_OLLAMA_NUM_PREDICT_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaNumPredict ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaNumPredictChange(
+                                  next === null || !Number.isFinite(next) || next < 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Num Keep
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Tokens to keep from prompt
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_NUM_KEEP_RANGE.min}
+                              max={ADVANCED_OLLAMA_NUM_KEEP_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaNumKeep ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaNumKeepChange(
+                                  next === null || !Number.isFinite(next) || next < 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Num Batch
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Batch size for prompt processing
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_NUM_BATCH_RANGE.min}
+                              max={ADVANCED_OLLAMA_NUM_BATCH_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaNumBatch ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaNumBatchChange(
+                                  next === null || !Number.isFinite(next) || next < 1
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Num GPU
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                GPU layers offload
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_NUM_GPU_RANGE.min}
+                              max={ADVANCED_OLLAMA_NUM_GPU_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaNumGpu ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaNumGpuChange(
+                                  next === null || !Number.isFinite(next) || next < 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Num Thread
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                CPU threads for inference
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_NUM_THREAD_RANGE.min}
+                              max={ADVANCED_OLLAMA_NUM_THREAD_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaNumThread ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaNumThreadChange(
+                                  next === null || !Number.isFinite(next) || next < 1
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">TFS Z</span>
+                              <span className="block text-[10px] text-white/40">
+                                Tail-free sampling (0-1)
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_OLLAMA_TFS_Z_RANGE.min}
+                              max={ADVANCED_OLLAMA_TFS_Z_RANGE.max}
+                              step={0.01}
+                              value={modelAdvancedDraft.ollamaTfsZ ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleOllamaTfsZChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Typical P
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Typical sampling (0-1)
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_OLLAMA_TYPICAL_P_RANGE.min}
+                              max={ADVANCED_OLLAMA_TYPICAL_P_RANGE.max}
+                              step={0.01}
+                              value={modelAdvancedDraft.ollamaTypicalP ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleOllamaTypicalPChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">Min P</span>
+                              <span className="block text-[10px] text-white/40">
+                                Min-p sampling (0-1)
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_OLLAMA_MIN_P_RANGE.min}
+                              max={ADVANCED_OLLAMA_MIN_P_RANGE.max}
+                              step={0.01}
+                              value={modelAdvancedDraft.ollamaMinP ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleOllamaMinPChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Repeat Penalty
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Penalize repetition (0-2)
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_OLLAMA_REPEAT_PENALTY_RANGE.min}
+                              max={ADVANCED_OLLAMA_REPEAT_PENALTY_RANGE.max}
+                              step={0.01}
+                              value={modelAdvancedDraft.ollamaRepeatPenalty ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleOllamaRepeatPenaltyChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Mirostat
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                0 = off, 1 or 2 = enabled
+                              </span>
+                            </div>
+                            <select
+                              value={
+                                modelAdvancedDraft.ollamaMirostat === null ||
+                                modelAdvancedDraft.ollamaMirostat === undefined
+                                  ? "auto"
+                                  : modelAdvancedDraft.ollamaMirostat.toString()
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                handleOllamaMirostatChange(val === "auto" ? null : Number(val));
+                              }}
+                              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white transition focus:border-white/30 focus:outline-none"
+                            >
+                              <option value="auto" className="bg-[#16171d]">
+                                Auto
+                              </option>
+                              <option value="0" className="bg-[#16171d]">
+                                0 (Off)
+                              </option>
+                              <option value="1" className="bg-[#16171d]">
+                                1
+                              </option>
+                              <option value="2" className="bg-[#16171d]">
+                                2
+                              </option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">Seed</span>
+                              <span className="block text-[10px] text-white/40">
+                                Leave blank for random
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={ADVANCED_OLLAMA_SEED_RANGE.min}
+                              max={ADVANCED_OLLAMA_SEED_RANGE.max}
+                              step={1}
+                              value={modelAdvancedDraft.ollamaSeed ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const next = raw === "" ? null : Number(raw);
+                                handleOllamaSeedChange(
+                                  next === null || !Number.isFinite(next) || next < 0
+                                    ? null
+                                    : Math.trunc(next),
+                                );
+                              }}
+                              placeholder="Random"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Mirostat Tau
+                              </span>
+                              <span className="block text-[10px] text-white/40">
+                                Target entropy
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_OLLAMA_MIROSTAT_TAU_RANGE.min}
+                              max={ADVANCED_OLLAMA_MIROSTAT_TAU_RANGE.max}
+                              step={0.1}
+                              value={modelAdvancedDraft.ollamaMirostatTau ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleOllamaMirostatTauChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                              <span className="block text-xs font-medium text-white/70">
+                                Mirostat Eta
+                              </span>
+                              <span className="block text-[10px] text-white/40">Learning rate</span>
+                            </div>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={ADVANCED_OLLAMA_MIROSTAT_ETA_RANGE.min}
+                              max={ADVANCED_OLLAMA_MIROSTAT_ETA_RANGE.max}
+                              step={0.01}
+                              value={modelAdvancedDraft.ollamaMirostatEta ?? ""}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                handleOllamaMirostatEtaChange(raw === "" ? null : Number(raw));
+                              }}
+                              placeholder="Auto"
+                              className={numberInputClassName}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-0.5">
+                            <span className="block text-xs font-medium text-white/70">
+                              Stop Sequences
+                            </span>
+                            <span className="block text-[10px] text-white/40">
+                              One per line or comma-separated
+                            </span>
+                          </div>
+                          <textarea
+                            value={ollamaStopText}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const next = raw
+                                .split(/[\n,]+/)
+                                .map((s) => s.trim())
+                                .filter((s) => s.length > 0);
+                              handleOllamaStopChange(next.length > 0 ? next : null);
+                            }}
+                            placeholder="e.g. \n\n###\nUser:\n"
+                            rows={4}
+                            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+                          />
                         </div>
                       </div>
                     )}

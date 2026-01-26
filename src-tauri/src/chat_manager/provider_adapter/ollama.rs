@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde_json::{json, Value};
 
-use super::{OpenAIChatRequest, ProviderAdapter};
+use super::ProviderAdapter;
 use crate::chat_manager::tooling::{openai_tool_choice, openai_tools, ToolConfig};
 
 pub struct OllamaAdapter;
@@ -11,9 +11,9 @@ impl ProviderAdapter for OllamaAdapter {
     fn endpoint(&self, base_url: &str) -> String {
         let trimmed = base_url.trim_end_matches('/');
         if trimmed.ends_with("/v1") {
-            format!("{}/chat/completions", trimmed)
+            format!("{}/api/chat", trimmed.trim_end_matches("/v1"))
         } else {
-            format!("{}/v1/chat/completions", trimmed)
+            format!("{}/api/chat", trimmed)
         }
     }
 
@@ -29,7 +29,7 @@ impl ProviderAdapter for OllamaAdapter {
         let mut out = HashMap::new();
         out.insert("Authorization".into(), "Bearer <apiKey>".into());
         out.insert("Content-Type".into(), "application/json".into());
-        out.insert("Accept".into(), "text/event-stream".into());
+        out.insert("Accept".into(), "application/json".into());
         out
     }
 
@@ -41,7 +41,7 @@ impl ProviderAdapter for OllamaAdapter {
         let mut out: HashMap<String, String> = HashMap::new();
         out.insert("Authorization".into(), format!("Bearer {}", api_key));
         out.insert("Content-Type".into(), "application/json".into());
-        out.insert("Accept".into(), "text/event-stream".into());
+        out.insert("Accept".into(), "application/json".into());
         out.entry("User-Agent".into())
             .or_insert_with(|| "LettuceAI/0.1".into());
         if let Some(extra) = extra {
@@ -82,46 +82,34 @@ impl ProviderAdapter for OllamaAdapter {
             (None, None)
         };
 
-        let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
+        let mut body = json!({
+            "model": model_name,
+            "messages": messages_for_api,
+            "stream": should_stream,
+        });
 
-        let reasoning_config = if reasoning_enabled {
-            Some(super::ReasoningConfig {
-                effort: reasoning_effort.clone(),
-                max_tokens: reasoning_budget,
-            })
-        } else {
-            None
-        };
+        if let Some(map) = body.as_object_mut() {
+            if let Some(tools) = tools {
+                map.insert("tools".to_string(), Value::Array(tools));
+            }
+            if let Some(choice) = tool_choice {
+                map.insert("tool_choice".to_string(), choice);
+            }
+        }
 
-        let body = OpenAIChatRequest {
-            model: model_name,
-            messages: messages_for_api,
-            stream: should_stream,
+        let _ = (
             temperature,
             top_p,
-            max_tokens: if reasoning_enabled {
-                None
-            } else {
-                Some(total_tokens)
-            },
+            max_tokens,
             context_length,
-            max_completion_tokens: if reasoning_enabled {
-                Some(total_tokens)
-            } else {
-                None
-            },
             frequency_penalty,
             presence_penalty,
-            reasoning_effort: if reasoning_enabled {
-                reasoning_effort
-            } else {
-                None
-            },
-            reasoning: reasoning_config,
-            tools,
-            tool_choice,
-        };
-        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
+        );
+
+        body
     }
     fn list_models_endpoint(&self, base_url: &str) -> String {
         let mut base = base_url.trim_end_matches('/').to_string();

@@ -10,7 +10,7 @@
 mod selection;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
@@ -183,6 +183,159 @@ fn build_llama_extra_fields(model: &Model, settings: &Settings) -> Option<HashMa
     } else {
         Some(extra)
     }
+}
+
+fn build_ollama_extra_fields(
+    model: &Model,
+    settings: &Settings,
+    context_length: Option<u32>,
+    max_tokens: u32,
+    temperature: f64,
+    top_p: f64,
+    top_k: Option<u32>,
+    frequency_penalty: Option<f64>,
+    presence_penalty: Option<f64>,
+) -> Option<HashMap<String, Value>> {
+    let mut options = Map::new();
+
+    let num_ctx = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_num_ctx)
+        .or(settings.advanced_model_settings.ollama_num_ctx)
+        .or(context_length);
+    let num_predict = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_num_predict)
+        .or(settings.advanced_model_settings.ollama_num_predict)
+        .or(Some(max_tokens));
+    let num_keep = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_num_keep)
+        .or(settings.advanced_model_settings.ollama_num_keep);
+    let num_batch = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_num_batch)
+        .or(settings.advanced_model_settings.ollama_num_batch);
+    let num_gpu = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_num_gpu)
+        .or(settings.advanced_model_settings.ollama_num_gpu);
+    let num_thread = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_num_thread)
+        .or(settings.advanced_model_settings.ollama_num_thread);
+    let tfs_z = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_tfs_z)
+        .or(settings.advanced_model_settings.ollama_tfs_z);
+    let typical_p = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_typical_p)
+        .or(settings.advanced_model_settings.ollama_typical_p);
+    let min_p = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_min_p)
+        .or(settings.advanced_model_settings.ollama_min_p);
+    let mirostat = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_mirostat)
+        .or(settings.advanced_model_settings.ollama_mirostat);
+    let mirostat_tau = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_mirostat_tau)
+        .or(settings.advanced_model_settings.ollama_mirostat_tau);
+    let mirostat_eta = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_mirostat_eta)
+        .or(settings.advanced_model_settings.ollama_mirostat_eta);
+    let repeat_penalty = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_repeat_penalty)
+        .or(settings.advanced_model_settings.ollama_repeat_penalty);
+    let seed = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_seed)
+        .or(settings.advanced_model_settings.ollama_seed);
+    let stop = model
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|a| a.ollama_stop.clone())
+        .or(settings.advanced_model_settings.ollama_stop.clone());
+
+    options.insert("temperature".into(), json!(temperature));
+    options.insert("top_p".into(), json!(top_p));
+    if let Some(v) = top_k {
+        options.insert("top_k".into(), json!(v));
+    }
+    if let Some(v) = frequency_penalty {
+        options.insert("frequency_penalty".into(), json!(v));
+    }
+    if let Some(v) = presence_penalty {
+        options.insert("presence_penalty".into(), json!(v));
+    }
+    if let Some(v) = num_ctx {
+        options.insert("num_ctx".into(), json!(v));
+    }
+    if let Some(v) = num_predict {
+        options.insert("num_predict".into(), json!(v));
+    }
+    if let Some(v) = num_keep {
+        options.insert("num_keep".into(), json!(v));
+    }
+    if let Some(v) = num_batch {
+        options.insert("num_batch".into(), json!(v));
+    }
+    if let Some(v) = num_gpu {
+        options.insert("num_gpu".into(), json!(v));
+    }
+    if let Some(v) = num_thread {
+        options.insert("num_thread".into(), json!(v));
+    }
+    if let Some(v) = tfs_z {
+        options.insert("tfs_z".into(), json!(v));
+    }
+    if let Some(v) = typical_p {
+        options.insert("typical_p".into(), json!(v));
+    }
+    if let Some(v) = min_p {
+        options.insert("min_p".into(), json!(v));
+    }
+    if let Some(v) = mirostat {
+        options.insert("mirostat".into(), json!(v));
+    }
+    if let Some(v) = mirostat_tau {
+        options.insert("mirostat_tau".into(), json!(v));
+    }
+    if let Some(v) = mirostat_eta {
+        options.insert("mirostat_eta".into(), json!(v));
+    }
+    if let Some(v) = repeat_penalty {
+        options.insert("repeat_penalty".into(), json!(v));
+    }
+    if let Some(v) = seed {
+        options.insert("seed".into(), json!(v));
+    }
+    if let Some(v) = stop {
+        options.insert("stop".into(), json!(v));
+    }
+
+    let mut extra = HashMap::new();
+    extra.insert("options".to_string(), Value::Object(options));
+    Some(extra)
 }
 
 // ============================================================================
@@ -1043,8 +1196,20 @@ async fn summarize_group_messages(
         .unwrap_or(2048);
 
     let context_length = resolve_context_length(model, &settings);
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(model, &settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            model,
+            &settings,
+            context_length,
+            max_tokens,
+            0.2,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -1067,7 +1232,7 @@ async fn summarize_group_messages(
         false,
         None,
         None,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -1182,8 +1347,20 @@ async fn run_group_memory_tool_update(
         .unwrap_or(2048);
 
     let context_length = resolve_context_length(model, &settings);
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(model, &settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            model,
+            &settings,
+            context_length,
+            max_tokens,
+            0.2,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -1206,7 +1383,7 @@ async fn run_group_memory_tool_update(
         false,
         None,
         None,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -2298,8 +2475,20 @@ async fn select_speaker_via_llm_with_tracking(
     };
 
     let context_length = resolve_context_length(model, &settings);
-    let llama_extra_fields = if cred.provider_id == "llamacpp" {
+    let extra_body_fields = if cred.provider_id == "llamacpp" {
         build_llama_extra_fields(model, &settings)
+    } else if cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            model,
+            &settings,
+            context_length,
+            500,
+            0.3,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -2322,7 +2511,7 @@ async fn select_speaker_via_llm_with_tracking(
         false, // reasoning_enabled
         None,  // reasoning_effort
         None,  // reasoning_budget
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -2587,8 +2776,20 @@ async fn generate_character_response(
         .as_ref()
         .and_then(|a| a.frequency_penalty);
     let top_k = model.advanced_model_settings.as_ref().and_then(|a| a.top_k);
-    let llama_extra_fields = if cred.provider_id == "llamacpp" {
+    let extra_body_fields = if cred.provider_id == "llamacpp" {
         build_llama_extra_fields(model, &settings)
+    } else if cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            model,
+            &settings,
+            context_length,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k,
+            frequency_penalty,
+            presence_penalty,
+        )
     } else {
         None
     };
@@ -2612,7 +2813,7 @@ async fn generate_character_response(
         reasoning_enabled, // reasoning_enabled
         reasoning_effort,  // reasoning_effort
         reasoning_budget,  // reasoning_budget
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     log_info(
@@ -3595,8 +3796,20 @@ pub async fn group_chat_generate_user_reply(
     messages_for_api.push(json!({ "role": "user", "content": user_prompt }));
 
     let context_length = resolve_context_length(model, &settings);
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(model, &settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            model,
+            &settings,
+            context_length,
+            max_tokens,
+            0.8,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -3619,7 +3832,7 @@ pub async fn group_chat_generate_user_reply(
         false,              // reasoning_enabled
         None,               // reasoning_effort
         None,               // reasoning_budget
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     log_info(

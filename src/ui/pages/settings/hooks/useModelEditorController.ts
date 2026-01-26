@@ -52,6 +52,21 @@ type ControllerReturn = {
   handleLlamaRopeFreqBaseChange: (value: number | null) => void;
   handleLlamaRopeFreqScaleChange: (value: number | null) => void;
   handleLlamaOffloadKqvChange: (value: boolean | null) => void;
+  handleOllamaNumCtxChange: (value: number | null) => void;
+  handleOllamaNumPredictChange: (value: number | null) => void;
+  handleOllamaNumKeepChange: (value: number | null) => void;
+  handleOllamaNumBatchChange: (value: number | null) => void;
+  handleOllamaNumGpuChange: (value: number | null) => void;
+  handleOllamaNumThreadChange: (value: number | null) => void;
+  handleOllamaTfsZChange: (value: number | null) => void;
+  handleOllamaTypicalPChange: (value: number | null) => void;
+  handleOllamaMinPChange: (value: number | null) => void;
+  handleOllamaMirostatChange: (value: number | null) => void;
+  handleOllamaMirostatTauChange: (value: number | null) => void;
+  handleOllamaMirostatEtaChange: (value: number | null) => void;
+  handleOllamaRepeatPenaltyChange: (value: number | null) => void;
+  handleOllamaSeedChange: (value: number | null) => void;
+  handleOllamaStopChange: (value: string[] | null) => void;
   handleReasoningEnabledChange: (value: boolean) => void;
   handleReasoningEffortChange: (value: "low" | "medium" | "high" | null) => void;
   handleReasoningBudgetChange: (value: number | null) => void;
@@ -460,6 +475,201 @@ export function useModelEditorController(): ControllerReturn {
     [dispatch, state.modelAdvancedDraft],
   );
 
+  const handleOllamaNumCtxChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaNumCtx: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaNumPredictChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaNumPredict: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaNumKeepChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaNumKeep: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaNumBatchChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaNumBatch: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaNumGpuChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaNumGpu: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaNumThreadChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaNumThread: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaTfsZChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaTfsZ: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaTypicalPChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaTypicalP: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaMinPChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaMinP: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaMirostatChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaMirostat: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaMirostatTauChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaMirostatTau: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaMirostatEtaChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaMirostatEta: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaRepeatPenaltyChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaRepeatPenalty: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaSeedChange = useCallback(
+    (value: number | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaSeed: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
+  const handleOllamaStopChange = useCallback(
+    (value: string[] | null) => {
+      dispatch({
+        type: "set_model_advanced_draft",
+        payload: {
+          ...state.modelAdvancedDraft,
+          ollamaStop: value,
+        },
+      });
+    },
+    [dispatch, state.modelAdvancedDraft],
+  );
+
   const handleReasoningEnabledChange = useCallback(
     (value: boolean) => {
       const effortBudgets: Record<string, number> = {
@@ -714,6 +924,21 @@ export function useModelEditorController(): ControllerReturn {
     handleLlamaRopeFreqBaseChange,
     handleLlamaRopeFreqScaleChange,
     handleLlamaOffloadKqvChange,
+    handleOllamaNumCtxChange,
+    handleOllamaNumPredictChange,
+    handleOllamaNumKeepChange,
+    handleOllamaNumBatchChange,
+    handleOllamaNumGpuChange,
+    handleOllamaNumThreadChange,
+    handleOllamaTfsZChange,
+    handleOllamaTypicalPChange,
+    handleOllamaMinPChange,
+    handleOllamaMirostatChange,
+    handleOllamaMirostatTauChange,
+    handleOllamaMirostatEtaChange,
+    handleOllamaRepeatPenaltyChange,
+    handleOllamaSeedChange,
+    handleOllamaStopChange,
     handleReasoningEnabledChange,
     handleReasoningEffortChange,
     handleReasoningBudgetChange,

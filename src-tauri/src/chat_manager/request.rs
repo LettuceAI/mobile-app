@@ -12,12 +12,6 @@ pub fn provider_base_url(cred: &ProviderCredential) -> String {
     )
 }
 
-// chat_completions_endpoint removed; endpoint selection is centralized in request_builder/provider_adapter.
-
-// headers are constructed by provider adapters now
-
-// system role resolution moved to provider adapters via request_builder::system_role_for
-
 fn selected_variant<'a>(message: &'a StoredMessage) -> Option<&'a MessageVariant> {
     if let Some(selected_id) = &message.selected_variant_id {
         message
@@ -84,6 +78,32 @@ pub fn extract_text(data: &Value, provider_id: Option<&str>) -> Option<String> {
                 return Some(
                     super::sse::accumulate_text_from_sse(s, provider_id).unwrap_or_default(),
                 );
+            }
+            if provider_id == Some("ollama") {
+                let mut combined = String::new();
+                for line in s.lines() {
+                    let l = line.trim();
+                    if l.is_empty() {
+                        continue;
+                    }
+                    let payload = if let Some(rest) = l.strip_prefix("data:") {
+                        rest.trim()
+                    } else {
+                        l
+                    };
+                    if payload.is_empty() || payload == "[DONE]" {
+                        continue;
+                    }
+                    if let Ok(v) = serde_json::from_str::<Value>(payload) {
+                        if let Some(part) = extract_text(&v, provider_id) {
+                            combined.push_str(&part);
+                        }
+                    }
+                }
+                if !combined.is_empty() {
+                    return Some(combined);
+                }
+                return None;
             }
             Some(s.clone())
         }
@@ -236,14 +256,22 @@ pub fn extract_usage(data: &Value) -> Option<UsageSummary> {
             let mut found: Option<UsageSummary> = None;
             for line in raw.lines() {
                 let piece = line.trim();
-                if !piece.starts_with("data:") {
+                if piece.starts_with("data:") {
+                    let payload = piece[5..].trim();
+                    if payload.is_empty() || payload == "[DONE]" {
+                        continue;
+                    }
+                    if let Ok(parsed) = serde_json::from_str::<Value>(payload) {
+                        if let Some(summary) = extract_usage(&parsed) {
+                            found = Some(summary);
+                        }
+                    }
                     continue;
                 }
-                let payload = piece[5..].trim();
-                if payload.is_empty() || payload == "[DONE]" {
+                if piece.is_empty() {
                     continue;
                 }
-                if let Ok(parsed) = serde_json::from_str::<Value>(payload) {
+                if let Ok(parsed) = serde_json::from_str::<Value>(piece) {
                     if let Some(summary) = extract_usage(&parsed) {
                         found = Some(summary);
                     }
@@ -297,6 +325,7 @@ fn usage_from_map(map: &Map<String, Value>) -> Option<UsageSummary> {
     let prompt_tokens = take_first(
         map,
         &[
+            "prompt_eval_count",
             "prompt_tokens",
             "input_tokens",
             "promptTokens",
@@ -306,6 +335,7 @@ fn usage_from_map(map: &Map<String, Value>) -> Option<UsageSummary> {
     let completion_tokens = take_first(
         map,
         &[
+            "eval_count",
             "completion_tokens",
             "output_tokens",
             "completionTokens",

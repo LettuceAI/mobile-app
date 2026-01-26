@@ -17,6 +17,20 @@ export const ADVANCED_LLAMA_THREADS_BATCH_RANGE = { min: 1, max: 256 };
 export const ADVANCED_LLAMA_SEED_RANGE = { min: 0, max: 2_147_483_647 };
 export const ADVANCED_LLAMA_ROPE_FREQ_BASE_RANGE = { min: 0, max: 1_000_000 };
 export const ADVANCED_LLAMA_ROPE_FREQ_SCALE_RANGE = { min: 0, max: 10 };
+export const ADVANCED_OLLAMA_NUM_CTX_RANGE = { min: 0, max: 262_144 };
+export const ADVANCED_OLLAMA_NUM_PREDICT_RANGE = { min: 0, max: 131_072 };
+export const ADVANCED_OLLAMA_NUM_KEEP_RANGE = { min: 0, max: 32_768 };
+export const ADVANCED_OLLAMA_NUM_BATCH_RANGE = { min: 1, max: 16_384 };
+export const ADVANCED_OLLAMA_NUM_GPU_RANGE = { min: 0, max: 512 };
+export const ADVANCED_OLLAMA_NUM_THREAD_RANGE = { min: 1, max: 256 };
+export const ADVANCED_OLLAMA_TFS_Z_RANGE = { min: 0, max: 1 };
+export const ADVANCED_OLLAMA_TYPICAL_P_RANGE = { min: 0, max: 1 };
+export const ADVANCED_OLLAMA_MIN_P_RANGE = { min: 0, max: 1 };
+export const ADVANCED_OLLAMA_MIROSTAT_RANGE = { min: 0, max: 2 };
+export const ADVANCED_OLLAMA_MIROSTAT_TAU_RANGE = { min: 0, max: 10 };
+export const ADVANCED_OLLAMA_MIROSTAT_ETA_RANGE = { min: 0, max: 1 };
+export const ADVANCED_OLLAMA_REPEAT_PENALTY_RANGE = { min: 0, max: 2 };
+export const ADVANCED_OLLAMA_SEED_RANGE = { min: 0, max: 2_147_483_647 };
 
 function clampValue(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -37,6 +51,14 @@ export function sanitizeAdvancedModelSettings(input: AdvancedModelSettings): Adv
     }
     const clamped = clampValue(numeric, range.min, range.max);
     return toInteger ? Math.round(clamped) : Number(clamped.toFixed(3));
+  };
+
+  const normalizeStop = (value: unknown): string[] | null => {
+    if (!Array.isArray(value)) return null;
+    const cleaned = value
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter((v) => v.length > 0);
+    return cleaned.length > 0 ? cleaned : null;
   };
 
   return {
@@ -62,6 +84,25 @@ export function sanitizeAdvancedModelSettings(input: AdvancedModelSettings): Adv
       false,
     ),
     llamaOffloadKqv: input.llamaOffloadKqv ?? null,
+    ollamaNumCtx: sanitize(input.ollamaNumCtx, ADVANCED_OLLAMA_NUM_CTX_RANGE, true),
+    ollamaNumPredict: sanitize(input.ollamaNumPredict, ADVANCED_OLLAMA_NUM_PREDICT_RANGE, true),
+    ollamaNumKeep: sanitize(input.ollamaNumKeep, ADVANCED_OLLAMA_NUM_KEEP_RANGE, true),
+    ollamaNumBatch: sanitize(input.ollamaNumBatch, ADVANCED_OLLAMA_NUM_BATCH_RANGE, true),
+    ollamaNumGpu: sanitize(input.ollamaNumGpu, ADVANCED_OLLAMA_NUM_GPU_RANGE, true),
+    ollamaNumThread: sanitize(input.ollamaNumThread, ADVANCED_OLLAMA_NUM_THREAD_RANGE, true),
+    ollamaTfsZ: sanitize(input.ollamaTfsZ, ADVANCED_OLLAMA_TFS_Z_RANGE, false),
+    ollamaTypicalP: sanitize(input.ollamaTypicalP, ADVANCED_OLLAMA_TYPICAL_P_RANGE, false),
+    ollamaMinP: sanitize(input.ollamaMinP, ADVANCED_OLLAMA_MIN_P_RANGE, false),
+    ollamaMirostat: sanitize(input.ollamaMirostat, ADVANCED_OLLAMA_MIROSTAT_RANGE, true),
+    ollamaMirostatTau: sanitize(input.ollamaMirostatTau, ADVANCED_OLLAMA_MIROSTAT_TAU_RANGE, false),
+    ollamaMirostatEta: sanitize(input.ollamaMirostatEta, ADVANCED_OLLAMA_MIROSTAT_ETA_RANGE, false),
+    ollamaRepeatPenalty: sanitize(
+      input.ollamaRepeatPenalty,
+      ADVANCED_OLLAMA_REPEAT_PENALTY_RANGE,
+      false,
+    ),
+    ollamaSeed: sanitize(input.ollamaSeed, ADVANCED_OLLAMA_SEED_RANGE, true),
+    ollamaStop: normalizeStop(input.ollamaStop),
     reasoningEnabled: input.reasoningEnabled ?? null,
     reasoningEffort: input.reasoningEffort ?? null,
     reasoningBudgetTokens: sanitize(

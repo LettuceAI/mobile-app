@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -497,6 +497,250 @@ fn build_llama_extra_fields(
     } else {
         Some(extra)
     }
+}
+
+fn build_ollama_extra_fields(
+    session: &Session,
+    model: &Model,
+    settings: &Settings,
+    context_length: Option<u32>,
+    max_tokens: u32,
+    temperature: f64,
+    top_p: f64,
+    top_k: Option<u32>,
+    frequency_penalty: Option<f64>,
+    presence_penalty: Option<f64>,
+) -> Option<HashMap<String, Value>> {
+    let mut options = Map::new();
+
+    let num_ctx = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_num_ctx)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_num_ctx)
+        })
+        .or(settings.advanced_model_settings.ollama_num_ctx)
+        .or(context_length);
+    let num_predict = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_num_predict)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_num_predict)
+        })
+        .or(settings.advanced_model_settings.ollama_num_predict)
+        .or(Some(max_tokens));
+    let num_keep = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_num_keep)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_num_keep)
+        })
+        .or(settings.advanced_model_settings.ollama_num_keep);
+    let num_batch = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_num_batch)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_num_batch)
+        })
+        .or(settings.advanced_model_settings.ollama_num_batch);
+    let num_gpu = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_num_gpu)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_num_gpu)
+        })
+        .or(settings.advanced_model_settings.ollama_num_gpu);
+    let num_thread = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_num_thread)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_num_thread)
+        })
+        .or(settings.advanced_model_settings.ollama_num_thread);
+    let tfs_z = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_tfs_z)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_tfs_z)
+        })
+        .or(settings.advanced_model_settings.ollama_tfs_z);
+    let typical_p = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_typical_p)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_typical_p)
+        })
+        .or(settings.advanced_model_settings.ollama_typical_p);
+    let min_p = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_min_p)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_min_p)
+        })
+        .or(settings.advanced_model_settings.ollama_min_p);
+    let mirostat = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_mirostat)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_mirostat)
+        })
+        .or(settings.advanced_model_settings.ollama_mirostat);
+    let mirostat_tau = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_mirostat_tau)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_mirostat_tau)
+        })
+        .or(settings.advanced_model_settings.ollama_mirostat_tau);
+    let mirostat_eta = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_mirostat_eta)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_mirostat_eta)
+        })
+        .or(settings.advanced_model_settings.ollama_mirostat_eta);
+    let repeat_penalty = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_repeat_penalty)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_repeat_penalty)
+        })
+        .or(settings.advanced_model_settings.ollama_repeat_penalty);
+    let seed = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_seed)
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_seed)
+        })
+        .or(settings.advanced_model_settings.ollama_seed);
+    let stop = session
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|cfg| cfg.ollama_stop.clone())
+        .or_else(|| {
+            model
+                .advanced_model_settings
+                .as_ref()
+                .and_then(|cfg| cfg.ollama_stop.clone())
+        })
+        .or(settings.advanced_model_settings.ollama_stop.clone());
+
+    options.insert("temperature".into(), json!(temperature));
+    options.insert("top_p".into(), json!(top_p));
+    if let Some(v) = top_k {
+        options.insert("top_k".into(), json!(v));
+    }
+    if let Some(v) = frequency_penalty {
+        options.insert("frequency_penalty".into(), json!(v));
+    }
+    if let Some(v) = presence_penalty {
+        options.insert("presence_penalty".into(), json!(v));
+    }
+    if let Some(v) = num_ctx {
+        options.insert("num_ctx".into(), json!(v));
+    }
+    if let Some(v) = num_predict {
+        options.insert("num_predict".into(), json!(v));
+    }
+    if let Some(v) = num_keep {
+        options.insert("num_keep".into(), json!(v));
+    }
+    if let Some(v) = num_batch {
+        options.insert("num_batch".into(), json!(v));
+    }
+    if let Some(v) = num_gpu {
+        options.insert("num_gpu".into(), json!(v));
+    }
+    if let Some(v) = num_thread {
+        options.insert("num_thread".into(), json!(v));
+    }
+    if let Some(v) = tfs_z {
+        options.insert("tfs_z".into(), json!(v));
+    }
+    if let Some(v) = typical_p {
+        options.insert("typical_p".into(), json!(v));
+    }
+    if let Some(v) = min_p {
+        options.insert("min_p".into(), json!(v));
+    }
+    if let Some(v) = mirostat {
+        options.insert("mirostat".into(), json!(v));
+    }
+    if let Some(v) = mirostat_tau {
+        options.insert("mirostat_tau".into(), json!(v));
+    }
+    if let Some(v) = mirostat_eta {
+        options.insert("mirostat_eta".into(), json!(v));
+    }
+    if let Some(v) = repeat_penalty {
+        options.insert("repeat_penalty".into(), json!(v));
+    }
+    if let Some(v) = seed {
+        options.insert("seed".into(), json!(v));
+    }
+    if let Some(v) = stop {
+        options.insert("stop".into(), json!(v));
+    }
+
+    let mut extra = HashMap::new();
+    extra.insert("options".to_string(), Value::Object(options));
+    Some(extra)
 }
 
 fn resolve_reasoning_enabled(session: &Session, model: &Model, _settings: &Settings) -> bool {
@@ -1044,8 +1288,21 @@ pub async fn chat_completion(
     let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
     let reasoning_budget =
         resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(&session, &model, &settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            &session,
+            &model,
+            &settings,
+            context_length,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k,
+            frequency_penalty,
+            presence_penalty,
+        )
     } else {
         None
     };
@@ -1084,7 +1341,7 @@ pub async fn chat_completion(
         reasoning_enabled,
         reasoning_effort,
         reasoning_budget,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     log_info(
@@ -1715,8 +1972,21 @@ pub async fn chat_regenerate(
     let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
     let reasoning_budget =
         resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(&session, &model, &settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            &session,
+            &model,
+            &settings,
+            context_length,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k,
+            frequency_penalty,
+            presence_penalty,
+        )
     } else {
         None
     };
@@ -1740,7 +2010,7 @@ pub async fn chat_regenerate(
         reasoning_enabled,
         reasoning_effort,
         reasoning_budget,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     emit_debug(
@@ -2250,8 +2520,21 @@ pub async fn chat_continue(
     let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
     let reasoning_budget =
         resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(&session, &model, &settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            &session,
+            &model,
+            &settings,
+            context_length,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k,
+            frequency_penalty,
+            presence_penalty,
+        )
     } else {
         None
     };
@@ -2275,7 +2558,7 @@ pub async fn chat_continue(
         reasoning_enabled,
         reasoning_effort,
         reasoning_budget,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     emit_debug(
@@ -3348,8 +3631,22 @@ async fn run_memory_tool_update(
     }));
 
     let context_length = resolve_context_length(session, model, settings);
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let max_tokens = resolve_max_tokens(session, model, settings);
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(session, model, settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            session,
+            model,
+            settings,
+            context_length,
+            max_tokens,
+            0.2,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -3361,7 +3658,7 @@ async fn run_memory_tool_update(
         None,
         0.2,
         1.0,
-        resolve_max_tokens(session, model, settings), // Dynamic max tokens
+        max_tokens, // Dynamic max tokens
         context_length,
         false,
         None,
@@ -3372,7 +3669,7 @@ async fn run_memory_tool_update(
         false,
         None,
         None,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -3766,8 +4063,22 @@ async fn summarize_messages(
     }));
 
     let context_length = resolve_context_length(session, model, settings);
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let max_tokens = resolve_max_tokens(session, model, settings);
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(session, model, settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            session,
+            model,
+            settings,
+            context_length,
+            max_tokens,
+            0.2,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -3779,7 +4090,7 @@ async fn summarize_messages(
         None,
         0.2,
         1.0,
-        resolve_max_tokens(session, model, settings),
+        max_tokens,
         context_length,
         false,
         None,
@@ -3790,7 +4101,7 @@ async fn summarize_messages(
         false,
         None,
         None,
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     let api_request_payload = ApiRequest {
@@ -4140,8 +4451,21 @@ pub async fn chat_generate_user_reply(
     ];
 
     let context_length = resolve_context_length(&session, model, settings);
-    let llama_extra_fields = if provider_cred.provider_id == "llamacpp" {
+    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
         build_llama_extra_fields(&session, model, settings)
+    } else if provider_cred.provider_id == "ollama" {
+        build_ollama_extra_fields(
+            &session,
+            model,
+            settings,
+            context_length,
+            max_tokens,
+            0.8,
+            1.0,
+            None,
+            None,
+            None,
+        )
     } else {
         None
     };
@@ -4164,7 +4488,7 @@ pub async fn chat_generate_user_reply(
         false,              // reasoning_enabled
         None,               // reasoning_effort
         None,               // reasoning_budget
-        llama_extra_fields,
+        extra_body_fields,
     );
 
     log_info(
