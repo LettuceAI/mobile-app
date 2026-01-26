@@ -10,6 +10,7 @@ import {
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import type {
   AccessibilitySettings,
   Character,
@@ -238,6 +239,7 @@ export function ChatConversationPage() {
 
   const backgroundImageData = useImageData(character?.backgroundImagePath);
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
+  const unloadProviderIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const checkModelCapabilities = async () => {
@@ -258,6 +260,35 @@ export function ChatConversationPage() {
     };
     checkModelCapabilities();
   }, [character]);
+
+  useEffect(() => {
+    let active = true;
+    unloadProviderIdRef.current = null;
+    if (!character) {
+      return () => {
+        active = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const settings = await readSettings();
+        if (!active) return;
+        const effectiveModelId = character.defaultModelId || settings.defaultModelId;
+        const currentModel = settings.models.find((m: Model) => m.id === effectiveModelId);
+        unloadProviderIdRef.current = currentModel?.providerId ?? null;
+      } catch (err) {
+        console.error("Failed to resolve model provider for unload:", err);
+      }
+    })();
+
+    return () => {
+      active = false;
+      if (unloadProviderIdRef.current === "llamacpp") {
+        void invoke("llamacpp_unload");
+      }
+    };
+  }, [character?.id]);
 
   useEffect(() => {
     if (character) {

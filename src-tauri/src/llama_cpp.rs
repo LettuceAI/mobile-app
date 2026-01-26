@@ -112,6 +112,28 @@ mod desktop {
         Ok(guard)
     }
 
+    pub fn unload_engine(app: &AppHandle) -> Result<(), String> {
+        let engine = ENGINE.get_or_init(|| {
+            Mutex::new(LlamaState {
+                backend: None,
+                model_path: None,
+                model: None,
+            })
+        });
+
+        let mut guard = engine
+            .lock()
+            .map_err(|_| "llama.cpp engine lock poisoned".to_string())?;
+
+        if guard.model.is_some() {
+            guard.model = None;
+            guard.model_path = None;
+            log_info(app, "llama_cpp", "unloaded llama.cpp model");
+        }
+
+        Ok(())
+    }
+
     fn normalize_role(role: &str) -> &'static str {
         match role {
             "system" | "developer" => "system",
@@ -555,6 +577,19 @@ pub async fn llamacpp_context_info(
     {
         let _ = app;
         let _ = model_path;
+        Err("llama.cpp is only supported on desktop builds".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn llamacpp_unload(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(mobile))]
+    {
+        return desktop::unload_engine(&app);
+    }
+    #[cfg(mobile)]
+    {
+        let _ = app;
         Err("llama.cpp is only supported on desktop builds".to_string())
     }
 }
