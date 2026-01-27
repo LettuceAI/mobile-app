@@ -17,14 +17,19 @@ export interface Logger {
   with: (ctx: Partial<LoggerOptions>) => Logger;
 }
 
-let _enabled = isDevelopmentMode();
+const _enabled = true;
+let _minLevel: LogLevel = isDevelopmentMode() ? "debug" : "info";
 
 export function setLoggingEnabled(enabled: boolean) {
-  _enabled = enabled;
+  if (!enabled) return;
 }
 
 export function isLoggingEnabled() {
-  return _enabled;
+  return true;
+}
+
+export function setMinLogLevel(level: LogLevel) {
+  _minLevel = level;
 }
 
 function fmtPrefix(level: LogLevel, opts: LoggerOptions): string {
@@ -38,25 +43,33 @@ function fmtPrefix(level: LogLevel, opts: LoggerOptions): string {
 
 function write(level: LogLevel, opts: LoggerOptions, args: any[]) {
   if (!_enabled) return;
+  const levelRank: Record<LogLevel, number> = {
+    debug: 10,
+    info: 20,
+    warn: 30,
+    error: 40,
+    log: 20,
+  };
+  if (levelRank[level] < levelRank[_minLevel]) return;
   const method: (...data: any[]) => void = (console as any)[level] || console.log;
   const prefix = fmtPrefix(level, opts);
   method(prefix, ...args);
-  
+
   // Also log to file
   try {
-    const message = args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join(' ');
-    
-    invoke('log_to_file', {
+    const message = args
+      .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
+      .join(" ");
+
+    invoke("log_to_file", {
       timestamp: new Date().toISOString(),
       level: level.toUpperCase(),
       component: opts.component,
       function: opts.fn || null,
       message: message,
-    }).catch(err => {
+    }).catch((err) => {
       // Silently fail if logging to file doesn't work
-      console.warn('Failed to log to file:', err);
+      console.warn("Failed to log to file:", err);
     });
   } catch (err) {
     // Silently fail
@@ -73,8 +86,6 @@ const disabledLogger: Logger = {
 };
 
 export function logManager(options: LoggerOptions): Logger {
-  if (!_enabled) return disabledLogger;
-
   const base: LoggerOptions = { component: options.component, fn: options.fn };
 
   const logger: Logger = {

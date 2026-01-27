@@ -77,13 +77,13 @@ pub fn list_lorebooks(conn: &DbConnection) -> Result<Vec<Lorebook>, String> {
             ORDER BY updated_at DESC
             "#,
         )
-        .map_err(|e| format!("Failed to prepare lorebooks list: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to prepare lorebooks list: {}", e)))?;
 
     let items = stmt
         .query_map([], Lorebook::from_row)
-        .map_err(|e| format!("Failed to query lorebooks: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query lorebooks: {}", e)))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect lorebooks: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to collect lorebooks: {}", e)))?;
 
     Ok(items)
 }
@@ -95,7 +95,7 @@ pub fn get_lorebook(conn: &DbConnection, lorebook_id: &str) -> Result<Option<Lor
         Lorebook::from_row,
     )
     .optional()
-    .map_err(|e| format!("Failed to query lorebook: {}", e))
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query lorebook: {}", e)))
 }
 
 pub fn upsert_lorebook(conn: &DbConnection, lorebook: &Lorebook) -> Result<Lorebook, String> {
@@ -108,7 +108,7 @@ pub fn upsert_lorebook(conn: &DbConnection, lorebook: &Lorebook) -> Result<Loreb
             |_| Ok(true),
         )
         .optional()
-        .map_err(|e| format!("Failed to check lorebook existence: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to check lorebook existence: {}", e)))?
         .unwrap_or(false);
 
     if exists {
@@ -116,13 +116,13 @@ pub fn upsert_lorebook(conn: &DbConnection, lorebook: &Lorebook) -> Result<Loreb
             "UPDATE lorebooks SET name = ?2, updated_at = ?3 WHERE id = ?1",
             params![lorebook.id, lorebook.name, now],
         )
-        .map_err(|e| format!("Failed to update lorebook: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to update lorebook: {}", e)))?;
     } else {
         conn.execute(
             "INSERT INTO lorebooks (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
             params![lorebook.id, lorebook.name, lorebook.created_at, now],
         )
-        .map_err(|e| format!("Failed to insert lorebook: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert lorebook: {}", e)))?;
     }
 
     get_lorebook(conn, &lorebook.id)?
@@ -131,7 +131,7 @@ pub fn upsert_lorebook(conn: &DbConnection, lorebook: &Lorebook) -> Result<Loreb
 
 pub fn delete_lorebook(conn: &DbConnection, lorebook_id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM lorebooks WHERE id = ?1", params![lorebook_id])
-        .map_err(|e| format!("Failed to delete lorebook: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete lorebook: {}", e)))?;
     Ok(())
 }
 
@@ -149,13 +149,13 @@ pub fn list_character_lorebooks(
             ORDER BY cl.display_order ASC, l.updated_at DESC
             "#,
         )
-        .map_err(|e| format!("Failed to prepare character lorebooks list: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to prepare character lorebooks list: {}", e)))?;
 
     let items = stmt
         .query_map(params![character_id], Lorebook::from_row)
-        .map_err(|e| format!("Failed to query character lorebooks: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query character lorebooks: {}", e)))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect character lorebooks: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to collect character lorebooks: {}", e)))?;
 
     Ok(items)
 }
@@ -168,13 +168,13 @@ pub fn set_character_lorebooks(
     let now = now_millis()? as i64;
     let tx = conn
         .transaction()
-        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to start transaction: {}", e)))?;
 
     tx.execute(
         "DELETE FROM character_lorebooks WHERE character_id = ?1",
         params![character_id],
     )
-    .map_err(|e| format!("Failed to clear character lorebooks: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to clear character lorebooks: {}", e)))?;
 
     for (idx, lorebook_id) in lorebook_ids.iter().enumerate() {
         tx.execute(
@@ -184,11 +184,11 @@ pub fn set_character_lorebooks(
             "#,
             params![character_id, lorebook_id, idx as i32, now],
         )
-        .map_err(|e| format!("Failed to set character lorebook mapping: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to set character lorebook mapping: {}", e)))?;
     }
 
     tx.commit()
-        .map_err(|e| format!("Failed to commit character lorebooks: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to commit character lorebooks: {}", e)))?;
 
     Ok(())
 }
@@ -212,13 +212,13 @@ pub fn get_lorebook_entries(
             ORDER BY display_order ASC, created_at ASC
             "#,
         )
-        .map_err(|e| format!("Failed to prepare entries query: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to prepare entries query: {}", e)))?;
 
     let entries = stmt
         .query_map(params![lorebook_id], LorebookEntry::from_row)
-        .map_err(|e| format!("Failed to execute entries query: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to execute entries query: {}", e)))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect entries: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to collect entries: {}", e)))?;
 
     Ok(entries)
 }
@@ -239,13 +239,13 @@ pub fn get_enabled_character_lorebook_entries(
             ORDER BY cl.display_order ASC, e.display_order ASC, e.created_at ASC
             "#,
         )
-        .map_err(|e| format!("Failed to prepare enabled entries query: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to prepare enabled entries query: {}", e)))?;
 
     let entries = stmt
         .query_map(params![character_id], LorebookEntry::from_row)
-        .map_err(|e| format!("Failed to execute enabled entries query: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to execute enabled entries query: {}", e)))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect enabled entries: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to collect enabled entries: {}", e)))?;
 
     Ok(entries)
 }
@@ -266,7 +266,7 @@ pub fn get_lorebook_entry(
         LorebookEntry::from_row,
     )
     .optional()
-    .map_err(|e| format!("Failed to query entry: {}", e))
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query entry: {}", e)))
 }
 
 pub fn upsert_lorebook_entry(
@@ -274,7 +274,7 @@ pub fn upsert_lorebook_entry(
     entry: &LorebookEntry,
 ) -> Result<LorebookEntry, String> {
     let keywords_json = serde_json::to_string(&entry.keywords)
-        .map_err(|e| format!("Failed to serialize keywords: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize keywords: {}", e)))?;
 
     let exists: bool = conn
         .query_row(
@@ -283,7 +283,7 @@ pub fn upsert_lorebook_entry(
             |_| Ok(true),
         )
         .optional()
-        .map_err(|e| format!("Failed to check entry existence: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to check entry existence: {}", e)))?
         .unwrap_or(false);
 
     let now = now_millis()? as i64;
@@ -311,7 +311,7 @@ pub fn upsert_lorebook_entry(
                 now,
             ],
         )
-        .map_err(|e| format!("Failed to update entry: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to update entry: {}", e)))?;
     } else {
         conn.execute(
             r#"
@@ -336,7 +336,7 @@ pub fn upsert_lorebook_entry(
                 now,
             ],
         )
-        .map_err(|e| format!("Failed to insert entry: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert entry: {}", e)))?;
     }
 
     get_lorebook_entry(conn, &entry.id)?
@@ -348,7 +348,7 @@ pub fn delete_lorebook_entry(conn: &DbConnection, entry_id: &str) -> Result<(), 
         "DELETE FROM lorebook_entries WHERE id = ?1",
         params![entry_id],
     )
-    .map_err(|e| format!("Failed to delete entry: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete entry: {}", e)))?;
     Ok(())
 }
 
@@ -362,7 +362,7 @@ pub fn update_entry_display_order(
             "UPDATE lorebook_entries SET display_order = ?1, updated_at = ?2 WHERE id = ?3",
             params![display_order, now, entry_id],
         )
-        .map_err(|e| format!("Failed to update display order for {}: {}", entry_id, e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to update display order for {}: {}", entry_id, e)))?;
     }
     Ok(())
 }
@@ -375,16 +375,16 @@ pub fn update_entry_display_order(
 pub fn lorebooks_list(app: tauri::AppHandle) -> Result<String, String> {
     let conn = crate::storage_manager::db::open_db(&app)?;
     let lorebooks = list_lorebooks(&conn)?;
-    serde_json::to_string(&lorebooks).map_err(|e| format!("Failed to serialize lorebooks: {}", e))
+    serde_json::to_string(&lorebooks).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize lorebooks: {}", e)))
 }
 
 #[tauri::command]
 pub fn lorebook_upsert(app: tauri::AppHandle, lorebook_json: String) -> Result<String, String> {
     let lorebook: Lorebook = serde_json::from_str(&lorebook_json)
-        .map_err(|e| format!("Invalid lorebook JSON: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid lorebook JSON: {}", e)))?;
     let conn = crate::storage_manager::db::open_db(&app)?;
     let updated = upsert_lorebook(&conn, &lorebook)?;
-    serde_json::to_string(&updated).map_err(|e| format!("Failed to serialize lorebook: {}", e))
+    serde_json::to_string(&updated).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize lorebook: {}", e)))
 }
 
 #[tauri::command]
@@ -401,7 +401,7 @@ pub fn character_lorebooks_list(
     let conn = crate::storage_manager::db::open_db(&app)?;
     let lorebooks = list_character_lorebooks(&conn, &character_id)?;
     serde_json::to_string(&lorebooks)
-        .map_err(|e| format!("Failed to serialize character lorebooks: {}", e))
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize character lorebooks: {}", e)))
 }
 
 #[tauri::command]
@@ -411,7 +411,7 @@ pub fn character_lorebooks_set(
     lorebook_ids_json: String,
 ) -> Result<(), String> {
     let lorebook_ids: Vec<String> = serde_json::from_str(&lorebook_ids_json)
-        .map_err(|e| format!("Invalid lorebook ids JSON: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid lorebook ids JSON: {}", e)))?;
     let mut conn = crate::storage_manager::db::open_db(&app)?;
     set_character_lorebooks(&mut conn, &character_id, &lorebook_ids)
 }
@@ -420,26 +420,26 @@ pub fn character_lorebooks_set(
 pub fn lorebook_entries_list(app: tauri::AppHandle, lorebook_id: String) -> Result<String, String> {
     let conn = crate::storage_manager::db::open_db(&app)?;
     let entries = get_lorebook_entries(&conn, &lorebook_id)?;
-    serde_json::to_string(&entries).map_err(|e| format!("Failed to serialize entries: {}", e))
+    serde_json::to_string(&entries).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize entries: {}", e)))
 }
 
 #[tauri::command]
 pub fn lorebook_entry_get(app: tauri::AppHandle, entry_id: String) -> Result<String, String> {
     let conn = crate::storage_manager::db::open_db(&app)?;
     let entry = get_lorebook_entry(&conn, &entry_id)?;
-    serde_json::to_string(&entry).map_err(|e| format!("Failed to serialize entry: {}", e))
+    serde_json::to_string(&entry).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize entry: {}", e)))
 }
 
 #[tauri::command]
 pub fn lorebook_entry_upsert(app: tauri::AppHandle, entry_json: String) -> Result<String, String> {
     let entry: LorebookEntry =
-        serde_json::from_str(&entry_json).map_err(|e| format!("Invalid entry JSON: {}", e))?;
+        serde_json::from_str(&entry_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid entry JSON: {}", e)))?;
 
     let conn = crate::storage_manager::db::open_db(&app)?;
     let updated_entry = upsert_lorebook_entry(&conn, &entry)?;
 
     serde_json::to_string(&updated_entry)
-        .map_err(|e| format!("Failed to serialize updated entry: {}", e))
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize updated entry: {}", e)))
 }
 
 #[tauri::command]
@@ -480,13 +480,13 @@ pub fn lorebook_entry_create_blank(
     };
 
     let created = upsert_lorebook_entry(&conn, &new_entry)?;
-    serde_json::to_string(&created).map_err(|e| format!("Failed to serialize entry: {}", e))
+    serde_json::to_string(&created).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize entry: {}", e)))
 }
 
 #[tauri::command]
 pub fn lorebook_entries_reorder(app: tauri::AppHandle, updates_json: String) -> Result<(), String> {
     let updates: Vec<(String, i32)> =
-        serde_json::from_str(&updates_json).map_err(|e| format!("Invalid updates JSON: {}", e))?;
+        serde_json::from_str(&updates_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid updates JSON: {}", e)))?;
 
     let conn = crate::storage_manager::db::open_db(&app)?;
     update_entry_display_order(&conn, updates)

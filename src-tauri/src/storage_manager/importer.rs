@@ -19,7 +19,7 @@ pub fn run_legacy_import(app: &tauri::AppHandle) -> Result<(), String> {
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if imported.is_some() {
         return Ok(());
     }
@@ -79,7 +79,7 @@ pub fn run_legacy_import(app: &tauri::AppHandle) -> Result<(), String> {
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('legacy_imported', ?)",
             params![ts],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         log_info(app, "import", "Imported legacy storage into SQLite");
     }
     Ok(())
@@ -99,15 +99,15 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if imported.is_none() {
-        return Err("Legacy import not completed; refusing to remove files".into());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Legacy import not completed; refusing to remove files"));
     }
 
     let root = super::legacy::storage_root(&app)?;
     let ts = super::db::now_ms();
     let backup_dir = root.join(format!("backup_legacy_{}", ts));
-    fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&backup_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut moved: Vec<String> = Vec::new();
     let mut skip_missing = |p: PathBuf, _name: &str| -> Result<(), String> {
@@ -116,9 +116,9 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
             fs::rename(&p, &target)
                 .or_else(|_| {
                     // fallback to copy if rename across devices fails
-                    fs::copy(&p, &target).map(|_| ()).map_err(|e| e.to_string())
+                    fs::copy(&p, &target).map(|_| ()).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
                 })
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             moved.push(format!(
                 "{} -> {}",
                 p.to_string_lossy(),
@@ -142,22 +142,22 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
             .or_else(|_| {
                 // copy recursively
                 fn copy_dir(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
-                    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
-                    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
-                        let entry = entry.map_err(|e| e.to_string())?;
+                    fs::create_dir_all(dst).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                    for entry in fs::read_dir(src).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
+                        let entry = entry.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                         let path = entry.path();
                         let dest = dst.join(entry.file_name());
                         if path.is_dir() {
                             copy_dir(&path, &dest)?;
                         } else {
-                            fs::copy(&path, &dest).map_err(|e| e.to_string())?;
+                            fs::copy(&path, &dest).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                         }
                     }
                     Ok(())
                 }
                 copy_dir(&sdir, &target)
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         moved.push(format!(
             "{} -> {}",
             sdir.to_string_lossy(),
@@ -173,10 +173,10 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
 }
 
 fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), String> {
-    let data: JsonValue = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let data: JsonValue = serde_json::from_str(json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let arr = data.as_array().cloned().unwrap_or_default();
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for c in arr {
         let id = c
             .get("id")
@@ -250,7 +250,7 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                 created_at,
                 updated_at
             ],
-        ).map_err(|e| e.to_string())?;
+        ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Rules
         if let Some(rules) = c.get("rules").and_then(|v| v.as_array()) {
@@ -260,7 +260,7 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                         "INSERT INTO character_rules (character_id, idx, rule) VALUES (?, ?, ?)",
                         params![&id, idx as i64, text],
                     )
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 }
             }
         }
@@ -271,7 +271,7 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                 if s.is_string() {
                     let sid = uuid::Uuid::new_v4().to_string();
                     let content = s.as_str().unwrap_or("");
-                    tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, NULL)", params![&sid, &id, content, None::<String>, now]).map_err(|e| e.to_string())?;
+                    tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, NULL)", params![&sid, &id, content, None::<String>, now]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 } else if let Some(obj) = s.as_object() {
                     let sid = obj
                         .get("id")
@@ -285,7 +285,7 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
                     let direction = obj.get("direction").and_then(|v| v.as_str());
-                    tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, ?)", params![&sid, &id, content, direction, screated, sel]).map_err(|e| e.to_string())?;
+                    tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, ?)", params![&sid, &id, content, direction, screated, sel]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                     if let Some(vars) = obj.get("variants").and_then(|v| v.as_array()) {
                         for v in vars {
                             let vid = v
@@ -297,21 +297,21 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
                             let vdirection = v.get("direction").and_then(|x| x.as_str());
                             let vcreated =
                                 v.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(now);
-                            tx.execute("INSERT INTO scene_variants (id, scene_id, content, direction, created_at) VALUES (?, ?, ?, ?, ?)", params![vid, &sid, vcontent, vdirection, vcreated]).map_err(|e| e.to_string())?;
+                            tx.execute("INSERT INTO scene_variants (id, scene_id, content, direction, created_at) VALUES (?, ?, ?, ?, ?)", params![vid, &sid, vcontent, vdirection, vcreated]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                         }
                     }
                 }
             }
         }
     }
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 fn import_personas(conn: &mut rusqlite::Connection, json: &str) -> Result<(), String> {
-    let data: JsonValue = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let data: JsonValue = serde_json::from_str(json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let arr = data.as_array().cloned().unwrap_or_default();
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for p in arr {
         let id = p
             .get("id")
@@ -353,9 +353,9 @@ fn import_personas(conn: &mut rusqlite::Connection, json: &str) -> Result<(), St
                 created_at,
                 updated_at
             ],
-        ).map_err(|e| e.to_string())?;
+        ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> Result<(), String> {
@@ -378,8 +378,8 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
     }
     if ids.is_empty() {
         // discover by scanning
-        for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
+        for entry in fs::read_dir(&dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
+            let entry = entry.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let path = entry.path();
             if let Some(ext) = path.extension() {
                 if ext == "bin" {
@@ -392,14 +392,14 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
     }
 
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for id in ids {
         let path = dir.join(format!("{}.bin", &id));
         if !path.exists() {
             continue;
         }
         if let Some(json) = read_encrypted_file(&path)? {
-            let s: JsonValue = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+            let s: JsonValue = serde_json::from_str(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let character_id = s.get("characterId").and_then(|v| v.as_str()).unwrap_or("");
             let title = s.get("title").and_then(|v| v.as_str()).unwrap_or("");
             let system_prompt = s
@@ -441,7 +441,7 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
                 r#"INSERT OR REPLACE INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, archived, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
                 params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, archived, created_at, updated_at],
-            ).map_err(|e| e.to_string())?;
+            ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             if let Some(msgs) = s.get("messages").and_then(|v| v.as_array()) {
                 for m in msgs {
@@ -475,7 +475,7 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
                     tx.execute(
                         "INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         params![&mid, &id, role, content, mcreated, pt, ct, tt, selected_variant_id, is_pinned],
-                    ).map_err(|e| e.to_string())?;
+                    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
                     if let Some(vars) = m.get("variants").and_then(|v| v.as_array()) {
                         for v in vars {
@@ -499,12 +499,12 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
                             let vt = u
                                 .and_then(|u| u.get("totalTokens"))
                                 .and_then(|v| v.as_i64());
-                            tx.execute("INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)", params![vid, &mid, vcontent, vcreated, vp, vc, vt]).map_err(|e| e.to_string())?;
+                            tx.execute("INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)", params![vid, &mid, vcontent, vcreated, vp, vc, vt]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                         }
                     }
                 }
             }
         }
     }
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }

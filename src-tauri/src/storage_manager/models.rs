@@ -6,7 +6,7 @@ use super::db::{now_ms, open_db};
 #[tauri::command]
 pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String, String> {
     let conn = open_db(&app)?;
-    let model: JsonValue = serde_json::from_str(&model_json).map_err(|e| e.to_string())?;
+    let model: JsonValue = serde_json::from_str(&model_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = model
         .get("id")
         .and_then(|v| v.as_str())
@@ -85,7 +85,7 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let created_at = existing_created.unwrap_or(now_ms() as i64);
     conn.execute(
         r#"INSERT INTO models (id, name, provider_id, provider_label, display_name, created_at, model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt)
@@ -114,7 +114,7 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
             prompt_template_id,
             system_prompt
         ],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut out = JsonMap::new();
     out.insert("id".into(), JsonValue::String(id));
     out.insert("name".into(), JsonValue::String(name.to_string()));
@@ -152,13 +152,13 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
     {
         out.insert("systemPrompt".into(), v);
     }
-    Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn model_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM models WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }

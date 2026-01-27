@@ -1,6 +1,6 @@
 import { useEffect, useState, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, ArrowLeft, User, MessageCircle } from "lucide-react";
+import { Search, X, ArrowLeft, User, MessageCircle, Rocket } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
@@ -13,6 +13,7 @@ import type { Character, Persona } from "../../../core/storage/schemas";
 import { cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
+import { useRocketEasterEgg } from "../../hooks/useRocketEasterEgg";
 import { AvatarImage } from "../../components/AvatarImage";
 
 type SearchTab = "characters" | "personas";
@@ -446,9 +447,20 @@ function LoadingSkeleton() {
 
 function EmptyState({ type, hasQuery }: { type: "characters" | "personas"; hasQuery: boolean }) {
   const isCharacters = type === "characters";
+  const rocket = useRocketEasterEgg();
 
   return (
-    <div className="mt-12 flex flex-col items-center justify-center px-8 text-center">
+    <div
+      className="relative mt-12 flex flex-col items-center justify-center px-8 text-center overflow-hidden"
+      {...rocket.bind}
+    >
+      {rocket.isLaunched && (
+        <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rocket-launch">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/10">
+            <Rocket className="h-4 w-4 text-white/80" />
+          </div>
+        </div>
+      )}
       <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white/5">
         {isCharacters ? (
           <MessageCircle size={36} className="text-white/20" />

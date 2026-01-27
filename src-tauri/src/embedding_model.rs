@@ -182,7 +182,7 @@ fn cleanup_partial_files(
         let file_path = model_dir.join(filename);
         if file_path.exists() {
             fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete partial file {}: {}", filename, e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete partial file {}: {}", filename, e)))?;
         }
     }
     Ok(())
@@ -243,7 +243,7 @@ async fn download_file(
         .get(url)
         .send()
         .await
-        .map_err(|e| format!("Failed to start download: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to start download: {}", e)))?;
 
     if !response.status().is_success() {
         log_error(
@@ -273,7 +273,7 @@ async fn download_file(
     let temp_path = dest_path.with_extension("tmp");
     let mut file = tokio::fs::File::create(&temp_path)
         .await
-        .map_err(|e| format!("Failed to create file: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create file: {}", e)))?;
 
     let mut stream = response.bytes_stream();
     let mut _downloaded: u64 = 0;
@@ -286,14 +286,14 @@ async fn download_file(
                 drop(file);
                 let _ = tokio::fs::remove_file(&temp_path).await;
                 let _ = app.emit("embedding_download_progress", &state_lock.progress);
-                return Err("Download cancelled".to_string());
+                return Err(crate::utils::err_msg(module_path!(), line!(), "Download cancelled"));
             }
         }
 
-        let chunk = chunk_result.map_err(|e| format!("Error reading chunk: {}", e))?;
+        let chunk = chunk_result.map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Error reading chunk: {}", e)))?;
         file.write_all(&chunk)
             .await
-            .map_err(|e| format!("Error writing to file: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Error writing to file: {}", e)))?;
 
         _downloaded += chunk.len() as u64;
 
@@ -310,12 +310,12 @@ async fn download_file(
 
     file.flush()
         .await
-        .map_err(|e| format!("Error flushing file: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Error flushing file: {}", e)))?;
     drop(file);
 
     tokio::fs::rename(&temp_path, dest_path)
         .await
-        .map_err(|e| format!("Failed to rename file: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to rename file: {}", e)))?;
 
     let file_status = describe_path(dest_path);
     log_info(
@@ -366,7 +366,7 @@ pub async fn start_embedding_download(
     {
         let mut state = DOWNLOAD_STATE.lock().await;
         if state.is_downloading {
-            return Err("Download already in progress".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Download already in progress"));
         }
         state.is_downloading = true;
         state.cancel_requested = false;
@@ -395,7 +395,7 @@ pub async fn start_embedding_download(
         ),
     );
     fs::create_dir_all(&model_dir)
-        .map_err(|e| format!("Failed to create model directory: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create model directory: {}", e)))?;
     log_info(
         &app,
         "embedding_download",
@@ -539,7 +539,7 @@ fn compute_embedding_with_session(
 ) -> Result<Vec<f32>, String> {
     let encoding = tokenizer
         .encode(text, true)
-        .map_err(|e| format!("Tokenization failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Tokenization failed: {}", e)))?;
 
     let input_ids = encoding.get_ids();
     let attention_mask = encoding.get_attention_mask();
@@ -552,22 +552,22 @@ fn compute_embedding_with_session(
     let attention_mask_i64: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
 
     let input_ids_value = Value::from_array(([1, seq_len], input_ids_i64))
-        .map_err(|e| format!("Failed to create input_ids tensor: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create input_ids tensor: {}", e)))?;
 
     let attention_mask_value = Value::from_array(([1, seq_len], attention_mask_i64))
-        .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create attention_mask tensor: {}", e)))?;
 
     let outputs = session
         .run(inputs![
             "input_ids" => input_ids_value,
             "attention_mask" => attention_mask_value
         ])
-        .map_err(|e| format!("Inference failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Inference failed: {}", e)))?;
 
     let embedding_value = &outputs[0];
     let (_, embedding_slice) = embedding_value
         .try_extract_tensor::<f32>()
-        .map_err(|e| format!("Failed to extract embedding: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to extract embedding: {}", e)))?;
 
     let embedding_vec: Vec<f32> = embedding_slice.to_vec();
 
@@ -588,7 +588,7 @@ fn ensure_ort_init() -> Result<(), String> {
         let message = err.to_string();
         let lower = message.to_lowercase();
         if !lower.contains("already") || !lower.contains("init") {
-            return Err(format!("Failed to initialize ONNX Runtime: {}", message));
+            return Err(crate::utils::err_msg(module_path!(), line!(), format!("Failed to initialize ONNX Runtime: {}", message)));
         }
     }
     Ok(())
@@ -662,7 +662,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
                 "embedding_debug",
                 "model files not found; compute_embedding aborted",
             );
-            return Err("Model files not found. Please download the model first.".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Model files not found. Please download the model first."));
         }
     };
 
@@ -693,11 +693,11 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     log_info(&app, "embedding_debug", "ort initialized");
 
     let mut session = Session::builder()
-        .map_err(|e| format!("Failed to create session builder: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create session builder: {}", e)))?
         .with_optimization_level(GraphOptimizationLevel::Level3)
-        .map_err(|e| format!("Failed to set optimization level: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to set optimization level: {}", e)))?
         .commit_from_file(&model_path)
-        .map_err(|e| format!("Failed to load model: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load model: {}", e)))?;
     log_info(
         &app,
         "embedding_debug",
@@ -705,7 +705,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     );
 
     let tokenizer = Tokenizer::from_file(&tokenizer_path)
-        .map_err(|e| format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e)))?;
     log_info(&app, "embedding_debug", "tokenizer loaded");
 
     log_info(&app, "embedding_debug", "running embedding inference");
@@ -729,7 +729,7 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
     );
     if detected_version.is_none() {
         log_error(&app, "embedding_init", "model files not found");
-        return Err("Model files not found. Please download the model first.".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Model files not found. Please download the model first."));
     }
 
     let model_dir = embedding_model_dir(&app)?;
@@ -741,7 +741,7 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
     let tokenizer_path = model_dir.join("tokenizer.json");
 
     if !model_path.exists() {
-        return Err(format!("Model file missing: {}", model_path.display()));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Model file missing: {}", model_path.display())));
     }
     if !tokenizer_path.exists() {
         return Err(format!(
@@ -763,11 +763,11 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
     log_info(&app, "embedding_init", "ort initialized");
 
     let _session = Session::builder()
-        .map_err(|e| format!("Failed to create session builder: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create session builder: {}", e)))?
         .with_optimization_level(GraphOptimizationLevel::Level3)
-        .map_err(|e| format!("Failed to set optimization level: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to set optimization level: {}", e)))?
         .commit_from_file(&model_path)
-        .map_err(|e| format!("Failed to load {} model: {}", version_label, e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load {} model: {}", version_label, e)))?;
     let _tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
         format!(
             "Failed to load tokenizer from {}: {}",
@@ -844,7 +844,7 @@ pub struct ScoreComparison {
 #[tauri::command]
 pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
     log_info(&app, "embedding_test", "starting embedding test");
-    println!("Starting embedding test...");
+    log_info(&app, "embedding_test", "Starting embedding test...");
 
     // Test cases organized by category
     let test_cases: Vec<(&str, &str, &str, &str, f32, &str)> = vec![
@@ -965,7 +965,7 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
                 "v1",
             ),
             None => {
-                return Err("Model files not found. Please download the model first.".to_string());
+                return Err(crate::utils::err_msg(module_path!(), line!(), "Model files not found. Please download the model first."));
             }
         };
 
@@ -975,20 +975,24 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
         log_info(&app_for_test, "embedding_test", "ort initialized");
 
         let mut session = Session::builder()
-            .map_err(|e| format!("Failed to create session builder: {}", e))?
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create session builder: {}", e)))?
             .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(|e| format!("Failed to set optimization level: {}", e))?
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to set optimization level: {}", e)))?
             .commit_from_file(&model_path)
-            .map_err(|e| format!("Failed to load {} model: {}", version_label, e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load {} model: {}", version_label, e)))?;
 
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| format!("Failed to load tokenizer: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load tokenizer: {}", e)))?;
 
         for (idx, (name, text_a, text_b, category, threshold, expected_desc)) in
             test_cases.iter().enumerate()
         {
             log_info(&app_for_test, "embedding_test", format!("testing {}", name));
-            println!("Testing: {}", name);
+            log_info(
+                &app_for_test,
+                "embedding_test",
+                format!("Testing: {}", name),
+            );
 
             let emb_a =
                 compute_embedding_with_session(&mut session, &tokenizer, text_a, max_seq_length)
@@ -1105,7 +1109,7 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
     )
     .await
     .map_err(|_| "Embedding test timed out. Please try again.".to_string())?
-    .map_err(|e| format!("Embedding test failed to start: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Embedding test failed to start: {}", e)))?;
 
     let _ = app.emit(
         "embedding_test_progress",
@@ -1126,7 +1130,7 @@ pub async fn compare_custom_texts(
     text_b: String,
 ) -> Result<f32, String> {
     if text_a.trim().is_empty() || text_b.trim().is_empty() {
-        return Err("Both texts must be non-empty".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Both texts must be non-empty"));
     }
 
     log_info(
@@ -1141,11 +1145,11 @@ pub async fn compare_custom_texts(
 
     let emb_a = compute_embedding(app.clone(), text_a)
         .await
-        .map_err(|e| format!("Failed to embed first text: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to embed first text: {}", e)))?;
 
     let emb_b = compute_embedding(app.clone(), text_b)
         .await
-        .map_err(|e| format!("Failed to embed second text: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to embed second text: {}", e)))?;
 
     Ok(cosine_similarity(&emb_a, &emb_b))
 }

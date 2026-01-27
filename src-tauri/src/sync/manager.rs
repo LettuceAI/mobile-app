@@ -95,13 +95,13 @@ pub async fn start_driver(app: AppHandle, _port: u16) -> Result<String, String> 
     let state = app.state::<SyncManagerState>();
     let mut current_tx = state.shutdown_tx.lock().await;
     if current_tx.is_some() {
-        return Err("Sync service is already running".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Sync service is already running"));
     }
 
     let listener = TcpListener::bind("0.0.0.0:0")
         .await
-        .map_err(|e| e.to_string())?;
-    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let port = listener.local_addr().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?.port();
 
     let my_ip = crate::utils::get_local_ip().unwrap_or_else(|_| "0.0.0.0".into());
 
@@ -199,7 +199,7 @@ async fn handle_driver_connection(
             challenge,
         })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Wait for AuthRequest
     let (encrypted_challenge, their_challenge) = match framed.next().await {
@@ -207,9 +207,9 @@ async fn handle_driver_connection(
             encrypted_challenge,
             my_challenge,
         })) => (encrypted_challenge, my_challenge),
-        Some(Ok(msg)) => return Err(format!("Expected AuthRequest, got {:?}", msg)),
+        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected AuthRequest, got {:?}", msg))),
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err("Connection closed during handshake".to_string()),
+        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed during handshake")),
     };
 
     // Verify
@@ -222,7 +222,7 @@ async fn handle_driver_connection(
     // The other side manually encrypted the blob.
     // We assume they prepended the nonce.
     if encrypted_challenge.len() < 12 {
-        return Err("Auth challenge too short".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth challenge too short"));
     }
     let mut n_bytes = [0u8; 12];
     n_bytes.copy_from_slice(&encrypted_challenge[..12]);
@@ -234,7 +234,7 @@ async fn handle_driver_connection(
         .map_err(|_| "Auth failed (bad PIN)".to_string())?;
 
     if decrypted != challenge {
-        return Err("Auth failed (challenge mismatch)".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth failed (challenge mismatch)"));
     }
 
     // Auth Success!
@@ -244,7 +244,7 @@ async fn handle_driver_connection(
     let response_nonce = Nonce::from(response_nonce_bytes);
     let response_ciphertext = cipher
         .encrypt(&response_nonce, their_challenge.as_ref())
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut response_payload = Vec::new();
     response_payload.extend_from_slice(&response_nonce_bytes);
@@ -255,7 +255,7 @@ async fn handle_driver_connection(
             encrypted_challenge: response_payload,
         })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Enable Encryption for session
     framed.codec_mut().set_key(&key);
@@ -298,9 +298,9 @@ async fn handle_driver_connection(
     // So after `set_key`, Driver should wait for `Handshake`.
     let device_name = match framed.next().await {
         Some(Ok(P2PMessage::Handshake { device_name, .. })) => device_name,
-        Some(Ok(msg)) => return Err(format!("Expected Encrypted Handshake, got {:?}", msg)),
+        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected Encrypted Handshake, got {:?}", msg))),
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err("Connection closed after auth".to_string()),
+        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed after auth")),
     };
 
     // Approval Check
@@ -351,7 +351,7 @@ async fn handle_driver_connection(
                 )
                 .await;
 
-            return Err("Connection rejected by host".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Connection rejected by host"));
         }
     }
 
@@ -387,7 +387,7 @@ async fn handle_driver_connection(
                 },
             )
             .await;
-        return Err("Sync start cancelled".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Sync start cancelled"));
     }
 
     // Main Loop
@@ -450,7 +450,7 @@ async fn handle_sync_request(
             "Syncing Global Settings...".into(),
         ))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     {
         let data = sync_db::fetch_layer_data(&conn, SyncLayer::Globals, &[])?;
@@ -460,7 +460,7 @@ async fn handle_sync_request(
                 payload: data,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Send Global Assets (Personas)
         send_global_assets(app, framed).await?;
@@ -474,7 +474,7 @@ async fn handle_sync_request(
                 lb_ids_to_send.len()
             )))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         let data = sync_db::fetch_layer_data(&conn, SyncLayer::Lorebooks, &lb_ids_to_send)?;
         framed
@@ -483,7 +483,7 @@ async fn handle_sync_request(
                 payload: data,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     // Send Characters
@@ -494,7 +494,7 @@ async fn handle_sync_request(
                 char_ids_to_send.len()
             )))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         let data = sync_db::fetch_layer_data(&conn, SyncLayer::Characters, &char_ids_to_send)?;
         framed
@@ -503,7 +503,7 @@ async fn handle_sync_request(
                 payload: data,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Send Character Assets (Avatars)
         framed
@@ -511,7 +511,7 @@ async fn handle_sync_request(
                 "Syncing Character Assets...".into(),
             ))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         send_character_assets(app, framed, &char_ids_to_send).await?;
     }
 
@@ -523,7 +523,7 @@ async fn handle_sync_request(
                 session_ids_to_send.len()
             )))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         let data = sync_db::fetch_layer_data(&conn, SyncLayer::Sessions, &session_ids_to_send)?;
         framed
@@ -532,7 +532,7 @@ async fn handle_sync_request(
                 payload: data,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Send Session Assets (Attachments)
         framed
@@ -540,7 +540,7 @@ async fn handle_sync_request(
                 "Syncing Session Attachments...".into(),
             ))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Prepare asset info synchronously to avoid holding &Connection across await
         let mut session_asset_info = Vec::new();
@@ -562,7 +562,7 @@ async fn handle_sync_request(
     framed
         .send(P2PMessage::SyncComplete)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let state = app.state::<SyncManagerState>();
     state.set_status(app, SyncStatus::SyncCompleted).await;
@@ -580,11 +580,11 @@ pub async fn connect_as_passenger(
     let state = app.state::<SyncManagerState>();
     let mut current_tx = state.shutdown_tx.lock().await;
     if current_tx.is_some() {
-        return Err("Sync service is already running".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Sync service is already running"));
     }
 
     let addr = format!("{}:{}", ip, port);
-    let stream = TcpStream::connect(&addr).await.map_err(|e| e.to_string())?;
+    let stream = TcpStream::connect(&addr).await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let (tx, mut rx) = broadcast::channel(1);
     *current_tx = Some(tx);
@@ -632,9 +632,9 @@ async fn run_passenger_session(
         Some(Ok(P2PMessage::Handshake {
             salt, challenge, ..
         })) => (salt, challenge),
-        Some(Ok(msg)) => return Err(format!("Expected Handshake, got {:?}", msg)),
+        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected Handshake, got {:?}", msg))),
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err("Connection closed during handshake".to_string()),
+        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed during handshake")),
     };
 
     // 2. Derive Key & Encrypt Challenge & Send AuthRequest
@@ -651,7 +651,7 @@ async fn run_passenger_session(
     // Encrypt the Driver's challenge to prove we know the PIN
     let encrypted_challenge_ciphertext = cipher
         .encrypt(&nonce, challenge.as_ref())
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut encrypted_challenge = Vec::new();
     encrypted_challenge.extend_from_slice(&nonce_bytes);
@@ -663,21 +663,21 @@ async fn run_passenger_session(
             my_challenge,
         })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // 3. Wait for AuthResponse
     let encrypted_response = match framed.next().await {
         Some(Ok(P2PMessage::AuthResponse {
             encrypted_challenge,
         })) => encrypted_challenge,
-        Some(Ok(msg)) => return Err(format!("Expected AuthResponse, got {:?}", msg)),
+        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected AuthResponse, got {:?}", msg))),
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err("Connection closed during auth".to_string()),
+        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed during auth")),
     };
 
     // 4. Verify Driver's response to OUR challenge
     if encrypted_response.len() < 12 {
-        return Err("Auth response too short".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth response too short"));
     }
     let mut n_bytes = [0u8; 12];
     n_bytes.copy_from_slice(&encrypted_response[..12]);
@@ -689,7 +689,7 @@ async fn run_passenger_session(
         .map_err(|_| "Auth failed (Driver Sent Bad Response)".to_string())?;
 
     if decrypted_my_challenge != my_challenge {
-        return Err("Auth failed (response mismatch)".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth failed (response mismatch)"));
     }
 
     // Auth Success! Enable Encryption.
@@ -704,7 +704,7 @@ async fn run_passenger_session(
             challenge: [0u8; 16], // Not used post-auth
         })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     state
         .set_status(
@@ -723,7 +723,7 @@ async fn run_passenger_session(
     framed
         .send(P2PMessage::SyncRequest { manifest })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     state
         .set_status(
             &app,
@@ -839,7 +839,7 @@ pub async fn approve_connection(app: AppHandle, ip: String, allow: bool) -> Resu
     if let Some(tx) = map.remove(&ip) {
         let _ = tx.send(allow);
     } else {
-        return Err("No pending connection found for this IP".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "No pending connection found for this IP"));
     }
 
     Ok(())
@@ -852,7 +852,7 @@ pub async fn start_sync_session(app: AppHandle, ip: String) -> Result<(), String
     if let Some(tx) = map.remove(&ip) {
         let _ = tx.send(());
     } else {
-        return Err("No pending sync session found for this IP".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "No pending sync session found for this IP"));
     }
 
     Ok(())
@@ -867,7 +867,7 @@ async fn send_file(
     if absolute_path.exists() {
         let content = tokio::fs::read(absolute_path)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         log_info(
             app,
@@ -881,7 +881,7 @@ async fn send_file(
                 content,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     Ok(())
 }
@@ -899,7 +899,7 @@ async fn send_character_assets(
             char_ids.len()
         ),
     );
-    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| e.to_string())?;
+    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let avatars_dir = root.join("avatars");
     let images_dir = root.join("images");
 
@@ -926,7 +926,7 @@ async fn send_character_assets(
         if char_dir.exists() {
             let mut entries = tokio::fs::read_dir(&char_dir)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
@@ -997,7 +997,7 @@ async fn send_session_assets(
             sessions_with_chars.len()
         ),
     );
-    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| e.to_string())?;
+    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for (session_id, char_id) in sessions_with_chars {
         let mut char_dir_name = char_id.clone();
@@ -1018,7 +1018,7 @@ async fn send_session_assets(
         if session_dir.exists() {
             let mut entries = tokio::fs::read_dir(&session_dir)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
                 if path.is_file() {
@@ -1048,17 +1048,17 @@ async fn send_global_assets(
     framed: &mut Framed<TcpStream, P2PCodec>,
 ) -> Result<(), String> {
     log_info(app, "sync_driver", "Starting send_global_assets (Personas)");
-    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| e.to_string())?;
+    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let avatars_dir = root.join("avatars");
     let conn = crate::storage_manager::db::open_db(app)?;
 
     let persona_ids: Vec<String> = {
         let stmt_sql = "SELECT id FROM personas";
-        let mut stmt = conn.prepare(stmt_sql).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(stmt_sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows = stmt
             .query_map([], |row| row.get(0))
-            .map_err(|e| e.to_string())?;
-        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())?
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        rows.collect::<Result<_, _>>().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
     };
 
     for id in persona_ids {
@@ -1075,7 +1075,7 @@ async fn send_global_assets(
         }
 
         if dir.exists() {
-            let mut entries = tokio::fs::read_dir(&dir).await.map_err(|e| e.to_string())?;
+            let mut entries = tokio::fs::read_dir(&dir).await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();

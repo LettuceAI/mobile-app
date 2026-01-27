@@ -20,7 +20,7 @@ pub fn audio_provider_list(app: AppHandle) -> Result<Vec<AudioProvider>, String>
             "SELECT id, provider_type, label, api_key, project_id, location, created_at, updated_at
              FROM audio_providers ORDER BY created_at DESC",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let providers = stmt
         .query_map([], |row| {
@@ -35,9 +35,9 @@ pub fn audio_provider_list(app: AppHandle) -> Result<Vec<AudioProvider>, String>
                 updated_at: row.get(7)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(providers)
 }
@@ -49,7 +49,7 @@ pub fn audio_provider_upsert(
     provider_json: String,
 ) -> Result<AudioProvider, String> {
     let provider: AudioProvider =
-        serde_json::from_str(&provider_json).map_err(|e| format!("Invalid JSON: {}", e))?;
+        serde_json::from_str(&provider_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid JSON: {}", e)))?;
 
     let conn = open_db(&app)?;
     let now = now_ms();
@@ -85,7 +85,7 @@ pub fn audio_provider_upsert(
             now
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(AudioProvider {
         id,
@@ -104,7 +104,7 @@ pub fn audio_provider_upsert(
 pub fn audio_provider_delete(app: AppHandle, id: String) -> Result<(), String> {
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM audio_providers WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -142,7 +142,7 @@ pub fn audio_provider_voices(
             params![provider_id],
             |row| row.get(0),
         )
-        .map_err(|e| format!("Provider not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
 
     // For Gemini, return hardcoded voices
     if provider_type == "gemini_tts" {
@@ -167,7 +167,7 @@ pub fn audio_provider_voices(
             "SELECT id, provider_id, voice_id, name, preview_url, labels, cached_at
              FROM audio_voice_cache WHERE provider_id = ?",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let voices = stmt
         .query_map(params![provider_id], |row| {
@@ -186,9 +186,9 @@ pub fn audio_provider_voices(
                 cached_at: row.get(6)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(voices)
 }
@@ -208,7 +208,7 @@ pub async fn audio_provider_refresh_voices(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| format!("Provider not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
 
     // Gemini uses hardcoded voices
     if provider_type == "gemini_tts" {
@@ -225,7 +225,7 @@ pub async fn audio_provider_refresh_voices(
         "DELETE FROM audio_voice_cache WHERE provider_id = ?",
         params![provider_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut cached = Vec::new();
     for v in voices {
@@ -237,7 +237,7 @@ pub async fn audio_provider_refresh_voices(
              VALUES (?, ?, ?, ?, ?, ?, ?)",
             params![id, provider_id, v.voice_id, v.name, v.preview_url, labels_json, now],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         cached.push(CachedVoice {
             id,
@@ -262,7 +262,7 @@ pub fn user_voice_list(app: AppHandle) -> Result<Vec<UserVoice>, String> {
             "SELECT id, provider_id, name, model_id, voice_id, prompt, created_at, updated_at
              FROM user_voices ORDER BY created_at DESC",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let voices = stmt
         .query_map([], |row| {
@@ -277,9 +277,9 @@ pub fn user_voice_list(app: AppHandle) -> Result<Vec<UserVoice>, String> {
                 updated_at: row.get(7)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(voices)
 }
@@ -288,7 +288,7 @@ pub fn user_voice_list(app: AppHandle) -> Result<Vec<UserVoice>, String> {
 #[tauri::command]
 pub fn user_voice_upsert(app: AppHandle, voice_json: String) -> Result<UserVoice, String> {
     let voice: UserVoice =
-        serde_json::from_str(&voice_json).map_err(|e| format!("Invalid JSON: {}", e))?;
+        serde_json::from_str(&voice_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid JSON: {}", e)))?;
 
     let conn = open_db(&app)?;
     let now = now_ms();
@@ -319,7 +319,7 @@ pub fn user_voice_upsert(app: AppHandle, voice_json: String) -> Result<UserVoice
             now
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(UserVoice {
         id,
@@ -338,7 +338,7 @@ pub fn user_voice_upsert(app: AppHandle, voice_json: String) -> Result<UserVoice
 pub fn user_voice_delete(app: AppHandle, id: String) -> Result<(), String> {
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM user_voices WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -367,7 +367,7 @@ pub async fn tts_preview(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
-        .map_err(|e| format!("Provider not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
 
     let api_key = api_key.ok_or("API key not configured")?;
 
@@ -398,7 +398,7 @@ pub async fn tts_preview(
                     elevenlabs::generate_speech(&text, &voice_id, &model_id, &api_key).await?;
                 Ok((data, "audio/mpeg".to_string()))
             }
-            _ => Err(format!("Unknown provider type: {}", provider_type)),
+            _ => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unknown provider type: {}", provider_type))),
         }
     };
 
@@ -410,7 +410,7 @@ pub async fn tts_preview(
                     let registry = app.state::<AbortRegistry>();
                     registry.unregister(id);
                 }
-                return Err("Request aborted by user".to_string());
+                return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
             }
             value = generate_audio => value,
         }
@@ -447,7 +447,7 @@ pub async fn audio_provider_verify(
             gemini::verify_api_key(&api_key, &project_id).await
         }
         "elevenlabs" => elevenlabs::verify_api_key(&api_key).await,
-        _ => Err(format!("Unknown provider type: {}", provider_type)),
+        _ => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unknown provider type: {}", provider_type))),
     }
 }
 
@@ -466,10 +466,10 @@ pub async fn audio_provider_search_voices(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| format!("Provider not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
 
     if provider_type != "elevenlabs" {
-        return Err("Voice search only available for ElevenLabs".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Voice search only available for ElevenLabs"));
     }
 
     let api_key = api_key.ok_or("API key not configured")?;
@@ -508,10 +508,10 @@ pub async fn voice_design_preview(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| format!("Provider not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
 
     if provider_type != "elevenlabs" {
-        return Err("Voice design only available for ElevenLabs".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Voice design only available for ElevenLabs"));
     }
 
     let api_key = api_key.ok_or("API key not configured")?;
@@ -552,10 +552,10 @@ pub async fn voice_design_create(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| format!("Provider not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
 
     if provider_type != "elevenlabs" {
-        return Err("Voice creation only available for ElevenLabs".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Voice creation only available for ElevenLabs"));
     }
 
     let api_key = api_key.ok_or("API key not configured")?;

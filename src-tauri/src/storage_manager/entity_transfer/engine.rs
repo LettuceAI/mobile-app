@@ -376,7 +376,7 @@ pub fn build_scenes_from_greetings(
 
 pub fn parse_chara_card_v1(value: &JsonValue) -> Result<CharacterExportPackage, String> {
     let card: CharaCardV1 = serde_json::from_value(value.clone())
-        .map_err(|e| format!("Invalid chara card v1: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid chara card v1: {}", e)))?;
 
     let definition = build_definition_from_fields(
         &card.description,
@@ -418,7 +418,7 @@ pub fn parse_chara_card_v1(value: &JsonValue) -> Result<CharacterExportPackage, 
 
 pub fn parse_chara_card_v2(value: &JsonValue) -> Result<CharacterExportPackage, String> {
     let card: CharaCardV2 = serde_json::from_value(value.clone())
-        .map_err(|e| format!("Invalid chara card v2: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid chara card v2: {}", e)))?;
 
     let data = card.data;
     let definition = build_definition_from_fields(

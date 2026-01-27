@@ -51,7 +51,7 @@ pub async fn get_remote_models(
         "get_remote_models",
         format!("Sending request to {}", url),
     );
-    let resp = req_builder.send().await.map_err(|e| e.to_string())?;
+    let resp = req_builder.send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
 
     if !status.is_success() {
@@ -61,10 +61,10 @@ pub async fn get_remote_models(
             "get_remote_models",
             format!("Error {}: {}", status, text),
         );
-        return Err(format!("Provider returned error {}: {}", status, text));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Provider returned error {}: {}", status, text)));
     }
 
-    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let json: serde_json::Value = resp.json().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // 5. Parse response
     let models = adapter.parse_models_list(json);

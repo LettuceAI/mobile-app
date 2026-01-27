@@ -64,7 +64,7 @@ pub async fn generate_image(
     let response = req_builder
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -72,13 +72,13 @@ pub async fn generate_image(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("API error {}: {}", status, error_text));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("API error {}: {}", status, error_text)));
     }
 
     let response_json: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
 
     log_info(
         &app,

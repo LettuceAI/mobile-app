@@ -33,7 +33,7 @@ pub fn generate_cache_key(
 fn tts_audio_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let root = storage_root(app)?;
     let dir = root.join(TTS_AUDIO_DIR);
-    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create TTS audio directory: {}", e))?;
+    fs::create_dir_all(&dir).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create TTS audio directory: {}", e)))?;
     Ok(dir)
 }
 
@@ -67,7 +67,7 @@ pub fn save_audio_to_cache(
     let ext = format_to_extension(format);
     let file_path = dir.join(format!("{}.{}", cache_key, ext));
     fs::write(&file_path, audio_data)
-        .map_err(|e| format!("Failed to save TTS audio to cache: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to save TTS audio to cache: {}", e)))?;
     Ok(())
 }
 
@@ -81,7 +81,7 @@ pub fn load_audio_from_cache(
         let file_path = dir.join(format!("{}.{}", cache_key, ext));
         if file_path.exists() {
             let audio_data = fs::read(&file_path)
-                .map_err(|e| format!("Failed to read TTS audio from cache: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read TTS audio from cache: {}", e)))?;
             let format = extension_to_format(ext);
             return Ok(Some((audio_data, format)));
         }
@@ -110,7 +110,7 @@ pub fn delete_audio_from_cache(app: &tauri::AppHandle, cache_key: &str) -> Resul
         let file_path = dir.join(format!("{}.{}", cache_key, ext));
         if file_path.exists() {
             fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete TTS audio from cache: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete TTS audio from cache: {}", e)))?;
         }
     }
 
@@ -123,7 +123,7 @@ pub fn clear_audio_cache(app: &tauri::AppHandle) -> Result<u64, String> {
 
     if dir.exists() {
         for entry in
-            fs::read_dir(&dir).map_err(|e| format!("Failed to read TTS cache directory: {}", e))?
+            fs::read_dir(&dir).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read TTS cache directory: {}", e)))?
         {
             if let Ok(entry) = entry {
                 let path = entry.path();
@@ -145,7 +145,7 @@ pub fn get_cache_size(app: &tauri::AppHandle) -> Result<u64, String> {
 
     if dir.exists() {
         for entry in
-            fs::read_dir(&dir).map_err(|e| format!("Failed to read TTS cache directory: {}", e))?
+            fs::read_dir(&dir).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read TTS cache directory: {}", e)))?
         {
             if let Ok(entry) = entry {
                 if let Ok(metadata) = entry.metadata() {
@@ -166,7 +166,7 @@ pub fn get_cache_count(app: &tauri::AppHandle) -> Result<u64, String> {
 
     if dir.exists() {
         for entry in
-            fs::read_dir(&dir).map_err(|e| format!("Failed to read TTS cache directory: {}", e))?
+            fs::read_dir(&dir).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read TTS cache directory: {}", e)))?
         {
             if let Ok(entry) = entry {
                 if let Ok(metadata) = entry.metadata() {
@@ -223,7 +223,7 @@ pub fn tts_cache_save(
 ) -> Result<(), String> {
     let audio_data = STANDARD
         .decode(&audio_base64)
-        .map_err(|e| format!("Failed to decode audio base64: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode audio base64: {}", e)))?;
     save_audio_to_cache(&app, &cache_key, &audio_data, &format)
 }
 

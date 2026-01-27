@@ -6,7 +6,7 @@ use super::db::open_db;
 #[tauri::command]
 pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result<String, String> {
     let conn = open_db(&app)?;
-    let cred: JsonValue = serde_json::from_str(&credential_json).map_err(|e| e.to_string())?;
+    let cred: JsonValue = serde_json::from_str(&credential_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = cred
         .get("id")
         .and_then(|v| v.as_str())
@@ -50,7 +50,7 @@ pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result
                 headers = excluded.headers,
                 config = excluded.config"#,
         params![id, provider_id, label, api_key, base_url, default_model, headers, config],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut out = JsonMap::new();
     out.insert("id".into(), JsonValue::String(id));
@@ -86,14 +86,14 @@ pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result
             out.insert("config".into(), v);
         }
     }
-    Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn provider_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM provider_credentials WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -101,10 +101,10 @@ pub fn get_provider_credential(
     app: &tauri::AppHandle,
     id: &str,
 ) -> Result<crate::chat_manager::types::ProviderCredential, String> {
-    let conn = open_db(app).map_err(|e| e.to_string())?;
+    let conn = open_db(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut stmt = conn
         .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers, config FROM provider_credentials WHERE id = ?")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let row = stmt
         .query_row(params![id], |r| {
@@ -141,7 +141,7 @@ pub fn get_provider_credential(
             })
         })
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     row.ok_or_else(|| "Provider credential not found".to_string())
 }

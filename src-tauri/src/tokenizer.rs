@@ -8,7 +8,7 @@ static TOKENIZER: Mutex<Option<Tokenizer>> = Mutex::new(None);
 fn get_tokenizer(app: &AppHandle) -> Result<Tokenizer, String> {
     let mut tokenizer_lock = TOKENIZER
         .lock()
-        .map_err(|e| format!("Failed to lock tokenizer: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to lock tokenizer: {}", e)))?;
 
     if tokenizer_lock.is_none() {
         let model_dir = crate::embedding_model::embedding_model_dir(app)?;
@@ -21,7 +21,7 @@ fn get_tokenizer(app: &AppHandle) -> Result<Tokenizer, String> {
         }
 
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e)))?;
 
         *tokenizer_lock = Some(tokenizer);
     }
@@ -35,7 +35,7 @@ pub fn count_tokens(app: &AppHandle, text: &str) -> Result<u32, String> {
 
     let encoding = tokenizer
         .encode(text, false)
-        .map_err(|e| format!("Tokenization failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Tokenization failed: {}", e)))?;
 
     Ok(encoding.get_ids().len() as u32)
 }

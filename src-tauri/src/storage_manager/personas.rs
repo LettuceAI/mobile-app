@@ -6,7 +6,7 @@ use super::db::{now_ms, open_db};
 #[tauri::command]
 pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
     let conn = open_db(&app)?;
-    let mut stmt = conn.prepare("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |r| {
             Ok((
@@ -22,7 +22,7 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
                 r.get::<_, i64>(9)?,
             ))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut out = Vec::new();
     for row in rows {
         let (
@@ -36,7 +36,7 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
             is_default,
             created_at,
             updated_at,
-        ) = row.map_err(|e| e.to_string())?;
+        ) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut obj = JsonMap::new();
         obj.insert("id".into(), JsonValue::String(id));
         obj.insert("title".into(), JsonValue::String(title.to_string()));
@@ -59,13 +59,13 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
         obj.insert("updatedAt".into(), JsonValue::from(updated_at));
         out.push(JsonValue::Object(obj));
     }
-    Ok(serde_json::to_string(&out).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&out).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<String, String> {
     let mut conn = open_db(&app)?;
-    let p: JsonValue = serde_json::from_str(&persona_json).map_err(|e| e.to_string())?;
+    let p: JsonValue = serde_json::from_str(&persona_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = p
         .get("id")
         .and_then(|v| v.as_str())
@@ -93,7 +93,7 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
         .unwrap_or(false) as i64;
     let now = now_ms() as i64;
 
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let existing_created: Option<i64> = tx
         .query_row(
             "SELECT created_at FROM personas WHERE id = ?",
@@ -101,7 +101,7 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
@@ -128,16 +128,16 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
             created_at,
             now
         ],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if is_default != 0 {
         tx.execute(
             "UPDATE personas SET is_default = 0 WHERE id <> ?",
             params![&id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut obj = JsonMap::new();
     obj.insert("id".into(), JsonValue::String(id));
@@ -159,14 +159,14 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
     obj.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
     obj.insert("createdAt".into(), JsonValue::from(created_at));
     obj.insert("updatedAt".into(), JsonValue::from(now));
-    Ok(serde_json::to_string(&JsonValue::Object(obj)).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&JsonValue::Object(obj)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn persona_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let conn = open_db(&app)?;
     conn.execute("DELETE FROM personas WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -175,7 +175,7 @@ pub fn persona_default_get(app: tauri::AppHandle) -> Result<Option<String>, Stri
     let conn = open_db(&app)?;
     let row = conn.query_row("SELECT id, title, description, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, is_default, created_at, updated_at FROM personas WHERE is_default = 1 LIMIT 1", [], |r| Ok((
         r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<f64>>(4)?, r.get::<_, Option<f64>>(5)?, r.get::<_, Option<f64>>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?
-    ))).optional().map_err(|e| e.to_string())?;
+    ))).optional().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some((
         id,
         title,
@@ -210,7 +210,7 @@ pub fn persona_default_get(app: tauri::AppHandle) -> Result<Option<String>, Stri
         obj.insert("createdAt".into(), JsonValue::from(created_at));
         obj.insert("updatedAt".into(), JsonValue::from(updated_at));
         Ok(Some(
-            serde_json::to_string(&JsonValue::Object(obj)).map_err(|e| e.to_string())?,
+            serde_json::to_string(&JsonValue::Object(obj)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ))
     } else {
         Ok(None)

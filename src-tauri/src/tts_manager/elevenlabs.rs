@@ -99,7 +99,7 @@ pub async fn fetch_voices(
         .header("xi-api-key", api_key)
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -107,13 +107,13 @@ pub async fn fetch_voices(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("ElevenLabs error ({}): {}", status, body));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("ElevenLabs error ({}): {}", status, body)));
     }
 
     let data: VoicesResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
 
     Ok(data
         .voices
@@ -166,7 +166,7 @@ pub async fn generate_speech(
         .json(&request)
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -174,14 +174,14 @@ pub async fn generate_speech(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("ElevenLabs TTS error ({}): {}", status, body));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("ElevenLabs TTS error ({}): {}", status, body)));
     }
 
     response
         .bytes()
         .await
         .map(|b| b.to_vec())
-        .map_err(|e| format!("Failed to read audio: {}", e))
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read audio: {}", e)))
 }
 
 #[derive(Serialize)]
@@ -239,7 +239,7 @@ pub async fn design_voice(
         .json(&request)
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -247,13 +247,13 @@ pub async fn design_voice(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Voice design error ({}): {}", status, body));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Voice design error ({}): {}", status, body)));
     }
 
     let data: VoiceDesignResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
 
     Ok(data.previews)
 }
@@ -297,7 +297,7 @@ pub async fn create_voice_from_preview(
         .json(&request)
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -305,13 +305,13 @@ pub async fn create_voice_from_preview(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Create voice error ({}): {}", status, body));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Create voice error ({}): {}", status, body)));
     }
 
     response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))
 }
 
 pub async fn verify_api_key(api_key: &str) -> Result<bool, String> {
@@ -321,7 +321,7 @@ pub async fn verify_api_key(api_key: &str) -> Result<bool, String> {
         .header("xi-api-key", api_key)
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
 
     Ok(response.status().is_success())
 }

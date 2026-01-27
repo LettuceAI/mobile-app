@@ -64,7 +64,7 @@ mod desktop {
         if guard.backend.is_none() {
             guard.backend = Some(
                 LlamaBackend::init()
-                    .map_err(|e| format!("Failed to initialize llama backend: {e}"))?,
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to initialize llama backend: {e}")))?,
             );
         }
 
@@ -113,7 +113,7 @@ mod desktop {
                 }
             } else {
                 LlamaModel::load_from_file(backend, model_path, &cpu_params)
-                    .map_err(|e| format!("Failed to load llama model: {e}"))?
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load llama model: {e}")))?
             };
 
             guard.model = Some(model);
@@ -268,18 +268,18 @@ mod desktop {
                 continue;
             }
             let chat_message = LlamaChatMessage::new(role.to_string(), content)
-                .map_err(|e| format!("Invalid chat message: {e}"))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid chat message: {e}")))?;
             chat_messages.push(chat_message);
         }
 
         if chat_messages.is_empty() {
-            return Err("No usable chat messages for llama.cpp".into());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "No usable chat messages for llama.cpp"));
         }
 
         let template = model
             .chat_template(None)
             .or_else(|_| LlamaChatTemplate::new("chatml"))
-            .map_err(|e| format!("Failed to load chat template: {e}"))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load chat template: {e}")))?;
 
         let prompt = match model.apply_chat_template(&template, &chat_messages, true) {
             Ok(text) => text,
@@ -330,10 +330,10 @@ mod desktop {
         model_path: String,
     ) -> Result<LlamaCppContextInfo, String> {
         if model_path.trim().is_empty() {
-            return Err("llama.cpp model path is empty".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "llama.cpp model path is empty"));
         }
         if !Path::new(&model_path).exists() {
-            return Err(format!("llama.cpp model path not found: {}", model_path));
+            return Err(crate::utils::err_msg(module_path!(), line!(), format!("llama.cpp model path not found: {}", model_path)));
         }
 
         let engine = load_engine(Some(&app), &model_path, None)?;
@@ -368,7 +368,7 @@ mod desktop {
             .ok_or_else(|| "llama.cpp request missing model path".to_string())?;
 
         if !Path::new(model_path).exists() {
-            return Err(format!("llama.cpp model path not found: {}", model_path));
+            return Err(crate::utils::err_msg(module_path!(), line!(), format!("llama.cpp model path not found: {}", model_path)));
         }
 
         let messages = body
@@ -485,7 +485,7 @@ mod desktop {
             let prompt = build_prompt(model, messages)?;
             let tokens = model
                 .str_to_token(&prompt, AddBos::Always)
-                .map_err(|e| format!("Failed to tokenize prompt: {e}"))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to tokenize prompt: {e}")))?;
             prompt_tokens = tokens.len() as u64;
 
             if tokens.len() as u32 >= ctx_size {
@@ -517,7 +517,7 @@ mod desktop {
             }
             let mut ctx = model
                 .new_context(backend, ctx_params)
-                .map_err(|e| format!("Failed to create llama context: {e}"))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create llama context: {e}")))?;
 
             let batch_size = n_batch as usize;
             let mut batch = LlamaBatch::new(batch_size, 1);
@@ -527,11 +527,11 @@ mod desktop {
                 let is_last = i == last_index;
                 batch
                     .add(token, i, &[0], is_last)
-                    .map_err(|e| format!("Failed to build llama batch: {e}"))?;
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to build llama batch: {e}")))?;
             }
 
             ctx.decode(&mut batch)
-                .map_err(|e| format!("llama_decode failed: {e}"))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("llama_decode failed: {e}")))?;
 
             let prompt_len = batch.n_tokens();
             let mut n_cur = prompt_len;
@@ -551,7 +551,7 @@ mod desktop {
                 if let Some(rx) = abort_rx.as_mut() {
                     match rx.try_recv() {
                         Ok(()) => {
-                            return Err("llama.cpp request aborted by user".to_string());
+                            return Err(crate::utils::err_msg(module_path!(), line!(), "llama.cpp request aborted by user"));
                         }
                         Err(TryRecvError::Closed) | Err(TryRecvError::Empty) => {}
                     }
@@ -566,7 +566,7 @@ mod desktop {
 
                 let piece = model
                     .token_to_str(token, Special::Plaintext)
-                    .map_err(|e| format!("Failed to decode token: {e}"))?;
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode token: {e}")))?;
 
                 output.push_str(&piece);
                 completion_tokens += 1;
@@ -584,11 +584,11 @@ mod desktop {
                 batch.clear();
                 batch
                     .add(token, n_cur, &[0], true)
-                    .map_err(|e| format!("Failed to update llama batch: {e}"))?;
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to update llama batch: {e}")))?;
                 n_cur += 1;
 
                 ctx.decode(&mut batch)
-                    .map_err(|e| format!("llama_decode failed: {e}"))?;
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("llama_decode failed: {e}")))?;
             }
 
             Ok(())
@@ -666,7 +666,7 @@ pub async fn handle_local_request(
     _app: AppHandle,
     _req: ApiRequest,
 ) -> Result<ApiResponse, String> {
-    Err("llama.cpp is only supported on desktop builds".to_string())
+    Err(crate::utils::err_msg(module_path!(), line!(), "llama.cpp is only supported on desktop builds"))
 }
 
 #[tauri::command]
@@ -678,13 +678,13 @@ pub async fn llamacpp_context_info(
     {
         let info = desktop::llamacpp_context_info(app, model_path).await?;
         return serde_json::to_value(info)
-            .map_err(|e| format!("Failed to serialize context info: {e}"));
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize context info: {e}")));
     }
     #[cfg(mobile)]
     {
         let _ = app;
         let _ = model_path;
-        Err("llama.cpp is only supported on desktop builds".to_string())
+        Err(crate::utils::err_msg(module_path!(), line!(), "llama.cpp is only supported on desktop builds"))
     }
 }
 
@@ -697,7 +697,7 @@ pub async fn llamacpp_unload(app: AppHandle) -> Result<(), String> {
     #[cfg(mobile)]
     {
         let _ = app;
-        Err("llama.cpp is only supported on desktop builds".to_string())
+        Err(crate::utils::err_msg(module_path!(), line!(), "llama.cpp is only supported on desktop builds"))
     }
 }
 

@@ -122,7 +122,7 @@ pub fn resolve_api_key(
             provider_cred.id.as_str()
         ),
     );
-    Err("Provider credential missing API key".into())
+    Err(crate::utils::err_msg(module_path!(), line!(), "Provider credential missing API key"))
 }
 
 pub async fn record_usage_if_available(

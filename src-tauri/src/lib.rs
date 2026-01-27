@@ -50,6 +50,11 @@ pub fn run() {
             let log_manager =
                 logger::LogManager::new(app.handle()).expect("Failed to initialize log manager");
             app.manage(log_manager);
+            logger::set_global_app_handle(app.handle().clone());
+            std::panic::set_hook(Box::new(|info| {
+                let message = format!("{}", info);
+                utils::log_error_global("panic", message);
+            }));
 
             match storage_manager::db::init_pool(app.handle()) {
                 Ok(pool) => {
@@ -60,19 +65,31 @@ pub fn run() {
             }
 
             if let Err(e) = storage_manager::importer::run_legacy_import(app.handle()) {
-                eprintln!("Legacy import error: {}", e);
+                utils::log_error(
+                    app.handle(),
+                    "bootstrap",
+                    format!("Legacy import error: {}", e),
+                );
             }
 
             if let Err(e) = migrations::run_migrations(app.handle()) {
-                eprintln!("Migration error: {}", e);
+                utils::log_error(app.handle(), "bootstrap", format!("Migration error: {}", e));
             }
 
             if let Err(e) = chat_manager::prompts::ensure_app_default_template(app.handle()) {
-                eprintln!("Failed to ensure app default template: {}", e);
+                utils::log_error(
+                    app.handle(),
+                    "bootstrap",
+                    format!("Failed to ensure app default template: {}", e),
+                );
             }
 
             if let Err(e) = chat_manager::prompts::ensure_help_me_reply_template(app.handle()) {
-                eprintln!("Failed to ensure help me reply template: {}", e);
+                utils::log_error(
+                    app.handle(),
+                    "bootstrap",
+                    format!("Failed to ensure help me reply template: {}", e),
+                );
             }
 
             // Initialize Sync Manager

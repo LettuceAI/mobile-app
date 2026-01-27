@@ -1005,7 +1005,7 @@ pub async fn chat_completion(
                 "chat_completion",
                 format!("session {} not found", &session_id),
             );
-            return Err("Session not found".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"));
         }
     };
 
@@ -1706,7 +1706,7 @@ pub async fn chat_regenerate(
                 "chat_regenerate",
                 format!("session {} not found", &session_id),
             );
-            return Err("Session not found".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"));
         }
     };
 
@@ -1721,7 +1721,7 @@ pub async fn chat_regenerate(
     );
 
     if session.messages.is_empty() {
-        return Err("No messages available for regeneration".into());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "No messages available for regeneration"));
     }
 
     let target_index = session
@@ -1731,11 +1731,11 @@ pub async fn chat_regenerate(
         .ok_or_else(|| "Assistant message not found".to_string())?;
 
     if target_index + 1 != session.messages.len() {
-        return Err("Can only regenerate the latest assistant response".into());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Can only regenerate the latest assistant response"));
     }
 
     if target_index == 0 {
-        return Err("Assistant message has no preceding user prompt".into());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Assistant message has no preceding user prompt"));
     }
 
     let preceding_index = target_index - 1;
@@ -1752,7 +1752,7 @@ pub async fn chat_regenerate(
     if session.messages[target_index].role != "assistant"
         && session.messages[target_index].role != "scene"
     {
-        return Err("Selected message is not an assistant or scene response".into());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Selected message is not an assistant or scene response"));
     }
 
     let character = match context.find_character(&session.character_id) {
@@ -2130,7 +2130,7 @@ pub async fn chat_regenerate(
         return if err_message == fallback {
             Err(err_message)
         } else {
-            Err(format!("{} (status {})", err_message, api_response.status))
+            Err(crate::utils::err_msg(module_path!(), line!(), format!("{} (status {})", err_message, api_response.status)))
         };
     }
 
@@ -2310,7 +2310,7 @@ pub async fn chat_continue(
                 "chat_continue",
                 format!("session {} not found", &session_id),
             );
-            return Err("Session not found".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"));
         }
     };
 
@@ -2687,7 +2687,7 @@ pub async fn chat_continue(
         return if err_message == fallback {
             Err(err_message)
         } else {
-            Err(format!("{} (status {})", err_message, api_response.status))
+            Err(crate::utils::err_msg(module_path!(), line!(), format!("{} (status {})", err_message, api_response.status)))
         };
     }
 
@@ -3506,7 +3506,7 @@ fn update_summarisation_model_setting(app: &AppHandle, model_id: &str) -> Result
         internal_read_settings(app)?.ok_or_else(|| "Settings not found".to_string())?;
 
     let settings_value: serde_json::Value = serde_json::from_str(&settings_json)
-        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings: {}", e)))?;
 
     let mut advanced = settings_value
         .get("advancedSettings")
@@ -3521,7 +3521,7 @@ fn update_summarisation_model_setting(app: &AppHandle, model_id: &str) -> Result
     }
 
     let advanced_json = serde_json::to_string(&advanced)
-        .map_err(|e| format!("Failed to serialize advanced settings: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize advanced settings: {}", e)))?;
 
     settings_set_advanced(app.clone(), advanced_json)?;
     Ok(())
@@ -4206,7 +4206,7 @@ pub async fn chat_add_message_attachment(
     } = args;
 
     if base64_data.trim().is_empty() {
-        return Err("base64Data cannot be empty".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "base64Data cannot be empty"));
     }
 
     let mut session = super::storage::load_session(&app, &session_id)?
@@ -4257,11 +4257,11 @@ pub async fn chat_add_message_attachment(
     // Persist meta + the updated message (even if it's not the last message).
     let mut meta = session.clone();
     meta.messages = Vec::new();
-    let meta_json = serde_json::to_string(&meta).map_err(|e| e.to_string())?;
+    let meta_json = serde_json::to_string(&meta).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     session_upsert_meta(app.clone(), meta_json)?;
 
     let payload =
-        serde_json::to_string(&vec![updated_message.clone()]).map_err(|e| e.to_string())?;
+        serde_json::to_string(&vec![updated_message.clone()]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     messages_upsert_batch(app.clone(), session_id, payload)?;
 
     Ok(updated_message)
@@ -4277,7 +4277,7 @@ pub async fn search_messages(
 
     let session = match context.load_session(&session_id)? {
         Some(s) => s,
-        None => return Err("Session not found".to_string()),
+        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
     };
 
     let query_lower = query.to_lowercase();
@@ -4322,13 +4322,13 @@ pub async fn chat_generate_user_reply(
     // Check if help me reply is enabled
     if let Some(advanced) = &settings.advanced_settings {
         if advanced.help_me_reply_enabled == Some(false) {
-            return Err("Help Me Reply is disabled in settings".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Help Me Reply is disabled in settings"));
         }
     }
 
     let session = match context.load_session(&session_id)? {
         Some(s) => s,
-        None => return Err("Session not found".to_string()),
+        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
     };
 
     let character = context.find_character(&session.character_id)?;
@@ -4338,7 +4338,7 @@ pub async fn chat_generate_user_reply(
     let recent_msgs = recent_messages(&session, 10);
 
     if recent_msgs.is_empty() {
-        return Err("No conversation history to base reply on".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "No conversation history to base reply on"));
     }
 
     // Use help me reply model if configured, otherwise fall back to default

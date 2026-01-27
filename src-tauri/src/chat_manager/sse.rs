@@ -470,7 +470,10 @@ pub fn usage_from_value(v: &Value) -> Option<UsageSummary> {
     let (prompt_tokens, completion_tokens, reasoning_tokens, image_tokens, total_tokens) =
         if let Some(u) = u {
             // Log the usage metadata for debugging
-            eprintln!("[DEBUG] Usage metadata received: {:?}", u);
+            crate::utils::log_debug_global(
+                "sse_usage",
+                format!("Usage metadata received: {:?}", u),
+            );
 
             let prompt_tokens = take_first(
                 u,
@@ -553,9 +556,12 @@ pub fn usage_from_value(v: &Value) -> Option<UsageSummary> {
                 .map(|s| s.to_string())
         });
 
-    eprintln!(
-        "[DEBUG] Parsed usage: prompt={:?}, completion={:?}, total={:?}, reasoning={:?}",
-        prompt_tokens, completion_tokens, total_tokens, reasoning_tokens
+    crate::utils::log_debug_global(
+        "sse_usage",
+        format!(
+            "Parsed usage: prompt={:?}, completion={:?}, total={:?}, reasoning={:?}",
+            prompt_tokens, completion_tokens, total_tokens, reasoning_tokens
+        ),
     );
 
     if prompt_tokens.is_none() && completion_tokens.is_none() && total_tokens.is_none() {

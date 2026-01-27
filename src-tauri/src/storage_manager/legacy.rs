@@ -87,7 +87,7 @@ fn encrypt(content: &[u8]) -> Result<Vec<u8>, String> {
     let mut out = Vec::with_capacity(24 + content.len() + 16);
     let ciphertext = cipher
         .encrypt(&nonce, content)
-        .map_err(|e| format!("encrypt: {e}"))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("encrypt: {e}")))?;
     out.extend_from_slice(&nonce_bytes);
     out.extend_from_slice(&ciphertext);
     Ok(out)
@@ -95,7 +95,7 @@ fn encrypt(content: &[u8]) -> Result<Vec<u8>, String> {
 
 fn decrypt(data: &[u8]) -> Result<Vec<u8>, String> {
     if data.len() < 24 {
-        return Err("corrupted data".into());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "corrupted data"));
     }
     let (nonce_bytes, ciphertext) = data.split_at(24);
     let key = derive_key()?;
@@ -103,19 +103,19 @@ fn decrypt(data: &[u8]) -> Result<Vec<u8>, String> {
     let nonce = XNonce::from(*<&[u8; 24]>::try_from(nonce_bytes).map_err(|_| "invalid nonce")?);
     cipher
         .decrypt(&nonce, ciphertext)
-        .map_err(|e| format!("decrypt: {e}"))
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("decrypt: {e}")))
 }
 
 pub fn read_encrypted_file(path: &PathBuf) -> Result<Option<String>, String> {
     if !path.exists() {
         return Ok(None);
     }
-    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = fs::read(path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if bytes.is_empty() {
         return Ok(None);
     }
     let decrypted = decrypt(&bytes)?;
-    let text = String::from_utf8(decrypted).map_err(|e| e.to_string())?;
+    let text = String::from_utf8(decrypted).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if text.is_empty() {
         Ok(None)
     } else {
@@ -126,16 +126,16 @@ pub fn read_encrypted_file(path: &PathBuf) -> Result<Option<String>, String> {
 #[allow(dead_code)]
 pub fn write_encrypted_file(path: &PathBuf, content: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        fs::create_dir_all(parent).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     let bytes = encrypt(content.as_bytes())?;
-    fs::write(path, bytes).map_err(|e| e.to_string())
+    fs::write(path, bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[allow(dead_code)]
 pub fn delete_file_if_exists(path: &PathBuf) -> Result<(), String> {
     if path.exists() {
-        fs::remove_file(path).map_err(|e| e.to_string())?;
+        fs::remove_file(path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     Ok(())
 }

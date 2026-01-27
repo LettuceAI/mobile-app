@@ -36,7 +36,7 @@ impl UsageRepository {
             ),
         );
 
-        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tx.execute(
             r#"INSERT OR REPLACE INTO usage_records (
                 id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label,
@@ -68,22 +68,22 @@ impl UsageRepository {
                 usage.error_message,
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // metadata
         tx.execute(
             "DELETE FROM usage_metadata WHERE usage_id = ?",
             rusqlite::params![&usage.id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         for (k, v) in usage.metadata.iter() {
             tx.execute(
                 "INSERT INTO usage_metadata (usage_id, key, value) VALUES (?, ?, ?)",
                 rusqlite::params![&usage.id, k, v],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
-        tx.commit().map_err(|e| e.to_string())
+        tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
     }
 
     fn query_records(&self, filter: UsageFilter) -> Result<Vec<RequestUsage>, String> {
@@ -123,7 +123,7 @@ impl UsageRepository {
             "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, finish_reason, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
             if where_clauses.is_empty() { String::new() } else { format!("WHERE {}", where_clauses.join(" AND ")) }
         );
-        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows = stmt
             .query_map(rusqlite::params_from_iter(params.iter()), |r| {
                 Ok((
@@ -152,7 +152,7 @@ impl UsageRepository {
                     r.get::<_, Option<String>>(22)?, // error_message
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         let mut out: Vec<RequestUsage> = Vec::new();
         let mut ids: Vec<String> = Vec::new();
@@ -181,7 +181,7 @@ impl UsageRepository {
                 tc,
                 success,
                 err,
-            ) = row.map_err(|e| e.to_string())?;
+            ) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             ids.push(id.clone());
             let cost = match (pc, cc, tc) {
                 (Some(prompt_cost), Some(completion_cost), Some(total_cost)) => {
@@ -231,7 +231,7 @@ impl UsageRepository {
                 "SELECT usage_id, key, value FROM usage_metadata WHERE usage_id IN ({})",
                 placeholders
             );
-            let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+            let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let rows = stmt
                 .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
                     Ok((
@@ -240,10 +240,10 @@ impl UsageRepository {
                         r.get::<_, String>(2)?,
                     ))
                 })
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mut meta_map: HashMap<String, HashMap<String, String>> = HashMap::new();
             for row in rows {
-                let (uid, k, v) = row.map_err(|e| e.to_string())?;
+                let (uid, k, v) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 meta_map.entry(uid).or_default().insert(k, v);
             }
             for rec in &mut out {
@@ -290,7 +290,7 @@ impl UsageRepository {
             "DELETE FROM usage_records WHERE timestamp < ?",
             rusqlite::params![timestamp as i64],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         Ok(count as u64)
     }
 
@@ -340,17 +340,17 @@ impl UsageRepository {
             .app
             .path()
             .download_dir()
-            .map_err(|e| format!("Failed to get downloads directory: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get downloads directory: {}", e)))?;
 
         if !download_dir.exists() {
             fs::create_dir_all(&download_dir)
-                .map_err(|e| format!("Failed to create downloads directory: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create downloads directory: {}", e)))?;
         }
 
         let file_path = download_dir.join(filename);
 
         fs::write(&file_path, csv_data.as_bytes())
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write file: {}", e)))?;
 
         let path_str = file_path
             .to_str()

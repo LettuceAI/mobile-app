@@ -108,10 +108,10 @@ impl ImageProviderAdapter for GoogleGeminiAdapter {
 
     fn parse_response(&self, response: Value) -> Result<Vec<ImageResponseData>, String> {
         let gemini_response: GeminiResponse = serde_json::from_value(response)
-            .map_err(|e| format!("Failed to parse response: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
 
         if gemini_response.candidates.is_empty() {
-            return Err("No candidates in response".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "No candidates in response"));
         }
 
         let mut images = Vec::new();
@@ -144,7 +144,7 @@ impl ImageProviderAdapter for GoogleGeminiAdapter {
         }
 
         if images.is_empty() {
-            return Err("No images found in response".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "No images found in response"));
         }
 
         Ok(images)

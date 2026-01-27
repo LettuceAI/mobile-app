@@ -1,10 +1,11 @@
 import { useEffect, useState, memo, useRef } from "react";
-import { Users } from "lucide-react";
+import { Rocket, Users } from "lucide-react";
 import { motion } from "framer-motion";
 
 import type { GroupSessionPreview, Character } from "../../../../../core/storage/schemas";
 import { typography, radius, spacing, interactive, cn } from "../../../../design-tokens";
 import { useAvatar } from "../../../../hooks/useAvatar";
+import { useRocketEasterEgg } from "../../../../hooks/useRocketEasterEgg";
 import { AvatarImage } from "../../../../components/AvatarImage";
 
 export function GroupSessionList({
@@ -74,14 +75,23 @@ export function GroupSessionSkeleton() {
 }
 
 export function EmptyState() {
+  const rocket = useRocketEasterEgg();
   return (
     <div
       className={cn(
-        "p-8 text-center",
+        "relative p-8 text-center overflow-hidden",
         radius.lg,
         "border border-dashed border-white/10 bg-white/2",
       )}
+      {...rocket.bind}
     >
+      {rocket.isLaunched && (
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rocket-launch">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/10">
+            <Rocket className="h-4 w-4 text-white/80" />
+          </div>
+        </div>
+      )}
       <div className={spacing.field}>
         <Users className="mx-auto h-12 w-12 text-white/30 mb-4" />
         <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white")}>

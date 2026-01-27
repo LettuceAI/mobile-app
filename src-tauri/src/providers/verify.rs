@@ -82,7 +82,7 @@ pub async fn verify_provider_api_key(
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let headers = build_headers(&pid, &resolved_key)?;
     let url = build_verify_url(&pid, &base);

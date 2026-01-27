@@ -24,7 +24,7 @@ pub fn get_cached_pricing(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if let Some((pricing_json_opt, cached_at)) = row {
         let current_time = now_secs();
@@ -32,7 +32,7 @@ pub fn get_cached_pricing(
         if cache_age < (CACHE_TTL_HOURS * 3600) {
             if let Some(pricing_json) = pricing_json_opt {
                 let pricing: crate::models::ModelPricing =
-                    serde_json::from_str(&pricing_json).map_err(|e| e.to_string())?;
+                    serde_json::from_str(&pricing_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 return Ok(Some(pricing));
             } else {
                 return Ok(None);
@@ -51,7 +51,7 @@ pub fn cache_model_pricing(
     let conn = open_db(app)?;
     let now = now_secs();
     let pricing_json = match pricing {
-        Some(ref p) => Some(serde_json::to_string(p).map_err(|e| e.to_string())?),
+        Some(ref p) => Some(serde_json::to_string(p).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?),
         None => None,
     };
     conn.execute(
@@ -60,6 +60,6 @@ pub fn cache_model_pricing(
          ON CONFLICT(model_id) DO UPDATE SET pricing_json = excluded.pricing_json, cached_at = excluded.cached_at",
         rusqlite::params![model_id, pricing_json, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }

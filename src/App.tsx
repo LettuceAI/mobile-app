@@ -320,8 +320,148 @@ function AppContent() {
     return platform.type === "desktop";
   }, []);
 
+  const [glitchStage, setGlitchStage] = useState<0 | 1 | 2 | 3>(0);
+  const glitchStageRef = useRef<0 | 1 | 2 | 3>(0);
+  const shakeCooldownRef = useRef(0);
+  const lastShakeRef = useRef(0);
+  const glitchTimeoutRef = useRef<number | null>(null);
+  const [glitchEnabled, setGlitchEnabled] = useState(true);
+  const [voidActive, setVoidActive] = useState(false);
+  const [voidTextIndex, setVoidTextIndex] = useState(0);
+  const [showRestore, setShowRestore] = useState(false);
+  const voidMessage = "congrats, you destablised the app. enjoy emptiness";
+
+  useEffect(() => {
+    glitchStageRef.current = glitchStage;
+  }, [glitchStage]);
+
+  useEffect(() => {
+    const key = "lettuce.easterEggs.glitch";
+    const applyStored = (value: string | null | undefined) => {
+      if (value === null || value === undefined) return;
+      setGlitchEnabled(value === "true");
+    };
+    const syncFromStorage = () => {
+      try {
+        applyStored(localStorage.getItem(key));
+      } catch {
+        setGlitchEnabled(true);
+      }
+    };
+    syncFromStorage();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === key) {
+        applyStored(event.newValue);
+      }
+    };
+    const handleToggleEvent = (event: Event) => {
+      const detail = (event as CustomEvent<boolean>).detail;
+      if (typeof detail === "boolean") {
+        setGlitchEnabled(detail);
+      } else {
+        syncFromStorage();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("lettuce:easterEggs:glitch", handleToggleEvent);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("lettuce:easterEggs:glitch", handleToggleEvent);
+    };
+  }, []);
+
+  useEffect(() => {
+    const platform = getPlatform();
+    if (platform.type !== "mobile" || !glitchEnabled) return;
+
+    let mounted = true;
+    const threshold = 18;
+    const cooldownMs = 4000;
+    const stageCooldownMs = 1000;
+
+    const handleMotion = (event: DeviceMotionEvent) => {
+      if (!mounted) return;
+      const accel = event.accelerationIncludingGravity;
+      if (!accel) return;
+      const x = accel.x ?? 0;
+      const y = accel.y ?? 0;
+      const z = accel.z ?? 0;
+      const magnitude = Math.sqrt(x * x + y * y + z * z);
+      const now = Date.now();
+
+      if (magnitude > threshold) {
+        const canTrigger = now - shakeCooldownRef.current > cooldownMs;
+        if (!canTrigger && glitchStageRef.current === 3) return;
+
+        if (now - lastShakeRef.current < stageCooldownMs) {
+          return;
+        }
+        lastShakeRef.current = now;
+
+        const currentStage = glitchStageRef.current;
+        const nextStage = currentStage === 0 ? 2 : ((currentStage + 1) as 1 | 2 | 3);
+
+        setGlitchStage(nextStage);
+        glitchStageRef.current = nextStage;
+
+        if (glitchTimeoutRef.current) {
+          window.clearTimeout(glitchTimeoutRef.current);
+        }
+
+        const durationMs = nextStage === 1 ? 1200 : nextStage === 2 ? 1500 : 1800;
+        glitchTimeoutRef.current = window.setTimeout(() => {
+          setGlitchStage(0);
+        }, durationMs);
+
+        if (nextStage === 2) {
+          toast.warning("Reality fracture detected.");
+        } else if (nextStage === 3) {
+          shakeCooldownRef.current = now;
+          toast.info("Reality resynced.");
+          setVoidActive(true);
+          setVoidTextIndex(0);
+          setShowRestore(false);
+        }
+      }
+    };
+
+    window.addEventListener("devicemotion", handleMotion);
+    return () => {
+      mounted = false;
+      window.removeEventListener("devicemotion", handleMotion);
+      if (glitchTimeoutRef.current) {
+        window.clearTimeout(glitchTimeoutRef.current);
+        glitchTimeoutRef.current = null;
+      }
+    };
+  }, [glitchEnabled]);
+
+  useEffect(() => {
+    if (glitchEnabled) return;
+    setGlitchStage(0);
+    glitchStageRef.current = 0;
+    setVoidActive(false);
+    setShowRestore(false);
+  }, [glitchEnabled]);
+
+  useEffect(() => {
+    if (!voidActive) return;
+    if (voidTextIndex >= voidMessage.length) {
+      const timer = window.setTimeout(() => setShowRestore(true), 1200);
+      return () => window.clearTimeout(timer);
+    }
+    const timer = window.setTimeout(() => {
+      setVoidTextIndex((prev) => Math.min(voidMessage.length, prev + 1));
+    }, 45);
+    return () => window.clearTimeout(timer);
+  }, [voidActive, voidTextIndex, voidMessage.length]);
+
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div
+      className={`relative min-h-screen overflow-hidden ${
+        glitchStage ? `app-glitch app-glitch-${glitchStage}` : ""
+      }`}
+    >
       <div
         className={`relative z-10 mx-auto flex min-h-screen w-full ${
           isChatDetailRoute ? "max-w-full" : "max-w-md lg:max-w-none"
@@ -331,7 +471,7 @@ function AppContent() {
 
         <main
           ref={mainRef}
-          className={`flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${
+          className={`app-fall-target flex-1 ${showTopNav ? "pt-[calc(72px+env(safe-area-inset-top))]" : ""} ${
             isOnboardingRoute
               ? `overflow-y-auto ${isDesktop ? "" : "px-0 pt-5 pb-5"}`
               : isChatDetailRoute
@@ -347,6 +487,29 @@ function AppContent() {
                         : `overflow-y-auto px-4 pt-4 ${showBottomNav ? "pb-[calc(96px+env(safe-area-inset-bottom))]" : "pb-6"}`
           }`}
         >
+          {voidActive && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <div className="pointer-events-auto max-w-xs px-6 py-5 text-center">
+                <p className="text-sm text-white/70">
+                  {voidMessage.slice(0, voidTextIndex)}
+                  <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-white/40 align-middle" />
+                </p>
+                {showRestore && (
+                  <button
+                    onClick={() => {
+                      setVoidActive(false);
+                      setShowRestore(false);
+                      setGlitchStage(0);
+                      glitchStageRef.current = 0;
+                    }}
+                    className="mt-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:border-white/40 hover:bg-white/15"
+                  >
+                    Restore
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           <motion.div
             key={location.pathname.startsWith("/settings") ? location.pathname : location.key}
             initial={shouldAnimatePage ? { opacity: 0, y: 16 } : false}

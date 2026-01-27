@@ -135,7 +135,7 @@ fn parse_avatar_crop(value: Option<&JsonValue>) -> Option<AvatarCrop> {
 fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, String> {
     let uec = assert_uec(value, false)?;
     if uec.kind != UecKind::Character {
-        return Err("Invalid import: This is not a character UEC".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Invalid import: This is not a character UEC"));
     }
 
     let payload = uec
@@ -310,7 +310,7 @@ fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, Stri
 fn parse_uec_persona(value: &JsonValue) -> Result<PersonaExportPackage, String> {
     let uec = assert_uec(value, false)?;
     if uec.kind != UecKind::Persona {
-        return Err("Invalid import: This is not a persona UEC".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Invalid import: This is not a persona UEC"));
     }
 
     let payload = uec
@@ -393,7 +393,7 @@ fn parse_character_import_payload(
         ));
     }
     let legacy = serde_json::from_value::<CharacterExportPackage>(raw_value.clone())
-        .map_err(|e| format!("Invalid import data: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
     Ok((legacy, CharacterFileFormat::LegacyJson))
 }
 
@@ -503,23 +503,23 @@ fn load_character_export_snapshot(
                 ))
             },
         )
-        .map_err(|e| format!("Character not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Character not found: {}", e)))?;
 
     let mut rules: Vec<String> = Vec::new();
     let mut stmt = conn
         .prepare("SELECT rule FROM character_rules WHERE character_id = ? ORDER BY idx ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rule_rows = stmt
         .query_map(params![character_id], |r| Ok(r.get::<_, String>(0)?))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for rule in rule_rows {
-        rules.push(rule.map_err(|e| e.to_string())?);
+        rules.push(rule.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
 
     let mut scenes: Vec<SceneExport> = Vec::new();
     let mut scenes_stmt = conn
         .prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let scene_rows = scenes_stmt
         .query_map(params![character_id], |r| {
             Ok((
@@ -530,16 +530,16 @@ fn load_character_export_snapshot(
                 r.get::<_, Option<String>>(4)?,
             ))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for row in scene_rows {
         let (scene_id, content, direction, scene_created_at, selected_variant_id) =
-            row.map_err(|e| e.to_string())?;
+            row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         let mut variants: Vec<SceneVariantExport> = Vec::new();
         let mut var_stmt = conn
             .prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let var_rows = var_stmt
             .query_map(params![&scene_id], |r| {
                 Ok((
@@ -549,10 +549,10 @@ fn load_character_export_snapshot(
                     r.get::<_, i64>(3)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         for v in var_rows {
-            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| e.to_string())?;
+            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             variants.push(SceneVariantExport {
                 id: vid,
                 content: vcontent,
@@ -679,7 +679,7 @@ fn build_uec_from_package(
                 .collect(),
         ),
     );
-    let scenes = serde_json::to_value(&package.character.scenes).map_err(|e| e.to_string())?;
+    let scenes = serde_json::to_value(&package.character.scenes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     payload.insert("scenes".into(), scenes);
     if let Some(ds) = package.character.default_scene_id.clone() {
         payload.insert("defaultSceneId".into(), JsonValue::String(ds));
@@ -758,7 +758,7 @@ fn build_uec_from_package(
     );
 
     serde_json::to_string_pretty(&export_card)
-        .map_err(|e| format!("Failed to serialize export: {}", e))
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize export: {}", e)))
 }
 
 fn build_uec_from_persona_package(
@@ -817,7 +817,7 @@ fn build_uec_from_persona_package(
         Some(JsonValue::Object(JsonMap::new())),
     );
 
-    serde_json::to_string_pretty(&uec).map_err(|e| e.to_string())
+    serde_json::to_string_pretty(&uec).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -849,13 +849,13 @@ pub fn character_export_with_format(
         CharacterFileFormat::CharaCardV2 => {
             let card = engine::export_chara_card_v2(&snapshot.package);
             serde_json::to_string_pretty(&card)
-                .map_err(|e| format!("Failed to serialize export: {}", e))?
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize export: {}", e)))?
         }
         CharacterFileFormat::CharaCardV1 => {
-            return Err("Character Card V1 export is read-only".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Character Card V1 export is read-only"));
         }
         CharacterFileFormat::LegacyJson => {
-            return Err("Legacy JSON export is not supported".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Legacy JSON export is not supported"));
         }
     };
 
@@ -876,7 +876,7 @@ pub fn character_list_formats() -> Result<Vec<CharacterFormatInfo>, String> {
 #[tauri::command]
 pub fn character_detect_format(import_json: String) -> Result<CharacterFormatInfo, String> {
     let raw_value: JsonValue =
-        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+        serde_json::from_str(&import_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
     let format = detect_character_format(&raw_value)
         .ok_or_else(|| "Unsupported character file format".to_string())?;
     Ok(engine::character_format_info(format))
@@ -888,7 +888,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
     log_info(&app, "character_import", "Starting character import");
 
     let raw_value: JsonValue =
-        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+        serde_json::from_str(&import_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
     let (package, _format) = parse_character_import_payload(&raw_value)?;
 
     // Validate version
@@ -900,7 +900,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
     }
 
     let mut conn = open_db(&app)?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Generate new ID for imported character
     let new_character_id = uuid::Uuid::new_v4().to_string();
@@ -1029,7 +1029,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
             now
         ],
     )
-    .map_err(|e| format!("Failed to insert character: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert character: {}", e)))?;
 
     // Insert rules
     for (idx, rule) in package.character.rules.iter().enumerate() {
@@ -1037,7 +1037,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
             "INSERT INTO character_rules (character_id, idx, rule) VALUES (?, ?, ?)",
             params![&new_character_id, idx as i64, rule],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     // Map old scene IDs to new ones
@@ -1070,7 +1070,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
                     variant_created_at
                 ],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
 
         // Map selected variant ID
@@ -1091,7 +1091,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
                 new_selected_variant_id
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Set first scene as default if no default was specified
         if i == 0
@@ -1113,9 +1113,9 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
         "UPDATE characters SET default_scene_id = ? WHERE id = ?",
         params![new_default_scene_id, &new_character_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     log_info(
         &app,
@@ -1132,7 +1132,7 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 #[tauri::command]
 pub fn character_import_preview(import_json: String) -> Result<String, String> {
     let raw_value: JsonValue =
-        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+        serde_json::from_str(&import_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
     let (package, format) = parse_character_import_payload(&raw_value)?;
 
     if package.version > 1 {
@@ -1154,7 +1154,7 @@ pub fn character_import_preview(import_json: String) -> Result<String, String> {
         _ => "manual".to_string(),
     };
 
-    let scenes = serde_json::to_value(&package.character.scenes).map_err(|e| e.to_string())?;
+    let scenes = serde_json::to_value(&package.character.scenes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let preview = serde_json::json!({
         "name": package.character.name,
@@ -1171,18 +1171,18 @@ pub fn character_import_preview(import_json: String) -> Result<String, String> {
         "backgroundImageData": package.background_image_data
     });
 
-    serde_json::to_string(&preview).map_err(|e| e.to_string())
+    serde_json::to_string(&preview).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 /// Convert a legacy export package to a UEC file (no import performed)
 #[tauri::command]
 pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
     let raw_value: JsonValue =
-        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+        serde_json::from_str(&import_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
 
     if looks_like_uec(&raw_value) {
         assert_uec(&raw_value, false)?;
-        return serde_json::to_string_pretty(&raw_value).map_err(|e| e.to_string());
+        return serde_json::to_string_pretty(&raw_value).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e));
     }
 
     if engine::guess_chara_card_format(&raw_value).is_some() {
@@ -1209,7 +1209,7 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
     match kind {
         "character" => {
             let package: CharacterExportPackage = serde_json::from_value(raw_value.clone())
-                .map_err(|e| format!("Invalid import data: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
             let legacy_id = legacy_entity_id(&raw_value, "character")
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             let legacy_created_at = raw_value
@@ -1256,7 +1256,7 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
                 ),
             );
             let scenes =
-                serde_json::to_value(&package.character.scenes).map_err(|e| e.to_string())?;
+                serde_json::to_value(&package.character.scenes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             payload.insert("scenes".into(), scenes);
             if let Some(ds) = package.character.default_scene_id.clone() {
                 payload.insert("defaultSceneId".into(), JsonValue::String(ds));
@@ -1342,11 +1342,11 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
                 Some(JsonValue::Object(meta)),
                 Some(JsonValue::Object(JsonMap::new())),
             );
-            serde_json::to_string_pretty(&uec).map_err(|e| e.to_string())
+            serde_json::to_string_pretty(&uec).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
         }
         "persona" => {
             let package: PersonaExportPackage = serde_json::from_value(raw_value.clone())
-                .map_err(|e| format!("Invalid import data: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
             let legacy_id = legacy_entity_id(&raw_value, "persona")
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             let legacy_created_at = raw_value
@@ -1402,9 +1402,9 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
                 Some(JsonValue::Object(meta)),
                 Some(JsonValue::Object(JsonMap::new())),
             );
-            serde_json::to_string_pretty(&uec).map_err(|e| e.to_string())
+            serde_json::to_string_pretty(&uec).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
         }
-        _ => Err("Unsupported import type".to_string()),
+        _ => Err(crate::utils::err_msg(module_path!(), line!(), "Unsupported import type")),
     }
 }
 
@@ -1420,10 +1420,10 @@ fn read_avatar_as_base64(
         .join(filename);
 
     if !avatar_path.exists() {
-        return Err(format!("Avatar not found: {}", filename));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Avatar not found: {}", filename)));
     }
 
-    let bytes = fs::read(&avatar_path).map_err(|e| e.to_string())?;
+    let bytes = fs::read(&avatar_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Determine MIME type
     let mime_type = if filename.ends_with(".webp") {
@@ -1450,7 +1450,7 @@ fn read_background_image_as_base64(
     for ext in &["jpg", "jpeg", "png", "gif", "webp"] {
         let image_path = images_dir.join(format!("{}.{}", image_id, ext));
         if image_path.exists() {
-            let bytes = fs::read(&image_path).map_err(|e| e.to_string())?;
+            let bytes = fs::read(&image_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mime_type = match *ext {
                 "jpg" | "jpeg" => "image/jpeg",
                 "png" => "image/png",
@@ -1463,7 +1463,7 @@ fn read_background_image_as_base64(
         }
     }
 
-    Err(format!("Background image not found: {}", image_id))
+    Err(crate::utils::err_msg(module_path!(), line!(), format!("Background image not found: {}", image_id)))
 }
 
 /// Helper: Save avatar from base64 data URL
@@ -1482,13 +1482,21 @@ fn save_avatar_from_base64(
 
     let bytes = general_purpose::STANDARD
         .decode(data)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode base64: {}", e)))?;
 
     let avatars_dir = storage_root(app)?.join("avatars").join(entity_id);
 
-    eprintln!("[DEBUG] Creating avatar directory: {:?}", avatars_dir);
+    crate::utils::log_debug(
+        app,
+        "entity_transfer",
+        format!("Creating avatar directory: {:?}", avatars_dir),
+    );
     fs::create_dir_all(&avatars_dir).map_err(|e| {
-        eprintln!("[ERROR] Failed to create avatar directory: {:?}", e);
+        crate::utils::log_error(
+            app,
+            "entity_transfer",
+            format!("Failed to create avatar directory: {:?}", e),
+        );
         e.to_string()
     })?;
 
@@ -1498,7 +1506,7 @@ fn save_avatar_from_base64(
             let mut webp_data: Vec<u8> = Vec::new();
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
             img.write_with_encoder(encoder)
-                .map_err(|e| format!("Failed to encode WebP: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to encode WebP: {}", e)))?;
             webp_data
         }
         Err(_) => bytes,
@@ -1506,11 +1514,11 @@ fn save_avatar_from_base64(
 
     let base_filename = "avatar_base.webp";
     let base_path = avatars_dir.join(base_filename);
-    fs::write(&base_path, &webp_bytes).map_err(|e| e.to_string())?;
+    fs::write(&base_path, &webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let legacy_path = avatars_dir.join("avatar.webp");
-    fs::write(&legacy_path, &webp_bytes).map_err(|e| e.to_string())?;
+    fs::write(&legacy_path, &webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let round_path = avatars_dir.join("avatar_round.webp");
-    fs::write(&round_path, &webp_bytes).map_err(|e| e.to_string())?;
+    fs::write(&round_path, &webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(base_filename.to_string())
 }
@@ -1529,10 +1537,10 @@ fn save_background_image_from_base64(
 
     let bytes = general_purpose::STANDARD
         .decode(data)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode base64: {}", e)))?;
 
     let images_dir = storage_root(app)?.join("images");
-    fs::create_dir_all(&images_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&images_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Detect image format
     let extension = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -1549,7 +1557,7 @@ fn save_background_image_from_base64(
 
     let image_id = uuid::Uuid::new_v4().to_string();
     let image_path = images_dir.join(format!("{}.{}", image_id, extension));
-    fs::write(&image_path, bytes).map_err(|e| e.to_string())?;
+    fs::write(&image_path, bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(image_id)
 }
@@ -1636,25 +1644,25 @@ fn read_imported_character(
                 ))
             },
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Read rules
     let mut rules: Vec<JsonValue> = Vec::new();
     let mut stmt = conn
         .prepare("SELECT rule FROM character_rules WHERE character_id = ? ORDER BY idx ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rule_rows = stmt
         .query_map(params![character_id], |r| Ok(r.get::<_, String>(0)?))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for rule in rule_rows {
-        rules.push(JsonValue::String(rule.map_err(|e| e.to_string())?));
+        rules.push(JsonValue::String(rule.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?));
     }
 
     // Read scenes
     let mut scenes: Vec<JsonValue> = Vec::new();
     let mut scenes_stmt = conn
         .prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let scenes_rows = scenes_stmt
         .query_map(params![character_id], |r| {
             Ok((
@@ -1665,17 +1673,17 @@ fn read_imported_character(
                 r.get::<_, Option<String>>(4)?,
             ))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for row in scenes_rows {
         let (scene_id, content, direction, _scene_created_at, selected_variant_id) =
-            row.map_err(|e| e.to_string())?;
+            row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Read scene variants
         let mut variants: Vec<JsonValue> = Vec::new();
         let mut var_stmt = conn
             .prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let var_rows = var_stmt
             .query_map(params![&scene_id], |r| {
                 Ok((
@@ -1685,10 +1693,10 @@ fn read_imported_character(
                     r.get::<_, i64>(3)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         for v in var_rows {
-            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| e.to_string())?;
+            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mut variant_obj =
                 serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated});
             if let Some(dir) = vdirection {
@@ -1784,7 +1792,7 @@ fn read_imported_character(
     root.insert("createdAt".into(), JsonValue::from(created_at));
     root.insert("updatedAt".into(), JsonValue::from(updated_at));
 
-    serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())
+    serde_json::to_string(&JsonValue::Object(root)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1814,7 +1822,7 @@ pub fn persona_export(app: tauri::AppHandle, persona_id: String) -> Result<Strin
             params![&persona_id],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?)),
         )
-        .map_err(|e| format!("Persona not found: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Persona not found: {}", e)))?;
 
     // Read avatar image if exists
     let avatar_data = if let Some(ref avatar_filename) = avatar_path {
@@ -1856,7 +1864,7 @@ pub fn persona_export(app: tauri::AppHandle, persona_id: String) -> Result<Strin
     );
 
     let json = serde_json::to_string_pretty(&export_card)
-        .map_err(|e| format!("Failed to serialize export: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize export: {}", e)))?;
 
     log_info(
         &app,
@@ -1873,12 +1881,12 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
     log_info(&app, "persona_import", "Starting persona import");
 
     let raw_value: JsonValue =
-        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+        serde_json::from_str(&import_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
     let package = if looks_like_uec(&raw_value) {
         parse_uec_persona(&raw_value)?
     } else {
         serde_json::from_value::<PersonaExportPackage>(raw_value)
-            .map_err(|e| format!("Invalid import data: {}", e))?
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?
     };
 
     // Validate version
@@ -1890,7 +1898,7 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
     }
 
     let mut conn = open_db(&app)?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Generate new ID for imported persona
     let new_persona_id = uuid::Uuid::new_v4().to_string();
@@ -1941,7 +1949,7 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
         .unwrap_or((None, None, None));
     if is_default {
         tx.execute("UPDATE personas SET is_default = 0", [])
-            .map_err(|e| format!("Failed to clear default persona: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to clear default persona: {}", e)))?;
     }
 
     tx.execute(
@@ -1960,9 +1968,9 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
             now
         ],
     )
-    .map_err(|e| format!("Failed to insert persona: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert persona: {}", e)))?;
 
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     log_info(
         &app,
@@ -1986,7 +1994,7 @@ fn read_imported_persona(conn: &rusqlite::Connection, persona_id: &str) -> Resul
                 r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get::<_, i64>(6)?, r.get(7)?, r.get(8)?
             )),
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut root = JsonMap::new();
     root.insert("id".into(), JsonValue::String(persona_id.to_string()));
@@ -2005,7 +2013,7 @@ fn read_imported_persona(conn: &rusqlite::Connection, persona_id: &str) -> Resul
     root.insert("createdAt".into(), JsonValue::from(created_at));
     root.insert("updatedAt".into(), JsonValue::from(updated_at));
 
-    serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())
+    serde_json::to_string(&JsonValue::Object(root)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 /// Generic import that auto-detects whether it's a character or persona export
@@ -2015,7 +2023,7 @@ pub fn import_package(app: tauri::AppHandle, import_json: String) -> Result<Stri
     log_info(&app, "import_package", "Auto-detecting import type");
 
     let raw_value: JsonValue =
-        serde_json::from_str(&import_json).map_err(|e| format!("Invalid import data: {}", e))?;
+        serde_json::from_str(&import_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid import data: {}", e)))?;
 
     let import_kind = if looks_like_uec(&raw_value) {
         raw_value
@@ -2028,7 +2036,7 @@ pub fn import_package(app: tauri::AppHandle, import_json: String) -> Result<Stri
     } else if engine::guess_chara_card_format(&raw_value).is_some() {
         "character".to_string()
     } else {
-        return Err("Invalid import: missing type".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Invalid import: missing type"));
     };
 
     match import_kind.as_str() {
@@ -2037,26 +2045,26 @@ pub fn import_package(app: tauri::AppHandle, import_json: String) -> Result<Stri
             let result = character_import(app, import_json)?;
 
             let mut result_obj = serde_json::from_str::<JsonMap<String, JsonValue>>(&result)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             result_obj.insert(
                 "importType".into(),
                 JsonValue::String("character".to_string()),
             );
-            serde_json::to_string(&JsonValue::Object(result_obj)).map_err(|e| e.to_string())
+            serde_json::to_string(&JsonValue::Object(result_obj)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
         }
         "persona" => {
             log_info(&app, "import_package", "Detected persona export");
             let result = persona_import(app, import_json)?;
 
             let mut result_obj = serde_json::from_str::<JsonMap<String, JsonValue>>(&result)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             result_obj.insert(
                 "importType".into(),
                 JsonValue::String("persona".to_string()),
             );
-            serde_json::to_string(&JsonValue::Object(result_obj)).map_err(|e| e.to_string())
+            serde_json::to_string(&JsonValue::Object(result_obj)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
         }
-        _ => Err("Unsupported import type".to_string()),
+        _ => Err(crate::utils::err_msg(module_path!(), line!(), "Unsupported import type")),
     }
 }
 
@@ -2082,17 +2090,17 @@ pub fn save_json_to_downloads(
     let download_dir = app
         .path()
         .download_dir()
-        .map_err(|e| format!("Failed to get downloads directory: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get downloads directory: {}", e)))?;
 
     if !download_dir.exists() {
         fs::create_dir_all(&download_dir)
-            .map_err(|e| format!("Failed to create downloads directory: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create downloads directory: {}", e)))?;
     }
 
     let file_path = download_dir.join(&filename);
 
     fs::write(&file_path, json_content.as_bytes())
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write file: {}", e)))?;
 
     let path_str = file_path
         .to_str()

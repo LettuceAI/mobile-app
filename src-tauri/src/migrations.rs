@@ -424,7 +424,7 @@ fn set_migration_version(app: &AppHandle, version: u32) -> Result<(), String> {
         "UPDATE settings SET migration_version = ?1, updated_at = ?2 WHERE id = 1",
         params![version, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(())
 }
@@ -439,7 +439,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
     // Settings migration - add systemPrompt field if missing
     if let Ok(Some(settings_json)) = storage_read_settings(app.clone()) {
         let mut settings: Value = serde_json::from_str(&settings_json)
-            .map_err(|e| format!("Failed to parse settings: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings: {}", e)))?;
 
         let mut changed = false;
 
@@ -474,7 +474,7 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
         if changed {
             storage_write_settings(
                 app.clone(),
-                serde_json::to_string(&settings).map_err(|e| e.to_string())?,
+                serde_json::to_string(&settings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             )?;
             log_info(app, "migrations", "Settings migration completed");
         }
@@ -517,18 +517,18 @@ fn migrate_v3_to_v4(app: &AppHandle) -> Result<(), String> {
     }
 
     // Read and parse JSON
-    let raw = fs::read_to_string(&old_path).map_err(|e| e.to_string())?;
+    let raw = fs::read_to_string(&old_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if raw.trim().is_empty() {
         // Empty file; safe to remove
         let _ = fs::remove_file(&old_path);
         return Ok(());
     }
-    let secrets: SecretsFile = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let secrets: SecretsFile = serde_json::from_str(&raw).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Upsert into DB
     let mut conn = open_db(app)?;
     let now = now_ms();
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for (k, v) in secrets.entries.iter() {
         // keys are formatted as "service|account"
         if let Some((service, account)) = k.split_once('|') {
@@ -538,10 +538,10 @@ fn migrate_v3_to_v4(app: &AppHandle) -> Result<(), String> {
                  ON CONFLICT(service, account) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
                 params![service, account, v, now],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Backup old file
     let _ = fs::rename(&old_path, dir.join("secrets.json.bak"));
@@ -569,10 +569,10 @@ fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
         templates: Vec<SystemPromptTemplate>,
     }
 
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let file: PromptTemplatesFile = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let file: PromptTemplatesFile = serde_json::from_str(&content).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut conn = open_db(app)?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for t in file.templates.iter() {
         let scope_str = match t.scope {
@@ -580,7 +580,7 @@ fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
             PromptScope::ModelSpecific => "ModelSpecific",
             PromptScope::CharacterSpecific => "CharacterSpecific",
         };
-        let target_ids_json = serde_json::to_string(&t.target_ids).map_err(|e| e.to_string())?;
+        let target_ids_json = serde_json::to_string(&t.target_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tx.execute(
             "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -594,10 +594,10 @@ fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
                 t.updated_at
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     // Backup the old JSON file
     let _ = fs::rename(&path, path.with_extension("json.bak"));
     Ok(())
@@ -631,26 +631,26 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if content.trim().is_empty() {
         let _ = fs::remove_file(&path);
         return Ok(());
     }
-    let file: ModelsCacheFile = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let file: ModelsCacheFile = serde_json::from_str(&content).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut conn = open_db(app)?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for (model_id, entry) in file.models.iter() {
         let pricing_json = match &entry.pricing {
-            Some(p) => Some(serde_json::to_string(p).map_err(|e| e.to_string())?),
+            Some(p) => Some(serde_json::to_string(p).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?),
             None => None,
         };
         tx.execute(
             "INSERT OR REPLACE INTO model_pricing_cache (model_id, pricing_json, cached_at) VALUES (?1, ?2, ?3)",
             params![model_id, pricing_json, entry.cached_at],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let _ = fs::rename(&path, path.with_extension("json.bak"));
     Ok(())
 }
@@ -671,13 +671,13 @@ fn migrate_v6_to_v7(app: &AppHandle) -> Result<(), String> {
     // For each credential row, attempt to set api_key from secrets if missing
     let mut stmt = conn
         .prepare("SELECT id, provider_id FROM provider_credentials WHERE api_key IS NULL OR api_key = ''")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for row in rows {
-        let (cred_id, provider_id) = row.map_err(|e| e.to_string())?;
+        let (cred_id, provider_id) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let account = format!("{}:{}", provider_id, cred_id);
         let key_opt: Option<String> = conn
             .query_row(
@@ -686,13 +686,13 @@ fn migrate_v6_to_v7(app: &AppHandle) -> Result<(), String> {
                 |r| r.get(0),
             )
             .optional()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if let Some(key) = key_opt {
             conn.execute(
                 "UPDATE provider_credentials SET api_key = ?1 WHERE id = ?2",
                 params![key, cred_id],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
 
@@ -734,13 +734,13 @@ fn migrate_v9_to_v10(app: &AppHandle) -> Result<(), String> {
     let mut has_column = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(characters)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "memory_type" {
             has_column = true;
             break;
@@ -773,13 +773,13 @@ fn migrate_v10_to_v11(app: &AppHandle) -> Result<(), String> {
     let mut has_column = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "memory_embeddings" {
             has_column = true;
             break;
@@ -812,13 +812,13 @@ fn migrate_v11_to_v12(app: &AppHandle) -> Result<(), String> {
     let mut has_events = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "memory_summary" {
             has_summary = true;
         }
@@ -944,7 +944,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
     // Migrate Settings app-wide prompt
     if let Ok(Some(settings_json)) = storage_read_settings(app.clone()) {
         let mut settings: Value = serde_json::from_str(&settings_json)
-            .map_err(|e| format!("Failed to parse settings: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings: {}", e)))?;
 
         let mut changed = false;
 
@@ -1018,7 +1018,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
         if changed {
             storage_write_settings(
                 app.clone(),
-                serde_json::to_string(&settings).map_err(|e| e.to_string())?,
+                serde_json::to_string(&settings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             )?;
             log_info(
                 app,
@@ -1055,13 +1055,13 @@ fn migrate_v12_to_v13(app: &AppHandle) -> Result<(), String> {
     let mut has_column = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(usage_records)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "operation_type" {
             has_column = true;
             break;
@@ -1093,13 +1093,13 @@ fn migrate_v26_to_v27(app: &AppHandle) -> Result<(), String> {
     let mut has_model_id_messages = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_messages)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "model_id" {
             has_model_id_messages = true;
             break;
@@ -1115,13 +1115,13 @@ fn migrate_v26_to_v27(app: &AppHandle) -> Result<(), String> {
     let mut has_model_id_variants = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_message_variants)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "model_id" {
             has_model_id_variants = true;
             break;
@@ -1148,13 +1148,13 @@ fn migrate_v28_to_v29(app: &AppHandle) -> Result<(), String> {
     let mut has_background_image_path = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "background_image_path" {
             has_background_image_path = true;
             break;
@@ -1180,13 +1180,13 @@ fn migrate_v29_to_v30(app: &AppHandle) -> Result<(), String> {
     let mut has_definition = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(characters)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "definition" {
             has_definition = true;
             break;
@@ -1215,13 +1215,13 @@ fn migrate_v30_to_v31(app: &AppHandle) -> Result<(), String> {
     let mut has_avatar_crop_scale = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(characters)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
             "avatar_crop_x" => has_avatar_crop_x = true,
             "avatar_crop_y" => has_avatar_crop_y = true,
@@ -1248,13 +1248,13 @@ fn migrate_v30_to_v31(app: &AppHandle) -> Result<(), String> {
     let mut has_persona_avatar_crop_scale = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(personas)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
             "avatar_crop_x" => has_persona_avatar_crop_x = true,
             "avatar_crop_y" => has_persona_avatar_crop_y = true,
@@ -1285,13 +1285,13 @@ fn migrate_v27_to_v28(app: &AppHandle) -> Result<(), String> {
     let mut has_chat_type = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "chat_type" {
             has_chat_type = true;
             break;
@@ -1310,13 +1310,13 @@ fn migrate_v27_to_v28(app: &AppHandle) -> Result<(), String> {
     let mut has_starting_scene = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "starting_scene" {
             has_starting_scene = true;
             break;
@@ -1344,13 +1344,13 @@ fn migrate_v13_to_v14(app: &AppHandle) -> Result<(), String> {
     let mut has_column = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(models)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "model_type" {
             has_column = true;
             break;
@@ -1383,13 +1383,13 @@ fn migrate_v14_to_v15(app: &AppHandle) -> Result<(), String> {
     let mut has_column = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(messages)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "attachments" {
             has_column = true;
             break;
@@ -1417,13 +1417,13 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
     let mut has_column = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "memory_summary_token_count" {
             has_column = true;
             break;
@@ -1457,15 +1457,15 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
     // Backfill token counts for memory_embeddings
     let mut stmt = conn
         .prepare("SELECT id, memory_embeddings FROM sessions WHERE memory_embeddings IS NOT NULL AND memory_embeddings != '[]'")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let session_rows: Vec<(String, String)> = stmt
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Process each session
     for (session_id, embeddings_json) in session_rows {
@@ -1500,28 +1500,28 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
         // Update the session if any embeddings were modified
         if updated {
             let updated_json = serde_json::to_string(&embeddings)
-                .map_err(|e| format!("Failed to serialize updated embeddings: {}", e))?;
+                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize updated embeddings: {}", e)))?;
 
             conn.execute(
                 "UPDATE sessions SET memory_embeddings = ?1 WHERE id = ?2",
                 [&updated_json, &session_id],
             )
-            .map_err(|e| format!("Failed to update session {}: {}", session_id, e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to update session {}: {}", session_id, e)))?;
         }
     }
 
     // Backfill token counts for memory_summary
     let mut stmt = conn
         .prepare("SELECT id, memory_summary FROM sessions WHERE memory_summary IS NOT NULL AND memory_summary != '' AND memory_summary_token_count = 0")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let summary_rows: Vec<(String, String)> = stmt
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for (session_id, summary) in summary_rows {
         let token_count = count_tokens(app, &summary).unwrap_or(0);
@@ -1552,13 +1552,13 @@ fn migrate_v16_to_v17(app: &AppHandle) -> Result<(), String> {
     let mut has_summary_tokens = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(usage_records)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "memory_tokens" {
             has_memory_tokens = true;
         }
@@ -1599,13 +1599,13 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
     let mut has_custom_text_secondary = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(characters)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
             "custom_gradient_colors" => has_custom_gradient_colors = true,
             "custom_text_color" => has_custom_text_color = true,
@@ -1629,7 +1629,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE characters ADD COLUMN custom_gradient_colors TEXT",
             [],
         )
-        .map_err(|e| format!("Failed to add custom_gradient_colors: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to add custom_gradient_colors: {}", e)))?;
     }
 
     if !has_custom_text_color {
@@ -1638,7 +1638,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE characters ADD COLUMN custom_text_color TEXT",
             [],
         )
-        .map_err(|e| format!("Failed to add custom_text_color: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to add custom_text_color: {}", e)))?;
     }
 
     if !has_custom_text_secondary {
@@ -1647,7 +1647,7 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
             [],
         )
-        .map_err(|e| format!("Failed to add custom_text_secondary: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to add custom_text_secondary: {}", e)))?;
     }
 
     log_info(app, "migrations", "v17->v18 migration completed");
@@ -1668,13 +1668,13 @@ fn migrate_v18_to_v19(app: &AppHandle) -> Result<(), String> {
     let mut has_output_scopes = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(models)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
             "input_scopes" => has_input_scopes = true,
             "output_scopes" => has_output_scopes = true,
@@ -1754,7 +1754,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_character_lorebooks_character ON character_lorebooks(character_id);
         "#,
     )
-    .map_err(|e| format!("Failed to ensure lorebook tables: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to ensure lorebook tables: {}", e)))?;
 
     // If lorebook_entries already uses lorebook_id, nothing to do.
     let entries_table_exists: i32 = conn
@@ -1788,7 +1788,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             CREATE INDEX IF NOT EXISTS idx_lorebook_entries_enabled ON lorebook_entries(lorebook_id, enabled);
             "#,
         )
-        .map_err(|e| format!("Failed to create lorebook_entries: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create lorebook_entries: {}", e)))?;
         return Ok(());
     }
 
@@ -1797,12 +1797,12 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
     let mut has_lorebook_id = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(lorebook_entries)")
-        .map_err(|e| format!("Failed to read lorebook_entries schema: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read lorebook_entries schema: {}", e)))?;
     let cols = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| format!("Failed to query lorebook_entries schema: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query lorebook_entries schema: {}", e)))?;
     for col in cols {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
             "character_id" => has_character_id = true,
             "lorebook_id" => has_lorebook_id = true,
@@ -1833,7 +1833,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE lorebook_entries RENAME TO lorebook_entries_v1",
             [],
         )
-        .map_err(|e| format!("Failed to rename legacy lorebook_entries: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to rename legacy lorebook_entries: {}", e)))?;
     }
 
     conn.execute_batch(
@@ -1857,17 +1857,17 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_lorebook_entries_enabled ON lorebook_entries(lorebook_id, enabled);
         "#,
     )
-    .map_err(|e| format!("Failed to create v2 lorebook_entries: {}", e))?;
+    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create v2 lorebook_entries: {}", e)))?;
 
     // Create a default lorebook per character that has legacy entries and map it to the character.
     let mut stmt = conn
         .prepare("SELECT DISTINCT character_id FROM lorebook_entries_v1")
-        .map_err(|e| format!("Failed to read legacy lorebook entries: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read legacy lorebook entries: {}", e)))?;
     let character_ids = stmt
         .query_map([], |row| row.get::<_, String>(0))
-        .map_err(|e| format!("Failed to query legacy character ids: {}", e))?
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query legacy character ids: {}", e)))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect legacy character ids: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to collect legacy character ids: {}", e)))?;
 
     for character_id in character_ids {
         let name: Option<String> = conn
@@ -1877,7 +1877,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(|e| format!("Failed to read character name: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read character name: {}", e)))?;
 
         let lorebook_id = Uuid::new_v4().to_string();
         let now = now_millis()? as i64;
@@ -1890,7 +1890,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "INSERT INTO lorebooks (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
             params![lorebook_id, lorebook_name, now, now],
         )
-        .map_err(|e| format!("Failed to create migrated lorebook: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create migrated lorebook: {}", e)))?;
 
         conn.execute(
             r#"
@@ -1899,7 +1899,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "#,
             params![character_id, lorebook_id, now],
         )
-        .map_err(|e| format!("Failed to map character to migrated lorebook: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to map character to migrated lorebook: {}", e)))?;
 
         conn.execute(
             r#"
@@ -1915,7 +1915,7 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "#,
             params![character_id, lorebook_id],
         )
-        .map_err(|e| format!("Failed to migrate lorebook entries: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to migrate lorebook entries: {}", e)))?;
     }
 
     log_info(app, "migrations", "v19->v20 migration completed");
@@ -1979,13 +1979,13 @@ fn migrate_v23_to_v24(app: &AppHandle) -> Result<(), String> {
 
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
             "memories" => has_memories = true,
             "memory_embeddings" => has_memory_embeddings = true,
@@ -2040,13 +2040,13 @@ fn migrate_v24_to_v25(app: &AppHandle) -> Result<(), String> {
 
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "archived" {
             has_archived = true;
             break;
@@ -2074,13 +2074,13 @@ fn migrate_v25_to_v26(app: &AppHandle) -> Result<(), String> {
 
     let mut stmt = conn
         .prepare("PRAGMA table_info(group_sessions)")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for col in rows {
-        let name = col.map_err(|e| e.to_string())?;
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if name == "memory_tool_events" {
             has_memory_tool_events = true;
             break;

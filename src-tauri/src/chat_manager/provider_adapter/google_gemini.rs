@@ -215,7 +215,10 @@ impl ProviderAdapter for GoogleGeminiAdapter {
 
         // Log the Gemini request body for debugging
         if let Some(gen_config) = json_body.get("generationConfig") {
-            eprintln!("[DEBUG] Gemini generationConfig: {:?}", gen_config);
+            crate::utils::log_debug_global(
+                "gemini_request",
+                format!("Gemini generationConfig: {:?}", gen_config),
+            );
         }
 
         json_body

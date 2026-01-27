@@ -62,14 +62,14 @@ pub fn build_headers(provider_id: &ProviderId, api_key: &str) -> Result<HeaderMa
             headers.insert(
                 HeaderName::from_static("x-api-key"),
                 HeaderValue::from_str(api_key)
-                    .map_err(|e| format!("invalid x-api-key header: {e}"))?,
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("invalid x-api-key header: {e}")))?,
             );
         }
         "mistral" => {
             headers.insert(
                 HeaderName::from_static("x-api-key"),
                 HeaderValue::from_str(api_key)
-                    .map_err(|e| format!("invalid x-api-key header: {e}"))?,
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("invalid x-api-key header: {e}")))?,
             );
         }
         "featherless" => {
@@ -77,7 +77,7 @@ pub fn build_headers(provider_id: &ProviderId, api_key: &str) -> Result<HeaderMa
             headers.insert(
                 HeaderName::from_static("authentication"),
                 HeaderValue::from_str(&format!("Bearer {}", api_key))
-                    .map_err(|e| format!("invalid authentication header: {e}"))?,
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("invalid authentication header: {e}")))?,
             );
         }
         "gemini" => {
@@ -86,7 +86,7 @@ pub fn build_headers(provider_id: &ProviderId, api_key: &str) -> Result<HeaderMa
             headers.insert(
                 HeaderName::from_static("x-goog-api-key"),
                 HeaderValue::from_str(api_key)
-                    .map_err(|e| format!("invalid x-goog-api-key header: {e}"))?,
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("invalid x-goog-api-key header: {e}")))?,
             );
         }
         _ => {
@@ -94,7 +94,7 @@ pub fn build_headers(provider_id: &ProviderId, api_key: &str) -> Result<HeaderMa
             headers.insert(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", api_key))
-                    .map_err(|e| format!("invalid authorization header: {e}"))?,
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("invalid authorization header: {e}")))?,
             );
         }
     }

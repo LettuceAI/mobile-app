@@ -293,7 +293,7 @@ fn normalize_type(card_type: &str) -> Result<&'static str, String> {
         "newest" => Ok("newest"),
         "popular" => Ok("popular"),
         "trending" => Ok("trending"),
-        other => Err(format!("Unsupported card type: {}", other)),
+        other => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unsupported card type: {}", other))),
     }
 }
 
@@ -394,7 +394,7 @@ fn normalize_card_path(raw: &str) -> String {
 fn normalize_detail_path(raw: &str) -> Result<(String, String), String> {
     let trimmed = raw.trim().trim_start_matches('/');
     if trimmed.is_empty() {
-        return Err("Card path cannot be empty".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Card path cannot be empty"));
     }
 
     let mut parts = trimmed.splitn(2, '/');
@@ -441,7 +441,7 @@ pub fn get_card_image(
     quality: Option<u8>,
 ) -> Result<String, String> {
     if path.trim().is_empty() {
-        return Err("Card image path cannot be empty".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Card image path cannot be empty"));
     }
 
     if path.starts_with("http://") || path.starts_with("https://") {
@@ -465,7 +465,7 @@ pub async fn discovery_fetch_card_detail(
     path: String,
 ) -> Result<DiscoveryCardDetailResponse, String> {
     if path.trim().is_empty() {
-        return Err("Card path cannot be empty".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Card path cannot be empty"));
     }
 
     let pure_mode_enabled = is_pure_mode_enabled(&app);
@@ -478,7 +478,7 @@ pub async fn discovery_fetch_card_detail(
     let cache_key = format!("detail:{}", url);
     if let Some(cached) = cache_get::<DiscoveryCardDetailResponse>(&cache_key) {
         if pure_mode_enabled && cached.card.is_nsfw.unwrap_or(false) {
-            return Err("NSFW content is blocked in Pure Mode".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "NSFW content is blocked in Pure Mode"));
         }
         return Ok(cached);
     }
@@ -490,7 +490,7 @@ pub async fn discovery_fetch_card_detail(
     );
 
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
@@ -508,10 +508,10 @@ pub async fn discovery_fetch_card_detail(
     let detail = resp
         .json::<DiscoveryCardDetailResponse>()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &detail, DISCOVERY_CACHE_TTL_SECS);
     if pure_mode_enabled && detail.card.is_nsfw.unwrap_or(false) {
-        return Err("NSFW content is blocked in Pure Mode".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "NSFW content is blocked in Pure Mode"));
     }
     Ok(detail)
 }
@@ -533,7 +533,7 @@ async fn fetch_cards(
         format!("fetching {} cards from {}", card_type, url),
     );
 
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
@@ -542,10 +542,10 @@ async fn fetch_cards(
             "discovery_cards",
             format!("{} cards failed: {} {}", card_type, status, text),
         );
-        return Err(format!("Discovery request failed: {} {}", status, text));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Discovery request failed: {} {}", status, text)));
     }
 
-    let data: DiscoveryResponse = resp.json().await.map_err(|e| e.to_string())?;
+    let data: DiscoveryResponse = resp.json().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &data.hits, DISCOVERY_CACHE_TTL_SECS);
     Ok(data.hits)
 }
@@ -583,7 +583,7 @@ pub async fn discovery_fetch_sections(
         fetch_cards(&app, "popular", &client),
         fetch_cards(&app, "trending", &client),
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let pure_mode_enabled = is_pure_mode_enabled(&app);
     filter_nsfw_cards(&mut newest, pure_mode_enabled);
     filter_nsfw_cards(&mut popular, pure_mode_enabled);
@@ -659,7 +659,7 @@ pub async fn discovery_search_cards(
         .query(&params)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
@@ -677,7 +677,7 @@ pub async fn discovery_search_cards(
     let mut response = resp
         .json::<DiscoverySearchResponse>()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &response, DISCOVERY_CACHE_TTL_SECS);
     filter_nsfw_cards(&mut response.hits, pure_mode_enabled);
     Ok(response)
@@ -710,7 +710,7 @@ pub async fn discovery_fetch_alternate_greetings(
     );
 
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
 
     if !status.is_success() {
@@ -720,7 +720,7 @@ pub async fn discovery_fetch_alternate_greetings(
     let greetings = resp
         .json::<Vec<String>>()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &greetings, DISCOVERY_CACHE_TTL_SECS);
     Ok(greetings)
 }
@@ -749,7 +749,7 @@ pub async fn discovery_fetch_tags(app: AppHandle, card_id: String) -> Result<Vec
     );
 
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
 
     if !status.is_success() {
@@ -759,7 +759,7 @@ pub async fn discovery_fetch_tags(app: AppHandle, card_id: String) -> Result<Vec
     let tags = resp
         .json::<Vec<String>>()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &tags, DISCOVERY_CACHE_TTL_SECS);
     Ok(tags)
 }
@@ -781,7 +781,7 @@ pub async fn discovery_fetch_author_info(
 ) -> Result<AuthorInfo, String> {
     let author = author_name.trim();
     if author.is_empty() {
-        return Err("Author name cannot be empty".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Author name cannot be empty"));
     }
 
     let author_encoded = urlencoding::encode(author);
@@ -802,14 +802,14 @@ pub async fn discovery_fetch_author_info(
     );
 
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
 
     if !status.is_success() {
-        return Err(format!("Failed to fetch author info: {}", status));
+        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Failed to fetch author info: {}", status)));
     }
 
-    let info = resp.json::<AuthorInfo>().await.map_err(|e| e.to_string())?;
+    let info = resp.json::<AuthorInfo>().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &info, DISCOVERY_CACHE_TTL_SECS);
     Ok(info)
 }
@@ -840,7 +840,7 @@ async fn discovery_fetch_lorebook(
     );
 
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let status = resp.status();
 
     if !status.is_success() {
@@ -850,7 +850,7 @@ async fn discovery_fetch_lorebook(
     let lorebook = resp
         .json::<Option<DiscoveryLorebook>>()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &lorebook, DISCOVERY_CACHE_TTL_SECS);
     Ok(lorebook)
 }
@@ -911,12 +911,12 @@ pub async fn discovery_import_character(app: AppHandle, path: String) -> Result<
         .get(&avatar_cdn_url)
         .send()
         .await
-        .map_err(|e| format!("Failed to download avatar: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to download avatar: {}", e)))?;
 
     let avatar_data = avatar_response
         .bytes()
         .await
-        .map_err(|e| format!("Failed to read avatar data: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read avatar data: {}", e)))?;
 
     // Generate unique UUID for character
     let character_id = uuid::Uuid::new_v4().to_string();
@@ -928,7 +928,7 @@ pub async fn discovery_import_character(app: AppHandle, path: String) -> Result<
 
     let avatar_path =
         storage_save_avatar(app.clone(), avatar_entity_id.clone(), avatar_base64, None)
-            .map_err(|e| format!("Failed to save avatar: {}", e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to save avatar: {}", e)))?;
 
     if let Err(err) =
         generate_avatar_gradient(app.clone(), avatar_entity_id, "avatar_base.webp".into())
@@ -1044,11 +1044,11 @@ pub async fn discovery_import_character(app: AppHandle, path: String) -> Result<
     });
 
     let character_json = serde_json::to_string(&character)
-        .map_err(|e| format!("Failed to serialize character: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize character: {}", e)))?;
 
     // Save to database using existing character_upsert command
     crate::storage_manager::characters::character_upsert(app.clone(), character_json)
-        .map_err(|e| format!("Failed to save character to database: {}", e))?;
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to save character to database: {}", e)))?;
 
     if let Some(lorebook) = lorebook {
         match crate::storage_manager::db::open_db(&app) {

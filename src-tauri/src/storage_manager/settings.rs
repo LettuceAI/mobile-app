@@ -11,7 +11,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
     let exists: Option<i64> = conn
         .query_row("SELECT COUNT(*) FROM settings", [], |r| r.get(0))
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if exists.unwrap_or(0) == 0 {
         return Ok(None);
     }
@@ -33,7 +33,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             },
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let Some((
         default_provider_credential_id,
         default_model_id,
@@ -50,7 +50,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
     // Provider credentials
     let mut stmt = conn
         .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let creds_iter = stmt
         .query_map([], |r| {
             let id: String = r.get(0)?;
@@ -82,16 +82,16 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             }
             Ok(JsonValue::Object(obj))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut provider_credentials: Vec<JsonValue> = Vec::new();
     for item in creds_iter {
-        provider_credentials.push(item.map_err(|e| e.to_string())?);
+        provider_credentials.push(item.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
 
     // Models
     let mut stmt = conn
         .prepare("SELECT id, name, provider_id, provider_label, display_name, created_at, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt FROM models ORDER BY created_at ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let models_iter = stmt
         .query_map([], |r| {
             let id: String = r.get(0)?;
@@ -139,10 +139,10 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             }
             Ok(JsonValue::Object(obj))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut models: Vec<JsonValue> = Vec::new();
     for item in models_iter {
-        models.push(item.map_err(|e| e.to_string())?);
+        models.push(item.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
 
     let app_state: JsonValue = serde_json::from_str(&app_state_json).unwrap_or_else(|_| serde_json::json!({
@@ -191,7 +191,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
     }
 
     Ok(Some(
-        serde_json::to_string(&JsonValue::Object(root)).map_err(|e| e.to_string())?,
+        serde_json::to_string(&JsonValue::Object(root)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
     ))
 }
 
@@ -240,7 +240,7 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
         }
     });
 
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     tx.execute(
         r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, prompt_template_id, system_prompt, migration_version, advanced_settings, created_at, updated_at)
             VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -264,10 +264,10 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             now,
             now,
         ],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     tx.execute("DELETE FROM provider_credentials", [])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(creds) = json.get("providerCredentials").and_then(|v| v.as_array()) {
         for c in creds {
             let id = c.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -291,12 +291,12 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             tx.execute(
                 "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 params![id, provider_id, label, api_key, base_url, default_model, headers],
-            ).map_err(|e| e.to_string())?;
+            ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
 
     tx.execute("DELETE FROM models", [])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(models) = json.get("models").and_then(|v| v.as_array()) {
         let normalize_scopes = |value: JsonValue| -> JsonValue {
             let scope_order = ["text", "image", "audio"];
@@ -378,10 +378,10 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
                     prompt_template_id,
                     system_prompt
                 ],
-            ).map_err(|e| e.to_string())?;
+            ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 fn ensure_settings_row(conn: &rusqlite::Connection) -> Result<(), String> {
@@ -392,7 +392,7 @@ fn ensure_settings_row(conn: &rusqlite::Connection) -> Result<(), String> {
             ON CONFLICT(id) DO NOTHING"#,
         params![now, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -431,7 +431,7 @@ pub fn settings_set_defaults(
     conn.execute(
         "UPDATE settings SET default_provider_credential_id = ?, default_model_id = ?, updated_at = ? WHERE id = 1",
         params![default_provider_credential_id, default_model_id, now],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -452,7 +452,7 @@ pub fn settings_set_advanced(app: tauri::AppHandle, advanced_json: String) -> Re
         "UPDATE settings SET advanced_settings = ?, updated_at = ? WHERE id = 1",
         params![db_val, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -468,7 +468,7 @@ pub fn settings_set_default_provider(
         "UPDATE settings SET default_provider_credential_id = ?, updated_at = ? WHERE id = 1",
         params![id, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -481,7 +481,7 @@ pub fn settings_set_default_model(app: tauri::AppHandle, id: Option<String>) -> 
         "UPDATE settings SET default_model_id = ?, updated_at = ? WHERE id = 1",
         params![id, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -494,7 +494,7 @@ pub fn settings_set_app_state(app: tauri::AppHandle, state_json: String) -> Resu
         "UPDATE settings SET app_state = ?, updated_at = ? WHERE id = 1",
         params![state_json, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -510,7 +510,7 @@ pub fn settings_set_prompt_template(
         "UPDATE settings SET prompt_template_id = ?, updated_at = ? WHERE id = 1",
         params![id, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -526,7 +526,7 @@ pub fn settings_set_system_prompt(
         "UPDATE settings SET system_prompt = ?, updated_at = ? WHERE id = 1",
         params![prompt, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -539,6 +539,6 @@ pub fn settings_set_migration_version(app: tauri::AppHandle, version: i64) -> Re
         "UPDATE settings SET migration_version = ?, updated_at = ? WHERE id = 1",
         params![version, now],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }

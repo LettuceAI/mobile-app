@@ -13,22 +13,22 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
                 r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get::<_, i64>(15)?, r.get::<_, i64>(16)?, r.get(17)?, r.get(18)?, r.get(19)?, r.get(20)?, r.get(21)?
             )),
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // rules
     let mut rules: Vec<JsonValue> = Vec::new();
     let mut stmt = conn
         .prepare("SELECT rule FROM character_rules WHERE character_id = ? ORDER BY idx ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let q = stmt
         .query_map(params![id], |r| Ok(r.get::<_, String>(0)?))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for it in q {
-        rules.push(JsonValue::String(it.map_err(|e| e.to_string())?));
+        rules.push(JsonValue::String(it.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?));
     }
 
     // scenes
-    let mut scenes_stmt = conn.prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+    let mut scenes_stmt = conn.prepare("SELECT id, content, direction, created_at, selected_variant_id FROM scenes WHERE character_id = ? ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let scenes_rows = scenes_stmt
         .query_map(params![id], |r| {
             Ok((
@@ -39,13 +39,13 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
                 r.get::<_, Option<String>>(4)?,
             ))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut scenes: Vec<JsonValue> = Vec::new();
     for row in scenes_rows {
         let (scene_id, content, direction, created_at_s, selected_variant_id) =
-            row.map_err(|e| e.to_string())?;
+            row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         // variants
-        let mut var_stmt = conn.prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+        let mut var_stmt = conn.prepare("SELECT id, content, direction, created_at FROM scene_variants WHERE scene_id = ? ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let var_rows = var_stmt
             .query_map(params![&scene_id], |r| {
                 Ok((
@@ -55,10 +55,10 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
                     r.get::<_, i64>(3)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut variants: Vec<JsonValue> = Vec::new();
         for v in var_rows {
-            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| e.to_string())?;
+            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mut variant_obj =
                 serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated});
             if let Some(dir) = vdirection {
@@ -204,13 +204,13 @@ pub fn characters_list(app: tauri::AppHandle) -> Result<String, String> {
         "characters_list",
         format!("Found {} characters", out.len()),
     );
-    Ok(serde_json::to_string(&out).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&out).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result<String, String> {
     let mut conn = open_db(&app)?;
-    let c: JsonValue = serde_json::from_str(&character_json).map_err(|e| e.to_string())?;
+    let c: JsonValue = serde_json::from_str(&character_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = c
         .get("id")
         .and_then(|v| v.as_str())
@@ -298,7 +298,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .map(|s| s.to_string());
     let now = now_ms() as i64;
 
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let existing_created: Option<i64> = tx
         .query_row(
             "SELECT created_at FROM characters WHERE id = ?",
@@ -306,7 +306,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
@@ -357,14 +357,14 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
             created_at,
             now
         ],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Replace rules
     tx.execute(
         "DELETE FROM character_rules WHERE character_id = ?",
         params![&id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(rules) = c.get("rules").and_then(|v| v.as_array()) {
         for (idx, rule) in rules.iter().enumerate() {
             if let Some(text) = rule.as_str() {
@@ -372,7 +372,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
                     "INSERT INTO character_rules (character_id, idx, rule) VALUES (?, ?, ?)",
                     params![&id, idx as i64, text],
                 )
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             }
         }
     }
@@ -381,19 +381,19 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let scene_ids: Vec<String> = {
         let mut s = tx
             .prepare("SELECT id FROM scenes WHERE character_id = ?")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows = s
             .query_map(params![&id], |r| Ok(r.get::<_, String>(0)?))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut v = Vec::new();
         for it in rows {
-            v.push(it.map_err(|e| e.to_string())?);
+            v.push(it.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
         }
         v
     };
     for sid in scene_ids {
         tx.execute("DELETE FROM scenes WHERE id = ?", params![sid])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     // Insert scenes
@@ -415,7 +415,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
                 .and_then(|v| v.as_str())
                 .map(|x| x.to_string());
             let direction = s.get("direction").and_then(|v| v.as_str());
-            tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, ?)", params![&sid, &id, content, direction, created_at_s, selected_variant_id]).map_err(|e| e.to_string())?;
+            tx.execute("INSERT INTO scenes (id, character_id, content, direction, created_at, selected_variant_id) VALUES (?, ?, ?, ?, ?, ?)", params![&sid, &id, content, direction, created_at_s, selected_variant_id]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             if i == 0 && new_default_scene_id.is_none() {
                 new_default_scene_id = Some(sid.clone());
             }
@@ -429,7 +429,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
                     let vcontent = v.get("content").and_then(|x| x.as_str()).unwrap_or("");
                     let vdirection = v.get("direction").and_then(|x| x.as_str());
                     let vcreated = v.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(now);
-                    tx.execute("INSERT INTO scene_variants (id, scene_id, content, direction, created_at) VALUES (?, ?, ?, ?, ?)", params![vid, &sid, vcontent, vdirection, vcreated]).map_err(|e| e.to_string())?;
+                    tx.execute("INSERT INTO scene_variants (id, scene_id, content, direction, created_at) VALUES (?, ?, ?, ?, ?)", params![vid, &sid, vcontent, vdirection, vcreated]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 }
             }
         }
@@ -462,7 +462,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     );
 
     let conn2 = open_db(&app)?;
-    read_character(&conn2, &id).and_then(|v| serde_json::to_string(&v).map_err(|e| e.to_string()))
+    read_character(&conn2, &id).and_then(|v| serde_json::to_string(&v).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)))
 }
 
 #[tauri::command]

@@ -64,7 +64,7 @@ fn read_session_meta(conn: &rusqlite::Connection, id: &str) -> Result<Option<Jso
             )),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let Some((
         character_id,
         title,
@@ -155,7 +155,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
             )),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let Some((
         character_id,
         title,
@@ -186,7 +186,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
     };
 
     // messages
-    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mrows = mstmt
         .query_map(params![id], |r| {
             Ok((
@@ -204,7 +204,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
                 r.get::<_, Option<String>>(11)?,
             ))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut messages: Vec<JsonValue> = Vec::new();
     for mr in mrows {
         let (
@@ -220,8 +220,8 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
             memory_refs_json,
             attachments_json,
             reasoning,
-        ) = mr.map_err(|e| e.to_string())?;
-        let mut vstmt = conn.prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id = ? ORDER BY created_at ASC").map_err(|e| e.to_string())?;
+        ) = mr.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut vstmt = conn.prepare("SELECT id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id = ? ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let vrows = vstmt
             .query_map(params![&mid], |r| {
                 Ok((
@@ -234,11 +234,11 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
                     r.get::<_, Option<String>>(6)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut variants: Vec<JsonValue> = Vec::new();
         for vr in vrows {
             let (vid, vcontent, vcreated, vp, vc, vt, vreasoning) =
-                vr.map_err(|e| e.to_string())?;
+                vr.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mut vobj = JsonMap::new();
             vobj.insert("id".into(), JsonValue::String(vid));
             vobj.insert("content".into(), JsonValue::String(vcontent));
@@ -357,7 +357,7 @@ fn fetch_messages_page(
     let mut raw_messages = Vec::new();
     let mut message_ids: Vec<String> = Vec::new();
     {
-        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if use_before {
             let rows = stmt
                 .query_map(
@@ -379,9 +379,9 @@ fn fetch_messages_page(
                         ))
                     },
                 )
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             for row in rows {
-                let tuple = row.map_err(|e| e.to_string())?;
+                let tuple = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 message_ids.push(tuple.0.clone());
                 raw_messages.push(tuple);
             }
@@ -403,9 +403,9 @@ fn fetch_messages_page(
                         r.get::<_, Option<String>>(11)?,
                     ))
                 })
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             for row in rows {
-                let tuple = row.map_err(|e| e.to_string())?;
+                let tuple = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 message_ids.push(tuple.0.clone());
                 raw_messages.push(tuple);
             }
@@ -423,7 +423,7 @@ fn fetch_messages_page(
             "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
             placeholders
         );
-        let mut vstmt = conn.prepare(&vsql).map_err(|e| e.to_string())?;
+        let mut vstmt = conn.prepare(&vsql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let vrows = vstmt
             .query_map(rusqlite::params_from_iter(message_ids.iter()), |r| {
                 Ok((
@@ -437,11 +437,11 @@ fn fetch_messages_page(
                     r.get::<_, Option<String>>(7)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         for vr in vrows {
             let (message_id, vid, vcontent, vcreated, vp, vc, vt, vreasoning) =
-                vr.map_err(|e| e.to_string())?;
+                vr.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             variants_by_message.entry(message_id).or_default().push({
                 let mut vobj = JsonMap::new();
                 vobj.insert("id".into(), JsonValue::String(vid));
@@ -517,15 +517,15 @@ pub fn sessions_list_ids(app: tauri::AppHandle) -> Result<String, String> {
     let conn = open_db(&app)?;
     let mut stmt = conn
         .prepare("SELECT id FROM sessions ORDER BY created_at ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |r| Ok(r.get::<_, String>(0)?))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut ids: Vec<String> = Vec::new();
     for r in rows {
-        ids.push(r.map_err(|e| e.to_string())?);
+        ids.push(r.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
-    Ok(serde_json::to_string(&ids).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 /// List session previews without loading full message history.
@@ -572,26 +572,26 @@ pub fn sessions_list_previews(
         sql.push_str(" LIMIT ?2");
     }
 
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut previews: Vec<SessionPreview> = Vec::new();
     if limit.is_some() {
         let rows = stmt
             .query_map(params![character_id, limit], session_preview_from_row)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         for row in rows {
-            previews.push(row.map_err(|e| e.to_string())?);
+            previews.push(row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
         }
     } else {
         let rows = stmt
             .query_map(params![character_id], session_preview_from_row)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         for row in rows {
-            previews.push(row.map_err(|e| e.to_string())?);
+            previews.push(row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
         }
     }
 
-    Ok(serde_json::to_string(&previews).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&previews).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
@@ -599,7 +599,7 @@ pub fn session_get(app: tauri::AppHandle, id: String) -> Result<Option<String>, 
     let conn = open_db(&app)?;
     let v = read_session(&conn, &id)?;
     Ok(match v {
-        Some(json) => Some(serde_json::to_string(&json).map_err(|e| e.to_string())?),
+        Some(json) => Some(serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?),
         None => None,
     })
 }
@@ -609,7 +609,7 @@ pub fn session_get_meta(app: tauri::AppHandle, id: String) -> Result<Option<Stri
     let conn = open_db(&app)?;
     let v = read_session_meta(&conn, &id)?;
     Ok(match v {
-        Some(json) => Some(serde_json::to_string(&json).map_err(|e| e.to_string())?),
+        Some(json) => Some(serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?),
         None => None,
     })
 }
@@ -623,7 +623,7 @@ pub fn session_message_count(app: tauri::AppHandle, session_id: String) -> Resul
             params![session_id],
             |r| r.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(count)
 }
 
@@ -638,7 +638,7 @@ pub fn session_conversation_count(
             params![session_id],
             |r| r.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(count)
 }
 
@@ -658,7 +658,7 @@ pub fn messages_list(
         before_created_at,
         before_id.as_deref(),
     )?;
-    Ok(serde_json::to_string(&messages).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&messages).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
@@ -666,13 +666,13 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
     let conn = open_db(&app)?;
     let mut stmt = conn
         .prepare("SELECT id FROM messages WHERE session_id = ? AND is_pinned = 1 ORDER BY created_at ASC, id ASC")
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map(params![&session_id], |r| Ok(r.get::<_, String>(0)?))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut pinned_ids: Vec<String> = Vec::new();
     for row in rows {
-        pinned_ids.push(row.map_err(|e| e.to_string())?);
+        pinned_ids.push(row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
     if pinned_ids.is_empty() {
         return Ok("[]".to_string());
@@ -683,7 +683,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ?1 AND id IN ({}) ORDER BY created_at ASC, id ASC",
         placeholders
     );
-    let mut mstmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut mstmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut params_vec: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(1 + pinned_ids.len());
     params_vec.push(&session_id);
     for id in pinned_ids.iter() {
@@ -707,12 +707,12 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
                 r.get::<_, Option<String>>(11)?,
             ))
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut raw_messages = Vec::new();
     let mut message_ids: Vec<String> = Vec::new();
     for row in mrows {
-        let tuple = row.map_err(|e| e.to_string())?;
+        let tuple = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         message_ids.push(tuple.0.clone());
         raw_messages.push(tuple);
     }
@@ -728,7 +728,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
             "SELECT message_id, id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id IN ({}) ORDER BY created_at ASC",
             placeholders
         );
-        let mut vstmt = conn.prepare(&vsql).map_err(|e| e.to_string())?;
+        let mut vstmt = conn.prepare(&vsql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let vrows = vstmt
             .query_map(rusqlite::params_from_iter(message_ids.iter()), |r| {
                 Ok((
@@ -742,11 +742,11 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
                     r.get::<_, Option<String>>(7)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         for vr in vrows {
             let (message_id, vid, vcontent, vcreated, vp, vc, vt, vreasoning) =
-                vr.map_err(|e| e.to_string())?;
+                vr.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             variants_by_message.entry(message_id).or_default().push({
                 let mut vobj = JsonMap::new();
                 vobj.insert("id".into(), JsonValue::String(vid));
@@ -812,13 +812,13 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         out.push(JsonValue::Object(mobj));
     }
 
-    Ok(serde_json::to_string(&out).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_string(&out).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Result<(), String> {
     let conn = open_db(&app)?;
-    let s: JsonValue = serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+    let s: JsonValue = serde_json::from_str(&session_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = s
         .get("id")
         .and_then(|v| v.as_str())
@@ -954,7 +954,7 @@ pub fn session_upsert_meta(app: tauri::AppHandle, session_json: String) -> Resul
             updated_at
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     Ok(())
 }
@@ -966,9 +966,9 @@ pub fn messages_upsert_batch(
     messages_json: String,
 ) -> Result<(), String> {
     let mut conn = open_db(&app)?;
-    let v: JsonValue = serde_json::from_str(&messages_json).map_err(|e| e.to_string())?;
+    let v: JsonValue = serde_json::from_str(&messages_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let Some(msgs) = v.as_array() else {
-        return Err("messages_json must be a JSON array".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "messages_json must be a JSON array"));
     };
 
     log_info(
@@ -1060,14 +1060,14 @@ pub fn messages_upsert_batch(
                 reasoning
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         if m.get("variants").is_some() {
             tx.execute(
                 "DELETE FROM message_variants WHERE message_id = ?",
                 params![&mid],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             if let Some(vars) = m.get("variants").and_then(|v| v.as_array()) {
                 for v in vars {
                     let vid = v
@@ -1095,7 +1095,7 @@ pub fn messages_upsert_batch(
                         "INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![vid, &mid, vcontent, vcreated, vp, vc, vt, vreasoning],
                     )
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 }
             }
         }
@@ -1105,9 +1105,9 @@ pub fn messages_upsert_batch(
         "UPDATE sessions SET updated_at = ? WHERE id = ?",
         params![now, &session_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1142,7 +1142,7 @@ pub fn message_delete(
         "UPDATE sessions SET updated_at = ? WHERE id = ?",
         params![now, &session_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -1154,24 +1154,24 @@ pub fn messages_delete_after(
 ) -> Result<(), String> {
     let mut conn = open_db(&app)?;
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let ids: Vec<String> = {
         let mut stmt = tx
             .prepare("SELECT id FROM messages WHERE session_id = ? ORDER BY created_at ASC, id ASC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows = stmt
             .query_map(params![&session_id], |r| Ok(r.get::<_, String>(0)?))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut ids: Vec<String> = Vec::new();
         for row in rows {
-            ids.push(row.map_err(|e| e.to_string())?);
+            ids.push(row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
         }
         ids
     };
 
     let Some(pos) = ids.iter().position(|id| id == &message_id) else {
-        return Err("Message not found in session".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Message not found in session"));
     };
 
     let to_delete = &ids[(pos + 1)..];
@@ -1190,22 +1190,22 @@ pub fn messages_delete_after(
             "DELETE FROM messages WHERE id = ? AND session_id = ?",
             params![id, &session_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     tx.execute(
         "UPDATE sessions SET updated_at = ? WHERE id = ?",
         params![now, &session_id],
     )
-    .map_err(|e| e.to_string())?;
-    tx.commit().map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(), String> {
     let mut conn = open_db(&app)?;
-    let s: JsonValue = serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+    let s: JsonValue = serde_json::from_str(&session_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = s
         .get("id")
         .and_then(|v| v.as_str())
@@ -1297,7 +1297,7 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
         .and_then(|v| v.as_f64());
     let top_k = adv.and_then(|v| v.get("topK")).and_then(|v| v.as_i64());
 
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     tx.execute(
         r#"INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1323,7 +1323,7 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
               archived=excluded.archived,
               updated_at=excluded.updated_at"#,
         params![&id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, &memories_json, &memory_embeddings_json, memory_summary, memory_summary_token_count, &memory_tool_events_json, archived, created_at, updated_at],
-    ).map_err(|e| e.to_string())?;
+    ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if let Some(msgs) = s.get("messages").and_then(|v| v.as_array()) {
         for m in msgs {
@@ -1396,14 +1396,14 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                     attachments.to_string(),
                     reasoning
                 ],
-            ).map_err(|e| e.to_string())?;
+            ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             if m.get("variants").is_some() {
                 tx.execute(
                     "DELETE FROM message_variants WHERE message_id = ?",
                     params![&mid],
                 )
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 if let Some(vars) = m.get("variants").and_then(|v| v.as_array()) {
                     for v in vars {
                         let vid = v
@@ -1434,13 +1434,13 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                             "INSERT INTO message_variants (id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                             params![vid, &mid, vcontent, vcreated, vp, vc, vt, vreasoning],
                         )
-                        .map_err(|e| e.to_string())?;
+                        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                     }
                 }
             }
         }
     }
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1467,7 +1467,7 @@ pub fn session_archive(app: tauri::AppHandle, id: String, archived: bool) -> Res
         "UPDATE sessions SET archived = ?, updated_at = ? WHERE id = ?",
         params![if archived { 1 } else { 0 }, now, id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -1483,7 +1483,7 @@ pub fn session_update_title(
         "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
         params![title, now, id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -1501,16 +1501,16 @@ pub fn message_toggle_pin(
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(is_pinned) = current {
         conn.execute(
             "UPDATE messages SET is_pinned = ? WHERE id = ?",
             params![if is_pinned == 0 { 1 } else { 0 }, &message_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if let Some(json) = read_session(&conn, &session_id)? {
             return Ok(Some(
-                serde_json::to_string(&json).map_err(|e| e.to_string())?,
+                serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             ));
         }
         Ok(None)
@@ -1534,19 +1534,19 @@ pub fn message_toggle_pin_state(
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(is_pinned) = current {
         let next = if is_pinned == 0 { 1 } else { 0 };
         conn.execute(
             "UPDATE messages SET is_pinned = ? WHERE id = ? AND session_id = ?",
             params![next, &message_id, &session_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
             "UPDATE sessions SET updated_at = ? WHERE id = ?",
             params![now, &session_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         Ok(Some(next != 0))
     } else {
         Ok(None)
@@ -1574,7 +1574,7 @@ pub async fn session_add_memory(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .unwrap_or_else(|| ("[]".to_string(), "[]".to_string()));
 
     let mut memories: Vec<String> =
@@ -1610,20 +1610,20 @@ pub async fn session_add_memory(
     }));
 
     // Save back
-    let new_memories_json = serde_json::to_string(&memories).map_err(|e| e.to_string())?;
+    let new_memories_json = serde_json::to_string(&memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let now = now_ms() as i64;
 
     conn.execute(
         "UPDATE sessions SET memories = ?, memory_embeddings = ?, updated_at = ? WHERE id = ?",
         params![new_memories_json, new_embeddings_json, now, &session_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
-            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+            serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ));
     }
     Ok(None)
@@ -1645,7 +1645,7 @@ pub fn session_remove_memory(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .unwrap_or_else(|| ("[]".to_string(), "[]".to_string()));
 
     let mut memories: Vec<String> =
@@ -1662,21 +1662,21 @@ pub fn session_remove_memory(
         }
 
         // Save back
-        let new_memories_json = serde_json::to_string(&memories).map_err(|e| e.to_string())?;
+        let new_memories_json = serde_json::to_string(&memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let new_embeddings_json =
-            serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+            serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let now = now_ms() as i64;
 
         conn.execute(
             "UPDATE sessions SET memories = ?, memory_embeddings = ?, updated_at = ? WHERE id = ?",
             params![new_memories_json, new_embeddings_json, now, &session_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
-            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+            serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ));
     }
     Ok(None)
@@ -1699,7 +1699,7 @@ pub async fn session_update_memory(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .unwrap_or_else(|| ("[]".to_string(), "[]".to_string()));
 
     let mut memories: Vec<String> =
@@ -1749,21 +1749,21 @@ pub async fn session_update_memory(
         }
 
         // Save back
-        let new_memories_json = serde_json::to_string(&memories).map_err(|e| e.to_string())?;
+        let new_memories_json = serde_json::to_string(&memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let new_embeddings_json =
-            serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+            serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let now = now_ms() as i64;
 
         conn.execute(
             "UPDATE sessions SET memories = ?, memory_embeddings = ?, updated_at = ? WHERE id = ?",
             params![new_memories_json, new_embeddings_json, now, &session_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
-            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+            serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ));
     }
     Ok(None)
@@ -1785,7 +1785,7 @@ pub fn session_toggle_memory_pin(
             |r| r.get(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .unwrap_or_else(|| "[]".to_string());
 
     let mut memory_embeddings: Vec<JsonValue> =
@@ -1814,17 +1814,17 @@ pub fn session_toggle_memory_pin(
 
         // Save back
         let new_embeddings_json =
-            serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+            serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
             "UPDATE sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
             params![new_embeddings_json, now, &session_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
-            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+            serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ));
     }
     Ok(None)
@@ -1847,7 +1847,7 @@ pub fn session_set_memory_cold_state(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
         .unwrap_or_else(|| ("[]".to_string(), "[]".to_string()));
 
     let memories: Vec<String> =
@@ -1858,7 +1858,7 @@ pub fn session_set_memory_cold_state(
     if memory_index >= memories.len() {
         if let Some(json) = read_session_meta(&conn, &session_id)? {
             return Ok(Some(
-                serde_json::to_string(&json).map_err(|e| e.to_string())?,
+                serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             ));
         }
         return Ok(None);
@@ -1888,7 +1888,7 @@ pub fn session_set_memory_cold_state(
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         if is_pinned && is_cold {
-            return Err("Pinned memories cannot be moved to cold storage".to_string());
+            return Err(crate::utils::err_msg(module_path!(), line!(), "Pinned memories cannot be moved to cold storage"));
         }
 
         obj.insert("isCold".into(), JsonValue::Bool(is_cold));
@@ -1901,16 +1901,16 @@ pub fn session_set_memory_cold_state(
     }
 
     let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| e.to_string())?;
+        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     conn.execute(
         "UPDATE sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
         params![new_embeddings_json, now, &session_id],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if let Some(json) = read_session_meta(&conn, &session_id)? {
         return Ok(Some(
-            serde_json::to_string(&json).map_err(|e| e.to_string())?,
+            serde_json::to_string(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ));
     }
     Ok(None)

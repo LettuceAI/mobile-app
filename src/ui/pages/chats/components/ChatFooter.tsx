@@ -240,8 +240,8 @@ export function ChatFooter({
             interactive.active.scale,
             sending && onAbort && "hover:border-red-400/60 hover:bg-red-400/30",
             !sending &&
-            (hasDraft || hasAttachments) &&
-            "hover:border-emerald-400/60 hover:bg-emerald-400/30",
+              (hasDraft || hasAttachments) &&
+              "hover:border-emerald-400/60 hover:bg-emerald-400/30",
             !sending && !hasDraft && !hasAttachments && "hover:border-white/25 hover:bg-white/15",
             "disabled:cursor-not-allowed disabled:opacity-40",
           )}

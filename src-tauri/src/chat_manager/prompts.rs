@@ -228,7 +228,7 @@ fn str_to_scope(s: &str) -> Result<PromptScope, String> {
         "AppWide" => Ok(PromptScope::AppWide),
         "ModelSpecific" => Ok(PromptScope::ModelSpecific),
         "CharacterSpecific" => Ok(PromptScope::CharacterSpecific),
-        other => Err(format!("Unknown prompt scope: {}", other)),
+        other => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unknown prompt scope: {}", other))),
     }
 }
 
@@ -269,13 +269,13 @@ pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, Stri
         .prepare(
             "SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
         .query_map([], |row| row_to_template(row))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut out = Vec::new();
     for r in rows {
-        out.push(r.map_err(|e| e.to_string())?);
+        out.push(r.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
     if out.is_empty() {
         // Guarantee existence of App Default template even if setup call was skipped
@@ -285,13 +285,13 @@ pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, Stri
             .prepare(
                 "SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows2 = stmt2
             .query_map([], |row| row_to_template(row))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         out.clear();
         for r in rows2 {
-            out.push(r.map_err(|e| e.to_string())?);
+            out.push(r.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
         }
     }
     Ok(out)
@@ -308,7 +308,7 @@ pub fn create_template(
     let conn = open_db(app)?;
     let id = generate_id();
     let now = now();
-    let target_ids_json = serde_json::to_string(&target_ids).map_err(|e| e.to_string())?;
+    let target_ids_json = serde_json::to_string(&target_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let entries = entries.unwrap_or_else(|| {
         if supports_entry_prompts(&id) && !content.is_empty() {
             single_entry_from_content(&content)
@@ -316,7 +316,7 @@ pub fn create_template(
             Vec::new()
         }
     });
-    let entries_json = serde_json::to_string(&entries).map_err(|e| e.to_string())?;
+    let entries_json = serde_json::to_string(&entries).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     conn.execute(
         "INSERT INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
         params![
@@ -329,7 +329,7 @@ pub fn create_template(
             now
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     get_template(app, &id).map(|opt| opt.expect("inserted row should exist"))
 }
 
@@ -347,7 +347,7 @@ pub fn update_template(
         if let Some(s) = &scope {
             // Need the current template to compare, but keeping restriction consistent
             if *s != PromptScope::AppWide {
-                return Err("Cannot change scope of App Default template".to_string());
+                return Err(crate::utils::err_msg(module_path!(), line!(), "Cannot change scope of App Default template"));
             }
         }
     }
@@ -379,8 +379,8 @@ pub fn update_template(
         }
     }
     let updated_at = now();
-    let target_ids_json = serde_json::to_string(&new_target_ids).map_err(|e| e.to_string())?;
-    let entries_json = serde_json::to_string(&new_entries).map_err(|e| e.to_string())?;
+    let target_ids_json = serde_json::to_string(&new_target_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let entries_json = serde_json::to_string(&new_entries).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE prompt_templates SET name = ?1, scope = ?2, target_ids = ?3, content = ?4, entries = ?5, updated_at = ?6 WHERE id = ?7",
@@ -394,23 +394,23 @@ pub fn update_template(
             id
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     get_template(app, &id).map(|opt| opt.expect("updated row should exist"))
 }
 
 pub fn delete_template(app: &AppHandle, id: String) -> Result<(), String> {
     if is_app_default_template(&id) {
-        return Err("This template is protected and cannot be deleted".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "This template is protected and cannot be deleted"));
     }
 
     if get_template(app, &id)?.is_none() {
-        return Err("Template not found".to_string());
+        return Err(crate::utils::err_msg(module_path!(), line!(), "Template not found"));
     }
 
     let conn = open_db(app)?;
     conn.execute("DELETE FROM prompt_templates WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -423,7 +423,7 @@ pub fn get_template(app: &AppHandle, id: &str) -> Result<Option<SystemPromptTemp
             |row| row_to_template(row),
         )
         .optional()
-        .map_err(|e| e.to_string())
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
@@ -436,7 +436,7 @@ pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
     let now = now();
     let content = get_base_prompt(PromptType::SystemPrompt);
     let entries_json =
-        serde_json::to_string(&default_modular_prompt_entries()).map_err(|e| e.to_string())?;
+        serde_json::to_string(&default_modular_prompt_entries()).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     conn.execute(
         "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?6, ?6)",
         params![
@@ -448,7 +448,7 @@ pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
             now
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(APP_DEFAULT_TEMPLATE_ID.to_string())
 }
 
@@ -468,7 +468,7 @@ pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
                 now
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     // Memory manager template
@@ -483,7 +483,7 @@ pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
                 now
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     Ok(())
@@ -548,7 +548,7 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
                 now
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     // Also ensure conversational template exists
@@ -565,7 +565,7 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
                 now
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     Ok(())
 }

@@ -17,9 +17,9 @@ pub struct StorageUsageSummary {
 pub fn storage_clear_all(app: tauri::AppHandle) -> Result<(), String> {
     let dir = storage_root(&app)?;
     if dir.exists() {
-        fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+        fs::remove_dir_all(&dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
@@ -30,7 +30,7 @@ pub async fn storage_reset_database(app: tauri::AppHandle) -> Result<(), String>
 
     // Delete the database file if it exists
     if db_path.exists() {
-        fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database: {}", e))?;
+        fs::remove_file(&db_path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete database: {}", e)))?;
     }
 
     // Delete WAL and SHM files if they exist
@@ -96,7 +96,7 @@ pub fn storage_usage_summary(app: tauri::AppHandle) -> Result<StorageUsageSummar
             r.get(0)
         })
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(ts) = settings_updated {
         latest = Some(latest.map_or(ts as u64, |cur| cur.max(ts as u64)));
     }
@@ -108,7 +108,7 @@ pub fn storage_usage_summary(app: tauri::AppHandle) -> Result<StorageUsageSummar
         let max_ts: Option<i64> = conn
             .query_row(sql, [], |r| r.get(0))
             .optional()
-            .map_err(|e| format!("{}: {}", table, e))?;
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("{}: {}", table, e)))?;
         if let Some(ts) = max_ts {
             latest = Some(latest.map_or(ts as u64, |cur| cur.max(ts as u64)));
         }

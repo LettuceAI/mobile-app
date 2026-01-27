@@ -14,6 +14,7 @@ import type { Character, Persona, Lorebook } from "../../../core/storage/schemas
 import { typography, interactive, cn } from "../../design-tokens";
 import { useAvatar } from "../../hooks/useAvatar";
 import { useAvatarGradient } from "../../hooks/useAvatarGradient";
+import { useRocketEasterEgg } from "../../hooks/useRocketEasterEgg";
 import { useNavigate } from "react-router-dom";
 import { BottomMenu, CharacterExportMenu } from "../../components";
 import {
@@ -25,6 +26,7 @@ import {
   BookOpen,
   Users,
   Pencil,
+  Rocket,
 } from "lucide-react";
 import {
   exportCharacterWithFormat,
@@ -62,6 +64,7 @@ export function LibraryPage() {
   const [exporting, setExporting] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<LibraryItem | null>(null);
+  const rocket = useRocketEasterEgg();
 
   // Rename state
   const [renameItem, setRenameItem] = useState<LibraryItem | null>(null);
@@ -239,8 +242,16 @@ export function LibraryPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="flex flex-1 flex-col items-center justify-center px-6 py-20"
+            className="relative flex flex-1 flex-col items-center justify-center px-6 py-20 overflow-hidden"
+            {...rocket.bind}
           >
+            {rocket.isLaunched && (
+              <div className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 rocket-launch">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10">
+                  <Rocket className="h-5 w-5 text-white/80" />
+                </div>
+              </div>
+            )}
             <div className="relative mb-6">
               <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
                 <BookOpen className="h-10 w-10 text-white/30" />
