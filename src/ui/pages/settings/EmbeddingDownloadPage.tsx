@@ -4,482 +4,549 @@ import { Download, X, CheckCircle, XCircle, Loader2, Zap } from "lucide-react";
 import { storageBridge } from "../../../core/storage/files";
 import { updateAdvancedSetting } from "../../../core/storage/advanced";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { listen } from "@tauri-apps/api/event";
 
 type Capacity = 1024 | 2048 | 4096;
 
 const CAPACITY_OPTIONS: { value: Capacity; label: string; description: string }[] = [
-    { value: 1024, label: "1K tokens", description: "Best for quick responses" },
-    { value: 2048, label: "2K tokens", description: "Balanced performance" },
-    { value: 4096, label: "4K tokens", description: "Maximum context" },
+  { value: 1024, label: "1K tokens", description: "Best for quick responses" },
+  { value: 2048, label: "2K tokens", description: "Balanced performance" },
+  { value: 4096, label: "4K tokens", description: "Maximum context" },
 ];
 
 export function EmbeddingDownloadPage() {
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const returnTo = searchParams.get("returnTo");
-    const isUpgrade = searchParams.get("upgrade") === "true";
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
+  const isUpgrade = searchParams.get("upgrade") === "true";
 
-    // Capacity selection state
-    const [showCapacitySelection, setShowCapacitySelection] = useState(true);
-    const [selectedCapacity, setSelectedCapacity] = useState<Capacity>(2048);
+  // Capacity selection state
+  const [showCapacitySelection, setShowCapacitySelection] = useState(true);
+  const [selectedCapacity, setSelectedCapacity] = useState<Capacity>(2048);
 
-    const [progress, setProgress] = useState<{
-        downloaded: number;
-        total: number;
-        status: string;
-        currentFileIndex: number;
-        totalFiles: number;
-        currentFileName: string;
-    }>({
-        downloaded: 0,
-        total: 0,
-        status: "idle",
-        currentFileIndex: 0,
-        totalFiles: 0,
-        currentFileName: "",
-    });
-    const [error, setError] = useState<string | null>(null);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [testStatus, setTestStatus] = useState<"idle" | "testing" | "passed" | "failed">("idle");
-    const [testResults, setTestResults] = useState<{
-        success: boolean;
-        message: string;
-        scores: Array<{
-            pairName: string;
-            textA: string;
-            textB: string;
-            similarityScore: number;
-            expected: string;
-        }>;
-    } | null>(null);
-    const [countdown, setCountdown] = useState<number>(5);
+  const [progress, setProgress] = useState<{
+    downloaded: number;
+    total: number;
+    status: string;
+    currentFileIndex: number;
+    totalFiles: number;
+    currentFileName: string;
+  }>({
+    downloaded: 0,
+    total: 0,
+    status: "idle",
+    currentFileIndex: 0,
+    totalFiles: 0,
+    currentFileName: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "passed" | "failed">("idle");
+  const [testResults, setTestResults] = useState<{
+    success: boolean;
+    message: string;
+    scores: Array<{
+      pairName: string;
+      textA: string;
+      textB: string;
+      similarityScore: number;
+      expected: string;
+    }>;
+  } | null>(null);
+  const [countdown, setCountdown] = useState<number>(5);
+  const [testProgress, setTestProgress] = useState<{ current: number; total: number } | null>(null);
 
-    // Setup progress listener on mount
-    useEffect(() => {
-        let mounted = true;
-        let unsubscribe: (() => void) | null = null;
+  // Setup progress listener on mount
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
 
-        const setupListener = async () => {
-            try {
-                const currentProgress = await storageBridge.getEmbeddingDownloadProgress();
+    const setupListener = async () => {
+      try {
+        const currentProgress = await storageBridge.getEmbeddingDownloadProgress();
 
-                // If already completed, redirect
-                if (currentProgress.status === "completed") {
-                    if (returnTo) {
-                        navigate(returnTo, { replace: true });
-                    } else {
-                        navigate("/settings/advanced/memory", { replace: true });
-                    }
-                    return;
+        // If already completed, redirect
+        if (currentProgress.status === "completed") {
+          if (returnTo) {
+            navigate(returnTo, { replace: true });
+          } else {
+            navigate("/settings/advanced/memory", { replace: true });
+          }
+          return;
+        }
+
+        // Setup listener for progress updates
+        unsubscribe = await storageBridge.listenToEmbeddingDownloadProgress((progressData) => {
+          console.log("Progress update:", progressData);
+          if (mounted) {
+            setProgress(progressData);
+
+            if (progressData.status === "completed") {
+              setIsDownloading(false);
+              void (async () => {
+                try {
+                  await storageBridge.initializeEmbeddingModel();
+                  runTest();
+                } catch (err) {
+                  setTestStatus("failed");
+                  setError(err instanceof Error ? err.message : String(err));
                 }
-
-                // Setup listener for progress updates
-                unsubscribe = await storageBridge.listenToEmbeddingDownloadProgress((progressData) => {
-                    console.log("Progress update:", progressData);
-                    if (mounted) {
-                        setProgress(progressData);
-
-                        if (progressData.status === "completed") {
-                            setIsDownloading(false);
-                            runTest();
-                        } else if (progressData.status === "failed" || progressData.status === "cancelled") {
-                            setIsDownloading(false);
-                        }
-                    }
-                });
-
-                // If already downloading, attach to it and skip capacity selection
-                if (currentProgress.status === "downloading") {
-                    console.log("Download already in progress, attaching...");
-                    setShowCapacitySelection(false);
-                    setIsDownloading(true);
-                    setProgress(currentProgress);
-                }
-            } catch (err) {
-                console.error("Failed to setup listener:", err);
+              })();
+            } else if (progressData.status === "failed" || progressData.status === "cancelled") {
+              setIsDownloading(false);
             }
-        };
+          }
+        });
 
-        setupListener();
+        // If already downloading, attach to it and skip capacity selection
+        if (currentProgress.status === "downloading") {
+          console.log("Download already in progress, attaching...");
+          setShowCapacitySelection(false);
+          setIsDownloading(true);
+          setProgress(currentProgress);
+        }
+      } catch (err) {
+        console.error("Failed to setup listener:", err);
+      }
+    };
 
-        return () => {
-            mounted = false;
-            if (unsubscribe) {
-                unsubscribe();
-            }
-        };
-    }, [navigate, returnTo]);
+    setupListener();
 
-    // Start download with selected capacity
-    const startDownload = async () => {
-        setShowCapacitySelection(false);
+    return () => {
+      mounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [navigate, returnTo]);
+
+  // Start download with selected capacity
+  const startDownload = async () => {
+    setShowCapacitySelection(false);
+    setIsDownloading(true);
+    setError(null);
+
+    try {
+      // Always download v2 model (the backend defaults to v2)
+      await storageBridge.startEmbeddingDownload("v2");
+
+      // Save the selected capacity to settings
+      await updateAdvancedSetting("embeddingMaxTokens", selectedCapacity);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      if (errorMessage.includes("Download already in progress")) {
+        console.log("Race condition caught, attaching to existing download...");
         setIsDownloading(true);
-        setError(null);
+      } else {
+        setError(errorMessage);
+        setIsDownloading(false);
+      }
+    }
+  };
 
-        try {
-            // Always download v2 model (the backend defaults to v2)
-            await storageBridge.startEmbeddingDownload("v2");
+  // Run embedding test
+  const runTest = async () => {
+    setTestStatus("testing");
+    setError(null);
+    setTestProgress({ current: 0, total: 0 });
 
-            // Save the selected capacity to settings
-            await updateAdvancedSetting("embeddingMaxTokens", selectedCapacity);
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
+    try {
+      const results = await storageBridge.runEmbeddingTest();
+      setTestResults(results);
 
-            if (errorMessage.includes("Download already in progress")) {
-                console.log("Race condition caught, attaching to existing download...");
-                setIsDownloading(true);
-            } else {
-                setError(errorMessage);
-                setIsDownloading(false);
-            }
-        }
+      if (results.success) {
+        setTestStatus("passed");
+        await updateAdvancedSetting("dynamicMemory", {
+          enabled: true,
+          summaryMessageInterval: 20,
+          maxEntries: 50,
+          minSimilarityThreshold: 0.35,
+          hotMemoryTokenBudget: 2000,
+          decayRate: 0.08,
+          coldThreshold: 0.3,
+        });
+      } else {
+        setTestStatus("failed");
+      }
+    } catch (err) {
+      setTestStatus("failed");
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    const setupListener = async () => {
+      unlisten = await listen<{ current: number; total: number; stage?: string }>(
+        "embedding_test_progress",
+        (event) => {
+          setTestProgress({ current: event.payload.current, total: event.payload.total });
+        },
+      );
     };
-
-    // Run embedding test
-    const runTest = async () => {
-        setTestStatus("testing");
-        setError(null);
-
-        try {
-            const results = await storageBridge.runEmbeddingTest();
-            setTestResults(results);
-
-            if (results.success) {
-                setTestStatus("passed");
-                await updateAdvancedSetting("dynamicMemory", {
-                    enabled: true,
-                    summaryMessageInterval: 20,
-                    maxEntries: 50,
-                    minSimilarityThreshold: 0.35,
-                    hotMemoryTokenBudget: 2000,
-                    decayRate: 0.08,
-                    coldThreshold: 0.3,
-                });
-            } else {
-                setTestStatus("failed");
-            }
-        } catch (err) {
-            setTestStatus("failed");
-            setError(err instanceof Error ? err.message : String(err));
-        }
+    setupListener();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
     };
+  }, []);
 
-    // Countdown and redirect after successful test
-    useEffect(() => {
-        if (testStatus === "passed") {
-            setCountdown(5);
-            const timer = setInterval(() => {
-                setCountdown((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(timer);
-                        if (returnTo) {
-                            navigate(returnTo, { replace: true });
-                        } else {
-                            navigate("/settings/advanced", { replace: true });
-                        }
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-
-            return () => clearInterval(timer);
-        }
-    }, [testStatus, navigate]);
-
-    const handleCancel = async () => {
-        try {
-            await storageBridge.cancelEmbeddingDownload();
-            await updateAdvancedSetting("dynamicMemory", {
-                enabled: false,
-                summaryMessageInterval: 20,
-                maxEntries: 50,
-                minSimilarityThreshold: 0.35,
-                hotMemoryTokenBudget: 2000,
-                decayRate: 0.08,
-                coldThreshold: 0.3,
-            });
+  // Countdown and redirect after successful test
+  useEffect(() => {
+    if (testStatus === "passed") {
+      setCountdown(5);
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
             if (returnTo) {
-                navigate(returnTo);
+              navigate(returnTo, { replace: true });
             } else {
-                navigate("/settings/advanced");
+              navigate("/settings/advanced", { replace: true });
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-        }
-    };
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
 
-    const formatBytes = (bytes: number): string => {
-        if (bytes === 0) return "0 Bytes";
-        const k = 1024;
-        const sizes = ["Bytes", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
-    };
+      return () => clearInterval(timer);
+    }
+  }, [testStatus, navigate]);
 
-    const progressPercent =
-        testStatus !== "idle" ? 100 :
-            progress.total > 0 ? (progress.downloaded / progress.total) * 100 : 0;
+  const handleCancel = async () => {
+    try {
+      await storageBridge.cancelEmbeddingDownload();
+      await updateAdvancedSetting("dynamicMemory", {
+        enabled: false,
+        summaryMessageInterval: 20,
+        maxEntries: 50,
+        minSimilarityThreshold: 0.35,
+        hotMemoryTokenBudget: 2000,
+        decayRate: 0.08,
+        coldThreshold: 0.3,
+      });
+      if (returnTo) {
+        navigate(returnTo);
+      } else {
+        navigate("/settings/advanced");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
-    return (
-        <div className="flex min-h-screen flex-col">
-            <main className="flex-1 px-4 pb-24 pt-6">
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mx-auto w-full max-w-2xl space-y-6"
-                >
-                    {/* Header */}
-                    <div className="text-center">
-                        <h1 className="text-2xl font-bold text-white">
-                            {showCapacitySelection && (isUpgrade ? "Upgrade Embedding Model" : "Setup Embedding Model")}
-                            {!showCapacitySelection && testStatus === "idle" && "Downloading Embedding Model"}
-                            {!showCapacitySelection && testStatus === "testing" && "Testing Model"}
-                            {!showCapacitySelection && testStatus === "passed" && "Test Passed!"}
-                            {!showCapacitySelection && testStatus === "failed" && "Test Failed"}
-                        </h1>
-                        <p className="mt-2 text-sm text-white/60">
-                            {showCapacitySelection && "Choose your preferred memory context capacity"}
-                            {!showCapacitySelection && testStatus === "idle" && "Dynamic Memory requires a local embedding model to function"}
-                            {!showCapacitySelection && testStatus === "testing" && "Verifying model functionality..."}
-                            {!showCapacitySelection && testStatus === "passed" && `Redirecting in ${countdown} seconds...`}
-                            {!showCapacitySelection && testStatus === "failed" && "Model verification failed. Please try again."}
-                        </p>
-                    </div>
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+  };
 
-                    {/* Capacity Selection */}
-                    {showCapacitySelection && (
-                        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-                            <div className="space-y-4">
-                                <div className="text-center mb-6">
-                                    <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
-                                        <Zap className="h-8 w-8 text-blue-400" />
-                                    </div>
-                                    <p className="mt-4 text-sm text-white/70">
-                                        Higher capacity = better memory for longer conversations, but uses more processing power per embedding.
-                                    </p>
-                                </div>
+  const progressPercent =
+    testStatus !== "idle"
+      ? 100
+      : progress.total > 0
+        ? (progress.downloaded / progress.total) * 100
+        : 0;
 
-                                <div className="grid gap-3">
-                                    {CAPACITY_OPTIONS.map((option) => (
-                                        <button
-                                            key={option.value}
-                                            onClick={() => setSelectedCapacity(option.value)}
-                                            className={`
+  return (
+    <div className="flex min-h-screen flex-col">
+      <main className="flex-1 px-4 pb-24 pt-6">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-auto w-full max-w-2xl space-y-6"
+        >
+          {/* Header */}
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white">
+              {showCapacitySelection &&
+                (isUpgrade ? "Upgrade Embedding Model" : "Setup Embedding Model")}
+              {!showCapacitySelection && testStatus === "idle" && "Downloading Embedding Model"}
+              {!showCapacitySelection && testStatus === "testing" && "Testing Model"}
+              {!showCapacitySelection && testStatus === "passed" && "Test Passed!"}
+              {!showCapacitySelection && testStatus === "failed" && "Test Failed"}
+            </h1>
+            <p className="mt-2 text-sm text-white/60">
+              {showCapacitySelection && "Choose your preferred memory context capacity"}
+              {!showCapacitySelection &&
+                testStatus === "idle" &&
+                "Dynamic Memory requires a local embedding model to function"}
+              {!showCapacitySelection &&
+                testStatus === "testing" &&
+                "Verifying model functionality..."}
+              {!showCapacitySelection &&
+                testStatus === "passed" &&
+                `Redirecting in ${countdown} seconds...`}
+              {!showCapacitySelection &&
+                testStatus === "failed" &&
+                "Model verification failed. Please try again."}
+            </p>
+            {!showCapacitySelection &&
+              testStatus === "testing" &&
+              testProgress &&
+              testProgress.total > 0 && (
+                <p className="mt-2 text-xs text-white/50">
+                  Testing {testProgress.current}/{testProgress.total}
+                </p>
+              )}
+          </div>
+
+          {/* Capacity Selection */}
+          {showCapacitySelection && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+              <div className="space-y-4">
+                <div className="text-center mb-6">
+                  <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
+                    <Zap className="h-8 w-8 text-blue-400" />
+                  </div>
+                  <p className="mt-4 text-sm text-white/70">
+                    Higher capacity = better memory for longer conversations, but uses more
+                    processing power per embedding.
+                  </p>
+                </div>
+
+                <div className="grid gap-3">
+                  {CAPACITY_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setSelectedCapacity(option.value)}
+                      className={`
                                                 flex items-center justify-between p-4 rounded-xl border transition-all
-                                                ${selectedCapacity === option.value
+                                                ${
+                                                  selectedCapacity === option.value
                                                     ? "border-blue-500 bg-blue-500/20"
                                                     : "border-white/10 bg-white/5 hover:border-white/20"
                                                 }
                                             `}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`
                                                     w-5 h-5 rounded-full border-2 flex items-center justify-center
-                                                    ${selectedCapacity === option.value
+                                                    ${
+                                                      selectedCapacity === option.value
                                                         ? "border-blue-500 bg-blue-500"
                                                         : "border-white/30"
                                                     }
-                                                `}>
-                                                    {selectedCapacity === option.value && (
-                                                        <div className="w-2 h-2 rounded-full bg-white" />
-                                                    )}
-                                                </div>
-                                                <div className="text-left">
-                                                    <div className="font-medium text-white">{option.label}</div>
-                                                    <div className="text-xs text-white/50">{option.description}</div>
-                                                </div>
-                                            </div>
-                                            {option.value === 2048 && (
-                                                <span className="text-[10px] font-medium uppercase tracking-wider text-green-400 bg-green-500/20 px-2 py-0.5 rounded">
-                                                    Recommended
-                                                </span>
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <button
-                                    onClick={startDownload}
-                                    className="w-full mt-4 py-3 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Download className="h-5 w-5" />
-                                    Download v2 Model (~86 MB)
-                                </button>
-
-                                <button
-                                    onClick={() => {
-                                        if (returnTo) {
-                                            navigate(returnTo);
-                                        } else {
-                                            navigate("/settings/advanced");
-                                        }
-                                    }}
-                                    className="w-full py-2 text-sm text-white/50 hover:text-white/70 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Download/Test Progress Card */}
-                    {!showCapacitySelection && (
-                        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-                            {/* Icon */}
-                            <div className="mb-4 flex justify-center">
-                                {testStatus === "idle" && (
-                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
-                                        <Download className="h-8 w-8 text-blue-400" />
-                                    </div>
-                                )}
-                                {testStatus === "testing" && (
-                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-500/10">
-                                        <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
-                                    </div>
-                                )}
-                                {testStatus === "passed" && (
-                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-green-400/20 bg-green-500/10">
-                                        <CheckCircle className="h-8 w-8 text-green-400" />
-                                    </div>
-                                )}
-                                {testStatus === "failed" && (
-                                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-400/20 bg-red-500/10">
-                                        <XCircle className="h-8 w-8 text-red-400" />
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="space-y-6">
-                                {/* File Info - Above Progress Bar */}
-                                {progress.status.toLowerCase().includes("downloading") && (
-                                    <div className="space-y-2">
-                                        <div className="text-center">
-                                            <div className="text-sm font-medium text-white/80">
-                                                File {progress.currentFileIndex} of {progress.totalFiles}
-                                            </div>
-                                            {progress.currentFileName && (
-                                                <div className="mt-1 text-xs text-white/50 font-mono">
-                                                    {progress.currentFileName}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Progress Bar */}
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-white/70">Progress</span>
-                                        <span className="font-medium text-white">{Math.round(progressPercent)}%</span>
-                                    </div>
-                                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                                        <motion.div
-                                            className="h-full bg-green-500"
-                                            initial={{ width: 0 }}
-                                            animate={{
-                                                width: progress.total > 0 ? `${(progress.downloaded / progress.total) * 100}%` : "0%",
-                                            }}
-                                            transition={{ duration: 0.3 }}
-                                        />
-                                    </div>
-                                    <div className="flex justify-between text-xs text-white/50">
-                                        <span>{formatBytes(progress.downloaded)}</span>
-                                        <span>{formatBytes(progress.total)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Status */}
-                                <div className="text-center text-sm text-white/60">
-                                    {testStatus === "idle" && progress.status === "downloading" && "Downloading..."}
-                                    {testStatus === "idle" && progress.status === "completed" && "Download completed!"}
-                                    {testStatus === "idle" && progress.status === "failed" && "Download failed"}
-                                    {testStatus === "idle" && progress.status === "cancelled" && "Download cancelled"}
-                                    {testStatus === "testing" && "Running verification tests..."}
-                                    {testStatus === "passed" && "All tests passed successfully"}
-                                    {testStatus === "failed" && "Verification failed"}
-                                </div>
-
-                                {/* Test Results */}
-                                {testResults && (testStatus === "passed" || testStatus === "failed") && (
-                                    <div className="mt-6 space-y-4">
-                                        <div className="text-center">
-                                            <div className={`text-sm font-medium ${testResults.success ? "text-green-400" : "text-red-400"
-                                                }`}>
-                                                {testResults.message}
-                                            </div>
-                                        </div>
-
-                                        {/* Similarity Scores */}
-                                        <div className="space-y-3">
-                                            {testResults.scores.map((score, idx) => (
-                                                <div key={idx} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-xs font-medium text-white/70">{score.pairName}</span>
-                                                        <span className={`text-sm font-bold ${score.similarityScore > 0.6 ? "text-green-400" : "text-yellow-400"
-                                                            }`}>
-                                                            {score.similarityScore.toFixed(4)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="mt-1 text-xs text-white/50">
-                                                        Expected: {score.expected}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Error Message */}
-                            {error && (
-                                <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-                                    <p className="text-sm text-red-200">{error}</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Cancel Button */}
-                    {isDownloading && (
-                        <button
-                            onClick={handleCancel}
-                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-3 text-sm font-medium text-red-200 transition hover:border-red-500/30 hover:bg-red-500/15"
+                                                `}
                         >
-                            <X className="h-4 w-4" />
-                            Cancel Download
-                        </button>
-                    )}
-
-                    {/* Retry Button */}
-                    {!isDownloading && progress.status === "failed" && (
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => {
-                                    setError(null);
-                                    startDownload();
-                                }}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-blue-600"
-                            >
-                                <Download className="h-4 w-4" />
-                                Retry Download
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (returnTo) {
-                                        navigate(returnTo);
-                                    } else {
-                                        navigate("/settings/advanced");
-                                    }
-                                }}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white/60 transition hover:bg-white/10"
-                            >
-                                Go Back
-                            </button>
+                          {selectedCapacity === option.value && (
+                            <div className="w-2 h-2 rounded-full bg-white" />
+                          )}
                         </div>
-                    )}
-                </motion.div>
-            </main>
-        </div >
-    );
+                        <div className="text-left">
+                          <div className="font-medium text-white">{option.label}</div>
+                          <div className="text-xs text-white/50">{option.description}</div>
+                        </div>
+                      </div>
+                      {option.value === 2048 && (
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-green-400 bg-green-500/20 px-2 py-0.5 rounded">
+                          Recommended
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={startDownload}
+                  className="w-full mt-4 py-3 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <Download className="h-5 w-5" />
+                  Download v2 Model (~86 MB)
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (returnTo) {
+                      navigate(returnTo);
+                    } else {
+                      navigate("/settings/advanced");
+                    }
+                  }}
+                  className="w-full py-2 text-sm text-white/50 hover:text-white/70 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Download/Test Progress Card */}
+          {!showCapacitySelection && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+              {/* Icon */}
+              <div className="mb-4 flex justify-center">
+                {testStatus === "idle" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-blue-400/20 bg-blue-500/10">
+                    <Download className="h-8 w-8 text-blue-400" />
+                  </div>
+                )}
+                {testStatus === "testing" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-500/10">
+                    <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
+                  </div>
+                )}
+                {testStatus === "passed" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-green-400/20 bg-green-500/10">
+                    <CheckCircle className="h-8 w-8 text-green-400" />
+                  </div>
+                )}
+                {testStatus === "failed" && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-400/20 bg-red-500/10">
+                    <XCircle className="h-8 w-8 text-red-400" />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                {/* File Info - Above Progress Bar */}
+                {progress.status.toLowerCase().includes("downloading") && (
+                  <div className="space-y-2">
+                    <div className="text-center">
+                      <div className="text-sm font-medium text-white/80">
+                        File {progress.currentFileIndex} of {progress.totalFiles}
+                      </div>
+                      {progress.currentFileName && (
+                        <div className="mt-1 text-xs text-white/50 font-mono">
+                          {progress.currentFileName}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/70">Progress</span>
+                    <span className="font-medium text-white">{Math.round(progressPercent)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                    <motion.div
+                      className="h-full bg-green-500"
+                      initial={{ width: 0 }}
+                      animate={{
+                        width:
+                          progress.total > 0
+                            ? `${(progress.downloaded / progress.total) * 100}%`
+                            : "0%",
+                      }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-white/50">
+                    <span>{formatBytes(progress.downloaded)}</span>
+                    <span>{formatBytes(progress.total)}</span>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="text-center text-sm text-white/60">
+                  {testStatus === "idle" && progress.status === "downloading" && "Downloading..."}
+                  {testStatus === "idle" &&
+                    progress.status === "completed" &&
+                    "Download completed!"}
+                  {testStatus === "idle" && progress.status === "failed" && "Download failed"}
+                  {testStatus === "idle" && progress.status === "cancelled" && "Download cancelled"}
+                  {testStatus === "testing" && "Running verification tests..."}
+                  {testStatus === "passed" && "All tests passed successfully"}
+                  {testStatus === "failed" && "Verification failed"}
+                </div>
+
+                {/* Test Results */}
+                {testResults && (testStatus === "passed" || testStatus === "failed") && (
+                  <div className="mt-6 space-y-4">
+                    <div className="text-center">
+                      <div
+                        className={`text-sm font-medium ${
+                          testResults.success ? "text-green-400" : "text-red-400"
+                        }`}
+                      >
+                        {testResults.message}
+                      </div>
+                    </div>
+
+                    {/* Similarity Scores */}
+                    <div className="space-y-3">
+                      {testResults.scores.map((score, idx) => (
+                        <div key={idx} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-white/70">
+                              {score.pairName}
+                            </span>
+                            <span
+                              className={`text-sm font-bold ${
+                                score.similarityScore > 0.6 ? "text-green-400" : "text-yellow-400"
+                              }`}
+                            >
+                              {score.similarityScore.toFixed(4)}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs text-white/50">
+                            Expected: {score.expected}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                  <p className="text-sm text-red-200">{error}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cancel Button */}
+          {isDownloading && (
+            <button
+              onClick={handleCancel}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-3 text-sm font-medium text-red-200 transition hover:border-red-500/30 hover:bg-red-500/15"
+            >
+              <X className="h-4 w-4" />
+              Cancel Download
+            </button>
+          )}
+
+          {/* Retry Button */}
+          {!isDownloading && progress.status === "failed" && (
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setError(null);
+                  startDownload();
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-blue-600"
+              >
+                <Download className="h-4 w-4" />
+                Retry Download
+              </button>
+              <button
+                onClick={() => {
+                  if (returnTo) {
+                    navigate(returnTo);
+                  } else {
+                    navigate("/settings/advanced");
+                  }
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white/60 transition hover:bg-white/10"
+              >
+                Go Back
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </main>
+    </div>
+  );
 }

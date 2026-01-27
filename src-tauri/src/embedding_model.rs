@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex as TokioMutex;
+use tokio::time::{timeout, Duration};
 
 use crate::chat_manager::prompts;
 use crate::utils::{log_error, log_info, log_warn};
@@ -528,9 +529,68 @@ use ort::{
 use tokenizers::Tokenizer;
 
 const EMBEDDING_DIM: usize = 512;
+const EMBEDDING_TEST_TIMEOUT_SECS: u64 = 90;
 
-async fn ensure_ort_init() -> Result<(), String> {
-    let _ = ort::init().with_name("lettuce-embedding").commit();
+fn compute_embedding_with_session(
+    session: &mut Session,
+    tokenizer: &Tokenizer,
+    text: &str,
+    max_seq_length: usize,
+) -> Result<Vec<f32>, String> {
+    let encoding = tokenizer
+        .encode(text, true)
+        .map_err(|e| format!("Tokenization failed: {}", e))?;
+
+    let input_ids = encoding.get_ids();
+    let attention_mask = encoding.get_attention_mask();
+
+    let seq_len = input_ids.len().min(max_seq_length);
+    let input_ids = &input_ids[..seq_len];
+    let attention_mask = &attention_mask[..seq_len];
+
+    let input_ids_i64: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
+    let attention_mask_i64: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
+
+    let input_ids_value = Value::from_array(([1, seq_len], input_ids_i64))
+        .map_err(|e| format!("Failed to create input_ids tensor: {}", e))?;
+
+    let attention_mask_value = Value::from_array(([1, seq_len], attention_mask_i64))
+        .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
+
+    let outputs = session
+        .run(inputs![
+            "input_ids" => input_ids_value,
+            "attention_mask" => attention_mask_value
+        ])
+        .map_err(|e| format!("Inference failed: {}", e))?;
+
+    let embedding_value = &outputs[0];
+    let (_, embedding_slice) = embedding_value
+        .try_extract_tensor::<f32>()
+        .map_err(|e| format!("Failed to extract embedding: {}", e))?;
+
+    let embedding_vec: Vec<f32> = embedding_slice.to_vec();
+
+    match embedding_vec.len() {
+        len if len == EMBEDDING_DIM => Ok(embedding_vec),
+        len if len > EMBEDDING_DIM && len % EMBEDDING_DIM == 0 => {
+            Ok(embedding_vec[..EMBEDDING_DIM].to_vec())
+        }
+        len => Err(format!(
+            "Unexpected embedding dimension: {} (expected {} or multiple thereof)",
+            len, EMBEDDING_DIM
+        )),
+    }
+}
+
+fn ensure_ort_init() -> Result<(), String> {
+    if let Err(err) = ort::init().with_name("lettuce-embedding").commit() {
+        let message = err.to_string();
+        let lower = message.to_lowercase();
+        if !lower.contains("already") || !lower.contains("init") {
+            return Err(format!("Failed to initialize ONNX Runtime: {}", message));
+        }
+    }
     Ok(())
 }
 
@@ -629,7 +689,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
         format!("tokenizer_path status {}", describe_path(&tokenizer_path)),
     );
 
-    ensure_ort_init().await?;
+    ensure_ort_init()?;
     log_info(&app, "embedding_debug", "ort initialized");
 
     let mut session = Session::builder()
@@ -648,100 +708,15 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
         .map_err(|e| format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e))?;
     log_info(&app, "embedding_debug", "tokenizer loaded");
 
-    // Tokenize input
-    let encoding = tokenizer
-        .encode(text.clone(), true)
-        .map_err(|e| format!("Tokenization failed: {}", e))?;
-
-    let input_ids = encoding.get_ids();
-    let attention_mask = encoding.get_attention_mask();
-    log_info(
-        &app,
-        "embedding_debug",
-        format!(
-            "tokenization complete input_ids_len={} attention_mask_len={}",
-            input_ids.len(),
-            attention_mask.len()
-        ),
-    );
-
-    let seq_len = input_ids.len().min(max_seq_length);
-    let input_ids = &input_ids[..seq_len];
-    let attention_mask = &attention_mask[..seq_len];
-    log_info(
-        &app,
-        "embedding_debug",
-        format!(
-            "sequence length seq_len={} max_seq_length={}",
-            seq_len, max_seq_length
-        ),
-    );
-
-    // Convert to i64 arrays
-    let input_ids_i64: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
-    let attention_mask_i64: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
-
-    // Create tensors using (shape, data) tuple format for ort
-    let input_ids_value = Value::from_array(([1, seq_len], input_ids_i64))
-        .map_err(|e| format!("Failed to create input_ids tensor: {}", e))?;
-
-    let attention_mask_value = Value::from_array(([1, seq_len], attention_mask_i64))
-        .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
-
     log_info(&app, "embedding_debug", "running embedding inference");
-    let outputs = session
-        .run(inputs![
-            "input_ids" => input_ids_value,
-            "attention_mask" => attention_mask_value
-        ])
-        .map_err(|e| format!("Inference failed: {}", e))?;
-
-    log_info(
-        &app,
-        "embedding_debug",
-        format!("inference complete outputs_len={}", outputs.len()),
-    );
-
-    let embedding_value = &outputs[0];
-    let (_, embedding_slice) = embedding_value
-        .try_extract_tensor::<f32>()
-        .map_err(|e| format!("Failed to extract embedding: {}", e))?;
-
-    let embedding_vec: Vec<f32> = embedding_slice.to_vec();
+    let embedding_vec =
+        compute_embedding_with_session(&mut session, &tokenizer, &text, max_seq_length)?;
     log_info(
         &app,
         "embedding_debug",
         format!("embedding extracted len={}", embedding_vec.len()),
     );
-
-    match embedding_vec.len() {
-        len if len == EMBEDDING_DIM => Ok(embedding_vec),
-        len if len > EMBEDDING_DIM && len % EMBEDDING_DIM == 0 => {
-            log_info(
-                &app,
-                "embedding_debug",
-                format!(
-                    "embedding dim multiple detected len={} using first {}",
-                    len, EMBEDDING_DIM
-                ),
-            );
-            Ok(embedding_vec[..EMBEDDING_DIM].to_vec())
-        }
-        len => {
-            log_error(
-                &app,
-                "embedding_debug",
-                format!(
-                    "unexpected embedding dimension len={} expected={}",
-                    len, EMBEDDING_DIM
-                ),
-            );
-            Err(format!(
-                "Unexpected embedding dimension: {} (expected {} or multiple thereof)",
-                len, EMBEDDING_DIM
-            ))
-        }
-    }
+    Ok(embedding_vec)
 }
 
 #[tauri::command]
@@ -757,8 +732,60 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
         return Err("Model files not found. Please download the model first.".to_string());
     }
 
-    ensure_ort_init().await?;
+    let model_dir = embedding_model_dir(&app)?;
+    let (model_path, version_label) = match detected_version {
+        Some(EmbeddingModelVersion::V2) => (model_dir.join("v2-model.onnx"), "v2"),
+        Some(EmbeddingModelVersion::V1) => (model_dir.join("lettuce-emb-512d-kd-v1.onnx"), "v1"),
+        None => unreachable!(),
+    };
+    let tokenizer_path = model_dir.join("tokenizer.json");
+
+    if !model_path.exists() {
+        return Err(format!("Model file missing: {}", model_path.display()));
+    }
+    if !tokenizer_path.exists() {
+        return Err(format!(
+            "Tokenizer file missing: {}",
+            tokenizer_path.display()
+        ));
+    }
+
+    let model_size = fs::metadata(&model_path).map(|m| m.len()).unwrap_or(0);
+    let tokenizer_size = fs::metadata(&tokenizer_path).map(|m| m.len()).unwrap_or(0);
+    if model_size == 0 || tokenizer_size == 0 {
+        return Err(format!(
+            "Model files look invalid (sizes: model={} bytes, tokenizer={} bytes)",
+            model_size, tokenizer_size
+        ));
+    }
+
+    ensure_ort_init()?;
     log_info(&app, "embedding_init", "ort initialized");
+
+    let _session = Session::builder()
+        .map_err(|e| format!("Failed to create session builder: {}", e))?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(|e| format!("Failed to set optimization level: {}", e))?
+        .commit_from_file(&model_path)
+        .map_err(|e| format!("Failed to load {} model: {}", version_label, e))?;
+    let _tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+        format!(
+            "Failed to load tokenizer from {}: {}",
+            tokenizer_path.display(),
+            e
+        )
+    })?;
+
+    log_info(
+        &app,
+        "embedding_init",
+        format!(
+            "model validation ok version={} model_path={} tokenizer_path={}",
+            version_label,
+            model_path.display(),
+            tokenizer_path.display()
+        ),
+    );
 
     Ok(())
 }
@@ -816,11 +843,7 @@ pub struct ScoreComparison {
 
 #[tauri::command]
 pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
-    log_info(
-        &app,
-        "embedding_test",
-        "starting embedding test",
-    );
+    log_info(&app, "embedding_test", "starting embedding test");
     println!("Starting embedding test...");
 
     // Test cases organized by category
@@ -894,113 +917,206 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
         ),
     ];
 
-    let mut scores: Vec<ScoreComparison> = Vec::new();
-    let mut all_passed = true;
-    let mut embedding_dim = 0;
+    let total_tests = test_cases.len();
+    let _ = app.emit(
+        "embedding_test_progress",
+        serde_json::json!({
+            "current": 0,
+            "total": total_tests,
+            "stage": "starting"
+        }),
+    );
 
-    for (name, text_a, text_b, category, threshold, expected_desc) in test_cases {
-        log_info(&app, "embedding_test", format!("testing {}", name));
-        println!("Testing: {}", name);
+    let app_for_test = app.clone();
+    let test_future = tokio::task::spawn_blocking(move || {
+        let mut scores: Vec<ScoreComparison> = Vec::new();
+        let mut all_passed = true;
+        let mut embedding_dim = 0;
 
-        let emb_a = compute_embedding(app.clone(), text_a.to_string())
-            .await
-            .map_err(|e| {
-                log_error(
-                    &app,
+        let detected_version = detect_model_version(&app_for_test)?;
+        log_info(
+            &app_for_test,
+            "embedding_test",
+            format!("detected model version {:?}", detected_version),
+        );
+
+        let model_dir = embedding_model_dir(&app_for_test)?;
+        let (model_path, max_seq_length, version_label) = match detected_version {
+            Some(EmbeddingModelVersion::V2) => {
+                let settings_max_tokens =
+                    crate::storage_manager::settings::internal_read_settings(&app_for_test)
+                        .ok()
+                        .flatten()
+                        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                        .and_then(|json| {
+                            json.pointer("/advancedSettings/embeddingMaxTokens")?
+                                .as_u64()
+                        })
+                        .map(|t| t as usize);
+
+                let resolved_max_tokens = settings_max_tokens.unwrap_or(MAX_SEQ_LENGTH_V2);
+                let clamped = resolved_max_tokens.clamp(512, MAX_SEQ_LENGTH_V2);
+
+                (model_dir.join("v2-model.onnx"), clamped, "v2")
+            }
+            Some(EmbeddingModelVersion::V1) => (
+                model_dir.join("lettuce-emb-512d-kd-v1.onnx"),
+                MAX_SEQ_LENGTH_V1,
+                "v1",
+            ),
+            None => {
+                return Err("Model files not found. Please download the model first.".to_string());
+            }
+        };
+
+        let tokenizer_path = model_dir.join("tokenizer.json");
+
+        ensure_ort_init()?;
+        log_info(&app_for_test, "embedding_test", "ort initialized");
+
+        let mut session = Session::builder()
+            .map_err(|e| format!("Failed to create session builder: {}", e))?
+            .with_optimization_level(GraphOptimizationLevel::Level3)
+            .map_err(|e| format!("Failed to set optimization level: {}", e))?
+            .commit_from_file(&model_path)
+            .map_err(|e| format!("Failed to load {} model: {}", version_label, e))?;
+
+        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| format!("Failed to load tokenizer: {}", e))?;
+
+        for (idx, (name, text_a, text_b, category, threshold, expected_desc)) in
+            test_cases.iter().enumerate()
+        {
+            log_info(&app_for_test, "embedding_test", format!("testing {}", name));
+            println!("Testing: {}", name);
+
+            let emb_a =
+                compute_embedding_with_session(&mut session, &tokenizer, text_a, max_seq_length)
+                    .map_err(|e| {
+                        log_error(
+                            &app_for_test,
+                            "embedding_test",
+                            format!("failed to embed {} text_a error={}", name, e),
+                        );
+                        format!("Failed to embed '{}': {}", name, e)
+                    })?;
+
+            if embedding_dim == 0 {
+                embedding_dim = emb_a.len();
+                log_info(
+                    &app_for_test,
                     "embedding_test",
-                    format!("failed to embed {} text_a error={}", name, e),
+                    format!("embedding dimension set to {}", embedding_dim),
                 );
-                format!("Failed to embed '{}': {}", name, e)
-            })?;
+            }
 
-        if embedding_dim == 0 {
-            embedding_dim = emb_a.len();
+            let emb_b =
+                compute_embedding_with_session(&mut session, &tokenizer, text_b, max_seq_length)
+                    .map_err(|e| {
+                        log_error(
+                            &app_for_test,
+                            "embedding_test",
+                            format!("failed to embed {} text_b error={}", name, e),
+                        );
+                        format!("Failed to embed '{}': {}", name, e)
+                    })?;
+
+            let similarity = cosine_similarity(&emb_a, &emb_b);
+
+            let passed = if *category == "dissimilar" {
+                similarity < *threshold
+            } else {
+                similarity >= *threshold
+            };
+
+            if !passed {
+                all_passed = false;
+            }
+
             log_info(
-                &app,
+                &app_for_test,
                 "embedding_test",
-                format!("embedding dimension set to {}", embedding_dim),
+                format!(
+                    "result name={} category={} similarity={} threshold={} passed={}",
+                    name, category, similarity, threshold, passed
+                ),
+            );
+
+            scores.push(ScoreComparison {
+                pair_name: (*name).to_string(),
+                text_a: (*text_a).to_string(),
+                text_b: (*text_b).to_string(),
+                similarity_score: similarity,
+                expected: (*expected_desc).to_string(),
+                passed,
+                category: (*category).to_string(),
+            });
+
+            let _ = app_for_test.emit(
+                "embedding_test_progress",
+                serde_json::json!({
+                    "current": idx + 1,
+                    "total": total_tests,
+                    "stage": "running"
+                }),
             );
         }
 
-        let emb_b = compute_embedding(app.clone(), text_b.to_string())
-            .await
-            .map_err(|e| {
-                log_error(
-                    &app,
-                    "embedding_test",
-                    format!("failed to embed {} text_b error={}", name, e),
-                );
-                format!("Failed to embed '{}': {}", name, e)
-            })?;
+        let model_info = get_embedding_model_info(app_for_test.clone())?;
 
-        let similarity = cosine_similarity(&emb_a, &emb_b);
-
-        let passed = if category == "dissimilar" {
-            similarity < threshold
-        } else {
-            similarity >= threshold
-        };
-
-        if !passed {
-            all_passed = false;
-        }
-
+        let passed_count = scores.iter().filter(|s| s.passed).count();
+        let total_count = scores.len();
         log_info(
-            &app,
+            &app_for_test,
             "embedding_test",
             format!(
-                "result name={} category={} similarity={} threshold={} passed={}",
-                name, category, similarity, threshold, passed
+                "embedding test complete passed={} total={} all_passed={}",
+                passed_count, total_count, all_passed
             ),
         );
 
-        scores.push(ScoreComparison {
-            pair_name: name.to_string(),
-            text_a: text_a.to_string(),
-            text_b: text_b.to_string(),
-            similarity_score: similarity,
-            expected: expected_desc.to_string(),
-            passed,
-            category: category.to_string(),
-        });
-    }
+        let message = if all_passed {
+            format!(
+                "All {} tests passed! The embedding model is working correctly.",
+                total_count
+            )
+        } else {
+            format!(
+                "{}/{} tests passed. Some results were unexpected - the model may need reinstallation.",
+                passed_count, total_count
+            )
+        };
 
-    // Get model info
-    let model_info = get_embedding_model_info(app.clone())?;
+        Ok(TestResult {
+            success: all_passed,
+            message,
+            scores,
+            model_info: ModelTestInfo {
+                version: model_info.version.unwrap_or_else(|| "unknown".to_string()),
+                max_tokens: model_info.max_tokens,
+                embedding_dimensions: embedding_dim,
+            },
+        })
+    });
 
-    let passed_count = scores.iter().filter(|s| s.passed).count();
-    let total_count = scores.len();
-    log_info(
-        &app,
-        "embedding_test",
-        format!(
-            "embedding test complete passed={} total={} all_passed={}",
-            passed_count, total_count, all_passed
-        ),
+    let result = timeout(
+        Duration::from_secs(EMBEDDING_TEST_TIMEOUT_SECS),
+        test_future,
+    )
+    .await
+    .map_err(|_| "Embedding test timed out. Please try again.".to_string())?
+    .map_err(|e| format!("Embedding test failed to start: {}", e))?;
+
+    let _ = app.emit(
+        "embedding_test_progress",
+        serde_json::json!({
+            "current": total_tests,
+            "total": total_tests,
+            "stage": "completed"
+        }),
     );
 
-    let message = if all_passed {
-        format!(
-            "All {} tests passed! The embedding model is working correctly.",
-            total_count
-        )
-    } else {
-        format!(
-            "{}/{} tests passed. Some results were unexpected - the model may need reinstallation.",
-            passed_count, total_count
-        )
-    };
-
-    Ok(TestResult {
-        success: all_passed,
-        message,
-        scores,
-        model_info: ModelTestInfo {
-            version: model_info.version.unwrap_or_else(|| "unknown".to_string()),
-            max_tokens: model_info.max_tokens,
-            embedding_dimensions: embedding_dim,
-        },
-    })
+    result
 }
 
 #[tauri::command]

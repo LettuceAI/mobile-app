@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { storageBridge } from "../../../core/storage/files";
 import { cn, interactive } from "../../design-tokens";
+import { listen } from "@tauri-apps/api/event";
 
 type TestStatus = "idle" | "testing" | "passed" | "failed";
 
@@ -208,6 +209,7 @@ export function EmbeddingTestPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const [showAllResults, setShowAllResults] = useState(false);
+  const [testProgress, setTestProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Custom comparison state
   const [customTextA, setCustomTextA] = useState("");
@@ -221,8 +223,10 @@ export function EmbeddingTestPage() {
     setError(null);
     setTestResults(null);
     setExpandedCards(new Set());
+    setTestProgress({ current: 0, total: 0 });
 
     try {
+      await storageBridge.initializeEmbeddingModel();
       const results = await storageBridge.runEmbeddingTest();
       setTestResults(results);
       setTestStatus(results.success ? "passed" : "failed");
@@ -270,6 +274,24 @@ export function EmbeddingTestPage() {
       return next;
     });
   };
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    const setupListener = async () => {
+      unlisten = await listen<{ current: number; total: number; stage?: string }>(
+        "embedding_test_progress",
+        (event) => {
+          setTestProgress({ current: event.payload.current, total: event.payload.total });
+        },
+      );
+    };
+    setupListener();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
 
   // Run test automatically on mount
   useEffect(() => {
@@ -352,6 +374,11 @@ export function EmbeddingTestPage() {
                   (error ||
                     "Some tests produced unexpected results. Consider reinstalling the model.")}
               </p>
+              {testStatus === "testing" && testProgress && testProgress.total > 0 && (
+                <div className="mt-3 text-xs text-white/50">
+                  Testing {testProgress.current}/{testProgress.total}
+                </div>
+              )}
 
               {testStatus === "failed" && failedCount >= 4 && !error && (
                 <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
@@ -487,7 +514,7 @@ export function EmbeddingTestPage() {
               })}
             </motion.div>
           )}
-          
+
           {/* Custom Comparison */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -596,7 +623,6 @@ export function EmbeddingTestPage() {
               )}
             </div>
           </motion.div>
-          
         </div>
       </main>
     </div>
