@@ -329,6 +329,8 @@ function AppContent() {
   const [voidActive, setVoidActive] = useState(false);
   const [voidTextIndex, setVoidTextIndex] = useState(0);
   const [showRestore, setShowRestore] = useState(false);
+  const [voidStartAt, setVoidStartAt] = useState(0);
+  const [voidReady, setVoidReady] = useState(false);
   const voidMessage = "congrats, you destablised the app. enjoy emptiness";
 
   useEffect(() => {
@@ -406,12 +408,15 @@ function AppContent() {
 
         if (glitchTimeoutRef.current) {
           window.clearTimeout(glitchTimeoutRef.current);
+          glitchTimeoutRef.current = null;
         }
 
         const durationMs = nextStage === 1 ? 1200 : nextStage === 2 ? 1500 : 1800;
-        glitchTimeoutRef.current = window.setTimeout(() => {
-          setGlitchStage(0);
-        }, durationMs);
+        if (nextStage !== 3) {
+          glitchTimeoutRef.current = window.setTimeout(() => {
+            setGlitchStage(0);
+          }, durationMs);
+        }
 
         if (nextStage === 2) {
           toast.warning("Reality fracture detected.");
@@ -421,6 +426,8 @@ function AppContent() {
           setVoidActive(true);
           setVoidTextIndex(0);
           setShowRestore(false);
+          setVoidStartAt(Date.now());
+          setVoidReady(false);
         }
       }
     };
@@ -446,6 +453,21 @@ function AppContent() {
 
   useEffect(() => {
     if (!voidActive) return;
+    const now = Date.now();
+    const delayMs = 3000;
+    if (now - voidStartAt < delayMs) {
+      const timer = window.setTimeout(
+        () => {
+          setVoidReady(true);
+        },
+        delayMs - (now - voidStartAt),
+      );
+      return () => window.clearTimeout(timer);
+    }
+    if (!voidReady) {
+      setVoidReady(true);
+      return;
+    }
     if (voidTextIndex >= voidMessage.length) {
       const timer = window.setTimeout(() => setShowRestore(true), 1200);
       return () => window.clearTimeout(timer);
@@ -454,7 +476,7 @@ function AppContent() {
       setVoidTextIndex((prev) => Math.min(voidMessage.length, prev + 1));
     }, 45);
     return () => window.clearTimeout(timer);
-  }, [voidActive, voidTextIndex, voidMessage.length]);
+  }, [voidActive, voidStartAt, voidReady, voidTextIndex, voidMessage.length]);
 
   return (
     <div
@@ -488,7 +510,7 @@ function AppContent() {
           }`}
         >
           {voidActive && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div className="void-overlay pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
               <div className="pointer-events-auto max-w-xs px-6 py-5 text-center">
                 <p className="text-sm text-white/70">
                   {voidMessage.slice(0, voidTextIndex)}
@@ -501,6 +523,10 @@ function AppContent() {
                       setShowRestore(false);
                       setGlitchStage(0);
                       glitchStageRef.current = 0;
+                      if (glitchTimeoutRef.current) {
+                        window.clearTimeout(glitchTimeoutRef.current);
+                        glitchTimeoutRef.current = null;
+                      }
                     }}
                     className="mt-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:border-white/40 hover:bg-white/15"
                   >

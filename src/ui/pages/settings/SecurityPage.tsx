@@ -177,7 +177,7 @@ export function SecurityPage() {
                       </span>
                     </div>
                     <div className="mt-0.5 text-[11px] text-white/50">
-                      Disable the shake-triggered distortion
+                      Disable the shake-triggered visuals
                     </div>
                   </div>
                   <div className="flex items-center">

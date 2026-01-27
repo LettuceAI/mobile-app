@@ -127,6 +127,13 @@
   animation: fall-down 1.1s ease-in forwards;
 }
 
+.app-glitch-3 .app-fall-target .void-overlay,
+.app-glitch-3 .app-fall-target .void-overlay * {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
 @keyframes rocket-launch {
   0% {
     opacity: 0;
