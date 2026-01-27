@@ -32,6 +32,7 @@ import {
   generateExportFilenameWithFormat,
   type CharacterFileFormat,
 } from "../../../core/storage/characterTransfer";
+import { exportPersona, generateExportFilename } from "../../../core/storage/personaTransfer";
 import { listen } from "@tauri-apps/api/event";
 
 type FilterOption = "All" | "Characters" | "Personas" | "Lorebooks";
@@ -183,6 +184,21 @@ export function LibraryPage() {
     setExportTarget(selectedItem);
     setSelectedItem(null);
     setExportMenuOpen(true);
+  };
+
+  const handlePersonaExport = async () => {
+    if (!selectedItem || selectedItem.itemType !== "persona") return;
+    try {
+      setExporting(true);
+      const exportJson = await exportPersona(selectedItem.id);
+      const filename = generateExportFilename(getItemName(selectedItem));
+      await downloadJson(exportJson, filename);
+      setSelectedItem(null);
+    } catch (err) {
+      console.error("Failed to export persona:", err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleExportFormat = async (format: CharacterFileFormat) => {
@@ -371,6 +387,21 @@ export function LibraryPage() {
                 </div>
                 <span className="text-sm font-medium text-blue-300">
                   {exporting ? "Exporting..." : "Export Character"}
+                </span>
+              </button>
+            )}
+
+            {selectedItem.itemType === "persona" && (
+              <button
+                onClick={handlePersonaExport}
+                disabled={exporting}
+                className="flex w-full items-center gap-3 rounded-xl border border-blue-400/30 bg-blue-400/10 px-4 py-3 text-left transition hover:border-blue-400/50 hover:bg-blue-400/20 disabled:opacity-50"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-400/30 bg-blue-400/20">
+                  <Download className="h-4 w-4 text-blue-400" />
+                </div>
+                <span className="text-sm font-medium text-blue-300">
+                  {exporting ? "Exporting..." : "Export Persona"}
                 </span>
               </button>
             )}
