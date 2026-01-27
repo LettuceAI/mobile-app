@@ -1,652 +1,720 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search, GripVertical, X } from "lucide-react";
-import { motion, type PanInfo } from "framer-motion";
+import { motion, type PanInfo, useDragControls } from "framer-motion";
 import type { Lorebook, LorebookEntry } from "../../../core/storage/schemas";
 import {
-    listLorebooks,
-    listLorebookEntries,
-    createBlankLorebookEntry,
-    saveLorebookEntry,
-    deleteLorebookEntry,
-    reorderLorebookEntries,
-    saveLorebook,
+  listLorebooks,
+  listLorebookEntries,
+  createBlankLorebookEntry,
+  saveLorebookEntry,
+  deleteLorebookEntry,
+  reorderLorebookEntries,
+  saveLorebook,
 } from "../../../core/storage/repo";
 import { BottomMenu, MenuButton } from "../../components";
 import { TopNav } from "../../components/App";
 
+const DRAG_HOLD_MS = 2000;
+
 function KeywordTagInput({
-    keywords,
-    onChange,
-    caseSensitive,
-    onCaseSensitiveChange,
+  keywords,
+  onChange,
+  caseSensitive,
+  onCaseSensitiveChange,
 }: {
-    keywords: string[];
-    onChange: (keywords: string[]) => void;
-    caseSensitive: boolean;
-    onCaseSensitiveChange: (caseSensitive: boolean) => void;
+  keywords: string[];
+  onChange: (keywords: string[]) => void;
+  caseSensitive: boolean;
+  onCaseSensitiveChange: (caseSensitive: boolean) => void;
 }) {
-    const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState("");
 
-    const addKeyword = () => {
-        const newKeyword = inputValue.trim();
-        if (newKeyword && !keywords.includes(newKeyword)) {
-            onChange([...keywords, newKeyword]);
-            setInputValue("");
-        }
-    };
+  const addKeyword = () => {
+    const newKeyword = inputValue.trim();
+    if (newKeyword && !keywords.includes(newKeyword)) {
+      onChange([...keywords, newKeyword]);
+      setInputValue("");
+    }
+  };
 
-    const removeKeyword = (index: number) => {
-        onChange(keywords.filter((_, i) => i !== index));
-    };
+  const removeKeyword = (index: number) => {
+    onChange(keywords.filter((_, i) => i !== index));
+  };
 
-    return (
-        <div className="space-y-3">
-            <div className="flex items-center justify-between">
-                <label className="text-[11px] font-medium text-white/70">KEYWORDS</label>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-white/50">Case sensitive</span>
-                    <label
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${caseSensitive ? "bg-emerald-500" : "bg-white/20"
-                            }`}
-                    >
-                        <input
-                            type="checkbox"
-                            checked={caseSensitive}
-                            onChange={(e) => onCaseSensitiveChange(e.target.checked)}
-                            className="sr-only"
-                        />
-                        <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${caseSensitive ? "translate-x-4" : "translate-x-0"
-                                }`}
-                        />
-                    </label>
-                </div>
-            </div>
-
-            <div className="flex gap-2">
-                <input
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    placeholder="Type a keyword..."
-                    className="flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                />
-                <button
-                    type="button"
-                    onClick={addKeyword}
-                    disabled={!inputValue.trim()}
-                    className="rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    Add
-                </button>
-            </div>
-
-            {keywords.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                    {keywords.map((keyword, index) => (
-                        <button
-                            key={`${keyword}-${index}`}
-                            type="button"
-                            onClick={() => removeKeyword(index)}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-white/10 pl-3 pr-2 py-1.5 text-sm text-white active:bg-white/20 transition"
-                        >
-                            {keyword}
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10">
-                                <X size={12} className="text-white/70" />
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            )}
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-medium text-white/70">KEYWORDS</label>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/50">Case sensitive</span>
+          <label
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${
+              caseSensitive ? "bg-emerald-500" : "bg-white/20"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={caseSensitive}
+              onChange={(e) => onCaseSensitiveChange(e.target.checked)}
+              className="sr-only"
+            />
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                caseSensitive ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </label>
         </div>
-    );
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder="Type a keyword..."
+          className="flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={addKeyword}
+          disabled={!inputValue.trim()}
+          className="rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Add
+        </button>
+      </div>
+
+      {keywords.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {keywords.map((keyword, index) => (
+            <button
+              key={`${keyword}-${index}`}
+              type="button"
+              onClick={() => removeKeyword(index)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/10 pl-3 pr-2 py-1.5 text-sm text-white active:bg-white/20 transition"
+            >
+              {keyword}
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10">
+                <X size={12} className="text-white/70" />
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function EntryEditorMenu({
-    entry,
-    isOpen,
-    onClose,
-    onSave,
+  entry,
+  isOpen,
+  onClose,
+  onSave,
 }: {
-    entry: LorebookEntry | null;
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (entry: LorebookEntry) => void;
+  entry: LorebookEntry | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (entry: LorebookEntry) => void;
 }) {
-    const [draft, setDraft] = useState<LorebookEntry | null>(null);
+  const [draft, setDraft] = useState<LorebookEntry | null>(null);
 
-    useEffect(() => {
-        if (entry) {
-            setDraft({ ...entry });
-        }
-    }, [entry]);
+  useEffect(() => {
+    if (entry) {
+      setDraft({ ...entry });
+    }
+  }, [entry]);
 
-    if (!draft) return null;
+  if (!draft) return null;
 
-    const handleSave = () => {
-        onSave(draft);
-        onClose();
-    };
+  const handleSave = () => {
+    onSave(draft);
+    onClose();
+  };
 
-    return (
-        <BottomMenu isOpen={isOpen} onClose={onClose} title="Edit Entry">
-            <div className="space-y-4">
-                {/* Title */}
-                <div className="space-y-2">
-                    <label className="text-[11px] font-medium text-white/70">TITLE</label>
-                    <input
-                        value={draft.title || ""}
-                        onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                        placeholder="Name this entry..."
-                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                    />
-                </div>
+  return (
+    <BottomMenu isOpen={isOpen} onClose={onClose} title="Edit Entry">
+      <div className="space-y-4">
+        {/* Title */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-medium text-white/70">TITLE</label>
+          <input
+            value={draft.title || ""}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            placeholder="Name this entry..."
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+          />
+        </div>
 
-                {/* Toggles */}
-                <div className="flex gap-3">
-                    <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-3 flex-1">
-                        <div>
-                            <label className="block text-sm font-semibold text-white">Enabled</label>
-                            <p className="mt-0.5 text-xs text-gray-400">Include in prompts</p>
-                        </div>
-                        <label
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${draft.enabled ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
-                                }`}
-                        >
-                            <input
-                                type="checkbox"
-                                checked={draft.enabled}
-                                onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-                                className="sr-only"
-                            />
-                            <span
-                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${draft.enabled ? "translate-x-5" : "translate-x-0"
-                                    }`}
-                            />
-                        </label>
-                    </div>
-
-                    <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-3 flex-1">
-                        <div>
-                            <label className="block text-sm font-semibold text-white">Always On</label>
-                            <p className="mt-0.5 text-xs text-gray-400">No keywords needed</p>
-                        </div>
-                        <label
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${draft.alwaysActive ? "bg-blue-500 shadow-lg shadow-blue-500/30" : "bg-white/20"
-                                }`}
-                        >
-                            <input
-                                type="checkbox"
-                                checked={draft.alwaysActive}
-                                onChange={(e) => setDraft({ ...draft, alwaysActive: e.target.checked })}
-                                className="sr-only"
-                            />
-                            <span
-                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${draft.alwaysActive ? "translate-x-5" : "translate-x-0"
-                                    }`}
-                            />
-                        </label>
-                    </div>
-                </div>
-
-                {/* Keywords */}
-                {!draft.alwaysActive && (
-                    <KeywordTagInput
-                        keywords={draft.keywords}
-                        onChange={(keywords) => setDraft({ ...draft, keywords })}
-                        caseSensitive={draft.caseSensitive}
-                        onCaseSensitiveChange={(caseSensitive) => setDraft({ ...draft, caseSensitive })}
-                    />
-                )}
-
-                {/* Content */}
-                <div className="space-y-2">
-                    <label className="text-[11px] font-medium text-white/70">CONTENT</label>
-                    <textarea
-                        value={draft.content}
-                        onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-                        placeholder="Write the lore context here..."
-                        rows={8}
-                        className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                    />
-                </div>
-
-                {/* Save Button */}
-                <button
-                    onClick={handleSave}
-                    disabled={
-                        !draft.title?.trim() ||
-                        !draft.content?.trim() ||
-                        (!draft.alwaysActive && draft.keywords.length === 0)
-                    }
-                    className="w-full rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-3.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    Save Entry
-                </button>
+        {/* Toggles */}
+        <div className="flex gap-3">
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-3 flex-1">
+            <div>
+              <label className="block text-sm font-semibold text-white">Enabled</label>
+              <p className="mt-0.5 text-xs text-gray-400">Include in prompts</p>
             </div>
-        </BottomMenu>
-    );
+            <label
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${
+                draft.enabled ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={draft.enabled}
+                onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+                className="sr-only"
+              />
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                  draft.enabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </label>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-[#0b0c12]/90 p-3 flex-1">
+            <div>
+              <label className="block text-sm font-semibold text-white">Always On</label>
+              <p className="mt-0.5 text-xs text-gray-400">No keywords needed</p>
+            </div>
+            <label
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${
+                draft.alwaysActive ? "bg-blue-500 shadow-lg shadow-blue-500/30" : "bg-white/20"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={draft.alwaysActive}
+                onChange={(e) => setDraft({ ...draft, alwaysActive: e.target.checked })}
+                className="sr-only"
+              />
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                  draft.alwaysActive ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Keywords */}
+        {!draft.alwaysActive && (
+          <KeywordTagInput
+            keywords={draft.keywords}
+            onChange={(keywords) => setDraft({ ...draft, keywords })}
+            caseSensitive={draft.caseSensitive}
+            onCaseSensitiveChange={(caseSensitive) => setDraft({ ...draft, caseSensitive })}
+          />
+        )}
+
+        {/* Content */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-medium text-white/70">CONTENT</label>
+          <textarea
+            value={draft.content}
+            onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+            placeholder="Write the lore context here..."
+            rows={8}
+            className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+          />
+        </div>
+
+        {/* Save Button */}
+        <button
+          onClick={handleSave}
+          disabled={
+            !draft.title?.trim() ||
+            !draft.content?.trim() ||
+            (!draft.alwaysActive && draft.keywords.length === 0)
+          }
+          className="w-full rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-3.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Save Entry
+        </button>
+      </div>
+    </BottomMenu>
+  );
+}
+
+function EntryListItem({
+  entry,
+  originalIndex,
+  isDragging,
+  onDrag,
+  onDragEnd,
+  onSelect,
+}: {
+  entry: LorebookEntry;
+  originalIndex: number;
+  isDragging: boolean;
+  onDrag: (fromIndex: number, info: { offset: { y: number } }) => void;
+  onDragEnd: (fromIndex: number, info: PanInfo) => void;
+  onSelect: (entry: LorebookEntry) => void;
+}) {
+  const controls = useDragControls();
+  const dragTimeoutRef = useRef<number | null>(null);
+
+  const scheduleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.persist?.();
+    if (event.pointerType === "mouse") {
+      controls.start(event);
+      return;
+    }
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+    }
+    dragTimeoutRef.current = window.setTimeout(() => {
+      dragTimeoutRef.current = null;
+      controls.start(event);
+    }, DRAG_HOLD_MS);
+  };
+
+  const cancelDragStart = () => {
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+  };
+
+  const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
+  const displaySubtitle = entry.alwaysActive
+    ? "Always active"
+    : entry.keywords.length > 0
+      ? entry.keywords.slice(0, 3).join(", ") + (entry.keywords.length > 3 ? "..." : "")
+      : "No keywords";
+
+  return (
+    <motion.div
+      layout
+      layoutId={entry.id}
+      drag="y"
+      dragListener={false}
+      dragControls={controls}
+      dragElastic={0.15}
+      dragMomentum={false}
+      dragSnapToOrigin
+      dragTransition={{ bounceStiffness: 300, bounceDamping: 25 }}
+      onDrag={(_, info) => onDrag(originalIndex, info)}
+      onDragEnd={(_, info) => onDragEnd(originalIndex, info)}
+      whileDrag={{ scale: 1.03, zIndex: 50, boxShadow: "0 15px 40px rgba(0,0,0,0.5)" }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className={`group relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2 py-3 ${isDragging ? "opacity-0" : "cursor-grab active:cursor-grabbing"} ${
+        entry.enabled
+          ? "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
+          : "border-white/10 bg-[#0b0c12]/60 opacity-60 hover:opacity-80"
+      }`}
+    >
+      <button
+        onPointerDown={scheduleDragStart}
+        onPointerUp={cancelDragStart}
+        onPointerLeave={cancelDragStart}
+        onPointerCancel={cancelDragStart}
+        className="flex h-10 w-8 shrink-0 items-center justify-center text-white/30"
+        title="Drag to reorder"
+      >
+        <GripVertical size={18} />
+      </button>
+
+      <button
+        onClick={() => onSelect(entry)}
+        className="flex flex-1 items-center gap-3 text-left active:scale-[0.995]"
+      >
+        <div
+          className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${
+            entry.enabled
+              ? entry.alwaysActive
+                ? "border-blue-400/40 bg-blue-400/20"
+                : "border-emerald-400/40 bg-emerald-400/20"
+              : "border-white/10 bg-white/5"
+          }`}
+        >
+          <BookOpen
+            className={`h-5 w-5 ${
+              entry.enabled
+                ? entry.alwaysActive
+                  ? "text-blue-200"
+                  : "text-emerald-200"
+                : "text-white/40"
+            }`}
+          />
+        </div>
+
+        <div className="relative min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-white">{displayTitle}</h3>
+            {!entry.enabled && (
+              <span className="text-[10px] uppercase tracking-wide text-white/40">Disabled</span>
+            )}
+          </div>
+          <p className="line-clamp-1 text-xs text-gray-400">{displaySubtitle}</p>
+        </div>
+
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white transition">
+          <ChevronRight size={16} />
+        </span>
+      </button>
+    </motion.div>
+  );
 }
 
 export function StandaloneLorebookEditor() {
-    const { lorebookId } = useParams<{ lorebookId: string }>();
-    const navigate = useNavigate();
+  const { lorebookId } = useParams<{ lorebookId: string }>();
+  const navigate = useNavigate();
 
-    const [lorebook, setLorebook] = useState<Lorebook | null>(null);
-    const [entries, setEntries] = useState<LorebookEntry[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [editingEntry, setEditingEntry] = useState<LorebookEntry | null>(null);
-    const [selectedEntry, setSelectedEntry] = useState<LorebookEntry | null>(null);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [dragState, setDragState] = useState<{ fromIndex: number; toIndex: number } | null>(null);
+  const [lorebook, setLorebook] = useState<Lorebook | null>(null);
+  const [entries, setEntries] = useState<LorebookEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [editingEntry, setEditingEntry] = useState<LorebookEntry | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<LorebookEntry | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dragState, setDragState] = useState<{ fromIndex: number; toIndex: number } | null>(null);
 
-    // Rename lorebook state
-    const [showRenameMenu, setShowRenameMenu] = useState(false);
-    const [newName, setNewName] = useState("");
-    const [isCreatingEntry, setIsCreatingEntry] = useState(false);
+  // Rename lorebook state
+  const [showRenameMenu, setShowRenameMenu] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [isCreatingEntry, setIsCreatingEntry] = useState(false);
 
-    useEffect(() => {
-        loadData();
-    }, [lorebookId]);
+  useEffect(() => {
+    loadData();
+  }, [lorebookId]);
 
-    const loadData = async () => {
+  const loadData = async () => {
+    if (!lorebookId) return;
+    try {
+      setIsLoading(true);
+      const [allLorebooks, ent] = await Promise.all([
+        listLorebooks(),
+        listLorebookEntries(lorebookId),
+      ]);
+      const lb = allLorebooks.find((l) => l.id === lorebookId) ?? null;
+      setLorebook(lb);
+      setEntries(ent);
+    } catch (error) {
+      console.error("Failed to load lorebook:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Listen for add event from plus button
+  useEffect(() => {
+    const handleAdd = () => handleCreateEntry();
+    window.addEventListener("lorebook:add", handleAdd);
+    return () => window.removeEventListener("lorebook:add", handleAdd);
+  }, [lorebookId]);
+
+  const handleCreateEntry = () => {
+    setIsCreatingEntry(true);
+    // Temporary placeholder entry for the editor
+    setEditingEntry({
+      id: "", // Will be assigned on save
+      lorebookId: lorebookId || "",
+      title: "",
+      content: "",
+      keywords: [],
+      enabled: true,
+      alwaysActive: false,
+      caseSensitive: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      displayOrder: entries.length,
+      priority: 0,
+    });
+  };
+
+  const handleSaveEntry = async (entry: LorebookEntry) => {
+    try {
+      if (isCreatingEntry) {
         if (!lorebookId) return;
-        try {
-            setIsLoading(true);
-            const [allLorebooks, ent] = await Promise.all([
-                listLorebooks(),
-                listLorebookEntries(lorebookId),
-            ]);
-            const lb = allLorebooks.find(l => l.id === lorebookId) ?? null;
-            setLorebook(lb);
-            setEntries(ent);
-        } catch (error) {
-            console.error("Failed to load lorebook:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        // Create brand new entry with the data
+        const created = await createBlankLorebookEntry(lorebookId);
+        const fullEntry = {
+          ...created,
+          title: entry.title,
+          content: entry.content,
+          keywords: entry.keywords,
+          enabled: entry.enabled,
+          alwaysActive: entry.alwaysActive,
+          caseSensitive: entry.caseSensitive,
+        };
+        await saveLorebookEntry(fullEntry);
+        setEntries((prev) => [...prev, fullEntry]);
+        setIsCreatingEntry(false);
+      } else {
+        await saveLorebookEntry(entry);
+        setEntries((prev) => prev.map((e) => (e.id === entry.id ? entry : e)));
+      }
+    } catch (error) {
+      console.error("Failed to save entry:", error);
+    }
+  };
 
-    // Listen for add event from plus button
-    useEffect(() => {
-        const handleAdd = () => handleCreateEntry();
-        window.addEventListener("lorebook:add", handleAdd);
-        return () => window.removeEventListener("lorebook:add", handleAdd);
-    }, [lorebookId]);
+  const handleDeleteEntry = async (id: string) => {
+    try {
+      await deleteLorebookEntry(id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+    } catch (error) {
+      console.error("Failed to delete entry:", error);
+    }
+  };
 
-    const handleCreateEntry = () => {
-        setIsCreatingEntry(true);
-        // Temporary placeholder entry for the editor
-        setEditingEntry({
-            id: "", // Will be assigned on save
-            lorebookId: lorebookId || "",
-            title: "",
-            content: "",
-            keywords: [],
-            enabled: true,
-            alwaysActive: false,
-            caseSensitive: false,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            displayOrder: entries.length,
-            priority: 0,
-        });
-    };
+  const handleToggleEntry = async (entry: LorebookEntry, enabled: boolean) => {
+    try {
+      const updated = { ...entry, enabled };
+      await saveLorebookEntry(updated);
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, enabled } : e)));
+    } catch (error) {
+      console.error("Failed to toggle entry:", error);
+    }
+  };
 
-    const handleSaveEntry = async (entry: LorebookEntry) => {
-        try {
-            if (isCreatingEntry) {
-                if (!lorebookId) return;
-                // Create brand new entry with the data
-                const created = await createBlankLorebookEntry(lorebookId);
-                const fullEntry = {
-                    ...created,
-                    title: entry.title,
-                    content: entry.content,
-                    keywords: entry.keywords,
-                    enabled: entry.enabled,
-                    alwaysActive: entry.alwaysActive,
-                    caseSensitive: entry.caseSensitive,
-                };
-                await saveLorebookEntry(fullEntry);
-                setEntries((prev) => [...prev, fullEntry]);
-                setIsCreatingEntry(false);
-            } else {
-                await saveLorebookEntry(entry);
-                setEntries((prev) => prev.map((e) => (e.id === entry.id ? entry : e)));
-            }
-        } catch (error) {
-            console.error("Failed to save entry:", error);
-        }
-    };
+  const handleReorderEntries = async (reorderedEntries: LorebookEntry[]) => {
+    try {
+      const updates = reorderedEntries.map((e, i) => [e.id, i] as [string, number]);
+      await reorderLorebookEntries(updates);
+      setEntries(reorderedEntries.map((e, i) => ({ ...e, displayOrder: i })));
+    } catch (error) {
+      console.error("Failed to reorder entries:", error);
+    }
+  };
 
-    const handleDeleteEntry = async (id: string) => {
-        try {
-            await deleteLorebookEntry(id);
-            setEntries((prev) => prev.filter((e) => e.id !== id));
-        } catch (error) {
-            console.error("Failed to delete entry:", error);
-        }
-    };
+  const handleRename = async () => {
+    if (!lorebook || !newName.trim()) return;
+    try {
+      const updated = { ...lorebook, name: newName.trim() };
+      await saveLorebook(updated);
+      setLorebook(updated);
+      setShowRenameMenu(false);
+      setNewName("");
+    } catch (error) {
+      console.error("Failed to rename lorebook:", error);
+    }
+  };
 
-    const handleToggleEntry = async (entry: LorebookEntry, enabled: boolean) => {
-        try {
-            const updated = { ...entry, enabled };
-            await saveLorebookEntry(updated);
-            setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, enabled } : e)));
-        } catch (error) {
-            console.error("Failed to toggle entry:", error);
-        }
-    };
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) return entries;
+    const query = searchQuery.toLowerCase();
+    return entries.filter((e) => {
+      const title = e.title?.toLowerCase() || "";
+      const content = e.content?.toLowerCase() || "";
+      const keywords = e.keywords.map((k) => k.toLowerCase()).join(" ");
+      return title.includes(query) || content.includes(query) || keywords.includes(query);
+    });
+  }, [entries, searchQuery]);
 
-    const handleReorderEntries = async (reorderedEntries: LorebookEntry[]) => {
-        try {
-            const updates = reorderedEntries.map((e, i) => [e.id, i] as [string, number]);
-            await reorderLorebookEntries(updates);
-            setEntries(reorderedEntries.map((e, i) => ({ ...e, displayOrder: i })));
-        } catch (error) {
-            console.error("Failed to reorder entries:", error);
-        }
-    };
+  const displayEntries = useMemo(() => {
+    if (!dragState || dragState.fromIndex === dragState.toIndex) {
+      return filteredEntries;
+    }
+    const result = [...filteredEntries];
+    const [removed] = result.splice(dragState.fromIndex, 1);
+    result.splice(dragState.toIndex, 0, removed);
+    return result;
+  }, [filteredEntries, dragState]);
 
-    const handleRename = async () => {
-        if (!lorebook || !newName.trim()) return;
-        try {
-            const updated = { ...lorebook, name: newName.trim() };
-            await saveLorebook(updated);
-            setLorebook(updated);
+  const handleDrag = (fromIndex: number, info: { offset: { y: number } }) => {
+    const offsetSlots = Math.round(info.offset.y / 70);
+    const toIndex = Math.max(0, Math.min(entries.length - 1, fromIndex + offsetSlots));
+    setDragState({ fromIndex, toIndex });
+  };
+
+  const handleDragEnd = (fromIndex: number, info: PanInfo) => {
+    const offsetSlots = Math.round(info.offset.y / 70);
+    const toIndex = Math.max(0, Math.min(entries.length - 1, fromIndex + offsetSlots));
+
+    if (fromIndex !== toIndex) {
+      const reordered = [...entries];
+      const [removed] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, removed);
+      handleReorderEntries(reordered);
+    }
+    setDragState(null);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050505]">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-white/60" />
+      </div>
+    );
+  }
+
+  if (!lorebook) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] px-4">
+        <div className="text-center">
+          <p className="text-lg text-white">Lorebook not found</p>
+          <button
+            onClick={() => navigate("/library")}
+            className="mt-4 text-sm text-white/60 hover:text-white"
+          >
+            Back to Library
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <TopNav
+        currentPath="/library/lorebooks"
+        titleOverride={`Lorebook - ${lorebook.name}`}
+        onBackOverride={() => navigate("/library")}
+      />
+      <div className="flex h-full flex-col text-gray-200 overflow-hidden pb-6 pt-[calc(72px+env(safe-area-inset-top))]">
+        {/* Search */}
+        {entries.length > 0 && (
+          <div className="px-4 py-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search entries..."
+                className="w-full rounded-xl border border-white/10 bg-black/20 pl-9 pr-4 py-2 text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Entry List */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6">
+          {entries.length === 0 ? (
+            <div className="flex h-64 flex-col items-center justify-center">
+              <BookOpen className="mb-3 h-12 w-12 text-white/20" />
+              <h3 className="mb-1 text-lg font-medium text-white">No entries yet</h3>
+              <p className="mb-4 text-center text-sm text-white/50">
+                Add entries to inject lore into your chats
+              </p>
+              <button
+                onClick={handleCreateEntry}
+                className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30"
+              >
+                Create Entry
+              </button>
+            </div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="flex h-32 flex-col items-center justify-center text-white/50">
+              <p>No matching entries found</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {displayEntries.map((entry) => {
+                const originalIndex = filteredEntries.findIndex((e) => e.id === entry.id);
+                const isDragging = dragState?.fromIndex === originalIndex;
+
+                return (
+                  <EntryListItem
+                    key={entry.id}
+                    entry={entry}
+                    originalIndex={originalIndex}
+                    isDragging={isDragging}
+                    onDrag={handleDrag}
+                    onDragEnd={handleDragEnd}
+                    onSelect={setSelectedEntry}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </main>
+
+        {/* Entry Actions Menu */}
+        <BottomMenu
+          isOpen={Boolean(selectedEntry)}
+          onClose={() => setSelectedEntry(null)}
+          title={selectedEntry?.title || selectedEntry?.keywords[0] || "Entry"}
+        >
+          {selectedEntry && (
+            <div className="space-y-2">
+              <MenuButton
+                icon={Edit2}
+                title="Edit Entry"
+                description="Modify title, keywords, and content"
+                color="from-blue-500 to-blue-600"
+                onClick={() => {
+                  setEditingEntry(selectedEntry);
+                  setSelectedEntry(null);
+                }}
+              />
+
+              <MenuButton
+                icon={Star}
+                title={selectedEntry.enabled ? "Disable Entry" : "Enable Entry"}
+                description={
+                  selectedEntry.enabled
+                    ? "Entry won't be injected into prompts"
+                    : "Entry will be injected when keywords match"
+                }
+                color="from-emerald-500 to-emerald-600"
+                onClick={() => {
+                  handleToggleEntry(selectedEntry, !selectedEntry.enabled);
+                  setSelectedEntry(null);
+                }}
+              />
+
+              <button
+                onClick={() => {
+                  if (confirm("Delete this entry?")) {
+                    handleDeleteEntry(selectedEntry.id);
+                    setSelectedEntry(null);
+                  }
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/20">
+                  <Trash2 className="h-4 w-4 text-red-400" />
+                </div>
+                <span className="text-sm font-medium text-red-300">Delete Entry</span>
+              </button>
+            </div>
+          )}
+        </BottomMenu>
+
+        {/* Entry Editor */}
+        <EntryEditorMenu
+          entry={editingEntry}
+          isOpen={Boolean(editingEntry)}
+          onClose={() => {
+            setEditingEntry(null);
+            setIsCreatingEntry(false);
+          }}
+          onSave={handleSaveEntry}
+        />
+
+        {/* Rename Menu */}
+        <BottomMenu
+          isOpen={showRenameMenu}
+          onClose={() => {
             setShowRenameMenu(false);
             setNewName("");
-        } catch (error) {
-            console.error("Failed to rename lorebook:", error);
-        }
-    };
-
-    const filteredEntries = useMemo(() => {
-        if (!searchQuery.trim()) return entries;
-        const query = searchQuery.toLowerCase();
-        return entries.filter(e => {
-            const title = e.title?.toLowerCase() || "";
-            const content = e.content?.toLowerCase() || "";
-            const keywords = e.keywords.map(k => k.toLowerCase()).join(" ");
-            return title.includes(query) || content.includes(query) || keywords.includes(query);
-        });
-    }, [entries, searchQuery]);
-
-    const displayEntries = useMemo(() => {
-        if (!dragState || dragState.fromIndex === dragState.toIndex) {
-            return filteredEntries;
-        }
-        const result = [...filteredEntries];
-        const [removed] = result.splice(dragState.fromIndex, 1);
-        result.splice(dragState.toIndex, 0, removed);
-        return result;
-    }, [filteredEntries, dragState]);
-
-    const handleDrag = (fromIndex: number, info: { offset: { y: number } }) => {
-        const offsetSlots = Math.round(info.offset.y / 70);
-        const toIndex = Math.max(0, Math.min(entries.length - 1, fromIndex + offsetSlots));
-        setDragState({ fromIndex, toIndex });
-    };
-
-    const handleDragEnd = (fromIndex: number, info: PanInfo) => {
-        const offsetSlots = Math.round(info.offset.y / 70);
-        const toIndex = Math.max(0, Math.min(entries.length - 1, fromIndex + offsetSlots));
-
-        if (fromIndex !== toIndex) {
-            const reordered = [...entries];
-            const [removed] = reordered.splice(fromIndex, 1);
-            reordered.splice(toIndex, 0, removed);
-            handleReorderEntries(reordered);
-        }
-        setDragState(null);
-    };
-
-    if (isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-[#050505]">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-white/60" />
+          }}
+          title="Rename Lorebook"
+        >
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[11px] font-medium text-white/70">NAME</label>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleRename()}
+                placeholder="Enter lorebook name..."
+                autoFocus
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
+              />
             </div>
-        );
-    }
 
-    if (!lorebook) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-[#050505] px-4">
-                <div className="text-center">
-                    <p className="text-lg text-white">Lorebook not found</p>
-                    <button
-                        onClick={() => navigate("/library")}
-                        className="mt-4 text-sm text-white/60 hover:text-white"
-                    >
-                        Back to Library
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <>
-            <TopNav
-                currentPath="/library/lorebooks"
-                titleOverride={`Lorebook - ${lorebook.name}`}
-                onBackOverride={() => navigate("/library")}
-            />
-            <div className="flex h-full flex-col text-gray-200 overflow-hidden pb-6 pt-[calc(72px+env(safe-area-inset-top))]">
-
-
-                {/* Search */}
-                {entries.length > 0 && (
-                    <div className="px-4 py-3">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-                            <input
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search entries..."
-                                className="w-full rounded-xl border border-white/10 bg-black/20 pl-9 pr-4 py-2 text-sm text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Entry List */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6">
-                    {entries.length === 0 ? (
-                        <div className="flex h-64 flex-col items-center justify-center">
-                            <BookOpen className="mb-3 h-12 w-12 text-white/20" />
-                            <h3 className="mb-1 text-lg font-medium text-white">No entries yet</h3>
-                            <p className="mb-4 text-center text-sm text-white/50">
-                                Add entries to inject lore into your chats
-                            </p>
-                            <button
-                                onClick={handleCreateEntry}
-                                className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-6 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/30"
-                            >
-                                Create Entry
-                            </button>
-                        </div>
-                    ) : filteredEntries.length === 0 ? (
-                        <div className="flex h-32 flex-col items-center justify-center text-white/50">
-                            <p>No matching entries found</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {displayEntries.map((entry) => {
-                                const originalIndex = filteredEntries.findIndex(e => e.id === entry.id);
-                                const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
-                                const displaySubtitle = entry.alwaysActive
-                                    ? "Always active"
-                                    : entry.keywords.length > 0
-                                        ? entry.keywords.slice(0, 3).join(", ") + (entry.keywords.length > 3 ? "..." : "")
-                                        : "No keywords";
-                                const isDragging = dragState?.fromIndex === originalIndex;
-
-                                return (
-                                    <motion.div
-                                        key={entry.id}
-                                        layout
-                                        layoutId={entry.id}
-                                        drag="y"
-                                        dragElastic={0.15}
-                                        dragMomentum={false}
-                                        dragSnapToOrigin
-                                        dragTransition={{ bounceStiffness: 300, bounceDamping: 25 }}
-                                        onDrag={(_, info) => handleDrag(originalIndex, info)}
-                                        onDragEnd={(_, info) => handleDragEnd(originalIndex, info)}
-                                        whileDrag={{ scale: 1.03, zIndex: 50, boxShadow: "0 15px 40px rgba(0,0,0,0.5)" }}
-                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                        className={`group relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2 py-3 ${isDragging ? "opacity-0" : "cursor-grab active:cursor-grabbing"} ${entry.enabled
-                                            ? "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
-                                            : "border-white/10 bg-[#0b0c12]/60 opacity-60 hover:opacity-80"
-                                            }`}
-                                    >
-                                        {/* Drag Handle */}
-                                        <div className="flex h-10 w-8 shrink-0 items-center justify-center text-white/30">
-                                            <GripVertical size={18} />
-                                        </div>
-
-                                        {/* Main content */}
-                                        <button
-                                            onClick={() => setSelectedEntry(entry)}
-                                            className="flex flex-1 items-center gap-3 text-left active:scale-[0.995]"
-                                        >
-                                            {/* Enable indicator */}
-                                            <div
-                                                className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${entry.enabled
-                                                    ? entry.alwaysActive
-                                                        ? "border-blue-400/40 bg-blue-400/20"
-                                                        : "border-emerald-400/40 bg-emerald-400/20"
-                                                    : "border-white/10 bg-white/5"
-                                                    }`}
-                                            >
-                                                <BookOpen
-                                                    className={`h-5 w-5 ${entry.enabled
-                                                        ? entry.alwaysActive
-                                                            ? "text-blue-200"
-                                                            : "text-emerald-200"
-                                                        : "text-white/40"
-                                                        }`}
-                                                />
-                                            </div>
-
-                                            {/* Content */}
-                                            <div className="relative min-w-0 flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <h3 className="truncate text-sm font-semibold text-white">{displayTitle}</h3>
-                                                    {!entry.enabled && (
-                                                        <span className="text-[10px] uppercase tracking-wide text-white/40">
-                                                            Disabled
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="line-clamp-1 text-xs text-gray-400">{displaySubtitle}</p>
-                                            </div>
-
-                                            {/* Chevron */}
-                                            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white transition">
-                                                <ChevronRight size={16} />
-                                            </span>
-                                        </button>
-                                    </motion.div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </main>
-
-                {/* Entry Actions Menu */}
-                <BottomMenu
-                    isOpen={Boolean(selectedEntry)}
-                    onClose={() => setSelectedEntry(null)}
-                    title={selectedEntry?.title || selectedEntry?.keywords[0] || "Entry"}
-                >
-                    {selectedEntry && (
-                        <div className="space-y-2">
-                            <MenuButton
-                                icon={Edit2}
-                                title="Edit Entry"
-                                description="Modify title, keywords, and content"
-                                color="from-blue-500 to-blue-600"
-                                onClick={() => {
-                                    setEditingEntry(selectedEntry);
-                                    setSelectedEntry(null);
-                                }}
-                            />
-
-                            <MenuButton
-                                icon={Star}
-                                title={selectedEntry.enabled ? "Disable Entry" : "Enable Entry"}
-                                description={selectedEntry.enabled ? "Entry won't be injected into prompts" : "Entry will be injected when keywords match"}
-                                color="from-emerald-500 to-emerald-600"
-                                onClick={() => {
-                                    handleToggleEntry(selectedEntry, !selectedEntry.enabled);
-                                    setSelectedEntry(null);
-                                }}
-                            />
-
-                            <button
-                                onClick={() => {
-                                    if (confirm("Delete this entry?")) {
-                                        handleDeleteEntry(selectedEntry.id);
-                                        setSelectedEntry(null);
-                                    }
-                                }}
-                                className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
-                            >
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/20">
-                                    <Trash2 className="h-4 w-4 text-red-400" />
-                                </div>
-                                <span className="text-sm font-medium text-red-300">Delete Entry</span>
-                            </button>
-                        </div>
-                    )}
-                </BottomMenu>
-
-                {/* Entry Editor */}
-                <EntryEditorMenu
-                    entry={editingEntry}
-                    isOpen={Boolean(editingEntry)}
-                    onClose={() => {
-                        setEditingEntry(null);
-                        setIsCreatingEntry(false);
-                    }}
-                    onSave={handleSaveEntry}
-                />
-
-                {/* Rename Menu */}
-                <BottomMenu
-                    isOpen={showRenameMenu}
-                    onClose={() => {
-                        setShowRenameMenu(false);
-                        setNewName("");
-                    }}
-                    title="Rename Lorebook"
-                >
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-[11px] font-medium text-white/70">NAME</label>
-                            <input
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleRename()}
-                                placeholder="Enter lorebook name..."
-                                autoFocus
-                                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition focus:border-white/30 focus:outline-none"
-                            />
-                        </div>
-
-                        <button
-                            onClick={handleRename}
-                            disabled={!newName.trim() || newName.trim() === lorebook.name}
-                            className="w-full rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-3.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Save
-                        </button>
-                    </div>
-                </BottomMenu>
-            </div>
-        </>
-    );
+            <button
+              onClick={handleRename}
+              disabled={!newName.trim() || newName.trim() === lorebook.name}
+              className="w-full rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-3.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save
+            </button>
+          </div>
+        </BottomMenu>
+      </div>
+    </>
+  );
 }

@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useSearchParams, useLocation } from "react-router-dom";
 import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search, GripVertical, X } from "lucide-react";
-import { motion, AnimatePresence, type PanInfo } from "framer-motion";
+import { motion, AnimatePresence, type PanInfo, useDragControls } from "framer-motion";
 import type { Lorebook, LorebookEntry } from "../../../core/storage/schemas";
 import {
   deleteLorebook,
@@ -17,6 +17,8 @@ import {
 } from "../../../core/storage/repo";
 import { BottomMenu, MenuButton } from "../../components";
 import { TopNav } from "../../components/App";
+
+const DRAG_HOLD_MS = 2000;
 
 function KeywordTagInput({
   keywords,
@@ -50,8 +52,9 @@ function KeywordTagInput({
         <div className="flex items-center gap-2">
           <span className="text-xs text-white/50">Case sensitive</span>
           <label
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${caseSensitive ? "bg-emerald-500" : "bg-white/20"
-              }`}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${
+              caseSensitive ? "bg-emerald-500" : "bg-white/20"
+            }`}
           >
             <input
               type="checkbox"
@@ -60,8 +63,9 @@ function KeywordTagInput({
               className="sr-only"
             />
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${caseSensitive ? "translate-x-4" : "translate-x-0"
-                }`}
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                caseSensitive ? "translate-x-4" : "translate-x-0"
+              }`}
             />
           </label>
         </div>
@@ -107,6 +111,127 @@ function KeywordTagInput({
   );
 }
 
+function EntryListItem({
+  entry,
+  originalIndex,
+  isDragging,
+  onDrag,
+  onDragEnd,
+  onSelect,
+}: {
+  entry: LorebookEntry;
+  originalIndex: number;
+  isDragging: boolean;
+  onDrag: (fromIndex: number, info: { offset: { y: number } }) => void;
+  onDragEnd: (fromIndex: number, info: PanInfo) => void;
+  onSelect: (entry: LorebookEntry) => void;
+}) {
+  const controls = useDragControls();
+  const dragTimeoutRef = useRef<number | null>(null);
+
+  const scheduleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.persist?.();
+    if (event.pointerType === "mouse") {
+      controls.start(event);
+      return;
+    }
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+    }
+    dragTimeoutRef.current = window.setTimeout(() => {
+      dragTimeoutRef.current = null;
+      controls.start(event);
+    }, DRAG_HOLD_MS);
+  };
+
+  const cancelDragStart = () => {
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+  };
+
+  const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
+  const displaySubtitle = entry.alwaysActive
+    ? "Always active"
+    : entry.keywords.length > 0
+      ? entry.keywords.slice(0, 3).join(", ") + (entry.keywords.length > 3 ? "..." : "")
+      : "No keywords";
+
+  return (
+    <motion.div
+      layout
+      layoutId={entry.id}
+      drag="y"
+      dragListener={false}
+      dragControls={controls}
+      dragElastic={0.15}
+      dragMomentum={false}
+      dragSnapToOrigin
+      dragTransition={{ bounceStiffness: 300, bounceDamping: 25 }}
+      onDrag={(_, info) => onDrag(originalIndex, info)}
+      onDragEnd={(_, info) => onDragEnd(originalIndex, info)}
+      whileDrag={{ scale: 1.03, zIndex: 50, boxShadow: "0 15px 40px rgba(0,0,0,0.5)" }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className={`group relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2 py-3 ${isDragging ? "opacity-0" : "cursor-grab active:cursor-grabbing"} ${
+        entry.enabled
+          ? "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
+          : "border-white/10 bg-[#0b0c12]/60 opacity-60 hover:opacity-80"
+      }`}
+    >
+      <button
+        onPointerDown={scheduleDragStart}
+        onPointerUp={cancelDragStart}
+        onPointerLeave={cancelDragStart}
+        onPointerCancel={cancelDragStart}
+        className="flex h-10 w-8 shrink-0 items-center justify-center text-white/30"
+        title="Drag to reorder"
+      >
+        <GripVertical size={18} />
+      </button>
+
+      <button
+        onClick={() => onSelect(entry)}
+        className="flex flex-1 items-center gap-3 text-left active:scale-[0.995]"
+      >
+        <div
+          className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${
+            entry.enabled
+              ? entry.alwaysActive
+                ? "border-blue-400/40 bg-blue-400/20"
+                : "border-emerald-400/40 bg-emerald-400/20"
+              : "border-white/10 bg-white/5"
+          }`}
+        >
+          <BookOpen
+            className={`h-5 w-5 ${
+              entry.enabled
+                ? entry.alwaysActive
+                  ? "text-blue-200"
+                  : "text-emerald-200"
+                : "text-white/40"
+            }`}
+          />
+        </div>
+
+        <div className="relative min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-white">{displayTitle}</h3>
+            {!entry.enabled && (
+              <span className="text-[10px] uppercase tracking-wide text-white/40">Disabled</span>
+            )}
+          </div>
+          <p className="line-clamp-1 text-xs text-gray-400">{displaySubtitle}</p>
+        </div>
+
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white transition">
+          <ChevronRight size={16} />
+        </span>
+      </button>
+    </motion.div>
+  );
+}
+
 function LorebookListView({
   lorebooks,
   assignedLorebookIds,
@@ -146,7 +271,7 @@ function LorebookListView({
   const filteredLorebooks = useMemo(() => {
     if (!searchQuery.trim()) return lorebooks;
     const query = searchQuery.toLowerCase();
-    return lorebooks.filter(l => l.name.toLowerCase().includes(query));
+    return lorebooks.filter((l) => l.name.toLowerCase().includes(query));
   }, [lorebooks, searchQuery]);
 
   // Empty state
@@ -241,21 +366,22 @@ function LorebookListView({
                     <motion.button
                       key={lorebook.id}
                       onClick={() => setSelectedLorebook(lorebook)}
-                      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left transition-all duration-200 active:scale-[0.995] ${isAssigned
-                        ? "border-emerald-400/40 bg-emerald-400/10 hover:border-emerald-400/60 hover:bg-emerald-400/15"
-                        : "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
-                        }`}
+                      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left transition-all duration-200 active:scale-[0.995] ${
+                        isAssigned
+                          ? "border-emerald-400/40 bg-emerald-400/10 hover:border-emerald-400/60 hover:bg-emerald-400/15"
+                          : "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
+                      }`}
                     >
                       {/* Icon */}
                       <div
-                        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${isAssigned
-                          ? "border-emerald-400/40 bg-emerald-400/20"
-                          : "border-white/15 bg-white/8"
-                          }`}
+                        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
+                          isAssigned
+                            ? "border-emerald-400/40 bg-emerald-400/20"
+                            : "border-white/15 bg-white/8"
+                        }`}
                       >
                         <BookOpen
-                          className={`h-5 w-5 ${isAssigned ? "text-emerald-200" : "text-white/70"
-                            }`}
+                          className={`h-5 w-5 ${isAssigned ? "text-emerald-200" : "text-white/70"}`}
                         />
                       </div>
 
@@ -276,10 +402,11 @@ function LorebookListView({
 
                       {/* Chevron */}
                       <span
-                        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${isAssigned
-                          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 group-hover:border-emerald-400/50"
-                          : "border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white"
-                          }`}
+                        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${
+                          isAssigned
+                            ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 group-hover:border-emerald-400/50"
+                            : "border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white"
+                        }`}
                       >
                         <ChevronRight size={16} />
                       </span>
@@ -348,7 +475,11 @@ function LorebookListView({
 
             <MenuButton
               icon={Star}
-              title={assignedLorebookIds.has(selectedLorebook.id) ? "Disable for Character" : "Enable for Character"}
+              title={
+                assignedLorebookIds.has(selectedLorebook.id)
+                  ? "Disable for Character"
+                  : "Enable for Character"
+              }
               description={
                 assignedLorebookIds.has(selectedLorebook.id)
                   ? "Remove from this character's active lorebooks"
@@ -413,10 +544,10 @@ function EntryListView({
   const filteredEntries = useMemo(() => {
     if (!searchQuery.trim()) return entries;
     const query = searchQuery.toLowerCase();
-    return entries.filter(e => {
+    return entries.filter((e) => {
       const title = e.title?.toLowerCase() || "";
       const content = e.content?.toLowerCase() || "";
-      const keywords = e.keywords.map(k => k.toLowerCase()).join(" ");
+      const keywords = e.keywords.map((k) => k.toLowerCase()).join(" ");
       return title.includes(query) || content.includes(query) || keywords.includes(query);
     });
   }, [entries, searchQuery]);
@@ -519,82 +650,19 @@ function EntryListView({
           ) : (
             <div className="space-y-3">
               {displayEntries.map((entry) => {
-                const originalIndex = filteredEntries.findIndex(e => e.id === entry.id);
-                const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
-                const displaySubtitle = entry.alwaysActive
-                  ? "Always active"
-                  : entry.keywords.length > 0
-                    ? entry.keywords.slice(0, 3).join(", ") + (entry.keywords.length > 3 ? "..." : "")
-                    : "No keywords";
+                const originalIndex = filteredEntries.findIndex((e) => e.id === entry.id);
                 const isDragging = dragState?.fromIndex === originalIndex;
 
                 return (
-                  <motion.div
+                  <EntryListItem
                     key={entry.id}
-                    layout
-                    layoutId={entry.id}
-                    drag="y"
-                    dragElastic={0.15}
-                    dragMomentum={false}
-                    dragSnapToOrigin
-                    dragTransition={{ bounceStiffness: 300, bounceDamping: 25 }}
-                    onDrag={(_, info) => handleDrag(originalIndex, info)}
-                    onDragEnd={(_, info) => handleDragEnd(originalIndex, info)}
-                    whileDrag={{ scale: 1.03, zIndex: 50, boxShadow: "0 15px 40px rgba(0,0,0,0.5)" }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    className={`group relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2 py-3 ${isDragging ? "opacity-0" : "cursor-grab active:cursor-grabbing"} ${entry.enabled
-                      ? "border-white/10 bg-[#0b0c12]/90 hover:border-white/25 hover:bg-[#0c0d13]/95"
-                      : "border-white/10 bg-[#0b0c12]/60 opacity-60 hover:opacity-80"
-                      }`}
-                  >
-                    {/* Drag Handle */}
-                    <div className="flex h-10 w-8 shrink-0 items-center justify-center text-white/30">
-                      <GripVertical size={18} />
-                    </div>
-
-                    {/* Main content */}
-                    <button
-                      onClick={() => setSelectedEntry(entry)}
-                      className="flex flex-1 items-center gap-3 text-left active:scale-[0.995]"
-                    >
-                      {/* Enable indicator */}
-                      <div
-                        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${entry.enabled
-                          ? entry.alwaysActive
-                            ? "border-blue-400/40 bg-blue-400/20"
-                            : "border-emerald-400/40 bg-emerald-400/20"
-                          : "border-white/10 bg-white/5"
-                          }`}
-                      >
-                        <BookOpen
-                          className={`h-5 w-5 ${entry.enabled
-                            ? entry.alwaysActive
-                              ? "text-blue-200"
-                              : "text-emerald-200"
-                            : "text-white/40"
-                            }`}
-                        />
-                      </div>
-
-                      {/* Content */}
-                      <div className="relative min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="truncate text-sm font-semibold text-white">{displayTitle}</h3>
-                          {!entry.enabled && (
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
-                              Disabled
-                            </span>
-                          )}
-                        </div>
-                        <p className="line-clamp-1 text-xs text-gray-400">{displaySubtitle}</p>
-                      </div>
-
-                      {/* Chevron */}
-                      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 group-hover:border-white/25 group-hover:text-white transition">
-                        <ChevronRight size={16} />
-                      </span>
-                    </button>
-                  </motion.div>
+                    entry={entry}
+                    originalIndex={originalIndex}
+                    isDragging={isDragging}
+                    onDrag={handleDrag}
+                    onDragEnd={handleDragEnd}
+                    onSelect={setSelectedEntry}
+                  />
                 );
               })}
             </div>
@@ -624,7 +692,11 @@ function EntryListView({
             <MenuButton
               icon={Star}
               title={selectedEntry.enabled ? "Disable Entry" : "Enable Entry"}
-              description={selectedEntry.enabled ? "Entry won't be injected into prompts" : "Entry will be injected when keywords match"}
+              description={
+                selectedEntry.enabled
+                  ? "Entry won't be injected into prompts"
+                  : "Entry will be injected when keywords match"
+              }
               color="from-emerald-500 to-emerald-600"
               onClick={() => {
                 onToggleEntry(selectedEntry, !selectedEntry.enabled);
@@ -701,8 +773,9 @@ function EntryEditorMenu({
               <p className="mt-0.5 text-xs text-gray-400">Include in prompts</p>
             </div>
             <label
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${draft.enabled ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
-                }`}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${
+                draft.enabled ? "bg-emerald-500 shadow-lg shadow-emerald-500/30" : "bg-white/20"
+              }`}
             >
               <input
                 type="checkbox"
@@ -711,8 +784,9 @@ function EntryEditorMenu({
                 className="sr-only"
               />
               <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${draft.enabled ? "translate-x-5" : "translate-x-0"
-                  }`}
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                  draft.enabled ? "translate-x-5" : "translate-x-0"
+                }`}
               />
             </label>
           </div>
@@ -723,8 +797,9 @@ function EntryEditorMenu({
               <p className="mt-0.5 text-xs text-gray-400">No keywords needed</p>
             </div>
             <label
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${draft.alwaysActive ? "bg-blue-500 shadow-lg shadow-blue-500/30" : "bg-white/20"
-                }`}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ${
+                draft.alwaysActive ? "bg-blue-500 shadow-lg shadow-blue-500/30" : "bg-white/20"
+              }`}
             >
               <input
                 type="checkbox"
@@ -733,8 +808,9 @@ function EntryEditorMenu({
                 className="sr-only"
               />
               <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${draft.alwaysActive ? "translate-x-5" : "translate-x-0"
-                  }`}
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                  draft.alwaysActive ? "translate-x-5" : "translate-x-0"
+                }`}
               />
             </label>
           </div>
@@ -794,7 +870,7 @@ export function LorebookEditor() {
 
   const activeLorebook = useMemo(
     () => lorebooks.find((l) => l.id === activeLorebookId) ?? null,
-    [lorebooks, activeLorebookId]
+    [lorebooks, activeLorebookId],
   );
 
   const pageTitle = activeLorebook ? `Lorebook - ${activeLorebook.name}` : undefined;
@@ -932,8 +1008,6 @@ export function LorebookEditor() {
     }
   };
 
-
-
   if (!characterId) {
     return (
       <div className="flex h-full items-center justify-center text-white/50">
@@ -944,10 +1018,7 @@ export function LorebookEditor() {
 
   return (
     <div className="flex flex-col h-full bg-black">
-      <TopNav
-        currentPath={location.pathname + location.search}
-        titleOverride={pageTitle}
-      />
+      <TopNav currentPath={location.pathname + location.search} titleOverride={pageTitle} />
       <div className="flex-1 min-h-0 overflow-visible">
         {activeLorebookId && activeLorebook ? (
           <>
