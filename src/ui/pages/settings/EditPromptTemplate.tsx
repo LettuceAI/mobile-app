@@ -542,8 +542,7 @@ export function EditPromptTemplate() {
       promptType === "memory" ||
       promptType === "reply");
 
-  const usesEntryEditor =
-    promptType !== "summary" && promptType !== "memory" && promptType !== "reply";
+  const usesEntryEditor = true;
 
   const variables = VARIABLES_BY_TYPE[promptType || "default"] || VARIABLES_BY_TYPE.default;
 
@@ -631,21 +630,15 @@ export function EditPromptTemplate() {
           }
           setPromptType(detectedType);
 
-          const shouldUseEntries =
-            detectedType !== "summary" && detectedType !== "memory" && detectedType !== "reply";
-          if (shouldUseEntries) {
-            const nextEntries =
-              template.entries?.length > 0
-                ? template.entries
-                : [createDefaultEntry(template.content)];
-            const normalizedEntries = ensureSystemEntry(nextEntries);
-            setEntries(normalizedEntries);
-            setCollapsedEntries(
-              Object.fromEntries(normalizedEntries.map((entry) => [entry.id, true])),
-            );
-          } else {
-            setEntries([]);
-          }
+          const nextEntries =
+            template.entries?.length > 0
+              ? template.entries
+              : [createDefaultEntry(template.content)];
+          const normalizedEntries = ensureSystemEntry(nextEntries);
+          setEntries(normalizedEntries);
+          setCollapsedEntries(
+            Object.fromEntries(normalizedEntries.map((entry) => [entry.id, true])),
+          );
 
           if (isProtected) {
             const required = await getRequiredTemplateVariables(template.id);

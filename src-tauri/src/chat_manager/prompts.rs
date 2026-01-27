@@ -144,6 +144,35 @@ fn template_entries_to_content(entries: &[SystemPromptEntry]) -> String {
     }
 }
 
+fn maybe_backfill_entries(
+    app: &AppHandle,
+    id: &str,
+    prompt_type: PromptType,
+    entries: Vec<SystemPromptEntry>,
+) -> Result<(), String> {
+    let template = match get_template(app, id)? {
+        Some(template) => template,
+        None => return Ok(()),
+    };
+    if !template.entries.is_empty() {
+        return Ok(());
+    }
+    let base = get_base_prompt(prompt_type);
+    if template.content.trim() != base.trim() {
+        return Ok(());
+    }
+    let _ = update_template(
+        app,
+        id.to_string(),
+        None,
+        None,
+        None,
+        Some(template.content),
+        Some(entries),
+    )?;
+    Ok(())
+}
+
 /// Get required variables for a specific template ID
 pub fn get_required_variables(template_id: &str) -> Vec<String> {
     match template_id {
@@ -457,6 +486,12 @@ pub fn get_template(app: &AppHandle, id: &str) -> Result<Option<SystemPromptTemp
 pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
     // Check existence
     if let Some(existing) = get_template(app, APP_DEFAULT_TEMPLATE_ID)? {
+        let _ = maybe_backfill_entries(
+            app,
+            APP_DEFAULT_TEMPLATE_ID,
+            PromptType::SystemPrompt,
+            default_modular_prompt_entries(),
+        );
         return Ok(existing.id);
     }
     // Insert default
@@ -502,6 +537,13 @@ pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
             ],
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    } else {
+        let _ = maybe_backfill_entries(
+            app,
+            APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
+            PromptType::DynamicSummaryPrompt,
+            get_base_prompt_entries(PromptType::DynamicSummaryPrompt),
+        );
     }
 
     // Memory manager template
@@ -522,6 +564,13 @@ pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
             ],
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    } else {
+        let _ = maybe_backfill_entries(
+            app,
+            APP_DYNAMIC_MEMORY_TEMPLATE_ID,
+            PromptType::DynamicMemoryPrompt,
+            get_base_prompt_entries(PromptType::DynamicMemoryPrompt),
+        );
     }
 
     Ok(())
@@ -596,6 +645,13 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
             ],
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    } else {
+        let _ = maybe_backfill_entries(
+            app,
+            APP_HELP_ME_REPLY_TEMPLATE_ID,
+            PromptType::HelpMeReplyPrompt,
+            get_base_prompt_entries(PromptType::HelpMeReplyPrompt),
+        );
     }
 
     // Also ensure conversational template exists
@@ -618,6 +674,13 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
             ],
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    } else {
+        let _ = maybe_backfill_entries(
+            app,
+            APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID,
+            PromptType::HelpMeReplyConversationalPrompt,
+            get_base_prompt_entries(PromptType::HelpMeReplyConversationalPrompt),
+        );
     }
     Ok(())
 }

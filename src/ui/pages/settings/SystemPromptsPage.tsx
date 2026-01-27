@@ -97,19 +97,19 @@ const EXTERNAL_MARKER_IDENTIFIERS = new Set([
 ]);
 
 function normalizePromptVariables(content: string) {
-  return content
-    .replaceAll("{{scenario}}", "{{scene}}")
-    .replaceAll("{{personality}}", "{{char.desc}}");
+  return content.replace(/{{scenario}}/g, "{{scene}}").replace(/{{personality}}/g, "{{char.desc}}");
 }
 
 function entryToExternal(entry: SystemPromptEntry): ExternalPromptEntry {
+  const role: "system" | "user" | "assistant" =
+    entry.role === "assistant" || entry.role === "user" ? entry.role : "system";
   return {
     identifier: entry.id,
     name: entry.name,
     system_prompt: entry.systemPrompt,
     marker: false,
     content: normalizePromptVariables(entry.content),
-    role: entry.role,
+    role,
     injection_position: entry.injectionPosition === "inChat" ? 1 : 0,
     injection_depth: entry.injectionDepth,
     forbid_overrides: false,
@@ -447,7 +447,10 @@ export function SystemPromptsPage() {
               },
             ];
 
-      const prompts = [...entries.map(entryToExternal), ...makeExternalMarkers()];
+      const prompts = [
+        ...entries.map((entry) => entryToExternal(entry as SystemPromptEntry)),
+        ...makeExternalMarkers(),
+      ];
       const exportPayload: ExternalPromptExport = {
         impersonation_prompt:
           "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Write 1 reply only in internet RP style. Don't write as {{char}} or system. Don't describe actions of {{char}}.]",
