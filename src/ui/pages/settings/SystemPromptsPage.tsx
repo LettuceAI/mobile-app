@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Pencil,
@@ -8,6 +8,8 @@ import {
   Copy,
   Star,
   FileText,
+  Download,
+  Upload,
   Sparkles,
   Brain,
   MessageSquare,
@@ -22,6 +24,7 @@ import {
   createPromptTemplate,
 } from "../../../core/prompts/service";
 import type { SystemPromptTemplate } from "../../../core/storage/schemas";
+import type { SystemPromptEntry } from "../../../core/storage/schemas";
 import { listCharacters, readSettings, setPromptTemplate } from "../../../core/storage/repo";
 import {
   APP_DEFAULT_TEMPLATE_ID,
@@ -36,6 +39,7 @@ import {
   getPromptTypeLabel,
 } from "../../../core/prompts/constants";
 import { BottomMenu } from "../../components";
+import { downloadJson, readFileAsText } from "../../../core/storage/personaTransfer";
 
 type TemplateUsage = {
   models: number;
@@ -50,6 +54,118 @@ const FILTER_TAGS: { key: FilterTag; label: string }[] = [
   { key: "internal", label: "Internal" },
   { key: "custom", label: "Custom" },
 ];
+
+type ExternalPromptEntry = {
+  identifier?: string;
+  name?: string;
+  system_prompt?: boolean;
+  marker?: boolean;
+  content?: string;
+  role?: string;
+  injection_position?: number | string;
+  injection_depth?: number;
+  forbid_overrides?: boolean;
+  enabled?: boolean;
+};
+
+type ExternalPromptExport = {
+  impersonation_prompt?: string;
+  new_chat_prompt?: string;
+  new_group_chat_prompt?: string;
+  new_example_chat_prompt?: string;
+  continue_nudge_prompt?: string;
+  scenario_format?: string;
+  personality_format?: string;
+  group_nudge_prompt?: string;
+  wi_format?: string;
+  prompts?: ExternalPromptEntry[];
+  prompt_order?: Array<{
+    character_id: number;
+    order: Array<{ identifier: string; enabled?: boolean }>;
+  }>;
+};
+
+const EXTERNAL_MARKER_IDENTIFIERS = new Set([
+  "worldInfoBefore",
+  "personaDescription",
+  "charDescription",
+  "charPersonality",
+  "scenario",
+  "worldInfoAfter",
+  "dialogueExamples",
+  "chatHistory",
+]);
+
+function normalizePromptVariables(content: string) {
+  return content
+    .replaceAll("{{scenario}}", "{{scene}}")
+    .replaceAll("{{personality}}", "{{char.desc}}");
+}
+
+function entryToExternal(entry: SystemPromptEntry): ExternalPromptEntry {
+  return {
+    identifier: entry.id,
+    name: entry.name,
+    system_prompt: entry.systemPrompt,
+    marker: false,
+    content: normalizePromptVariables(entry.content),
+    role: entry.role,
+    injection_position: entry.injectionPosition === "inChat" ? 1 : 0,
+    injection_depth: entry.injectionDepth,
+    forbid_overrides: false,
+    enabled: entry.enabled,
+  };
+}
+
+function makeExternalMarkers(): ExternalPromptEntry[] {
+  return [
+    { identifier: "worldInfoBefore", name: "Lorebook Before", system_prompt: true, marker: true },
+    {
+      identifier: "personaDescription",
+      name: "Persona Description",
+      system_prompt: true,
+      marker: true,
+    },
+    { identifier: "charDescription", name: "Char Description", system_prompt: true, marker: true },
+    { identifier: "charPersonality", name: "Char Personality", system_prompt: true, marker: true },
+    { identifier: "scenario", name: "Scenario", system_prompt: true, marker: true },
+    { identifier: "worldInfoAfter", name: "Lorebook After", system_prompt: true, marker: true },
+    { identifier: "dialogueExamples", name: "Chat Examples", system_prompt: true, marker: true },
+    { identifier: "chatHistory", name: "Chat History", system_prompt: true, marker: true },
+  ];
+}
+
+function toSystemEntry(
+  input: ExternalPromptEntry,
+  fallbackIndex: number,
+): SystemPromptEntry | null {
+  if (input.marker || (input.identifier && EXTERNAL_MARKER_IDENTIFIERS.has(input.identifier))) {
+    return null;
+  }
+  const content = typeof input.content === "string" ? normalizePromptVariables(input.content) : "";
+  if (!content.trim()) return null;
+  const id =
+    typeof input.identifier === "string" && input.identifier.trim()
+      ? input.identifier
+      : `imported_${fallbackIndex}_${Math.random().toString(36).slice(2, 8)}`;
+  const role = input.role === "user" || input.role === "assistant" ? input.role : "system";
+  const injectionPosition =
+    input.injection_position === 1 || input.injection_position === "inChat" ? "inChat" : "relative";
+  const injectionDepth =
+    typeof input.injection_depth === "number" && Number.isFinite(input.injection_depth)
+      ? input.injection_depth
+      : 0;
+  return {
+    id,
+    name: typeof input.name === "string" && input.name.trim() ? input.name : "Imported Prompt",
+    role,
+    content,
+    enabled: input.enabled ?? true,
+    injectionPosition,
+    injectionDepth,
+    systemPrompt: input.system_prompt ?? false,
+  };
+}
 
 function getTemplateIcon(templateId: string) {
   switch (templateId) {
@@ -132,6 +248,7 @@ function PromptCard({
   onEdit,
   onDelete,
   onDuplicate,
+  onExport,
   onSetDefault,
 }: {
   template: SystemPromptTemplate;
@@ -140,6 +257,7 @@ function PromptCard({
   onEdit: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onExport: () => void;
   onSetDefault: () => void;
 }) {
   const isProtected = isProtectedPromptTemplate(template.id);
@@ -209,6 +327,18 @@ function PromptCard({
             >
               <Copy className="h-4 w-4" />
             </button>
+            <button
+              onClick={onExport}
+              className={cn(
+                "p-1.5",
+                radius.md,
+                "text-white/40 hover:text-emerald-300 hover:bg-emerald-500/10",
+                interactive.transition.fast,
+              )}
+              title="Export"
+            >
+              <Download className="h-4 w-4" />
+            </button>
             {!isProtected && (
               <button
                 onClick={onDelete}
@@ -276,6 +406,9 @@ export function SystemPromptsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<SystemPromptTemplate | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadData();
@@ -293,6 +426,93 @@ export function SystemPromptsPage() {
       window.removeEventListener("prompts:add", handleAdd);
     };
   }, [navigate]);
+
+  async function handleExportTemplate(template: SystemPromptTemplate) {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const entries =
+        template.entries && template.entries.length > 0
+          ? template.entries
+          : [
+              {
+                id: "main",
+                name: "Main Prompt",
+                role: "system",
+                content: normalizePromptVariables(template.content),
+                enabled: true,
+                injectionPosition: "relative",
+                injectionDepth: 0,
+                systemPrompt: true,
+              },
+            ];
+
+      const prompts = [...entries.map(entryToExternal), ...makeExternalMarkers()];
+      const exportPayload: ExternalPromptExport = {
+        impersonation_prompt:
+          "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Write 1 reply only in internet RP style. Don't write as {{char}} or system. Don't describe actions of {{char}}.]",
+        new_chat_prompt: "[Start a new Chat]",
+        new_group_chat_prompt: "[Start a new group chat. Group members: {{group}}]",
+        new_example_chat_prompt: "[Example Chat]",
+        continue_nudge_prompt:
+          "[Continue the following message. Do not include ANY parts of the original message. Use capitalization and punctuation as if your reply is a part of the original message: {{lastChatMessage}}]",
+        scenario_format: "{{scene}}",
+        personality_format: "{{char.desc}}",
+        group_nudge_prompt: "[Write the next reply only as {{char}}.]",
+        wi_format: "{0}",
+        prompts,
+        prompt_order: [
+          {
+            character_id: 100001,
+            order: prompts.map((prompt) => ({
+              identifier: prompt.identifier || "",
+              enabled: prompt.enabled ?? true,
+            })),
+          },
+        ],
+      };
+
+      const json = JSON.stringify(exportPayload, null, 2);
+      const safeName = template.name.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
+      const filename = `system_prompts_${safeName || "export"}_${
+        new Date().toISOString().split("T")[0]
+      }.json`;
+      await downloadJson(json, filename);
+    } catch (error) {
+      console.error("Failed to export system prompts:", error);
+      alert("Failed to export system prompts. " + String(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImport(file: File) {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const raw = await readFileAsText(file);
+      const parsed = JSON.parse(raw) as ExternalPromptExport;
+      const promptEntries = Array.isArray(parsed.prompts) ? parsed.prompts : [];
+
+      const importedEntries = promptEntries
+        .map((prompt, index) => toSystemEntry(prompt, index))
+        .filter((entry): entry is SystemPromptEntry => Boolean(entry));
+
+      if (importedEntries.length === 0) {
+        alert("No importable prompts found in this file.");
+        return;
+      }
+
+      const baseName = file.name.replace(/\.[^/.]+$/, "") || "Imported Prompt Set";
+      await createPromptTemplate(baseName, "appWide", [], "", importedEntries);
+      await loadData();
+    } catch (error) {
+      console.error("Failed to import system prompts:", error);
+      alert("Failed to import system prompts. " + String(error));
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function loadData() {
     try {
@@ -402,7 +622,7 @@ export function SystemPromptsPage() {
       <main className="flex-1 overflow-y-auto px-4 pt-4">
         <div className="mx-auto w-full max-w-5xl space-y-4">
           {/* Search and Filters */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex flex-col gap-3">
             {/* Search */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30 pointer-events-none" />
@@ -429,8 +649,40 @@ export function SystemPromptsPage() {
               )}
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void handleImport(file);
+                  }
+                  event.currentTarget.value = "";
+                }}
+              />
+              <button
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2",
+                  radius.md,
+                  "border border-white/10 bg-white/5",
+                  "text-xs font-medium text-white/70",
+                  interactive.transition.fast,
+                  "hover:bg-white/10 hover:text-white",
+                  "disabled:opacity-50",
+                )}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {importing ? "Importing..." : "Import"}
+              </button>
+            </div>
+
             {/* Filter Tags */}
-            <div className="flex items-center gap-1.5 overflow-x-auto">
+            <div className="flex flex-wrap items-center gap-1.5">
               {FILTER_TAGS.map((tag) => {
                 const isActive = activeTag === tag.key;
                 return (
@@ -480,6 +732,7 @@ export function SystemPromptsPage() {
                     setShowDeleteConfirm(true);
                   }}
                   onDuplicate={() => handleDuplicate(template)}
+                  onExport={() => handleExportTemplate(template)}
                   onSetDefault={() => handleSetDefault(template.id)}
                 />
               ))}
