@@ -44,6 +44,20 @@ pub fn get_base_prompt(prompt_type: PromptType) -> String {
     }
 }
 
+pub fn get_base_prompt_entries(prompt_type: PromptType) -> Vec<SystemPromptEntry> {
+    match prompt_type {
+        PromptType::SystemPrompt => prompt_engine::default_modular_prompt_entries(),
+        PromptType::DynamicMemoryPrompt => prompt_engine::default_dynamic_memory_entries(),
+        PromptType::DynamicSummaryPrompt => prompt_engine::default_dynamic_summary_entries(),
+        PromptType::HelpMeReplyPrompt => prompt_engine::default_help_me_reply_entries(),
+        PromptType::HelpMeReplyConversationalPrompt => {
+            prompt_engine::default_help_me_reply_conversational_entries()
+        }
+        PromptType::GroupChatPrompt => prompt_engine::default_group_chat_entries(),
+        PromptType::GroupChatRoleplayPrompt => prompt_engine::default_group_chat_roleplay_entries(),
+    }
+}
+
 pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
     let mut rules = vec![
         "Embody the character naturally without breaking immersion".to_string(),
@@ -64,12 +78,14 @@ pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
 pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
     let json = storage_read_settings(app.clone())?;
     if let Some(data) = json {
-        serde_json::from_str(&data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+        serde_json::from_str(&data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
     } else {
         let defaults = default_settings();
         storage_write_settings(
             app.clone(),
-            serde_json::to_string(&defaults).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            serde_json::to_string(&defaults)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         )?;
         Ok(defaults)
     }
@@ -132,14 +148,15 @@ pub fn load_session(app: &AppHandle, session_id: &str) -> Result<Option<Session>
     let Some(meta_json) = meta else {
         return Ok(None);
     };
-    let mut session: Session = serde_json::from_str(&meta_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut session: Session = serde_json::from_str(&meta_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let recent_json = messages_list(app.clone(), session_id.to_string(), 120, None, None)?;
     let pinned_json = messages_list_pinned(app.clone(), session_id.to_string())?;
-    let recent: Vec<StoredMessage> =
-        serde_json::from_str(&recent_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let pinned: Vec<StoredMessage> =
-        serde_json::from_str(&pinned_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let recent: Vec<StoredMessage> = serde_json::from_str(&recent_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let pinned: Vec<StoredMessage> = serde_json::from_str(&pinned_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut by_id = std::collections::HashMap::<String, StoredMessage>::new();
     for m in pinned.into_iter().chain(recent.into_iter()) {
@@ -158,11 +175,13 @@ pub fn load_session(app: &AppHandle, session_id: &str) -> Result<Option<Session>
 pub fn save_session(app: &AppHandle, session: &Session) -> Result<(), String> {
     let mut meta = session.clone();
     meta.messages = Vec::new();
-    let meta_json = serde_json::to_string(&meta).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let meta_json = serde_json::to_string(&meta)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     session_upsert_meta(app.clone(), meta_json)?;
 
     if let Some(last) = session.messages.last() {
-        let payload = serde_json::to_string(&vec![last]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let payload = serde_json::to_string(&vec![last])
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         messages_upsert_batch(app.clone(), session.id.clone(), payload)?;
     }
     Ok(())

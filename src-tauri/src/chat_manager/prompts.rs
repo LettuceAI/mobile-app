@@ -2,7 +2,7 @@ use super::types::{
     PromptEntryPosition, PromptEntryRole, PromptScope, SystemPromptEntry, SystemPromptTemplate,
 };
 use crate::{
-    chat_manager::storage::get_base_prompt, chat_manager::storage::PromptType,
+    chat_manager::storage::{get_base_prompt, get_base_prompt_entries, PromptType},
     storage_manager::db::open_db,
 };
 use rusqlite::{params, OptionalExtension};
@@ -23,14 +23,8 @@ const APP_DYNAMIC_MEMORY_TEMPLATE_NAME: &str = "Dynamic Memory: Memory Manager";
 const APP_HELP_ME_REPLY_TEMPLATE_NAME: &str = "Reply Helper";
 const APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_NAME: &str = "Reply Helper (Conversational)";
 
-fn supports_entry_prompts(id: &str) -> bool {
-    !matches!(
-        id,
-        APP_DYNAMIC_SUMMARY_TEMPLATE_ID
-            | APP_DYNAMIC_MEMORY_TEMPLATE_ID
-            | APP_HELP_ME_REPLY_TEMPLATE_ID
-            | APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID
-    )
+fn supports_entry_prompts(_id: &str) -> bool {
+    true
 }
 
 fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
@@ -136,6 +130,20 @@ fn single_entry_from_content(content: &str) -> Vec<SystemPromptEntry> {
     }]
 }
 
+fn template_entries_to_content(entries: &[SystemPromptEntry]) -> String {
+    let merged = entries
+        .iter()
+        .filter(|entry| entry.enabled && !entry.content.trim().is_empty())
+        .map(|entry| entry.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if merged.trim().is_empty() {
+        String::new()
+    } else {
+        merged
+    }
+}
+
 /// Get required variables for a specific template ID
 pub fn get_required_variables(template_id: &str) -> Vec<String> {
     match template_id {
@@ -228,7 +236,11 @@ fn str_to_scope(s: &str) -> Result<PromptScope, String> {
         "AppWide" => Ok(PromptScope::AppWide),
         "ModelSpecific" => Ok(PromptScope::ModelSpecific),
         "CharacterSpecific" => Ok(PromptScope::CharacterSpecific),
-        other => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unknown prompt scope: {}", other))),
+        other => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Unknown prompt scope: {}", other),
+        )),
     }
 }
 
@@ -308,7 +320,8 @@ pub fn create_template(
     let conn = open_db(app)?;
     let id = generate_id();
     let now = now();
-    let target_ids_json = serde_json::to_string(&target_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target_ids_json = serde_json::to_string(&target_ids)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let entries = entries.unwrap_or_else(|| {
         if supports_entry_prompts(&id) && !content.is_empty() {
             single_entry_from_content(&content)
@@ -316,7 +329,8 @@ pub fn create_template(
             Vec::new()
         }
     });
-    let entries_json = serde_json::to_string(&entries).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let entries_json = serde_json::to_string(&entries)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     conn.execute(
         "INSERT INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
         params![
@@ -347,7 +361,11 @@ pub fn update_template(
         if let Some(s) = &scope {
             // Need the current template to compare, but keeping restriction consistent
             if *s != PromptScope::AppWide {
-                return Err(crate::utils::err_msg(module_path!(), line!(), "Cannot change scope of App Default template"));
+                return Err(crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    "Cannot change scope of App Default template",
+                ));
             }
         }
     }
@@ -379,8 +397,10 @@ pub fn update_template(
         }
     }
     let updated_at = now();
-    let target_ids_json = serde_json::to_string(&new_target_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let entries_json = serde_json::to_string(&new_entries).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target_ids_json = serde_json::to_string(&new_target_ids)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let entries_json = serde_json::to_string(&new_entries)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE prompt_templates SET name = ?1, scope = ?2, target_ids = ?3, content = ?4, entries = ?5, updated_at = ?6 WHERE id = ?7",
@@ -401,11 +421,19 @@ pub fn update_template(
 
 pub fn delete_template(app: &AppHandle, id: String) -> Result<(), String> {
     if is_app_default_template(&id) {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "This template is protected and cannot be deleted"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "This template is protected and cannot be deleted",
+        ));
     }
 
     if get_template(app, &id)?.is_none() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Template not found"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Template not found",
+        ));
     }
 
     let conn = open_db(app)?;
@@ -435,8 +463,8 @@ pub fn ensure_app_default_template(app: &AppHandle) -> Result<String, String> {
     let conn = open_db(app)?;
     let now = now();
     let content = get_base_prompt(PromptType::SystemPrompt);
-    let entries_json =
-        serde_json::to_string(&default_modular_prompt_entries()).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let entries_json = serde_json::to_string(&default_modular_prompt_entries())
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     conn.execute(
         "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?6, ?6)",
         params![
@@ -458,13 +486,18 @@ pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
 
     // Summarizer template
     if get_template(app, APP_DYNAMIC_SUMMARY_TEMPLATE_ID)?.is_none() {
+        let content = get_base_prompt(PromptType::DynamicSummaryPrompt);
+        let entries = get_base_prompt_entries(PromptType::DynamicSummaryPrompt);
+        let entries_json = serde_json::to_string(&entries)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
-            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?6, ?6)",
             params![
                 APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
                 APP_DYNAMIC_SUMMARY_TEMPLATE_NAME,
                 scope_to_str(&PromptScope::AppWide),
-                get_base_prompt(PromptType::DynamicSummaryPrompt),
+                content,
+                entries_json,
                 now
             ],
         )
@@ -473,13 +506,18 @@ pub fn ensure_dynamic_memory_templates(app: &AppHandle) -> Result<(), String> {
 
     // Memory manager template
     if get_template(app, APP_DYNAMIC_MEMORY_TEMPLATE_ID)?.is_none() {
+        let content = get_base_prompt(PromptType::DynamicMemoryPrompt);
+        let entries = get_base_prompt_entries(PromptType::DynamicMemoryPrompt);
+        let entries_json = serde_json::to_string(&entries)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
-            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?6, ?6)",
             params![
                 APP_DYNAMIC_MEMORY_TEMPLATE_ID,
                 APP_DYNAMIC_MEMORY_TEMPLATE_NAME,
                 scope_to_str(&PromptScope::AppWide),
-                get_base_prompt(PromptType::DynamicMemoryPrompt),
+                content,
+                entries_json,
                 now
             ],
         )
@@ -511,26 +549,30 @@ pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplat
 }
 
 pub fn reset_dynamic_summary_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
+    let content = get_base_prompt(PromptType::DynamicSummaryPrompt);
+    let entries = get_base_prompt_entries(PromptType::DynamicSummaryPrompt);
     update_template(
         app,
         APP_DYNAMIC_SUMMARY_TEMPLATE_ID.to_string(),
         None,
         None,
         None,
-        Some(get_base_prompt(PromptType::DynamicSummaryPrompt)),
-        None,
+        Some(content.clone()),
+        Some(entries),
     )
 }
 
 pub fn reset_dynamic_memory_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
+    let content = get_base_prompt(PromptType::DynamicMemoryPrompt);
+    let entries = get_base_prompt_entries(PromptType::DynamicMemoryPrompt);
     update_template(
         app,
         APP_DYNAMIC_MEMORY_TEMPLATE_ID.to_string(),
         None,
         None,
         None,
-        Some(get_base_prompt(PromptType::DynamicMemoryPrompt)),
-        None,
+        Some(content.clone()),
+        Some(entries),
     )
 }
 
@@ -538,13 +580,18 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
     if get_template(app, APP_HELP_ME_REPLY_TEMPLATE_ID)?.is_none() {
         let conn = open_db(app)?;
         let now = now();
+        let content = get_base_prompt(PromptType::HelpMeReplyPrompt);
+        let entries = get_base_prompt_entries(PromptType::HelpMeReplyPrompt);
+        let entries_json = serde_json::to_string(&entries)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
-            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?6, ?6)",
             params![
                 APP_HELP_ME_REPLY_TEMPLATE_ID,
                 APP_HELP_ME_REPLY_TEMPLATE_NAME,
                 scope_to_str(&PromptScope::AppWide),
-                get_base_prompt(PromptType::HelpMeReplyPrompt),
+                content,
+                entries_json,
                 now
             ],
         )
@@ -555,13 +602,18 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
     if get_template(app, APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID)?.is_none() {
         let conn = open_db(app)?;
         let now = now();
+        let content = get_base_prompt(PromptType::HelpMeReplyConversationalPrompt);
+        let entries = get_base_prompt_entries(PromptType::HelpMeReplyConversationalPrompt);
+        let entries_json = serde_json::to_string(&entries)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
-            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?5)",
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, '[]', ?4, ?5, ?6, ?6)",
             params![
                 APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID,
                 APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_NAME,
                 scope_to_str(&PromptScope::AppWide),
-                get_base_prompt(PromptType::HelpMeReplyConversationalPrompt),
+                content,
+                entries_json,
                 now
             ],
         )
@@ -571,28 +623,32 @@ pub fn ensure_help_me_reply_template(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn reset_help_me_reply_template(app: &AppHandle) -> Result<SystemPromptTemplate, String> {
+    let content = get_base_prompt(PromptType::HelpMeReplyPrompt);
+    let entries = get_base_prompt_entries(PromptType::HelpMeReplyPrompt);
     update_template(
         app,
         APP_HELP_ME_REPLY_TEMPLATE_ID.to_string(),
         None,
         None,
         None,
-        Some(get_base_prompt(PromptType::HelpMeReplyPrompt)),
-        None,
+        Some(content.clone()),
+        Some(entries),
     )
 }
 
 pub fn reset_help_me_reply_conversational_template(
     app: &AppHandle,
 ) -> Result<SystemPromptTemplate, String> {
+    let content = get_base_prompt(PromptType::HelpMeReplyConversationalPrompt);
+    let entries = get_base_prompt_entries(PromptType::HelpMeReplyConversationalPrompt);
     update_template(
         app,
         APP_HELP_ME_REPLY_CONVERSATIONAL_TEMPLATE_ID.to_string(),
         None,
         None,
         None,
-        Some(get_base_prompt(PromptType::HelpMeReplyConversationalPrompt)),
-        None,
+        Some(content.clone()),
+        Some(entries),
     )
 }
 
@@ -611,7 +667,14 @@ pub fn get_help_me_reply_prompt(app: &AppHandle, style: &str) -> String {
     };
 
     match get_template(app, template_id) {
-        Ok(Some(template)) => template.content,
+        Ok(Some(template)) => {
+            let merged = template_entries_to_content(&template.entries);
+            if merged.is_empty() {
+                template.content
+            } else {
+                merged
+            }
+        }
         _ => get_base_prompt(prompt_type),
     }
 }
@@ -620,7 +683,14 @@ pub fn get_help_me_reply_prompt(app: &AppHandle, style: &str) -> String {
 #[allow(dead_code)]
 pub fn get_group_chat_prompt(app: &AppHandle) -> String {
     match get_template(app, APP_GROUP_CHAT_TEMPLATE_ID) {
-        Ok(Some(template)) => template.content,
+        Ok(Some(template)) => {
+            let merged = template_entries_to_content(&template.entries);
+            if merged.is_empty() {
+                template.content
+            } else {
+                merged
+            }
+        }
         _ => get_base_prompt(PromptType::GroupChatPrompt),
     }
 }
@@ -629,7 +699,14 @@ pub fn get_group_chat_prompt(app: &AppHandle) -> String {
 #[allow(dead_code)]
 pub fn get_group_chat_roleplay_prompt(app: &AppHandle) -> String {
     match get_template(app, APP_GROUP_CHAT_ROLEPLAY_TEMPLATE_ID) {
-        Ok(Some(template)) => template.content,
+        Ok(Some(template)) => {
+            let merged = template_entries_to_content(&template.entries);
+            if merged.is_empty() {
+                template.content
+            } else {
+                merged
+            }
+        }
         _ => get_base_prompt(PromptType::GroupChatRoleplayPrompt),
     }
 }

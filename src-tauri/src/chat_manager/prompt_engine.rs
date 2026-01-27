@@ -10,236 +10,499 @@ use super::types::{
 use crate::storage_manager::db::open_db;
 
 pub fn default_system_prompt_template() -> String {
-    default_modular_prompt_entries()
+    join_entries(&default_modular_prompt_entries())
+}
+
+pub fn default_dynamic_summary_prompt() -> String {
+    join_entries(&default_dynamic_summary_entries())
+}
+
+pub fn default_dynamic_memory_prompt() -> String {
+    join_entries(&default_dynamic_memory_entries())
+}
+
+pub fn default_help_me_reply_prompt() -> String {
+    join_entries(&default_help_me_reply_entries())
+}
+
+pub fn default_help_me_reply_conversational_prompt() -> String {
+    join_entries(&default_help_me_reply_conversational_entries())
+}
+
+pub fn default_group_chat_system_prompt_template() -> String {
+    join_entries(&default_group_chat_entries())
+}
+
+pub fn default_group_chat_roleplay_prompt_template() -> String {
+    join_entries(&default_group_chat_roleplay_entries())
+}
+
+fn join_entries(entries: &[SystemPromptEntry]) -> String {
+    entries
         .iter()
         .map(|entry| entry.content.as_str())
         .collect::<Vec<_>>()
         .join("\n\n")
 }
 
-pub fn default_dynamic_summary_prompt() -> String {
-    "Your task is to maintain a single, cumulative summary of the conversation.
-
-    You receive:
-    - the previous global summary (if any)
-    - the newest conversation window
-
-    Your job:
-    1. Merge the new events into the existing summary.
-    2. Preserve all factual past events unless they are contradicted.
-    3. Keep the chronological flow clear and coherent.
-    4. Remove redundant details or repetitions.
-    5. DO NOT invent motivations, emotions, or events that were not explicitly stated.
-
-    Guidelines:
-    - Capture actions, choices, facts, changes, and important context.
-    - Keep the summary compact but complete.
-    - If special placeholders exist ({{character}}, {{persona}}, etc.), keep them untouched.
-    - Previous summary (if any): {{prev_summary}}
-    - The output must be a single cohesive summary paragraph, representing the entire conversation so far.
-
-    Output only the final merged summary with no commentary."
-        .to_string()
+pub fn default_dynamic_summary_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "summary_task".to_string(),
+            name: "Task".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "You maintain a single, cumulative summary of the conversation.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "summary_inputs".to_string(),
+            name: "Inputs".to_string(),
+            role: PromptEntryRole::System,
+            content: "You receive:\n- the previous global summary (if any)\n- the newest conversation window\n- Previous summary (if any): {{prev_summary}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "summary_job".to_string(),
+            name: "Your Job".to_string(),
+            role: PromptEntryRole::System,
+            content: "Your job:\n1. Merge the new events into the existing summary.\n2. Preserve all factual past events unless they are contradicted.\n3. Keep the chronological flow clear and coherent.\n4. Remove redundant details or repetitions.\n5. DO NOT invent motivations, emotions, or events that were not explicitly stated.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "summary_guidelines".to_string(),
+            name: "Guidelines".to_string(),
+            role: PromptEntryRole::System,
+            content: "Guidelines:\n- Capture actions, choices, facts, changes, and important context.\n- Keep the summary compact but complete.\n- If special placeholders exist ({{character}}, {{persona}}, etc.), keep them untouched.\n- The output must be a single cohesive summary paragraph, representing the entire conversation so far.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "summary_output".to_string(),
+            name: "Output".to_string(),
+            role: PromptEntryRole::System,
+            content: "Output only the final merged summary with no commentary.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+    ]
 }
 
-pub fn default_dynamic_memory_prompt() -> String {
-    "You manage long-term memories for this roleplay chat. Use tools to maintain an accurate, useful memory list.
-
-    IMPORTANT - TOKEN BUDGET:
-    Current hot memory usage: {{current_memory_tokens}}/{{hot_token_budget}} tokens
-    Deleted memories are NOT lost—they go to cold storage and can be recalled later via keyword search.
-    Memories decay over time unless accessed or pinned.
-
-    When OVER BUDGET: You MUST delete lower-priority memories to make room for new ones.
-    When UNDER BUDGET: Only delete duplicates, contradicted facts, or truly obsolete information.
-
-    What to Remember:
-    Store facts that will matter for future conversations:
-    - Character reveals: Traits, backstory, fears, goals (e.g., \"{{char}} revealed they fear abandonment\")
-    - Relationship changes: Bonds formed, conflicts, trust levels (e.g., \"{{persona}} and {{char}} became allies\")
-    - Plot milestones: Key decisions, events, world changes (e.g., \"The group chose to enter the forbidden forest\")
-    - User preferences: Tone, boundaries, or explicit requests (e.g., \"{{persona}} prefers slower pacing\")
-
-    Rules:
-    - Keep each memory atomic: one fact per entry, under 100 characters when possible
-    - Be factual: only store what was explicitly stated or clearly happened—never infer emotions or motivations
-    - Avoid duplicates: check existing memories before adding; merge or skip if redundant
-    - Respect the {{max_entries}} entry limit
-    - When deleting, use the 6-digit memory ID shown in brackets (e.g., delete \"847291\")
-
-    Priority (what to keep vs demote):
-    1. PIN: Character-defining facts that should never be forgotten
-    2. KEEP: Active plot threads and unresolved conflicts
-    3. KEEP: Recent decisions with ongoing consequences
-    4. DEMOTE: Resolved plot points, routine actions, outdated context
-
-    Tool Usage:
-    - Use `create_memory` with `text` and optionally `important: true` to pin
-    - Use `delete_memory` with the memory ID or exact text
-    - Use `pin_memory` to mark existing memories as critical (never decay)
-    - Use `unpin_memory` to allow a memory to decay normally
-    - Call `done` when finished making changes
-    - Output NO natural language, only tool calls"
-        .to_string()
+pub fn default_dynamic_memory_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "memory_task".to_string(),
+            name: "Task".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "You manage long-term memories for this roleplay chat. Use tools to maintain an accurate, useful memory list.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "memory_budget".to_string(),
+            name: "Token Budget".to_string(),
+            role: PromptEntryRole::System,
+            content: "IMPORTANT - TOKEN BUDGET:\nCurrent hot memory usage: {{current_memory_tokens}}/{{hot_token_budget}} tokens\nDeleted memories are NOT lost—they go to cold storage and can be recalled later via keyword search.\nMemories decay over time unless accessed or pinned.\n\nWhen OVER BUDGET: You MUST delete lower-priority memories to make room for new ones.\nWhen UNDER BUDGET: Only delete duplicates, contradicted facts, or truly obsolete information.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "memory_what".to_string(),
+            name: "What To Remember".to_string(),
+            role: PromptEntryRole::System,
+            content: "Store facts that will matter for future conversations:\n- Character reveals: Traits, backstory, fears, goals (e.g., \"{{char}} revealed they fear abandonment\")\n- Relationship changes: Bonds formed, conflicts, trust levels (e.g., \"{{persona}} and {{char}} became allies\")\n- Plot milestones: Key decisions, events, world changes (e.g., \"The group chose to enter the forbidden forest\")\n- User preferences: Tone, boundaries, or explicit requests (e.g., \"{{persona}} prefers slower pacing\")".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "memory_rules".to_string(),
+            name: "Rules".to_string(),
+            role: PromptEntryRole::System,
+            content: "Rules:\n- Keep each memory atomic: one fact per entry, under 100 characters when possible\n- Be factual: only store what was explicitly stated or clearly happened—never infer emotions or motivations\n- Avoid duplicates: check existing memories before adding; merge or skip if redundant\n- Respect the {{max_entries}} entry limit\n- When deleting, use the 6-digit memory ID shown in brackets (e.g., delete \"847291\")".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "memory_priority".to_string(),
+            name: "Priority".to_string(),
+            role: PromptEntryRole::System,
+            content: "Priority (what to keep vs demote):\n1. PIN: Character-defining facts that should never be forgotten\n2. KEEP: Active plot threads and unresolved conflicts\n3. KEEP: Recent decisions with ongoing consequences\n4. DEMOTE: Resolved plot points, routine actions, outdated context".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "memory_tools".to_string(),
+            name: "Tool Usage".to_string(),
+            role: PromptEntryRole::System,
+            content: "Tool Usage:\n- Use `create_memory` with `text` and optionally `important: true` to pin\n- Use `delete_memory` with the memory ID or exact text\n- Use `pin_memory` to mark existing memories as critical (never decay)\n- Use `unpin_memory` to allow a memory to decay normally\n- Call `done` when finished making changes\n- Output NO natural language, only tool calls".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+    ]
 }
 
-pub fn default_help_me_reply_prompt() -> String {
-    "You are helping the user write their next message in this roleplay conversation.
-
-# The Character You're Talking To
-Name: {{char.name}}
-{{char.desc}}
-
-# Your Character (The User)
-Name: {{persona.name}}
-{{persona.desc}}
-
-Based on the conversation history, generate a response that {{persona.name}} would naturally say to {{char.name}}.
-
-Guidelines:
-- Write as {{persona.name}} in first-person perspective.
-- Match the tone and style of the conversation
-- Don't be overly formal or robotic
-- React appropriately to what {{char.name}} just said or did
-- Stay true to {{persona.name}}'s personality and background
-- Write a substantial response with appropriate length - don't limit yourself to short sentences
-- Include actions, thoughts, dialogue, or descriptions as appropriate for the roleplay style
-
-{{#if current_draft}}
-The user has started writing: \"{{current_draft}}\"
-Continue and expand on this thought naturally. Keep their original intent but make it flow better and add appropriate detail and length.
-{{else}}
-Generate a fresh, detailed response based on the conversation context.
-{{/if}}
-
-Output ONLY the message text - no quotes, no \"{{persona.name}}:\", no roleplay formatting."
-        .to_string()
+pub fn default_help_me_reply_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "reply_task".to_string(),
+            name: "Task".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "You are helping the user write their next message in this roleplay conversation.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_character".to_string(),
+            name: "Character You're Talking To".to_string(),
+            role: PromptEntryRole::System,
+            content: "# The Character You're Talking To\nName: {{char.name}}\n{{char.desc}}"
+                .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_user".to_string(),
+            name: "User Character".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Your Character (The User)\nName: {{persona.name}}\n{{persona.desc}}"
+                .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_guidelines".to_string(),
+            name: "Guidelines".to_string(),
+            role: PromptEntryRole::System,
+            content: "Based on the conversation history, generate a response that {{persona.name}} would naturally say to {{char.name}}.\n\nGuidelines:\n- Write as {{persona.name}} in first-person perspective.\n- Match the tone and style of the conversation\n- Don't be overly formal or robotic\n- React appropriately to what {{char.name}} just said or did\n- Stay true to {{persona.name}}'s personality and background\n- Write a substantial response with appropriate length - don't limit yourself to short sentences\n- Include actions, thoughts, dialogue, or descriptions as appropriate for the roleplay style".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_draft".to_string(),
+            name: "Draft Handling".to_string(),
+            role: PromptEntryRole::System,
+            content: "{{#if current_draft}}\nThe user has started writing: \"{{current_draft}}\"\nContinue and expand on this thought naturally. Keep their original intent but make it flow better and add appropriate detail and length.\n{{else}}\nGenerate a fresh, detailed response based on the conversation context.\n{{/if}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_output".to_string(),
+            name: "Output".to_string(),
+            role: PromptEntryRole::System,
+            content: "Output ONLY the message text - no quotes, no \"{{persona.name}}:\", no roleplay formatting.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+    ]
 }
 
-pub fn default_help_me_reply_conversational_prompt() -> String {
-    "You are helping the user write their next message in this casual conversation.
-
-# The Person You're Talking To
-Name: {{char.name}}
-{{char.desc}}
-
-# Your Identity (The User)
-Name: {{persona.name}}
-{{persona.desc}}
-
-Based on the conversation history, generate a natural response that {{persona.name}} would say to {{char.name}}.
-
-Guidelines:
-- Write as {{persona.name}} using a conversational, natural tone
-- Match the casual style and energy of the conversation
-- Be authentic and genuine - avoid overly formal or robotic language
-- React naturally to what {{char.name}} just said
-- Stay true to {{persona.name}}'s personality while keeping it conversational
-- Write an appropriate length response - natural conversation flow is key
-- Focus on dialogue and natural reactions rather than detailed descriptions
-
-{{#if current_draft}}
-The user has started writing: \"{{current_draft}}\"
-Continue and expand on this thought naturally, maintaining a conversational tone. Keep their original intent but make it flow better and feel more natural.
-{{else}}
-Generate a fresh, natural response based on the conversation context.
-{{/if}}
-
-Output ONLY the message text - no quotes, no \"{{persona.name}}:\", keep it conversational and direct."
-        .to_string()
+pub fn default_help_me_reply_conversational_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "reply_conv_task".to_string(),
+            name: "Task".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "You are helping the user write their next message in this casual conversation.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_conv_character".to_string(),
+            name: "Person You're Talking To".to_string(),
+            role: PromptEntryRole::System,
+            content: "# The Person You're Talking To\nName: {{char.name}}\n{{char.desc}}"
+                .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_conv_user".to_string(),
+            name: "User Identity".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Your Identity (The User)\nName: {{persona.name}}\n{{persona.desc}}"
+                .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_conv_guidelines".to_string(),
+            name: "Guidelines".to_string(),
+            role: PromptEntryRole::System,
+            content: "Based on the conversation history, generate a natural response that {{persona.name}} would say to {{char.name}}.\n\nGuidelines:\n- Write as {{persona.name}} using a conversational, natural tone\n- Match the casual style and energy of the conversation\n- Be authentic and genuine - avoid overly formal or robotic language\n- React naturally to what {{char.name}} just said\n- Stay true to {{persona.name}}'s personality while keeping it conversational\n- Write an appropriate length response - natural conversation flow is key\n- Focus on dialogue and natural reactions rather than detailed descriptions".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_conv_draft".to_string(),
+            name: "Draft Handling".to_string(),
+            role: PromptEntryRole::System,
+            content: "{{#if current_draft}}\nThe user has started writing: \"{{current_draft}}\"\nContinue and expand on this thought naturally, maintaining a conversational tone. Keep their original intent but make it flow better and feel more natural.\n{{else}}\nGenerate a fresh, natural response based on the conversation context.\n{{/if}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "reply_conv_output".to_string(),
+            name: "Output".to_string(),
+            role: PromptEntryRole::System,
+            content: "Output ONLY the message text - no quotes, no \"{{persona.name}}:\", keep it conversational and direct.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+    ]
 }
 
-pub fn default_group_chat_system_prompt_template() -> String {
-    "You are {{char.name}}, engaging in a group conversation.
-
-# Your Character: {{char.name}}
-{{char.desc}}
-
-# User's Character: {{persona.name}}
-{{persona.desc}}
-
-# Group Chat Context
-
-You are in a group chat with {{persona.name}} and the following characters:
-{{group_characters}}
-
-# Context Summary
-{{context_summary}}
-
-# Key Memories
-{{key_memories}}
-
-# Message Format
-
-In the conversation history, you will see:
-- Messages from {{persona.name}} formatted as: [{{persona.name}}]: their message
-- Messages from other characters formatted as: [Character Name]: their message
-- Your own previous messages appear without a name prefix
-
-When you see a message with someone else's name in brackets, that is NOT you speaking - it's another character in the group chat.
-
-# Response Guidelines
-
-- Respond naturally as {{char.name}}
-- Stay in character and maintain your unique voice
-- Be aware of other characters in the conversation
-- You may reference what other characters have said
-- Respond directly without prefixing your name
-- Address {{persona.name}} by name when speaking to them
-- Remember: messages prefixed with [Other Name] are from other characters, not you
-
-{{content_rules}}"
-        .to_string()
+pub fn default_group_chat_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "group_task".to_string(),
+            name: "Task".to_string(),
+            role: PromptEntryRole::System,
+            content: "You are {{char.name}}, engaging in a group conversation.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_character".to_string(),
+            name: "Character".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Your Character: {{char.name}}\n{{char.desc}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_user".to_string(),
+            name: "User Character".to_string(),
+            role: PromptEntryRole::System,
+            content: "# User's Character: {{persona.name}}\n{{persona.desc}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_context".to_string(),
+            name: "Group Chat Context".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Group Chat Context\nYou are in a group chat with {{persona.name}} and the following characters:\n{{group_characters}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_summary".to_string(),
+            name: "Context Summary".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Context Summary\n{{context_summary}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_memories".to_string(),
+            name: "Key Memories".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Key Memories\n{{key_memories}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_format".to_string(),
+            name: "Message Format".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Message Format\nIn the conversation history, you will see:\n- Messages from {{persona.name}} formatted as: [{{persona.name}}]: their message\n- Messages from other characters formatted as: [Character Name]: their message\n- Your own previous messages appear without a name prefix\n\nWhen you see a message with someone else's name in brackets, that is NOT you speaking - it's another character in the group chat.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_guidelines".to_string(),
+            name: "Response Guidelines".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Response Guidelines\n- Respond naturally as {{char.name}}\n- Stay in character and maintain your unique voice\n- Be aware of other characters in the conversation\n- You may reference what other characters have said\n- Respond directly without prefixing your name\n- Address {{persona.name}} by name when speaking to them\n- Remember: messages prefixed with [Other Name] are from other characters, not you".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rules".to_string(),
+            name: "Content Rules".to_string(),
+            role: PromptEntryRole::System,
+            content: "{{content_rules}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+    ]
 }
 
-pub fn default_group_chat_roleplay_prompt_template() -> String {
-    "You are {{char.name}}, participating in a collaborative roleplay scenario.
-
-# Your Character: {{char.name}}
-{{char.desc}}
-
-# User's Character: {{persona.name}}
-{{persona.desc}}
-
-# Roleplay Participants
-
-You are roleplaying with {{persona.name}} and the following characters:
-{{group_characters}}
-
-# Starting Scene
-{{scene}}
-
-{{scene_direction}}
-
-# Context Summary
-{{context_summary}}
-
-# Key Memories
-{{key_memories}}
-
-# Message Format
-
-In the roleplay, you will see:
-- Actions and dialogue from {{persona.name}} formatted as: [{{persona.name}}]: their roleplay
-- Actions and dialogue from other characters formatted as: [Character Name]: their roleplay
-- Your own previous responses appear without a name prefix
-
-When you see a message with someone else's name in brackets, that is NOT you - it's another character in the roleplay.
-
-# Roleplay Guidelines
-
-- Write immersive, descriptive responses as {{char.name}}
-- Stay deeply in character and maintain your personality
-- Describe your character's actions, thoughts, and dialogue
-- React naturally to other characters' actions and words
-- You may reference what other characters have done or said
-- Respond directly without prefixing your character's name
-- Use present tense for actions and thoughts
-- Be creative and contribute to the collaborative story
-- Remember: messages prefixed with [Other Name] are from other characters, not you
-
-{{content_rules}}"
-        .to_string()
+pub fn default_group_chat_roleplay_entries() -> Vec<SystemPromptEntry> {
+    vec![
+        SystemPromptEntry {
+            id: "group_rp_task".to_string(),
+            name: "Task".to_string(),
+            role: PromptEntryRole::System,
+            content:
+                "You are {{char.name}}, participating in a collaborative roleplay scenario."
+                    .to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_character".to_string(),
+            name: "Character".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Your Character: {{char.name}}\n{{char.desc}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_user".to_string(),
+            name: "User Character".to_string(),
+            role: PromptEntryRole::System,
+            content: "# User's Character: {{persona.name}}\n{{persona.desc}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_participants".to_string(),
+            name: "Roleplay Participants".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Roleplay Participants\nYou are roleplaying with {{persona.name}} and the following characters:\n{{group_characters}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_scene".to_string(),
+            name: "Starting Scene".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Starting Scene\n{{scene}}\n\n{{scene_direction}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_summary".to_string(),
+            name: "Context Summary".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Context Summary\n{{context_summary}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_memories".to_string(),
+            name: "Key Memories".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Key Memories\n{{key_memories}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_format".to_string(),
+            name: "Message Format".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Message Format\nIn the roleplay, you will see:\n- Actions and dialogue from {{persona.name}} formatted as: [{{persona.name}}]: their roleplay\n- Actions and dialogue from other characters formatted as: [Character Name]: their roleplay\n- Your own previous responses appear without a name prefix\n\nWhen you see a message with someone else's name in brackets, that is NOT you - it's another character in the roleplay.".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_guidelines".to_string(),
+            name: "Roleplay Guidelines".to_string(),
+            role: PromptEntryRole::System,
+            content: "# Roleplay Guidelines\n- Write immersive, descriptive responses as {{char.name}}\n- Stay deeply in character and maintain your personality\n- Describe your character's actions, thoughts, and dialogue\n- React naturally to other characters' actions and words\n- You may reference what other characters have done or said\n- Respond directly without prefixing your character's name\n- Use present tense for actions and thoughts\n- Be creative and contribute to the collaborative story\n- Remember: messages prefixed with [Other Name] are from other characters, not you".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+        SystemPromptEntry {
+            id: "group_rp_rules".to_string(),
+            name: "Content Rules".to_string(),
+            role: PromptEntryRole::System,
+            content: "{{content_rules}}".to_string(),
+            enabled: true,
+            injection_position: PromptEntryPosition::Relative,
+            injection_depth: 0,
+            system_prompt: true,
+        },
+    ]
 }
 
 /// Get lorebook content for the current conversation context
@@ -306,7 +569,7 @@ fn get_lorebook_content(
     Ok(format_lorebook_for_prompt(&active_entries))
 }
 
-fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
+pub fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
     vec![
         SystemPromptEntry {
             id: "entry_base".to_string(),
