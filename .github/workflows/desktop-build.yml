@@ -132,6 +132,12 @@ jobs:
         with:
           version: 9
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
