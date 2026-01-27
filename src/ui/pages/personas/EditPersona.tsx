@@ -120,7 +120,7 @@ export function EditPersonaPage() {
                     setAvatarCrop(null);
                     setAvatarRoundPath(null);
                   }}
-                  className="absolute -top-1 -left-1 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
+                  className="absolute -top-1 -left-1 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1c] text-white/60 transition hover:bg-red-500/80 hover:border-red-500/50 hover:text-white active:scale-95"
                 >
                   <X size={14} strokeWidth={2.5} />
                 </button>
