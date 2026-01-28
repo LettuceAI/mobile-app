@@ -28,6 +28,7 @@ interface CreationHelperFooterProps {
   error: string | null;
   sending: boolean;
   onSendMessage: () => Promise<void>;
+  onRetry?: () => void;
   onAbort?: () => void;
   pendingAttachments?: ImageAttachment[];
   onAddAttachment?: (attachment: ImageAttachment) => void;
@@ -44,6 +45,7 @@ export function CreationHelperFooter({
   error,
   sending,
   onSendMessage,
+  onRetry,
   onAbort,
   pendingAttachments = [],
   onAddAttachment,
@@ -119,7 +121,7 @@ export function CreationHelperFooter({
           <span className="flex-1">{error}</span>
           {!sending && (
             <button
-              onClick={() => onSendMessage()}
+              onClick={() => (onRetry ? onRetry() : onSendMessage())}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-400/20 hover:bg-red-400/30 text-white/90 transition-colors whitespace-nowrap font-medium",
               )}

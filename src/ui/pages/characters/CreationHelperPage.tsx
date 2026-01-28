@@ -263,6 +263,12 @@ export function CreationHelperPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamUnlistenRef = useRef<(() => void) | null>(null);
   const streamingContentRef = useRef<string>("");
+  const lastActionRef = useRef<"send" | "regenerate" | null>(null);
+  const lastSendSnapshotRef = useRef<{
+    draft: string;
+    references: Reference[];
+    attachments: ImageAttachment[];
+  } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const initGuardRef = useRef<string | null>(null);
   const [imageGenerations, setImageGenerations] = useState<ImageGenerationEntry[]>([]);
@@ -355,6 +361,8 @@ export function CreationHelperPage() {
     streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
+    lastActionRef.current = null;
+    lastSendSnapshotRef.current = null;
     setImageGenerations([]);
     if (streamUnlistenRef.current) {
       streamUnlistenRef.current();
@@ -541,6 +549,7 @@ export function CreationHelperPage() {
     streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
+    lastActionRef.current = "send";
 
     const requestId = crypto.randomUUID();
     let unlistenStream: (() => void) | null = null;
@@ -558,6 +567,12 @@ export function CreationHelperPage() {
             mimeType: att.mimeType,
           }))
         : null;
+
+    lastSendSnapshotRef.current = {
+      draft: inputValue,
+      references: [...references],
+      attachments: [...pendingAttachments],
+    };
 
     // Clear inputs immediately for better UX
     setInputValue("");
@@ -608,6 +623,12 @@ export function CreationHelperPage() {
           streamingContentRef.current = "";
           setStreamingReasoning("");
           setActiveTools([]);
+          const snapshot = lastSendSnapshotRef.current;
+          if (snapshot) {
+            setInputValue((prev) => (prev.trim() ? prev : snapshot.draft));
+            setReferences((prev) => (prev.length ? prev : snapshot.references));
+            setPendingAttachments((prev) => (prev.length ? prev : snapshot.attachments));
+          }
         }
       });
       streamUnlistenRef.current = unlistenStream;
@@ -626,6 +647,12 @@ export function CreationHelperPage() {
       if (!streamingContentRef.current.trim()) {
         if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.content?.trim()) {
           setError("Smart Creator failed to generate a response.");
+          const snapshot = lastSendSnapshotRef.current;
+          if (snapshot) {
+            setInputValue((prev) => (prev.trim() ? prev : snapshot.draft));
+            setReferences((prev) => (prev.length ? prev : snapshot.references));
+            setPendingAttachments((prev) => (prev.length ? prev : snapshot.attachments));
+          }
         }
       }
       if (lastMessage?.toolResults) {
@@ -707,6 +734,7 @@ export function CreationHelperPage() {
     streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
+    lastActionRef.current = "regenerate";
 
     const requestId = crypto.randomUUID();
     let unlistenStream: (() => void) | null = null;
@@ -1313,6 +1341,13 @@ export function CreationHelperPage() {
           error={error}
           sending={sending}
           onSendMessage={handleSend}
+          onRetry={() => {
+            if (lastActionRef.current === "regenerate") {
+              handleRegenerate();
+            } else {
+              handleSend();
+            }
+          }}
           onAbort={handleAbort}
           pendingAttachments={pendingAttachments}
           onAddAttachment={(attachment) => {
