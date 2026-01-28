@@ -5,13 +5,16 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SyncLayer {
     Globals,
-    // settings, personas, models, secrets, provider_credentials, prompt_templates, model_pricing_cache
+    // settings, personas, models, secrets, provider_credentials, prompt_templates, model_pricing_cache,
+    // audio_providers, audio_voice_cache, user_voices
     Lorebooks,
     // lorebooks, lorebook_entries
     Characters,
     // characters, rules, scenes, scene_variants, character_lorebooks
     Sessions,
     // sessions, messages, message_variants, usage_records, usage_metadata
+    GroupSessions,
+    // group_sessions, group_participation, group_messages, group_message_variants, usage_records, usage_metadata
 }
 
 // 2. The Data Manifest (What do I have?)
@@ -26,11 +29,20 @@ pub struct Manifest {
     pub sessions: HashMap<String, i64>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct ManifestV2 {
+    pub lorebooks: HashMap<String, i64>,
+    pub characters: HashMap<String, i64>,
+    pub sessions: HashMap<String, i64>,
+    pub group_sessions: HashMap<String, i64>,
+}
+
 // 3. The Actual Messages over TCP
 #[derive(Serialize, Deserialize, Debug)]
 pub enum P2PMessage {
     // Handshake
     Handshake {
+        #[serde(default = "default_protocol_version")]
         protocol_version: u32,
         device_name: String,
         salt: [u8; 16],
@@ -52,6 +64,9 @@ pub enum P2PMessage {
     SyncRequest {
         manifest: Manifest,
     },
+    SyncRequestV2 {
+        manifest: ManifestV2,
+    },
 
     // Data Transfer
     DataResponse {
@@ -68,4 +83,8 @@ pub enum P2PMessage {
     },
     Disconnect,
     Error(String),
+}
+
+fn default_protocol_version() -> u32 {
+    1
 }

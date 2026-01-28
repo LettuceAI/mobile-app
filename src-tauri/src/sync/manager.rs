@@ -13,9 +13,11 @@ use tokio_util::codec::Framed;
 
 use crate::sync::codec::P2PCodec;
 use crate::sync::db as sync_db;
-use crate::sync::protocol::{Manifest, P2PMessage, SyncLayer};
+use crate::sync::protocol::{Manifest, ManifestV2, P2PMessage, SyncLayer};
 use crate::utils::{log_error, log_info, log_warn};
 use std::path::Path;
+
+const PROTOCOL_VERSION: u32 = 3;
 
 fn derive_key(pin: &str, salt: &[u8]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new_derive_key("lettuce_sync_v1");
@@ -95,13 +97,20 @@ pub async fn start_driver(app: AppHandle, _port: u16) -> Result<String, String> 
     let state = app.state::<SyncManagerState>();
     let mut current_tx = state.shutdown_tx.lock().await;
     if current_tx.is_some() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Sync service is already running"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Sync service is already running",
+        ));
     }
 
     let listener = TcpListener::bind("0.0.0.0:0")
         .await
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let port = listener.local_addr().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?.port();
+    let port = listener
+        .local_addr()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+        .port();
 
     let my_ip = crate::utils::get_local_ip().unwrap_or_else(|_| "0.0.0.0".into());
 
@@ -193,7 +202,7 @@ async fn handle_driver_connection(
     // Send Handshake
     framed
         .send(P2PMessage::Handshake {
-            protocol_version: 1,
+            protocol_version: PROTOCOL_VERSION,
             device_name: whoami::devicename(),
             salt,
             challenge,
@@ -207,9 +216,21 @@ async fn handle_driver_connection(
             encrypted_challenge,
             my_challenge,
         })) => (encrypted_challenge, my_challenge),
-        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected AuthRequest, got {:?}", msg))),
+        Some(Ok(msg)) => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Expected AuthRequest, got {:?}", msg),
+            ))
+        }
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed during handshake")),
+        None => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Connection closed during handshake",
+            ))
+        }
     };
 
     // Verify
@@ -222,7 +243,11 @@ async fn handle_driver_connection(
     // The other side manually encrypted the blob.
     // We assume they prepended the nonce.
     if encrypted_challenge.len() < 12 {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth challenge too short"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Auth challenge too short",
+        ));
     }
     let mut n_bytes = [0u8; 12];
     n_bytes.copy_from_slice(&encrypted_challenge[..12]);
@@ -234,7 +259,11 @@ async fn handle_driver_connection(
         .map_err(|_| "Auth failed (bad PIN)".to_string())?;
 
     if decrypted != challenge {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth failed (challenge mismatch)"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Auth failed (challenge mismatch)",
+        ));
     }
 
     // Auth Success!
@@ -296,11 +325,27 @@ async fn handle_driver_connection(
     // Driver expects `Handshake`.
 
     // So after `set_key`, Driver should wait for `Handshake`.
-    let device_name = match framed.next().await {
-        Some(Ok(P2PMessage::Handshake { device_name, .. })) => device_name,
-        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected Encrypted Handshake, got {:?}", msg))),
+    let (device_name, peer_protocol_version) = match framed.next().await {
+        Some(Ok(P2PMessage::Handshake {
+            device_name,
+            protocol_version,
+            ..
+        })) => (device_name, protocol_version),
+        Some(Ok(msg)) => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Expected Encrypted Handshake, got {:?}", msg),
+            ))
+        }
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed after auth")),
+        None => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Connection closed after auth",
+            ))
+        }
     };
 
     // Approval Check
@@ -351,7 +396,11 @@ async fn handle_driver_connection(
                 )
                 .await;
 
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Connection rejected by host"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Connection rejected by host",
+            ));
         }
     }
 
@@ -387,14 +436,38 @@ async fn handle_driver_connection(
                 },
             )
             .await;
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Sync start cancelled"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Sync start cancelled",
+        ));
     }
 
     // Main Loop
     while let Some(msg) = framed.next().await {
         match msg {
             Ok(P2PMessage::SyncRequest { manifest }) => {
-                handle_sync_request(&app, &mut framed, manifest).await?;
+                handle_sync_request(
+                    &app,
+                    &mut framed,
+                    manifest,
+                    None,
+                    false,
+                    peer_protocol_version,
+                )
+                .await?;
+            }
+            Ok(P2PMessage::SyncRequestV2 { manifest }) => {
+                let allow_group = peer_protocol_version >= 2;
+                handle_sync_request(
+                    &app,
+                    &mut framed,
+                    Manifest::default(),
+                    Some(manifest),
+                    allow_group,
+                    peer_protocol_version,
+                )
+                .await?;
             }
             Ok(P2PMessage::Disconnect) => break,
             Ok(other) => log_warn(
@@ -413,10 +486,40 @@ async fn handle_sync_request(
     app: &AppHandle,
     framed: &mut Framed<TcpStream, P2PCodec>,
     _passenger_manifest: Manifest,
+    _passenger_manifest_v2: Option<ManifestV2>,
+    allow_group: bool,
+    peer_protocol_version: u32,
 ) -> Result<(), String> {
     // Get Local Manifest
     let conn = crate::storage_manager::db::open_db(app)?;
     let local_manifest = sync_db::get_local_manifest(&conn)?;
+    let local_manifest_v2 = if allow_group {
+        Some(sync_db::get_local_manifest_v2(&conn)?)
+    } else {
+        None
+    };
+
+    if peer_protocol_version < PROTOCOL_VERSION {
+        let warning = format!(
+            "Warning: peer is outdated (v{}). Please update ASAP.",
+            peer_protocol_version
+        );
+        log_warn(app, "sync_driver", warning.clone());
+        let state = app.state::<SyncManagerState>();
+        state
+            .set_status(
+                app,
+                SyncStatus::Syncing {
+                    phase: warning.clone(),
+                    progress: None,
+                },
+            )
+            .await;
+        framed
+            .send(P2PMessage::StatusUpdate(warning))
+            .await
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    }
 
     // 2. Compare and find what Passenger needs vs what Driver needs
     // Assumption: Last Write Wins.
@@ -444,6 +547,13 @@ async fn handle_sync_request(
         session_ids_to_send.push(id.clone());
     }
 
+    let mut group_session_ids_to_send = Vec::new();
+    if let Some(manifest_v2) = &local_manifest_v2 {
+        for id in manifest_v2.group_sessions.keys() {
+            group_session_ids_to_send.push(id.clone());
+        }
+    }
+
     // Send Globals
     framed
         .send(P2PMessage::StatusUpdate(
@@ -453,7 +563,7 @@ async fn handle_sync_request(
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     {
-        let data = sync_db::fetch_layer_data(&conn, SyncLayer::Globals, &[])?;
+        let data = sync_db::fetch_globals_for_protocol(&conn, peer_protocol_version)?;
         framed
             .send(P2PMessage::DataResponse {
                 layer: SyncLayer::Globals,
@@ -558,6 +668,34 @@ async fn handle_sync_request(
         send_session_assets(app, framed, &session_asset_info).await?;
     }
 
+    if allow_group && !group_session_ids_to_send.is_empty() {
+        framed
+            .send(P2PMessage::StatusUpdate(format!(
+                "Syncing {} Group Sessions...",
+                group_session_ids_to_send.len()
+            )))
+            .await
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        let data =
+            sync_db::fetch_layer_data(&conn, SyncLayer::GroupSessions, &group_session_ids_to_send)?;
+        framed
+            .send(P2PMessage::DataResponse {
+                layer: SyncLayer::GroupSessions,
+                payload: data,
+            })
+            .await
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+        framed
+            .send(P2PMessage::StatusUpdate(
+                "Syncing Group Session Assets...".into(),
+            ))
+            .await
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        send_group_session_assets(app, framed, &group_session_ids_to_send).await?;
+    }
+
     // Finish
     framed
         .send(P2PMessage::SyncComplete)
@@ -580,11 +718,17 @@ pub async fn connect_as_passenger(
     let state = app.state::<SyncManagerState>();
     let mut current_tx = state.shutdown_tx.lock().await;
     if current_tx.is_some() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Sync service is already running"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Sync service is already running",
+        ));
     }
 
     let addr = format!("{}:{}", ip, port);
-    let stream = TcpStream::connect(&addr).await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let stream = TcpStream::connect(&addr)
+        .await
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let (tx, mut rx) = broadcast::channel(1);
     *current_tx = Some(tx);
@@ -628,13 +772,28 @@ async fn run_passenger_session(
     let state = app.state::<SyncManagerState>();
 
     // 1. Wait for Handshake from Driver (contains Salt + Challenge)
-    let (salt, challenge) = match framed.next().await {
+    let (salt, challenge, driver_protocol_version) = match framed.next().await {
         Some(Ok(P2PMessage::Handshake {
-            salt, challenge, ..
-        })) => (salt, challenge),
-        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected Handshake, got {:?}", msg))),
+            salt,
+            challenge,
+            protocol_version,
+            ..
+        })) => (salt, challenge, protocol_version),
+        Some(Ok(msg)) => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Expected Handshake, got {:?}", msg),
+            ))
+        }
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed during handshake")),
+        None => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Connection closed during handshake",
+            ))
+        }
     };
 
     // 2. Derive Key & Encrypt Challenge & Send AuthRequest
@@ -670,14 +829,30 @@ async fn run_passenger_session(
         Some(Ok(P2PMessage::AuthResponse {
             encrypted_challenge,
         })) => encrypted_challenge,
-        Some(Ok(msg)) => return Err(crate::utils::err_msg(module_path!(), line!(), format!("Expected AuthResponse, got {:?}", msg))),
+        Some(Ok(msg)) => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Expected AuthResponse, got {:?}", msg),
+            ))
+        }
         Some(Err(e)) => return Err(e.to_string()),
-        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Connection closed during auth")),
+        None => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Connection closed during auth",
+            ))
+        }
     };
 
     // 4. Verify Driver's response to OUR challenge
     if encrypted_response.len() < 12 {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth response too short"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Auth response too short",
+        ));
     }
     let mut n_bytes = [0u8; 12];
     n_bytes.copy_from_slice(&encrypted_response[..12]);
@@ -689,7 +864,11 @@ async fn run_passenger_session(
         .map_err(|_| "Auth failed (Driver Sent Bad Response)".to_string())?;
 
     if decrypted_my_challenge != my_challenge {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Auth failed (response mismatch)"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Auth failed (response mismatch)",
+        ));
     }
 
     // Auth Success! Enable Encryption.
@@ -698,7 +877,7 @@ async fn run_passenger_session(
     // 5. Send our Handshake (Encrypted) with Device Name
     framed
         .send(P2PMessage::Handshake {
-            protocol_version: 1,
+            protocol_version: PROTOCOL_VERSION,
             device_name: whoami::devicename(),
             salt: [0u8; 16],      // Not used post-auth
             challenge: [0u8; 16], // Not used post-auth
@@ -717,13 +896,38 @@ async fn run_passenger_session(
 
     // Prepare Manifest
     let mut conn = crate::storage_manager::db::open_db(&app)?;
-    let manifest = sync_db::get_local_manifest(&conn)?;
 
     // Send Sync Request
-    framed
-        .send(P2PMessage::SyncRequest { manifest })
-        .await
-        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    if driver_protocol_version >= 2 {
+        let manifest = sync_db::get_local_manifest_v2(&conn)?;
+        framed
+            .send(P2PMessage::SyncRequestV2 { manifest })
+            .await
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    } else {
+        let manifest = sync_db::get_local_manifest(&conn)?;
+        framed
+            .send(P2PMessage::SyncRequest { manifest })
+            .await
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    }
+
+    if driver_protocol_version < PROTOCOL_VERSION {
+        let warning = format!(
+            "Warning: driver is outdated (v{}). Please update ASAP.",
+            driver_protocol_version
+        );
+        log_warn(&app, "sync_passenger", warning.clone());
+        state
+            .set_status(
+                &app,
+                SyncStatus::Syncing {
+                    phase: warning,
+                    progress: None,
+                },
+            )
+            .await;
+    }
     state
         .set_status(
             &app,
@@ -839,7 +1043,11 @@ pub async fn approve_connection(app: AppHandle, ip: String, allow: bool) -> Resu
     if let Some(tx) = map.remove(&ip) {
         let _ = tx.send(allow);
     } else {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No pending connection found for this IP"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No pending connection found for this IP",
+        ));
     }
 
     Ok(())
@@ -852,7 +1060,11 @@ pub async fn start_sync_session(app: AppHandle, ip: String) -> Result<(), String
     if let Some(tx) = map.remove(&ip) {
         let _ = tx.send(());
     } else {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No pending sync session found for this IP"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No pending sync session found for this IP",
+        ));
     }
 
     Ok(())
@@ -899,7 +1111,8 @@ async fn send_character_assets(
             char_ids.len()
         ),
     );
-    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let root = crate::storage_manager::legacy::storage_root(app)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let avatars_dir = root.join("avatars");
     let images_dir = root.join("images");
 
@@ -997,7 +1210,8 @@ async fn send_session_assets(
             sessions_with_chars.len()
         ),
     );
-    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let root = crate::storage_manager::legacy::storage_root(app)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for (session_id, char_id) in sessions_with_chars {
         let mut char_dir_name = char_id.clone();
@@ -1043,22 +1257,74 @@ async fn send_session_assets(
     Ok(())
 }
 
+async fn send_group_session_assets(
+    app: &AppHandle,
+    framed: &mut Framed<TcpStream, P2PCodec>,
+    group_session_ids: &[String],
+) -> Result<(), String> {
+    log_info(
+        app,
+        "sync_driver",
+        format!(
+            "Starting send_group_session_assets for {} sessions",
+            group_session_ids.len()
+        ),
+    );
+    let root = crate::storage_manager::legacy::storage_root(app)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let images_dir = root.join("images");
+    let conn = crate::storage_manager::db::open_db(app)?;
+
+    for id in group_session_ids {
+        let bg_path: Option<String> = conn
+            .query_row(
+                "SELECT background_image_path FROM group_sessions WHERE id = ?",
+                [id],
+                |row| row.get(0),
+            )
+            .unwrap_or(None);
+
+        if let Some(bg_id) = bg_path {
+            if !bg_id.is_empty() && !bg_id.starts_with("data:") && !bg_id.starts_with("http") {
+                for ext in &["webp", "png", "jpg", "jpeg", "gif"] {
+                    let filename = format!("{}.{}", bg_id, ext);
+                    let file_path = images_dir.join(&filename);
+                    if file_path.exists() {
+                        log_info(
+                            app,
+                            "sync_driver",
+                            format!("Sending group bg file: {}", filename),
+                        );
+                        send_file(app, framed, format!("images/{}", filename), &file_path).await?;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn send_global_assets(
     app: &AppHandle,
     framed: &mut Framed<TcpStream, P2PCodec>,
 ) -> Result<(), String> {
     log_info(app, "sync_driver", "Starting send_global_assets (Personas)");
-    let root = crate::storage_manager::legacy::storage_root(app).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let root = crate::storage_manager::legacy::storage_root(app)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let avatars_dir = root.join("avatars");
     let conn = crate::storage_manager::db::open_db(app)?;
 
     let persona_ids: Vec<String> = {
         let stmt_sql = "SELECT id FROM personas";
-        let mut stmt = conn.prepare(stmt_sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut stmt = conn
+            .prepare(stmt_sql)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows = stmt
             .query_map([], |row| row.get(0))
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        rows.collect::<Result<_, _>>().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+        rows.collect::<Result<_, _>>()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
     };
 
     for id in persona_ids {
@@ -1075,7 +1341,9 @@ async fn send_global_assets(
         }
 
         if dir.exists() {
-            let mut entries = tokio::fs::read_dir(&dir).await.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let mut entries = tokio::fs::read_dir(&dir)
+                .await
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();

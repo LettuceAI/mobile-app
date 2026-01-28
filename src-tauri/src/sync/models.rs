@@ -85,6 +85,41 @@ pub struct ModelPricingCache {
     pub cached_at: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AudioProvider {
+    pub id: String,
+    pub provider_type: String,
+    pub label: String,
+    pub api_key: Option<String>,
+    pub project_id: Option<String>,
+    pub location: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AudioVoiceCache {
+    pub id: String,
+    pub provider_id: String,
+    pub voice_id: String,
+    pub name: String,
+    pub preview_url: Option<String>,
+    pub labels: Option<String>,
+    pub cached_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserVoice {
+    pub id: String,
+    pub provider_id: String,
+    pub name: String,
+    pub model_id: String,
+    pub voice_id: String,
+    pub prompt: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 // Layer 2: Lorebooks
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -267,4 +302,70 @@ pub struct UsageMetadata {
     pub usage_id: String,
     pub key: String,
     pub value: String,
+}
+
+// Layer 5: Group Sessions
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GroupSession {
+    pub id: String,
+    pub name: String,
+    pub character_ids: String,
+    pub persona_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub archived: i64,
+    pub chat_type: String,
+    pub starting_scene: Option<String>,
+    pub background_image_path: Option<String>,
+    pub memories: String,
+    pub memory_embeddings: String,
+    pub memory_summary: String,
+    pub memory_summary_token_count: i64,
+    pub memory_tool_events: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GroupParticipation {
+    pub id: String,
+    pub session_id: String,
+    pub character_id: String,
+    pub speak_count: i64,
+    pub last_spoke_turn: Option<i64>,
+    pub last_spoke_at: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GroupMessage {
+    pub id: String,
+    pub session_id: String,
+    pub role: String,
+    pub content: String,
+    pub speaker_character_id: Option<String>,
+    pub turn_number: i64,
+    pub created_at: i64,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub selected_variant_id: Option<String>,
+    pub is_pinned: i64,
+    pub attachments: String,
+    pub reasoning: Option<String>,
+    pub selection_reasoning: Option<String>,
+    pub model_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GroupMessageVariant {
+    pub id: String,
+    pub message_id: String,
+    pub content: String,
+    pub speaker_character_id: Option<String>,
+    pub created_at: i64,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub reasoning: Option<String>,
+    pub selection_reasoning: Option<String>,
+    pub model_id: Option<String>,
 }
