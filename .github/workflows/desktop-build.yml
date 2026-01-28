@@ -207,7 +207,8 @@ jobs:
 
       - name: Build Tauri (Windows, Dev build)
         env:
-          RUSTFLAGS: "--cfg DEV_BUILD"
+          RUSTFLAGS: "--cfg DEV_BUILD -C target-feature=-crt-static"
+          CMAKE_MSVC_RUNTIME_LIBRARY: "MultiThreadedDLL"
         run: pnpm tauri build --config dev-config.json
 
       - name: Upload Windows artifacts
