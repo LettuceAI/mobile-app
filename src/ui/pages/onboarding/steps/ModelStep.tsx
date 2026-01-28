@@ -3,6 +3,7 @@ import { Settings, Check, HelpCircle, Loader } from "lucide-react";
 import type { ProviderCredential } from "../../../../core/storage/schemas";
 import { ModelConfigForm } from "../components/ConfigForm";
 import { getPlatform } from "../../../../core/utils/platform";
+import { getProviderIcon } from "../../../../core/utils/providerIcons";
 
 interface ModelStepProps {
   providers: ProviderCredential[];
@@ -125,10 +126,7 @@ export function ModelStep({
                             : "border-white/15 bg-white/8"
                         }`}
                       >
-                        <Settings
-                          size={18}
-                          className={isActive ? "text-emerald-300" : "text-gray-300"}
-                        />
+                        {getProviderIcon(provider.providerId)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3
@@ -235,7 +233,7 @@ export function ModelStep({
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/8">
-                  <Settings size={16} className="text-gray-300" />
+                  {getProviderIcon(provider.providerId)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-semibold text-white">{provider.label}</h3>
