@@ -262,6 +262,7 @@ export function CreationHelperPage() {
   const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamUnlistenRef = useRef<(() => void) | null>(null);
+  const streamingContentRef = useRef<string>("");
   const sessionIdRef = useRef<string | null>(null);
   const initGuardRef = useRef<string | null>(null);
   const [imageGenerations, setImageGenerations] = useState<ImageGenerationEntry[]>([]);
@@ -351,6 +352,7 @@ export function CreationHelperPage() {
     setSelectedTool(null);
     setShowToolDetail(false);
     setStreamingContent("");
+    streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
     setImageGenerations([]);
@@ -536,6 +538,7 @@ export function CreationHelperPage() {
     setSending(true);
     setError(null);
     setStreamingContent("");
+    streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
 
@@ -577,7 +580,8 @@ export function CreationHelperPage() {
         if (!payload?.type) return;
 
         if (payload.type === "delta" && payload.data?.text) {
-          setStreamingContent((prev) => prev + payload.data.text);
+          streamingContentRef.current += payload.data.text;
+          setStreamingContent(streamingContentRef.current);
         } else if (payload.type === "reasoning" || payload.type === "thought") {
           if (payload.data?.text) {
             setStreamingReasoning((prev) => prev + payload.data.text);
@@ -595,9 +599,13 @@ export function CreationHelperPage() {
           }
         } else if (payload.type === "error") {
           const message =
-            payload.data?.message || payload.data?.error || "Streaming error. Please try again.";
+            payload.data?.message ||
+            payload.data?.error ||
+            (payload as any).message ||
+            "Streaming error. Please try again.";
           setError(String(message));
           setStreamingContent("");
+          streamingContentRef.current = "";
           setStreamingReasoning("");
           setActiveTools([]);
         }
@@ -615,6 +623,11 @@ export function CreationHelperPage() {
 
       // Check for tool actions that trigger UI
       const lastMessage = updatedSession.messages[updatedSession.messages.length - 1];
+      if (!streamingContentRef.current.trim()) {
+        if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.content?.trim()) {
+          setError("Smart Creator failed to generate a response.");
+        }
+      }
       if (lastMessage?.toolResults) {
         for (const result of lastMessage.toolResults) {
           const resObj = result.result as any;
@@ -659,6 +672,7 @@ export function CreationHelperPage() {
       }
       setSending(false);
       setStreamingContent("");
+      streamingContentRef.current = "";
       setStreamingReasoning("");
       setActiveTools([]);
     }
@@ -690,6 +704,7 @@ export function CreationHelperPage() {
     setSending(true);
     setError(null);
     setStreamingContent("");
+    streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
 
@@ -716,7 +731,8 @@ export function CreationHelperPage() {
         if (!payload?.type) return;
 
         if (payload.type === "delta" && payload.data?.text) {
-          setStreamingContent((prev) => prev + payload.data.text);
+          streamingContentRef.current += payload.data.text;
+          setStreamingContent(streamingContentRef.current);
         } else if (payload.type === "reasoning" || payload.type === "thought") {
           if (payload.data?.text) {
             setStreamingReasoning((prev) => prev + payload.data.text);
@@ -734,9 +750,13 @@ export function CreationHelperPage() {
           }
         } else if (payload.type === "error") {
           const message =
-            payload.data?.message || payload.data?.error || "Streaming error. Please try again.";
+            payload.data?.message ||
+            payload.data?.error ||
+            (payload as any).message ||
+            "Streaming error. Please try again.";
           setError(String(message));
           setStreamingContent("");
+          streamingContentRef.current = "";
           setStreamingReasoning("");
           setActiveTools([]);
         }
@@ -752,6 +772,11 @@ export function CreationHelperPage() {
 
       // Check for tool actions that trigger UI
       const lastMessage = updatedSession.messages[updatedSession.messages.length - 1];
+      if (!streamingContentRef.current.trim()) {
+        if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.content?.trim()) {
+          setError("Smart Creator failed to generate a response.");
+        }
+      }
       if (lastMessage?.toolResults) {
         for (const result of lastMessage.toolResults) {
           const resObj = result.result as any;
@@ -780,6 +805,7 @@ export function CreationHelperPage() {
       }
       setSending(false);
       setStreamingContent("");
+      streamingContentRef.current = "";
       setStreamingReasoning("");
       setActiveTools([]);
     }
@@ -820,6 +846,7 @@ export function CreationHelperPage() {
       .then(() => {
         setSending(false);
         setStreamingContent("");
+        streamingContentRef.current = "";
         setStreamingReasoning("");
         setActiveTools([]);
         setError("Generation cancelled.");
@@ -837,6 +864,7 @@ export function CreationHelperPage() {
     }
     setSending(false);
     setStreamingContent("");
+    streamingContentRef.current = "";
     setStreamingReasoning("");
     setActiveTools([]);
     navigate(-1);
