@@ -17,11 +17,12 @@ export function TabItem({
   return (
     <Link
       to={to}
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       className={`relative block ${className}`}
     >
       <motion.div
-        className={`relative flex h-full w-full flex-col items-center justify-center gap-0.2 pt-1 rounded-2xl text-[11px] font-medium transition ${
+        className={`relative flex h-full w-full items-center justify-center rounded-2xl font-medium transition ${
           active ? "text-white" : "text-gray-500 hover:text-white"
         }`}
         whileTap={{ scale: 0.95 }}
@@ -33,8 +34,8 @@ export function TabItem({
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
           />
         )}
-        <Icon size={18} className="relative z-10" />
-        <span className="relative z-10 uppercase tracking-[0.2em]">{label}</span>
+        <Icon size={22} className="relative z-10" />
+        <span className="sr-only">{label}</span>
       </motion.div>
     </Link>
   );
