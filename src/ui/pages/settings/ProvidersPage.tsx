@@ -134,7 +134,7 @@ export function ProvidersPage() {
                         {provider.baseUrl && (
                           <>
                             <span className="opacity-40">•</span>
-                            <span className="truncate max-w-[120px]">
+                            <span className="truncate max-w-30">
                               {provider.baseUrl.replace(/^https?:\/\//, "")}
                             </span>
                           </>

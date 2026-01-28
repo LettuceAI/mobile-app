@@ -21,7 +21,7 @@ interface ProviderCardProps {
 function ProviderCard({ provider, isActive, onClick }: ProviderCardProps) {
   return (
     <button
-      className={`relative group min-h-[88px] rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
+      className={`relative group min-h-22 rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
         isActive
           ? "border-white/25 bg-white/15 shadow-lg"
           : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
@@ -309,7 +309,7 @@ export function ProviderSetupPage() {
           </div>
 
           {/* Right Panel */}
-          <div className="w-[400px] shrink-0 p-8 overflow-y-auto">
+          <div className="w-100 shrink-0 p-8 overflow-y-auto">
             <div className="space-y-1 mb-6">
               <h1 className="text-xl font-bold text-white">
                 {selectedProvider ? `Configure ${selectedProvider.name}` : "Choose a provider"}
@@ -386,7 +386,7 @@ export function ProviderSetupPage() {
 
         {/* Configuration Form */}
         <div
-          className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-[2000px]" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}
+          className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-500" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}
         >
           <div className="text-center space-y-2 mb-6">
             <h2 className="text-lg font-semibold text-white">Connect {selectedProvider?.name}</h2>

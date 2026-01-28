@@ -96,7 +96,7 @@ export function ProviderStep({
                 </div>
 
                 {/* Right Panel - Config */}
-                <div className="w-[400px] shrink-0 p-8 overflow-y-auto">
+                <div className="w-100 shrink-0 p-8 overflow-y-auto">
                     <div className="space-y-1 mb-6">
                         <h1 className="text-xl font-bold text-white">
                             {selectedProvider ? `Configure ${selectedProvider.name}` : "Choose a provider"}
@@ -167,7 +167,7 @@ export function ProviderStep({
             {/* Configuration Form */}
             <div
                 id="provider-config-form"
-                className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-[2000px]" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}
+                className={`config-form-section w-full max-w-sm transition-all duration-300 ${showForm ? "opacity-100 max-h-500" : "opacity-0 max-h-0 overflow-hidden pointer-events-none"}`}
             >
                 <div className="text-center space-y-2 mb-6">
                     <h2 className="text-lg font-semibold text-white">Connect {selectedProvider?.name}</h2>
