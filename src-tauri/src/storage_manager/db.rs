@@ -11,6 +11,22 @@ pub fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(storage_root(app)?.join("app.db"))
 }
 
+#[tauri::command]
+pub fn storage_db_size(app: tauri::AppHandle) -> Result<u64, String> {
+    let db = db_path(&app)?;
+    let mut total: u64 = 0;
+    let wal = db.with_extension("db-wal");
+    let shm = db.with_extension("db-shm");
+    for path in [db, wal, shm] {
+        if path.exists() {
+            let meta = fs::metadata(&path)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            total = total.saturating_add(meta.len());
+        }
+    }
+    Ok(total)
+}
+
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tauri::{Emitter, Manager};
@@ -33,20 +49,31 @@ impl SwappablePool {
 
     /// Get a connection from the current pool
     pub fn get_connection(&self) -> Result<DbConnection, String> {
-        let pool = self
-            .pool
-            .read()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Pool lock poisoned: {}", e)))?;
-        pool.get()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get connection from pool: {}", e)))
+        let pool = self.pool.read().map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Pool lock poisoned: {}", e),
+            )
+        })?;
+        pool.get().map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to get connection from pool: {}", e),
+            )
+        })
     }
 
     /// Swap the pool with a new one (used after backup restore)
     pub fn swap(&self, new_pool: DbPool) -> Result<(), String> {
-        let mut pool = self
-            .pool
-            .write()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Pool lock poisoned: {}", e)))?;
+        let mut pool = self.pool.write().map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Pool lock poisoned: {}", e),
+            )
+        })?;
         *pool = new_pool;
         Ok(())
     }
@@ -68,10 +95,13 @@ pub fn create_pool_for_path(path: &PathBuf) -> Result<DbPool, String> {
         )
     });
 
-    Pool::builder()
-        .max_size(10)
-        .build(manager)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create pool: {}", e)))
+    Pool::builder().max_size(10).build(manager).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to create pool: {}", e),
+        )
+    })
 }
 
 pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
@@ -87,15 +117,25 @@ pub fn reload_database(app: &tauri::AppHandle) -> Result<(), String> {
     {
         let conn = open_db(app)?;
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("WAL checkpoint failed before reload: {}", e)))?;
+            .map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("WAL checkpoint failed before reload: {}", e),
+                )
+            })?;
         log_info(app, "database", "WAL checkpoint completed before reload");
     }
 
     let new_pool = create_pool_for_path(&path)?;
 
-    let conn = new_pool
-        .get()
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get connection from new pool: {}", e)))?;
+    let conn = new_pool.get().map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to get connection from new pool: {}", e),
+        )
+    })?;
     init_db(app, &conn)?;
 
     drop(conn);
@@ -149,15 +189,22 @@ pub fn init_pool(app: &tauri::AppHandle) -> Result<DbPool, String> {
         )
     });
 
-    let pool = Pool::builder()
-        .max_size(10)
-        .build(manager)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create pool: {}", e)))?;
+    let pool = Pool::builder().max_size(10).build(manager).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to create pool: {}", e),
+        )
+    })?;
 
     // Initialize the database schema on the first connection
-    let conn = pool
-        .get()
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get connection from pool for init: {}", e)))?;
+    let conn = pool.get().map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to get connection from pool for init: {}", e),
+        )
+    })?;
     init_db(app, &conn)?;
 
     Ok(pool)
@@ -575,9 +622,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(usage_records)")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut cols = std::collections::HashSet::new();
-    let mut rows = stmt.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         cols.insert(col_name);
     }
 
@@ -601,9 +655,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(messages)")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_memory_refs = false;
-    let mut rows = stmt.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "memory_refs" {
             has_memory_refs = true;
             break;
@@ -621,9 +682,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut stmt_reasoning = conn
         .prepare("PRAGMA table_info(messages)")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let mut rows_reasoning = stmt_reasoning.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows_reasoning.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows_reasoning = stmt_reasoning
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_reasoning
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "reasoning" {
             has_reasoning = true;
             break;
@@ -640,8 +708,13 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut rows_variant_reasoning = stmt_variant_reasoning
         .query([])
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows_variant_reasoning.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_variant_reasoning
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "reasoning" {
             has_variant_reasoning = true;
             break;
@@ -656,9 +729,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_session_voice_autoplay = false;
     let mut has_session_persona_disabled = false;
-    let mut rows_sessions = stmt_sessions.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows_sessions.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows_sessions = stmt_sessions
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_sessions
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match col_name.as_str() {
             "voice_autoplay" => has_session_voice_autoplay = true,
             "persona_disabled" => has_session_persona_disabled = true,
@@ -680,9 +760,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_memory_status = false;
     let mut has_memory_error = false;
-    let mut rows_sessions_mem = stmt_sessions_mem.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows_sessions_mem.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows_sessions_mem = stmt_sessions_mem
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_sessions_mem
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "memory_status" {
             has_memory_status = true;
         } else if col_name == "memory_error" {
@@ -708,9 +795,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut has_avatar_crop_x = false;
     let mut has_avatar_crop_y = false;
     let mut has_avatar_crop_scale = false;
-    let mut rows2 = stmt2.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows2.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows2 = stmt2
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows2
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match col_name.as_str() {
             "custom_gradient_enabled" => has_custom_gradient_enabled = true,
             "custom_gradient_colors" => has_custom_gradient_colors = true,
@@ -776,9 +870,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut has_persona_avatar_crop_x = false;
     let mut has_persona_avatar_crop_y = false;
     let mut has_persona_avatar_crop_scale = false;
-    let mut rows_personas = stmt_personas.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows_personas.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows_personas = stmt_personas
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_personas
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match col_name.as_str() {
             "avatar_crop_x" => has_persona_avatar_crop_x = true,
             "avatar_crop_y" => has_persona_avatar_crop_y = true,
@@ -801,9 +902,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(lorebook_entries)")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_lorebook_entry_title = false;
-    let mut rows3 = stmt3.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows3.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows3 = stmt3
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows3
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "title" {
             has_lorebook_entry_title = true;
             break;
@@ -820,9 +928,16 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(prompt_templates)")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_prompt_entries = false;
-    let mut rows_prompt_templates = stmt_prompt_templates.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    while let Some(row) = rows_prompt_templates.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let col_name: String = row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows_prompt_templates = stmt_prompt_templates
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_prompt_templates
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "entries" {
             has_prompt_entries = true;
             break;
@@ -891,6 +1006,12 @@ pub fn db_checkpoint(app: tauri::AppHandle) -> Result<(), String> {
     let conn = open_db(&app)?;
     // PRAGMA wal_checkpoint(TRUNCATE) forces a full checkpoint and truncates the WAL file
     conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("WAL checkpoint failed: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("WAL checkpoint failed: {}", e),
+            )
+        })?;
     Ok(())
 }

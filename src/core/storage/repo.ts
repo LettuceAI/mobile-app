@@ -759,6 +759,27 @@ export async function getEmbeddingModelInfo(): Promise<{
   return storageBridge.getEmbeddingModelInfo();
 }
 
+export async function runEmbeddingTest(): Promise<{
+  success: boolean;
+  message: string;
+  scores: Array<{
+    pairName: string;
+    textA: string;
+    textB: string;
+    similarityScore: number;
+    expected: string;
+    passed: boolean;
+    category: string;
+  }>;
+  modelInfo: {
+    version: string;
+    maxTokens: number;
+    embeddingDimensions: number;
+  };
+}> {
+  return storageBridge.runEmbeddingTest();
+}
+
 export async function generateUserReply(
   sessionId: string,
   currentDraft?: string,

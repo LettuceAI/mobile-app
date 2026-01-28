@@ -177,6 +177,7 @@ pub fn run() {
             storage_manager::settings::storage_write_settings,
             storage_manager::settings::settings_set_defaults,
             storage_manager::settings::analytics_is_available,
+            storage_manager::db::storage_db_size,
             storage_manager::providers::provider_upsert,
             storage_manager::providers::provider_delete,
             storage_manager::models::model_upsert,
