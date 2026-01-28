@@ -417,7 +417,7 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
         .prepare("SELECT id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, voice_autoplay,
                          temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k,
                          memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events,
-                         archived, created_at, updated_at FROM sessions")
+                         memory_status, memory_error, archived, created_at, updated_at FROM sessions")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let sessions: Vec<(String, JsonValue)> = stmt
@@ -443,9 +443,11 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
                 "memory_summary": r.get::<_, Option<String>>(16)?,
                 "memory_summary_token_count": r.get::<_, i64>(17)?,
                 "memory_tool_events": r.get::<_, String>(18)?,
-                "archived": r.get::<_, i64>(19)? != 0,
-                "created_at": r.get::<_, i64>(20)?,
-                "updated_at": r.get::<_, i64>(21)?,
+                "memory_status": r.get::<_, Option<String>>(19)?,
+                "memory_error": r.get::<_, Option<String>>(20)?,
+                "archived": r.get::<_, i64>(21)? != 0,
+                "created_at": r.get::<_, i64>(22)?,
+                "updated_at": r.get::<_, i64>(23)?,
             });
             Ok((id, json))
         })
@@ -664,8 +666,8 @@ fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String
     let mut stmt = conn
         .prepare("SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name,
                   provider_id, provider_label, operation_type, prompt_tokens, completion_tokens, total_tokens,
-                  memory_tokens, summary_tokens, prompt_cost, completion_cost, total_cost, success, error_message
-                  FROM usage_records")
+                  memory_tokens, summary_tokens, reasoning_tokens, prompt_cost, completion_cost, total_cost,
+                  success, error_message FROM usage_records")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let records: Vec<(String, JsonValue)> = stmt
@@ -687,11 +689,12 @@ fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String
                 "total_tokens": r.get::<_, Option<i64>>(12)?,
                 "memory_tokens": r.get::<_, Option<i64>>(13)?,
                 "summary_tokens": r.get::<_, Option<i64>>(14)?,
-                "prompt_cost": r.get::<_, Option<f64>>(15)?,
-                "completion_cost": r.get::<_, Option<f64>>(16)?,
-                "total_cost": r.get::<_, Option<f64>>(17)?,
-                "success": r.get::<_, i64>(18)? != 0,
-                "error_message": r.get::<_, Option<String>>(19)?,
+                "reasoning_tokens": r.get::<_, Option<i64>>(15)?,
+                "prompt_cost": r.get::<_, Option<f64>>(16)?,
+                "completion_cost": r.get::<_, Option<f64>>(17)?,
+                "total_cost": r.get::<_, Option<f64>>(18)?,
+                "success": r.get::<_, i64>(19)? != 0,
+                "error_message": r.get::<_, Option<String>>(20)?,
             });
             Ok((id, json))
         })
@@ -1530,8 +1533,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                 "INSERT INTO sessions (id, character_id, title, system_prompt, selected_scene_id, persona_id, persona_disabled, voice_autoplay,
                  temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k,
                  memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events,
-                 archived, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+                 memory_status, memory_error, archived, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
                 params![
                     session_id,
                     character_id,
@@ -1554,6 +1557,8 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                     item.get("memory_summary").and_then(|v| v.as_str()),
                     item.get("memory_summary_token_count").and_then(|v| v.as_i64()).unwrap_or(0),
                     item.get("memory_tool_events").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    item.get("memory_status").and_then(|v| v.as_str()),
+                    item.get("memory_error").and_then(|v| v.as_str()),
                     item.get("archived").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
@@ -1793,9 +1798,9 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
             conn.execute(
                 "INSERT INTO usage_records (id, timestamp, session_id, character_id, character_name,
                  model_id, model_name, provider_id, provider_label, operation_type, prompt_tokens,
-                 completion_tokens, total_tokens, memory_tokens, summary_tokens, prompt_cost,
-                 completion_cost, total_cost, success, error_message)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                 completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens,
+                 prompt_cost, completion_cost, total_cost, success, error_message)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
                 params![
                     record_id,
                     item.get("timestamp").and_then(|v| v.as_i64()),
@@ -1812,6 +1817,7 @@ fn import_usage_records(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), 
                     item.get("total_tokens").and_then(|v| v.as_i64()),
                     item.get("memory_tokens").and_then(|v| v.as_i64()),
                     item.get("summary_tokens").and_then(|v| v.as_i64()),
+                    item.get("reasoning_tokens").and_then(|v| v.as_i64()),
                     item.get("prompt_cost").and_then(|v| v.as_f64()),
                     item.get("completion_cost").and_then(|v| v.as_f64()),
                     item.get("total_cost").and_then(|v| v.as_f64()),
