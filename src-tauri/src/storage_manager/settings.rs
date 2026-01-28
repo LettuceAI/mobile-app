@@ -423,8 +423,10 @@ pub fn storage_write_settings(app: tauri::AppHandle, data: String) -> Result<(),
 #[tauri::command]
 pub fn analytics_is_available() -> bool {
     std::env::var("APTABASE_KEY")
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| option_env!("APTABASE_KEY").map(|v| v.to_string()))
+        .is_some()
 }
 
 // Internal helper used by some backend modules

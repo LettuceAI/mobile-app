@@ -60,7 +60,10 @@ pub fn run() {
         }
     }
 
-    let aptabase_key = std::env::var("APTABASE_KEY").ok();
+    let aptabase_key = std::env::var("APTABASE_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| option_env!("APTABASE_KEY").map(|v| v.to_string()));
     let aptabase_plugin_enabled = aptabase_key.is_some();
     let aptabase_runtime = if aptabase_plugin_enabled {
         Some(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime for Aptabase"))
