@@ -68,9 +68,6 @@ if-addrs = "0.14.0"
 tauri-plugin-tts = "=0.1.1"
 urlencoding = "2.1.3"
 
-[patch.crates-io]
-tauri-plugin-aptabase = { path = "crates/tauri-plugin-aptabase-1.0.0" }
-
 [target.'cfg(not(target_os = "android"))'.dependencies]
 machine-uid = "0.3"
 
