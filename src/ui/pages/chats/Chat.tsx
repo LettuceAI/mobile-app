@@ -936,8 +936,13 @@ export function ChatConversationPage() {
               }
               streamingText += String(payload.data.text);
               setGeneratedReply(streamingText);
-            } else if (payload && payload.type === "error" && payload.data?.message) {
-              setHelpMeReplyError(String(payload.data.message));
+            } else if (payload && payload.type === "error") {
+              const message =
+                payload.data?.message ||
+                payload.data?.error ||
+                payload.message ||
+                "Help Me Reply failed.";
+              setHelpMeReplyError(String(message));
               setGeneratingReply(false);
               clearTimeout(loadingTimeout);
             }
@@ -951,7 +956,11 @@ export function ChatConversationPage() {
 
         // If we didn't get streaming updates, use the final result
         if (!streamingText.trim()) {
-          setGeneratedReply(result);
+          if (result?.trim()) {
+            setGeneratedReply(result);
+          } else {
+            setHelpMeReplyError("Help Me Reply failed to generate a reply.");
+          }
         }
 
         // Clear loading state once API call completes (for non-streaming case)
