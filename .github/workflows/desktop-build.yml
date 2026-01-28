@@ -7,6 +7,8 @@ jobs:
   linux:
     name: Linux Build
     runs-on: ubuntu-latest
+    env:
+      APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
 
     steps:
       - name: Checkout
@@ -117,6 +119,8 @@ jobs:
   windows:
     name: Windows Build
     runs-on: windows-latest
+    env:
+      APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
 
     steps:
       - name: Checkout
