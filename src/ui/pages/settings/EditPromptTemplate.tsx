@@ -125,7 +125,7 @@ const ENTRY_POSITION_OPTIONS = [
   { value: "inChat", label: "In Chat" },
 ] as const;
 
-const DRAG_HOLD_MS = 2000;
+const DRAG_HOLD_MS = 450;
 
 const createEntryId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -350,16 +350,30 @@ function PromptEntryListItem({
 }) {
   const controls = useDragControls();
   const dragTimeoutRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
+  const pendingEventRef = useRef<PointerEvent | null>(null);
+  const scrollLockRef = useRef<{
+    el: HTMLElement;
+    overflow: string;
+    touchAction: string;
+    scrollTop: number;
+  } | null>(null);
   const toggleId = `prompt-entry-mobile-${entry.id}`;
 
   const scheduleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.persist?.();
+    event.preventDefault();
+    event.stopPropagation();
+    pendingEventRef.current = event.nativeEvent;
     if (dragTimeoutRef.current) {
       window.clearTimeout(dragTimeoutRef.current);
     }
     dragTimeoutRef.current = window.setTimeout(() => {
       dragTimeoutRef.current = null;
-      controls.start(event);
+      const pendingEvent = pendingEventRef.current;
+      if (pendingEvent) {
+        draggingRef.current = true;
+        controls.start(pendingEvent);
+      }
     }, DRAG_HOLD_MS);
   };
 
@@ -370,25 +384,96 @@ function PromptEntryListItem({
     }
   };
 
+  const cancelDragStartWithRelease = (event: React.PointerEvent<HTMLButtonElement>) => {
+    cancelDragStart();
+    draggingRef.current = false;
+    pendingEventRef.current = null;
+  };
+
+  const lockScrollContainer = () => {
+    const scrollEl = document.querySelector("main") as HTMLElement | null;
+    if (!scrollEl || scrollLockRef.current) return;
+    scrollLockRef.current = {
+      el: scrollEl,
+      overflow: scrollEl.style.overflow,
+      touchAction: scrollEl.style.touchAction,
+      scrollTop: scrollEl.scrollTop,
+    };
+    scrollEl.style.overflow = "hidden";
+    scrollEl.style.touchAction = "none";
+  };
+
+  const unlockScrollContainer = () => {
+    if (!scrollLockRef.current) return;
+    const { el, overflow, touchAction, scrollTop } = scrollLockRef.current;
+    el.style.overflow = overflow;
+    el.style.touchAction = touchAction;
+    el.scrollTop = scrollTop;
+    scrollLockRef.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      unlockScrollContainer();
+      if (draggingRef.current) {
+        document.body.style.overflow = "";
+        document.body.style.touchAction = "";
+        draggingRef.current = false;
+      }
+    };
+  }, []);
+
   return (
     <Reorder.Item
       value={entry}
       dragListener={false}
       dragControls={controls}
       layout="position"
-      className={cn("rounded-xl border border-white/10 bg-white/5 p-3", "space-y-2")}
+      onDragStart={() => {
+        draggingRef.current = true;
+        document.body.style.overflow = "hidden";
+        document.body.style.touchAction = "none";
+        lockScrollContainer();
+      }}
+      onDragEnd={() => {
+        draggingRef.current = false;
+        document.body.style.overflow = "";
+        document.body.style.touchAction = "";
+        unlockScrollContainer();
+      }}
+      onPointerMove={(event) => {
+        if (dragTimeoutRef.current) {
+          pendingEventRef.current = event.nativeEvent;
+        }
+        if (draggingRef.current) {
+          event.preventDefault();
+        }
+      }}
+      onPointerUp={() => {
+        draggingRef.current = false;
+        pendingEventRef.current = null;
+        unlockScrollContainer();
+      }}
+      onPointerCancel={() => {
+        draggingRef.current = false;
+        pendingEventRef.current = null;
+        unlockScrollContainer();
+      }}
+      className={cn("rounded-xl border border-white/10 bg-white/5 p-3 select-none", "space-y-2")}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <button
             onPointerDown={scheduleDragStart}
-            onPointerUp={cancelDragStart}
-            onPointerLeave={cancelDragStart}
-            onPointerCancel={cancelDragStart}
+            onPointerUp={cancelDragStartWithRelease}
+            onPointerLeave={cancelDragStartWithRelease}
+            onPointerCancel={cancelDragStartWithRelease}
+            onContextMenu={(event) => event.preventDefault()}
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-lg",
               "border border-white/10 bg-white/5 text-white/40",
             )}
+            style={{ touchAction: "none" }}
             title="Drag to reorder"
           >
             <GripVertical className="h-4 w-4" />

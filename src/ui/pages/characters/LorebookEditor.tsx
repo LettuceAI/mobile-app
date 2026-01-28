@@ -18,7 +18,7 @@ import {
 import { BottomMenu, MenuButton } from "../../components";
 import { TopNav } from "../../components/App";
 
-const DRAG_HOLD_MS = 2000;
+const DRAG_HOLD_MS = 450;
 
 function KeywordTagInput({
   keywords,
@@ -128,11 +128,23 @@ function EntryListItem({
 }) {
   const controls = useDragControls();
   const dragTimeoutRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
+  const pendingEventRef = useRef<PointerEvent | null>(null);
+  const scrollLockRef = useRef<{
+    el: HTMLElement;
+    overflow: string;
+    touchAction: string;
+    scrollTop: number;
+  } | null>(null);
 
   const scheduleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.persist?.();
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    pendingEventRef.current = event.nativeEvent;
     if (event.pointerType === "mouse") {
-      controls.start(event);
+      draggingRef.current = true;
+      controls.start(event.nativeEvent);
       return;
     }
     if (dragTimeoutRef.current) {
@@ -140,7 +152,11 @@ function EntryListItem({
     }
     dragTimeoutRef.current = window.setTimeout(() => {
       dragTimeoutRef.current = null;
-      controls.start(event);
+      const pendingEvent = pendingEventRef.current;
+      if (pendingEvent) {
+        draggingRef.current = true;
+        controls.start(pendingEvent);
+      }
     }, DRAG_HOLD_MS);
   };
 
@@ -149,6 +165,29 @@ function EntryListItem({
       window.clearTimeout(dragTimeoutRef.current);
       dragTimeoutRef.current = null;
     }
+    pendingEventRef.current = null;
+  };
+
+  const lockScrollContainer = () => {
+    const scrollEl = document.querySelector("main") as HTMLElement | null;
+    if (!scrollEl || scrollLockRef.current) return;
+    scrollLockRef.current = {
+      el: scrollEl,
+      overflow: scrollEl.style.overflow,
+      touchAction: scrollEl.style.touchAction,
+      scrollTop: scrollEl.scrollTop,
+    };
+    scrollEl.style.overflow = "hidden";
+    scrollEl.style.touchAction = "none";
+  };
+
+  const unlockScrollContainer = () => {
+    if (!scrollLockRef.current) return;
+    const { el, overflow, touchAction, scrollTop } = scrollLockRef.current;
+    el.style.overflow = overflow;
+    el.style.touchAction = touchAction;
+    el.scrollTop = scrollTop;
+    scrollLockRef.current = null;
   };
 
   const displayTitle = entry.title?.trim() || entry.keywords[0] || "Untitled Entry";
@@ -169,8 +208,38 @@ function EntryListItem({
       dragMomentum={false}
       dragSnapToOrigin
       dragTransition={{ bounceStiffness: 300, bounceDamping: 25 }}
+      onDragStart={() => {
+        draggingRef.current = true;
+        document.body.style.overflow = "hidden";
+        document.body.style.touchAction = "none";
+        lockScrollContainer();
+      }}
       onDrag={(_, info) => onDrag(originalIndex, info)}
       onDragEnd={(_, info) => onDragEnd(originalIndex, info)}
+      onPointerMove={(event) => {
+        if (dragTimeoutRef.current) {
+          pendingEventRef.current = event.nativeEvent;
+        }
+        if (draggingRef.current) {
+          event.preventDefault();
+        }
+      }}
+      onPointerUp={(event) => {
+        cancelDragStart();
+        draggingRef.current = false;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        document.body.style.overflow = "";
+        document.body.style.touchAction = "";
+        unlockScrollContainer();
+      }}
+      onPointerCancel={(event) => {
+        cancelDragStart();
+        draggingRef.current = false;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        document.body.style.overflow = "";
+        document.body.style.touchAction = "";
+        unlockScrollContainer();
+      }}
       whileDrag={{ scale: 1.03, zIndex: 50, boxShadow: "0 15px 40px rgba(0,0,0,0.5)" }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
       className={`group relative flex w-full items-center gap-2 overflow-hidden rounded-xl border px-2 py-3 ${isDragging ? "opacity-0" : "cursor-grab active:cursor-grabbing"} ${
@@ -180,17 +249,21 @@ function EntryListItem({
       }`}
     >
       <button
+        type="button"
         onPointerDown={scheduleDragStart}
         onPointerUp={cancelDragStart}
         onPointerLeave={cancelDragStart}
         onPointerCancel={cancelDragStart}
+        onContextMenu={(event) => event.preventDefault()}
         className="flex h-10 w-8 shrink-0 items-center justify-center text-white/30"
+        style={{ touchAction: "none" }}
         title="Drag to reorder"
       >
         <GripVertical size={18} />
       </button>
 
       <button
+        type="button"
         onClick={() => onSelect(entry)}
         className="flex flex-1 items-center gap-3 text-left active:scale-[0.995]"
       >
