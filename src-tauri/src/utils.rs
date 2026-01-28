@@ -296,6 +296,7 @@ pub(crate) fn log_info_global(component: &str, message: impl AsRef<str>) {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn log_warn_global(component: &str, message: impl AsRef<str>) {
     if let Some(app) = get_global_app_handle() {
         log_backend(&app, component, LogLevel::Warn, message);

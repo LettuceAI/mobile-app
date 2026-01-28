@@ -384,7 +384,7 @@ function PromptEntryListItem({
     }
   };
 
-  const cancelDragStartWithRelease = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const cancelDragStartWithRelease = () => {
     cancelDragStart();
     draggingRef.current = false;
     pendingEventRef.current = null;
