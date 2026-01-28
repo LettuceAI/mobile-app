@@ -47,6 +47,7 @@ export const storageBridge = {
     invoke("settings_set_default_model", { id }) as Promise<void>,
   settingsSetAppState: (state: unknown) =>
     invoke("settings_set_app_state", { stateJson: JSON.stringify(state) }) as Promise<void>,
+  analyticsIsAvailable: () => invoke<boolean>("analytics_is_available"),
   settingsSetPromptTemplate: (id: string | null) =>
     invoke("settings_set_prompt_template", { id }) as Promise<void>,
   settingsSetSystemPrompt: (prompt: string | null) =>

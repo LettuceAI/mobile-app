@@ -25,14 +25,61 @@ mod utils;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri::Manager;
+    use tauri_plugin_aptabase::EventTracker;
 
-    let builder = tauri::Builder::default()
+    #[derive(Clone)]
+    struct AnalyticsState {
+        enabled: bool,
+    }
+
+    fn read_analytics_enabled(app: &tauri::AppHandle) -> bool {
+        match crate::storage_manager::settings::internal_read_settings(app) {
+            Ok(Some(settings_json)) => {
+                let parsed: serde_json::Value = match serde_json::from_str(&settings_json) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        utils::log_error(
+                            app,
+                            "settings",
+                            format!("Failed to parse settings JSON: {}", err),
+                        );
+                        return true;
+                    }
+                };
+                parsed
+                    .get("appState")
+                    .and_then(|v| v.get("analyticsEnabled"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true)
+            }
+            Ok(None) => true,
+            Err(err) => {
+                utils::log_error(app, "settings", format!("Failed to read settings: {}", err));
+                true
+            }
+        }
+    }
+
+    let aptabase_key = std::env::var("APTABASE_KEY").ok();
+    let aptabase_plugin_enabled = aptabase_key.is_some();
+    let aptabase_runtime = if aptabase_plugin_enabled {
+        Some(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime for Aptabase"))
+    } else {
+        None
+    };
+    let _aptabase_runtime_guard = aptabase_runtime.as_ref().map(|rt| rt.enter());
+
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_tts::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init());
+
+    if let Some(key) = aptabase_key.as_deref() {
+        builder = builder.plugin(tauri_plugin_aptabase::Builder::new(key).build());
+    }
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = builder.plugin(tauri_plugin_haptics::init());
@@ -43,7 +90,7 @@ pub fn run() {
         .plugin(tauri_plugin_barcode_scanner::init());
 
     builder
-        .setup(|app| {
+        .setup(move |app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
 
@@ -62,6 +109,20 @@ pub fn run() {
                     app.manage(swappable);
                 }
                 Err(e) => panic!("Failed to initialize database pool: {}", e),
+            }
+
+            let analytics_enabled = aptabase_plugin_enabled && read_analytics_enabled(app.handle());
+            app.manage(AnalyticsState {
+                enabled: analytics_enabled,
+            });
+            if analytics_enabled {
+                if let Err(e) = app.track_event("app_started", None) {
+                    utils::log_error(
+                        app.handle(),
+                        "aptabase",
+                        format!("track_event(app_started) failed: {}", e),
+                    );
+                }
             }
 
             if let Err(e) = storage_manager::importer::run_legacy_import(app.handle()) {
@@ -115,6 +176,7 @@ pub fn run() {
             storage_manager::settings::storage_read_settings,
             storage_manager::settings::storage_write_settings,
             storage_manager::settings::settings_set_defaults,
+            storage_manager::settings::analytics_is_available,
             storage_manager::providers::provider_upsert,
             storage_manager::providers::provider_delete,
             storage_manager::models::model_upsert,
@@ -345,6 +407,22 @@ pub fn run() {
             group_chat_manager::group_chat_generate_user_reply,
             group_chat_manager::group_chat_retry_dynamic_memory,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(move |handler, event| match event {
+            tauri::RunEvent::Exit { .. } => {
+                let analytics_enabled = handler.state::<AnalyticsState>().enabled;
+                if analytics_enabled {
+                    if let Err(e) = handler.track_event("app_exited", None) {
+                        utils::log_error(
+                            &handler,
+                            "aptabase",
+                            format!("track_event(app_exited) failed: {}", e),
+                        );
+                    }
+                    handler.flush_events_blocking();
+                }
+            }
+            _ => {}
+        });
 }

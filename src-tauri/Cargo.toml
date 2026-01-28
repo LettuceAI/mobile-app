@@ -31,6 +31,7 @@ serde_json = "1"
 unified-entity-card = "0.1.1"
 keyring = "2"
 zeroize = "1"
+tauri-plugin-aptabase = "1.0.0"
 reqwest = { version = "0.11", default-features = false, features = ["json", "stream", "multipart", "rustls-tls"] }
 futures-util = "0.3"
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["std"] }

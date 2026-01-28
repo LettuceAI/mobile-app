@@ -10,6 +10,7 @@ function cloneAppState(state?: AppState): AppState {
     theme: source.theme,
     tooltips: { ...source.tooltips },
     pureModeEnabled: source.pureModeEnabled,
+    analyticsEnabled: source.analyticsEnabled ?? true,
   };
 }
 
@@ -108,6 +109,12 @@ export async function setTheme(theme: Theme): Promise<void> {
 export async function setPureModeEnabled(enabled: boolean): Promise<void> {
   await withAppState((state) => {
     state.pureModeEnabled = enabled;
+  });
+}
+
+export async function setAnalyticsEnabled(enabled: boolean): Promise<void> {
+  await withAppState((state) => {
+    state.analyticsEnabled = enabled;
   });
 }
 

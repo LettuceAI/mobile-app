@@ -1,18 +1,29 @@
 import { useState, useEffect } from "react";
-import { Shield, Lock, Database } from "lucide-react";
-import { readSettings } from "../../../core/storage/repo";
-import { setPureModeEnabled } from "../../../core/storage/appState";
+import { Shield, Lock, Database, Power } from "lucide-react";
+import { isAnalyticsAvailable, readSettings } from "../../../core/storage/repo";
+import { setAnalyticsEnabled, setPureModeEnabled } from "../../../core/storage/appState";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { BottomMenu, MenuButton, MenuButtonGroup } from "../../components/BottomMenu";
 
 export function SecurityPage() {
   const [isPureModeEnabled, setIsPureModeEnabled] = useState(true);
   const [isGlitchEnabled, setIsGlitchEnabled] = useState(true);
+  const [isAnalyticsEnabled, setIsAnalyticsEnabled] = useState(true);
+  const [isAnalyticsAvailableState, setIsAnalyticsAvailableState] = useState(true);
+  const [showRestartMenu, setShowRestartMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load settings on mount
   useEffect(() => {
-    readSettings()
-      .then((settings) => {
+    const load = async () => {
+      try {
+        const [settings, available] = await Promise.all([readSettings(), isAnalyticsAvailable()]);
         setIsPureModeEnabled(settings.appState.pureModeEnabled ?? true);
+        setIsAnalyticsEnabled(settings.appState.analyticsEnabled ?? true);
+        setIsAnalyticsAvailableState(available);
+        if (!available) {
+          setIsAnalyticsEnabled(false);
+        }
         try {
           const stored = localStorage.getItem("lettuce.easterEggs.glitch");
           if (stored !== null) {
@@ -22,12 +33,13 @@ export function SecurityPage() {
           console.error("Failed to read glitch setting:", err);
           setIsGlitchEnabled(true);
         }
-        setIsLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Failed to load settings:", err);
+      } finally {
         setIsLoading(false);
-      });
+      }
+    };
+    void load();
   }, []);
 
   // Save when toggled
@@ -53,6 +65,21 @@ export function SecurityPage() {
     } catch (err) {
       console.error("Failed to save glitch setting:", err);
       setIsGlitchEnabled(!newValue);
+    }
+  };
+
+  const handleAnalyticsToggle = async () => {
+    if (!isAnalyticsAvailableState) {
+      return;
+    }
+    const newValue = !isAnalyticsEnabled;
+    setIsAnalyticsEnabled(newValue);
+    try {
+      await setAnalyticsEnabled(newValue);
+      setShowRestartMenu(true);
+    } catch (err) {
+      console.error("Failed to save analytics setting:", err);
+      setIsAnalyticsEnabled(!newValue);
     }
   };
 
@@ -222,14 +249,63 @@ export function SecurityPage() {
                   <Database className="h-4 w-4 text-white/70" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">Local Storage</span>
-                    <span className="rounded-md border border-white/10 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white/70">
-                      Private
-                    </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">Analytics</span>
+                        <span
+                          className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-[0.25em] ${
+                            isAnalyticsEnabled
+                              ? "border-emerald-400/50 bg-emerald-500/25 text-emerald-100"
+                              : "border-white/10 bg-white/10 text-white/60"
+                          }`}
+                        >
+                          {!isAnalyticsAvailableState
+                            ? "Unavailable"
+                            : isAnalyticsEnabled
+                              ? "On"
+                              : "Off"}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/50">
+                        {isAnalyticsAvailableState
+                          ? "Help improve the app with anonymous usage events"
+                          : "Requires an analytics API key"}
+                      </div>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        id="analytics-tracking"
+                        type="checkbox"
+                        checked={isAnalyticsEnabled}
+                        onChange={handleAnalyticsToggle}
+                        disabled={!isAnalyticsAvailableState}
+                        className="peer sr-only"
+                      />
+                      <label
+                        htmlFor="analytics-tracking"
+                        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${
+                          isAnalyticsAvailableState
+                            ? "cursor-pointer"
+                            : "cursor-not-allowed opacity-60"
+                        } ${
+                          isAnalyticsEnabled
+                            ? "bg-emerald-500 shadow-lg shadow-emerald-500/30"
+                            : "bg-white/20"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            isAnalyticsEnabled ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </label>
+                    </div>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-white/45 leading-relaxed">
-                    Data stays on your device, no cloud sync
+                  <div className="mt-2 text-[11px] text-white/45 leading-relaxed">
+                    {isAnalyticsAvailableState
+                      ? "Restart required to apply changes"
+                      : "Set APTABASE_KEY to enable analytics"}
                   </div>
                 </div>
               </div>
@@ -238,17 +314,19 @@ export function SecurityPage() {
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex items-start gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10">
-                  <Lock className="h-4 w-4 text-white/70" />
+                  <Database className="h-4 w-4 text-white/70" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">API Keys</span>
+                    <span className="text-sm font-medium text-white">Aptabase Analytics</span>
                     <span className="rounded-md border border-white/10 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white/70">
-                      Encrypted
+                      Anonymous
                     </span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-white/45 leading-relaxed">
-                    Encrypted storage, only used for AI authentication
+                    Events are anonymous and contain only the event name and optional properties we
+                    define. We do not send message content or personal identifiers. Aptabase may
+                    infer a coarse location from your IP on their servers.
                   </div>
                 </div>
               </div>
@@ -256,6 +334,32 @@ export function SecurityPage() {
           </div>
         </div>
       </section>
+      <BottomMenu
+        isOpen={showRestartMenu}
+        onClose={() => setShowRestartMenu(false)}
+        title="Restart required"
+      >
+        <div className="text-sm text-white/70">Analytics changes apply after a restart.</div>
+        <MenuButtonGroup>
+          <MenuButton
+            icon={Power}
+            title="Restart now"
+            description="Apply analytics changes"
+            color="from-emerald-500 to-emerald-600"
+            onClick={async () => {
+              setShowRestartMenu(false);
+              await relaunch();
+            }}
+          />
+          <MenuButton
+            icon={Lock}
+            title="Later"
+            description="Keep current session"
+            color="from-blue-500 to-blue-600"
+            onClick={() => setShowRestartMenu(false)}
+          />
+        </MenuButtonGroup>
+      </BottomMenu>
     </div>
   );
 }

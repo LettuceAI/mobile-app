@@ -136,6 +136,10 @@ export async function setAppState(state: AppState): Promise<void> {
   broadcastSettingsUpdated();
 }
 
+export async function isAnalyticsAvailable(): Promise<boolean> {
+  return storageBridge.analyticsIsAvailable();
+}
+
 export async function setPromptTemplate(id: string | null): Promise<void> {
   await storageBridge.settingsSetPromptTemplate(id);
   broadcastSettingsUpdated();

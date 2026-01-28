@@ -1,16 +1,12 @@
 {
   "identifier": "mobile-capability",
-  "platforms": [
-    "android",
-    "iOS"
-  ],
-  "windows": [
-    "main"
-  ],
+  "platforms": ["android", "iOS"],
+  "windows": ["main"],
   "permissions": [
     "barcode-scanner:default",
     "tts:default",
     "fs:allow-read-file",
+    "aptabase:allow-track-event",
     "haptics:allow-impact-feedback",
     "haptics:allow-notification-feedback",
     "haptics:allow-selection-feedback",

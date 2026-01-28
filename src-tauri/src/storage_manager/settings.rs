@@ -85,7 +85,8 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut provider_credentials: Vec<JsonValue> = Vec::new();
     for item in creds_iter {
-        provider_credentials.push(item.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
+        provider_credentials
+            .push(item.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
     }
 
     // Models
@@ -149,7 +150,8 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         "onboarding": {"completed": false, "skipped": false, "providerSetupCompleted": false, "modelSetupCompleted": false},
         "theme": "light",
         "tooltips": {},
-        "pureModeEnabled": true
+        "pureModeEnabled": true,
+        "analyticsEnabled": true
     }));
 
     let mut root = JsonMap::new();
@@ -191,7 +193,8 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
     }
 
     Ok(Some(
-        serde_json::to_string(&JsonValue::Object(root)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+        serde_json::to_string(&JsonValue::Object(root))
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
     ))
 }
 
@@ -240,7 +243,9 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
         }
     });
 
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     tx.execute(
         r#"INSERT INTO settings (id, default_provider_credential_id, default_model_id, app_state, prompt_template_id, system_prompt, migration_version, advanced_settings, created_at, updated_at)
             VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -381,7 +386,8 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 fn ensure_settings_row(conn: &rusqlite::Connection) -> Result<(), String> {
@@ -412,6 +418,13 @@ pub fn storage_read_settings(app: tauri::AppHandle) -> Result<Option<String>, St
 #[tauri::command]
 pub fn storage_write_settings(app: tauri::AppHandle, data: String) -> Result<(), String> {
     db_write_settings_json(&app, data)
+}
+
+#[tauri::command]
+pub fn analytics_is_available() -> bool {
+    std::env::var("APTABASE_KEY")
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
 }
 
 // Internal helper used by some backend modules

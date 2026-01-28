@@ -1457,6 +1457,7 @@ export const AppStateSchema = z.object({
   theme: z.enum(["light", "dark"]),
   tooltips: TooltipsStateSchema,
   pureModeEnabled: z.boolean().default(true),
+  analyticsEnabled: z.boolean().default(true),
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
@@ -1491,6 +1492,7 @@ export function createDefaultAppState(): AppState {
     theme: "light",
     tooltips: {},
     pureModeEnabled: true,
+    analyticsEnabled: true,
   };
 }
 
