@@ -29,16 +29,33 @@ fn open_backup_file(_app: &tauri::AppHandle, path: &str) -> Result<File, String>
     {
         let api = _app.android_fs();
 
-        let url = Url::parse(path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid URI '{}': {}", path, e)))?;
+        let url = Url::parse(path).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Invalid URI '{}': {}", path, e),
+            )
+        })?;
         let file_path = FilePath::Url(url);
 
-        api.open_file(&file_path)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to open Android file: {}", e)))
+        api.open_file(&file_path).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to open Android file: {}", e),
+            )
+        })
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        File::open(path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to open backup file: {}", e)))
+        File::open(path).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to open backup file: {}", e),
+            )
+        })
     }
 }
 
@@ -72,18 +89,18 @@ fn derive_key_from_password(password: &str, salt: &[u8; 16]) -> [u8; 32] {
 fn encrypt_data(data: &[u8], key: &[u8; 32], nonce: &[u8; 24]) -> Result<Vec<u8>, String> {
     let cipher = XChaCha20Poly1305::new(key.into());
     let xnonce: XNonce = (*nonce).into();
-    cipher
-        .encrypt(&xnonce, data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Encryption failed: {}", e)))
+    cipher.encrypt(&xnonce, data).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Encryption failed: {}", e))
+    })
 }
 
 /// Decrypt data using XChaCha20-Poly1305
 fn decrypt_data(data: &[u8], key: &[u8; 32], nonce: &[u8; 24]) -> Result<Vec<u8>, String> {
     let cipher = XChaCha20Poly1305::new(key.into());
     let xnonce: XNonce = (*nonce).into();
-    cipher
-        .decrypt(&xnonce, data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Decryption failed: {}", e)))
+    cipher.decrypt(&xnonce, data).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Decryption failed: {}", e))
+    })
 }
 
 /// Get the downloads directory path
@@ -503,6 +520,143 @@ fn export_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     Ok(result)
 }
 
+fn export_group_sessions(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
+    let conn = open_db(app)?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, character_ids, persona_id, created_at, updated_at, archived,
+                    chat_type, starting_scene, background_image_path,
+                    memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events
+             FROM group_sessions",
+        )
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let sessions: Vec<(String, JsonValue)> = stmt
+        .query_map([], |r| {
+            let id: String = r.get(0)?;
+            let json = serde_json::json!({
+                "id": id.clone(),
+                "name": r.get::<_, String>(1)?,
+                "character_ids": r.get::<_, String>(2)?,
+                "persona_id": r.get::<_, Option<String>>(3)?,
+                "created_at": r.get::<_, i64>(4)?,
+                "updated_at": r.get::<_, i64>(5)?,
+                "archived": r.get::<_, i64>(6)? != 0,
+                "chat_type": r.get::<_, String>(7)?,
+                "starting_scene": r.get::<_, Option<String>>(8)?,
+                "background_image_path": r.get::<_, Option<String>>(9)?,
+                "memories": r.get::<_, String>(10)?,
+                "memory_embeddings": r.get::<_, String>(11)?,
+                "memory_summary": r.get::<_, String>(12)?,
+                "memory_summary_token_count": r.get::<_, i64>(13)?,
+                "memory_tool_events": r.get::<_, String>(14)?,
+            });
+            Ok((id, json))
+        })
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let mut result = Vec::new();
+    for (session_id, mut session_json) in sessions {
+        let mut participation_stmt = conn
+            .prepare(
+                "SELECT id, character_id, speak_count, last_spoke_turn, last_spoke_at
+                 FROM group_participation WHERE session_id = ?",
+            )
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+        let participation: Vec<JsonValue> = participation_stmt
+            .query_map([&session_id], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "character_id": r.get::<_, String>(1)?,
+                    "speak_count": r.get::<_, i64>(2)?,
+                    "last_spoke_turn": r.get::<_, Option<i64>>(3)?,
+                    "last_spoke_at": r.get::<_, Option<i64>>(4)?,
+                }))
+            })
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+        let mut messages_stmt = conn
+            .prepare(
+                "SELECT id, role, content, speaker_character_id, turn_number, created_at,
+                        prompt_tokens, completion_tokens, total_tokens, selected_variant_id,
+                        is_pinned, attachments, reasoning, selection_reasoning, model_id
+                 FROM group_messages WHERE session_id = ? ORDER BY created_at ASC",
+            )
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+        let messages: Vec<(String, JsonValue)> = messages_stmt
+            .query_map([&session_id], |r| {
+                let msg_id: String = r.get(0)?;
+                let json = serde_json::json!({
+                    "id": msg_id.clone(),
+                    "role": r.get::<_, String>(1)?,
+                    "content": r.get::<_, String>(2)?,
+                    "speaker_character_id": r.get::<_, Option<String>>(3)?,
+                    "turn_number": r.get::<_, i64>(4)?,
+                    "created_at": r.get::<_, i64>(5)?,
+                    "prompt_tokens": r.get::<_, Option<i64>>(6)?,
+                    "completion_tokens": r.get::<_, Option<i64>>(7)?,
+                    "total_tokens": r.get::<_, Option<i64>>(8)?,
+                    "selected_variant_id": r.get::<_, Option<String>>(9)?,
+                    "is_pinned": r.get::<_, i64>(10)? != 0,
+                    "attachments": r.get::<_, String>(11)?,
+                    "reasoning": r.get::<_, Option<String>>(12)?,
+                    "selection_reasoning": r.get::<_, Option<String>>(13)?,
+                    "model_id": r.get::<_, Option<String>>(14)?,
+                });
+                Ok((msg_id, json))
+            })
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+        let mut messages_with_variants = Vec::new();
+        for (msg_id, mut msg_json) in messages {
+            let mut variants_stmt = conn
+                .prepare(
+                    "SELECT id, content, speaker_character_id, created_at, prompt_tokens, completion_tokens,
+                            total_tokens, reasoning, selection_reasoning, model_id
+                     FROM group_message_variants WHERE message_id = ?",
+                )
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+            let variants: Vec<JsonValue> = variants_stmt
+                .query_map([&msg_id], |r| {
+                    Ok(serde_json::json!({
+                        "id": r.get::<_, String>(0)?,
+                        "content": r.get::<_, String>(1)?,
+                        "speaker_character_id": r.get::<_, Option<String>>(2)?,
+                        "created_at": r.get::<_, i64>(3)?,
+                        "prompt_tokens": r.get::<_, Option<i64>>(4)?,
+                        "completion_tokens": r.get::<_, Option<i64>>(5)?,
+                        "total_tokens": r.get::<_, Option<i64>>(6)?,
+                        "reasoning": r.get::<_, Option<String>>(7)?,
+                        "selection_reasoning": r.get::<_, Option<String>>(8)?,
+                        "model_id": r.get::<_, Option<String>>(9)?,
+                    }))
+                })
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+            msg_json["variants"] = serde_json::json!(variants);
+            messages_with_variants.push(msg_json);
+        }
+
+        session_json["participation"] = serde_json::json!(participation);
+        session_json["messages"] = serde_json::json!(messages_with_variants);
+        result.push(session_json);
+    }
+
+    Ok(result)
+}
+
 fn export_usage_records(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
 
@@ -688,7 +842,8 @@ pub async fn backup_export(
     };
 
     // Create the zip file
-    let file = File::create(&output_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let file = File::create(&output_path)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut zip = ZipWriter::new(file);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
@@ -705,11 +860,13 @@ pub async fn backup_export(
             let encrypted = encrypt_data(&json_bytes, key, nonce)?;
             zip.start_file(format!("data/{}.json.enc", name), options)
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-            zip.write_all(&encrypted).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            zip.write_all(&encrypted)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         } else {
             zip.start_file(format!("data/{}.json", name), options)
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-            zip.write_all(&json_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            zip.write_all(&json_bytes)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
         Ok(())
     };
@@ -774,6 +931,15 @@ pub async fn backup_export(
         &mut zip,
         "sessions",
         &serde_json::json!(sessions),
+        &encryption,
+    )?;
+
+    log_info(&app, "backup", "Exporting group sessions...");
+    let group_sessions = export_group_sessions(&app)?;
+    add_json_to_zip(
+        &mut zip,
+        "group_sessions",
+        &serde_json::json!(group_sessions),
         &encryption,
     )?;
 
@@ -879,13 +1045,15 @@ pub async fn backup_export(
     };
 
     // Add manifest
-    let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let manifest_json = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     zip.start_file("manifest.json", options)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     zip.write_all(manifest_json.as_bytes())
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    zip.finish().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    zip.finish()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     log_info(
         &app,
@@ -912,7 +1080,8 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
                 .to_string_lossy();
 
-            let bytes = fs::read(path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let bytes = fs::read(path)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             if let Some((_, nonce, key)) = encryption {
                 // Encrypt the file content
@@ -920,12 +1089,14 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(
                 let zip_path = format!("{}/{}.enc", prefix, relative);
                 zip.start_file(&zip_path, options)
                     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-                zip.write_all(&encrypted).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                zip.write_all(&encrypted)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             } else {
                 let zip_path = format!("{}/{}", prefix, relative);
                 zip.start_file(&zip_path, options)
                     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-                zip.write_all(&bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                zip.write_all(&bytes)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             }
         }
     }
@@ -1435,7 +1606,13 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
                                     variant.get("reasoning").and_then(|v| v.as_str()),
                                 ],
                             )
-                            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert message variant: {}", e)))?;
+                            .map_err(|e| {
+                                crate::utils::err_msg(
+                                    module_path!(),
+                                    line!(),
+                                    format!("Failed to insert message variant: {}", e),
+                                )
+                            })?;
                             variant_count += 1;
                         }
                     }
@@ -1450,6 +1627,149 @@ fn import_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
         format!(
             "Sessions import complete: {} sessions, {} messages, {} variants",
             session_count, message_count, variant_count
+        ),
+    );
+
+    Ok(())
+}
+
+fn import_group_sessions(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), String> {
+    let conn = open_db(app)?;
+
+    conn.execute("DELETE FROM group_message_variants", [])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    conn.execute("DELETE FROM group_messages", [])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    conn.execute("DELETE FROM group_participation", [])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    conn.execute("DELETE FROM group_sessions", [])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let mut session_count = 0;
+    let mut message_count = 0;
+    let mut variant_count = 0;
+    let mut participation_count = 0;
+
+    if let Some(arr) = data.as_array() {
+        log_info(
+            app,
+            "backup",
+            format!("Importing {} group sessions...", arr.len()),
+        );
+
+        for item in arr {
+            let session_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+
+            conn.execute(
+                "INSERT INTO group_sessions (id, name, character_ids, persona_id, created_at, updated_at, archived,
+                 chat_type, starting_scene, background_image_path,
+                 memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                params![
+                    session_id,
+                    item.get("name").and_then(|v| v.as_str()).unwrap_or("Group Chat"),
+                    item.get("character_ids").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    item.get("persona_id").and_then(|v| v.as_str()),
+                    item.get("created_at").and_then(|v| v.as_i64()),
+                    item.get("updated_at").and_then(|v| v.as_i64()),
+                    item.get("archived").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
+                    item.get("chat_type").and_then(|v| v.as_str()).unwrap_or("conversation"),
+                    item.get("starting_scene").and_then(|v| v.as_str()),
+                    item.get("background_image_path").and_then(|v| v.as_str()),
+                    item.get("memories").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    item.get("memory_embeddings").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    item.get("memory_summary").and_then(|v| v.as_str()).unwrap_or(""),
+                    item.get("memory_summary_token_count").and_then(|v| v.as_i64()).unwrap_or(0),
+                    item.get("memory_tool_events").and_then(|v| v.as_str()).unwrap_or("[]"),
+                ],
+            )
+            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert group session {}: {}", session_id, e)))?;
+            session_count += 1;
+
+            if let Some(participants) = item.get("participation").and_then(|v| v.as_array()) {
+                for part in participants {
+                    conn.execute(
+                        "INSERT INTO group_participation (id, session_id, character_id, speak_count, last_spoke_turn, last_spoke_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                        params![
+                            part.get("id").and_then(|v| v.as_str()),
+                            session_id,
+                            part.get("character_id").and_then(|v| v.as_str()),
+                            part.get("speak_count").and_then(|v| v.as_i64()).unwrap_or(0),
+                            part.get("last_spoke_turn").and_then(|v| v.as_i64()),
+                            part.get("last_spoke_at").and_then(|v| v.as_i64()),
+                        ],
+                    )
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert group participation in session {}: {}", session_id, e)))?;
+                    participation_count += 1;
+                }
+            }
+
+            if let Some(messages) = item.get("messages").and_then(|v| v.as_array()) {
+                for msg in messages {
+                    let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
+
+                    conn.execute(
+                        "INSERT INTO group_messages (id, session_id, role, content, speaker_character_id, turn_number, created_at,
+                         prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, attachments, reasoning, selection_reasoning, model_id)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                        params![
+                            msg_id,
+                            session_id,
+                            msg.get("role").and_then(|v| v.as_str()),
+                            msg.get("content").and_then(|v| v.as_str()),
+                            msg.get("speaker_character_id").and_then(|v| v.as_str()),
+                            msg.get("turn_number").and_then(|v| v.as_i64()).unwrap_or(0),
+                            msg.get("created_at").and_then(|v| v.as_i64()),
+                            msg.get("prompt_tokens").and_then(|v| v.as_i64()),
+                            msg.get("completion_tokens").and_then(|v| v.as_i64()),
+                            msg.get("total_tokens").and_then(|v| v.as_i64()),
+                            msg.get("selected_variant_id").and_then(|v| v.as_str()),
+                            msg.get("is_pinned").and_then(|v| v.as_bool()).unwrap_or(false) as i64,
+                            msg.get("attachments").and_then(|v| v.as_str()).unwrap_or("[]"),
+                            msg.get("reasoning").and_then(|v| v.as_str()),
+                            msg.get("selection_reasoning").and_then(|v| v.as_str()),
+                            msg.get("model_id").and_then(|v| v.as_str()),
+                        ],
+                    )
+                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert group message in session {}: {}", session_id, e)))?;
+                    message_count += 1;
+
+                    if let Some(variants) = msg.get("variants").and_then(|v| v.as_array()) {
+                        for variant in variants {
+                            conn.execute(
+                                "INSERT INTO group_message_variants (id, message_id, content, speaker_character_id, created_at,
+                                 prompt_tokens, completion_tokens, total_tokens, reasoning, selection_reasoning, model_id)
+                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                params![
+                                    variant.get("id").and_then(|v| v.as_str()),
+                                    msg_id,
+                                    variant.get("content").and_then(|v| v.as_str()),
+                                    variant.get("speaker_character_id").and_then(|v| v.as_str()),
+                                    variant.get("created_at").and_then(|v| v.as_i64()),
+                                    variant.get("prompt_tokens").and_then(|v| v.as_i64()),
+                                    variant.get("completion_tokens").and_then(|v| v.as_i64()),
+                                    variant.get("total_tokens").and_then(|v| v.as_i64()),
+                                    variant.get("reasoning").and_then(|v| v.as_str()),
+                                    variant.get("selection_reasoning").and_then(|v| v.as_str()),
+                                    variant.get("model_id").and_then(|v| v.as_str()),
+                                ],
+                            )
+                            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to insert group message variant: {}", e)))?;
+                            variant_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    log_info(
+        app,
+        "backup",
+        format!(
+            "Group sessions import complete: {} sessions, {} participants, {} messages, {} variants",
+            session_count, participation_count, message_count, variant_count
         ),
     );
 
@@ -1600,21 +1920,31 @@ fn import_character_lorebooks(app: &tauri::AppHandle, data: &JsonValue) -> Resul
 #[tauri::command]
 pub fn backup_check_encrypted(app: tauri::AppHandle, backup_path: String) -> Result<bool, String> {
     let file = open_backup_file(&app, &backup_path)?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
     // Read manifest
-    let mut manifest_file = archive
-        .by_name("manifest.json")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+    let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing manifest: {}", e),
+        )
+    })?;
 
     let mut manifest_str = String::new();
     manifest_file
         .read_to_string(&mut manifest_str)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let manifest: BackupManifest =
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_str).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+    })?;
 
     Ok(manifest.encrypted)
 }
@@ -1627,21 +1957,31 @@ pub fn backup_verify_password(
     password: String,
 ) -> Result<bool, String> {
     let file = open_backup_file(&app, &backup_path)?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
     // Read manifest
-    let mut manifest_file = archive
-        .by_name("manifest.json")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+    let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing manifest: {}", e),
+        )
+    })?;
 
     let mut manifest_str = String::new();
     manifest_file
         .read_to_string(&mut manifest_str)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let manifest: BackupManifest =
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_str).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+    })?;
 
     if !manifest.encrypted {
         return Ok(true); // No password needed
@@ -1670,9 +2010,13 @@ pub fn backup_verify_password(
 
     // Try to decrypt the marker
     drop(manifest_file);
-    let mut marker_file = archive
-        .by_name("encrypted_marker.bin")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing marker: {}", e)))?;
+    let mut marker_file = archive.by_name("encrypted_marker.bin").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing marker: {}", e),
+        )
+    })?;
 
     let mut encrypted_marker = Vec::new();
     marker_file
@@ -1692,21 +2036,31 @@ pub fn backup_get_info(
     backup_path: String,
 ) -> Result<serde_json::Value, String> {
     let file = open_backup_file(&app, &backup_path)?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
     // Read manifest
-    let mut manifest_file = archive
-        .by_name("manifest.json")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+    let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing manifest: {}", e),
+        )
+    })?;
 
     let mut manifest_str = String::new();
     manifest_file
         .read_to_string(&mut manifest_str)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let manifest: BackupManifest =
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_str).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+    })?;
 
     // Count files
     drop(manifest_file);
@@ -1752,19 +2106,30 @@ pub async fn backup_import(
     // First, read and validate manifest
     let manifest: BackupManifest = {
         let file = open_backup_file(&app, &backup_path)?;
-        let mut archive =
-            ZipArchive::new(file).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read backup archive: {}", e),
+            )
+        })?;
 
-        let mut manifest_file = archive
-            .by_name("manifest.json")
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+        let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Invalid backup: missing manifest: {}", e),
+            )
+        })?;
 
         let mut manifest_str = String::new();
         manifest_file
             .read_to_string(&mut manifest_str)
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?
+        serde_json::from_str(&manifest_str).map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+        })?
     };
 
     log_info(
@@ -1812,11 +2177,16 @@ pub async fn backup_import(
 
         // Verify marker BEFORE proceeding - this validates the password
         let file = open_backup_file(&app, &backup_path)?;
-        let mut archive = ZipArchive::new(file).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-        let mut marker_file = archive
-            .by_name("encrypted_marker.bin")
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing encryption marker: {}", e)))?;
+        let mut marker_file = archive.by_name("encrypted_marker.bin").map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Invalid backup: missing encryption marker: {}", e),
+            )
+        })?;
 
         let mut encrypted_marker = Vec::new();
         marker_file
@@ -1827,7 +2197,11 @@ pub async fn backup_import(
             .map_err(|_| "Invalid password - decryption failed".to_string())?;
 
         if decrypted != b"LETTUCE_BACKUP_VERIFIED" {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Invalid password - verification marker mismatch"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Invalid password - verification marker mismatch",
+            ));
         }
 
         log_info(&app, "backup", "Password verified successfully");
@@ -1847,9 +2221,15 @@ pub async fn backup_import(
         if let Some((ref key, ref nonce)) = enc_params {
             if let Ok(mut file) = archive.by_name(&encrypted_path) {
                 let mut contents = Vec::new();
-                file.read_to_end(&mut contents).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-                let decrypted = decrypt_data(&contents, key, nonce)
-                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decrypt {}: {}", path, e)))?;
+                file.read_to_end(&mut contents)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                let decrypted = decrypt_data(&contents, key, nonce).map_err(|e| {
+                    crate::utils::err_msg(
+                        module_path!(),
+                        line!(),
+                        format!("Failed to decrypt {}: {}", path, e),
+                    )
+                })?;
                 return Ok(Some(decrypted));
             }
         }
@@ -1857,7 +2237,8 @@ pub async fn backup_import(
         // Try unencrypted version
         if let Ok(mut file) = archive.by_name(path) {
             let mut contents = Vec::new();
-            file.read_to_end(&mut contents).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            file.read_to_end(&mut contents)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             return Ok(Some(contents));
         }
 
@@ -1866,7 +2247,8 @@ pub async fn backup_import(
 
     // Re-open archive for reading data files
     let file = open_backup_file(&app, &backup_path)?;
-    let mut archive = ZipArchive::new(file).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     log_info(&app, "backup", "Reading JSON data files...");
 
@@ -1888,6 +2270,8 @@ pub async fn backup_import(
     let characters_data =
         read_backup_file(&mut archive, "data/characters.json", &encryption_params)?;
     let sessions_data = read_backup_file(&mut archive, "data/sessions.json", &encryption_params)?;
+    let group_sessions_data =
+        read_backup_file(&mut archive, "data/group_sessions.json", &encryption_params)?;
     let usage_records_data =
         read_backup_file(&mut archive, "data/usage_records.json", &encryption_params)?;
     let lorebooks_data = read_backup_file(&mut archive, "data/lorebooks.json", &encryption_params)?;
@@ -1903,9 +2287,15 @@ pub async fn backup_import(
     // Settings first (no dependencies)
     if let Some(data) = settings_data {
         log_info(&app, "backup", "Found settings data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse settings JSON: {}", e),
+            )
+        })?;
         import_settings(&app, &json_value)?;
         log_info(&app, "backup", "Settings imported");
     } else {
@@ -1915,9 +2305,15 @@ pub async fn backup_import(
     // Provider credentials (no dependencies)
     if let Some(data) = provider_credentials_data {
         log_info(&app, "backup", "Found provider_credentials data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse provider_credentials JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse provider_credentials JSON: {}", e),
+            )
+        })?;
         import_provider_credentials(&app, &json_value)?;
         log_info(&app, "backup", "Provider credentials imported");
     } else {
@@ -1927,9 +2323,15 @@ pub async fn backup_import(
     // Models (depends on provider_credentials)
     if let Some(data) = models_data {
         log_info(&app, "backup", "Found models data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse models JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse models JSON: {}", e),
+            )
+        })?;
         import_models(&app, &json_value)?;
         log_info(&app, "backup", "Models imported");
     } else {
@@ -1939,9 +2341,15 @@ pub async fn backup_import(
     // Secrets (no dependencies)
     if let Some(data) = secrets_data {
         log_info(&app, "backup", "Found secrets data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse secrets JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse secrets JSON: {}", e),
+            )
+        })?;
         import_secrets(&app, &json_value)?;
         log_info(&app, "backup", "Secrets imported");
     } else {
@@ -1951,9 +2359,15 @@ pub async fn backup_import(
     // Prompt templates (no dependencies)
     if let Some(data) = prompt_templates_data {
         log_info(&app, "backup", "Found prompt_templates data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse prompt_templates JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse prompt_templates JSON: {}", e),
+            )
+        })?;
         import_prompt_templates(&app, &json_value)?;
         log_info(&app, "backup", "Prompt templates imported");
     } else {
@@ -1963,9 +2377,15 @@ pub async fn backup_import(
     // Personas (no dependencies)
     if let Some(data) = personas_data {
         log_info(&app, "backup", "Found personas data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse personas JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse personas JSON: {}", e),
+            )
+        })?;
         import_personas(&app, &json_value)?;
         log_info(&app, "backup", "Personas imported");
     } else {
@@ -1975,9 +2395,15 @@ pub async fn backup_import(
     // Characters (no dependencies)
     if let Some(data) = characters_data {
         log_info(&app, "backup", "Found characters data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse characters JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse characters JSON: {}", e),
+            )
+        })?;
         import_characters(&app, &json_value)?;
         log_info(&app, "backup", "Characters imported");
     } else {
@@ -1987,21 +2413,51 @@ pub async fn backup_import(
     // Sessions (depends on personas and characters)
     if let Some(data) = sessions_data {
         log_info(&app, "backup", "Found sessions data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse sessions JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse sessions JSON: {}", e),
+            )
+        })?;
         import_sessions(&app, &json_value)?;
         log_info(&app, "backup", "Sessions imported");
     } else {
         log_info(&app, "backup", "No sessions data found");
     }
 
+    // Group sessions (depends on personas and characters)
+    if let Some(data) = group_sessions_data {
+        log_info(&app, "backup", "Found group sessions data");
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse group sessions JSON: {}", e),
+            )
+        })?;
+        import_group_sessions(&app, &json_value)?;
+        log_info(&app, "backup", "Group sessions imported");
+    } else {
+        log_info(&app, "backup", "No group sessions data found");
+    }
+
     // Usage records (depends on sessions)
     if let Some(data) = usage_records_data {
         log_info(&app, "backup", "Found usage_records data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse usage_records JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse usage_records JSON: {}", e),
+            )
+        })?;
         import_usage_records(&app, &json_value)?;
         log_info(&app, "backup", "Usage records imported");
     } else {
@@ -2011,9 +2467,15 @@ pub async fn backup_import(
     // Lorebooks (no dependencies, import before character_lorebooks)
     if let Some(data) = lorebooks_data {
         log_info(&app, "backup", "Found lorebooks data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse lorebooks JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse lorebooks JSON: {}", e),
+            )
+        })?;
         import_lorebooks(&app, &json_value)?;
         log_info(&app, "backup", "Lorebooks imported");
     } else {
@@ -2023,9 +2485,15 @@ pub async fn backup_import(
     // Character-lorebook links (depends on characters and lorebooks)
     if let Some(data) = character_lorebooks_data {
         log_info(&app, "backup", "Found character_lorebooks data");
-        let json_str = String::from_utf8(data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse character_lorebooks JSON: {}", e)))?;
+        let json_str = String::from_utf8(data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse character_lorebooks JSON: {}", e),
+            )
+        })?;
         import_character_lorebooks(&app, &json_value)?;
         log_info(&app, "backup", "Character-lorebook links imported");
     } else {
@@ -2037,17 +2505,22 @@ pub async fn backup_import(
     // Extract media files to staging directory, then copy
     let staging_dir = storage.join(".import_staging");
     if staging_dir.exists() {
-        fs::remove_dir_all(&staging_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&staging_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    fs::create_dir_all(&staging_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&staging_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Re-open archive for media extraction
     let file = open_backup_file(&app, &backup_path)?;
-    let mut archive = ZipArchive::new(file).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Extract media files (images, avatars, attachments)
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let file_name = file.name().to_string();
 
         // Only process media directories
@@ -2061,16 +2534,23 @@ pub async fn backup_import(
 
         if file.is_dir() {
             let outpath = staging_dir.join(&file_name);
-            fs::create_dir_all(&outpath).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            fs::create_dir_all(&outpath)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         } else {
             let mut contents = Vec::new();
-            file.read_to_end(&mut contents).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            file.read_to_end(&mut contents)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             // Decrypt if needed
             let (outpath, final_contents) = if let Some((ref key, ref nonce)) = encryption_params {
                 if file_name.ends_with(".enc") {
-                    let decrypted = decrypt_data(&contents, key, nonce)
-                        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decrypt {}: {}", file_name, e)))?;
+                    let decrypted = decrypt_data(&contents, key, nonce).map_err(|e| {
+                        crate::utils::err_msg(
+                            module_path!(),
+                            line!(),
+                            format!("Failed to decrypt {}: {}", file_name, e),
+                        )
+                    })?;
                     let out_name = file_name[..file_name.len() - 4].to_string();
                     (staging_dir.join(out_name), decrypted)
                 } else {
@@ -2081,10 +2561,12 @@ pub async fn backup_import(
             };
 
             if let Some(parent) = outpath.parent() {
-                fs::create_dir_all(parent).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                fs::create_dir_all(parent)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             }
 
-            let mut outfile = File::create(&outpath).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let mut outfile = File::create(&outpath)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             outfile
                 .write_all(&final_contents)
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -2098,13 +2580,16 @@ pub async fn backup_import(
 
     // Clear existing media directories
     if images_dir.exists() {
-        fs::remove_dir_all(&images_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&images_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     if avatars_dir.exists() {
-        fs::remove_dir_all(&avatars_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&avatars_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     if attachments_dir.exists() {
-        fs::remove_dir_all(&attachments_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&attachments_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     let staged_images = staging_dir.join("images");
@@ -2152,16 +2637,21 @@ fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for entry in WalkDir::new(src).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        let relative = path.strip_prefix(src).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let relative = path
+            .strip_prefix(src)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let target = dst.join(relative);
 
         if path.is_dir() {
-            fs::create_dir_all(&target).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            fs::create_dir_all(&target)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         } else {
             if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                fs::create_dir_all(parent)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             }
-            fs::copy(path, &target).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            fs::copy(path, &target)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
     Ok(())
@@ -2252,28 +2742,44 @@ pub fn backup_list(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Stri
 /// Delete a backup file
 #[tauri::command]
 pub fn backup_delete(backup_path: String) -> Result<(), String> {
-    fs::remove_file(&backup_path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete backup: {}", e)))
+    fs::remove_file(&backup_path).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to delete backup: {}", e),
+        )
+    })
 }
 
 /// Get backup info from bytes (for Android content URI support)
 #[tauri::command]
 pub fn backup_get_info_from_bytes(data: Vec<u8>) -> Result<serde_json::Value, String> {
     let cursor = std::io::Cursor::new(data);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(cursor).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
     // Read manifest
-    let mut manifest_file = archive
-        .by_name("manifest.json")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+    let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing manifest: {}", e),
+        )
+    })?;
 
     let mut manifest_str = String::new();
     manifest_file
         .read_to_string(&mut manifest_str)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let manifest: BackupManifest =
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_str).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+    })?;
 
     // Count files
     drop(manifest_file);
@@ -2314,20 +2820,30 @@ pub fn backup_get_info_from_bytes(data: Vec<u8>) -> Result<serde_json::Value, St
 #[tauri::command]
 pub fn backup_check_encrypted_from_bytes(data: Vec<u8>) -> Result<bool, String> {
     let cursor = std::io::Cursor::new(data);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(cursor).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
-    let mut manifest_file = archive
-        .by_name("manifest.json")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+    let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing manifest: {}", e),
+        )
+    })?;
 
     let mut manifest_str = String::new();
     manifest_file
         .read_to_string(&mut manifest_str)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let manifest: BackupManifest =
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_str).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+    })?;
 
     Ok(manifest.encrypted)
 }
@@ -2336,20 +2852,30 @@ pub fn backup_check_encrypted_from_bytes(data: Vec<u8>) -> Result<bool, String> 
 #[tauri::command]
 pub fn backup_verify_password_from_bytes(data: Vec<u8>, password: String) -> Result<bool, String> {
     let cursor = std::io::Cursor::new(data);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(cursor).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
-    let mut manifest_file = archive
-        .by_name("manifest.json")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+    let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing manifest: {}", e),
+        )
+    })?;
 
     let mut manifest_str = String::new();
     manifest_file
         .read_to_string(&mut manifest_str)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let manifest: BackupManifest =
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?;
+    let manifest: BackupManifest = serde_json::from_str(&manifest_str).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+    })?;
 
     if !manifest.encrypted {
         return Ok(true);
@@ -2377,9 +2903,13 @@ pub fn backup_verify_password_from_bytes(data: Vec<u8>, password: String) -> Res
     let key = derive_key_from_password(&password, &salt);
 
     drop(manifest_file);
-    let mut marker_file = archive
-        .by_name("encrypted_marker.bin")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing marker: {}", e)))?;
+    let mut marker_file = archive.by_name("encrypted_marker.bin").map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing marker: {}", e),
+        )
+    })?;
 
     let mut encrypted_marker = Vec::new();
     marker_file
@@ -2406,19 +2936,30 @@ pub async fn backup_import_from_bytes(
     // Read manifest
     let manifest: BackupManifest = {
         let cursor = std::io::Cursor::new(&data);
-        let mut archive =
-            ZipArchive::new(cursor).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+        let mut archive = ZipArchive::new(cursor).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read backup archive: {}", e),
+            )
+        })?;
 
-        let mut manifest_file = archive
-            .by_name("manifest.json")
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+        let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Invalid backup: missing manifest: {}", e),
+            )
+        })?;
 
         let mut manifest_str = String::new();
         manifest_file
             .read_to_string(&mut manifest_str)
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?
+        serde_json::from_str(&manifest_str).map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+        })?
     };
 
     // Check backup version - only support v2
@@ -2460,11 +3001,16 @@ pub async fn backup_import_from_bytes(
 
         // Verify marker BEFORE proceeding - this validates the password
         let cursor = std::io::Cursor::new(&data);
-        let mut archive = ZipArchive::new(cursor).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut archive = ZipArchive::new(cursor)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-        let mut marker_file = archive
-            .by_name("encrypted_marker.bin")
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing encryption marker: {}", e)))?;
+        let mut marker_file = archive.by_name("encrypted_marker.bin").map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Invalid backup: missing encryption marker: {}", e),
+            )
+        })?;
 
         let mut encrypted_marker = Vec::new();
         marker_file
@@ -2475,7 +3021,11 @@ pub async fn backup_import_from_bytes(
             .map_err(|_| "Invalid password - decryption failed".to_string())?;
 
         if decrypted != b"LETTUCE_BACKUP_VERIFIED" {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Invalid password - verification marker mismatch"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Invalid password - verification marker mismatch",
+            ));
         }
 
         log_info(&app, "backup", "Password verified successfully");
@@ -2490,7 +3040,8 @@ pub async fn backup_import_from_bytes(
                                   enc_params: &Option<([u8; 32], [u8; 24])>|
      -> Result<Option<Vec<u8>>, String> {
         let cursor = std::io::Cursor::new(data);
-        let mut archive = ZipArchive::new(cursor).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut archive = ZipArchive::new(cursor)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         // Try encrypted version first if we have encryption params
         let encrypted_path = format!("{}.enc", path);
@@ -2498,9 +3049,15 @@ pub async fn backup_import_from_bytes(
         if let Some((ref key, ref nonce)) = enc_params {
             if let Ok(mut file) = archive.by_name(&encrypted_path) {
                 let mut contents = Vec::new();
-                file.read_to_end(&mut contents).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-                let decrypted = decrypt_data(&contents, key, nonce)
-                    .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decrypt {}: {}", path, e)))?;
+                file.read_to_end(&mut contents)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                let decrypted = decrypt_data(&contents, key, nonce).map_err(|e| {
+                    crate::utils::err_msg(
+                        module_path!(),
+                        line!(),
+                        format!("Failed to decrypt {}: {}", path, e),
+                    )
+                })?;
                 return Ok(Some(decrypted));
             }
         }
@@ -2508,7 +3065,8 @@ pub async fn backup_import_from_bytes(
         // Try unencrypted version
         if let Ok(mut file) = archive.by_name(path) {
             let mut contents = Vec::new();
-            file.read_to_end(&mut contents).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            file.read_to_end(&mut contents)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             return Ok(Some(contents));
         }
 
@@ -2529,6 +3087,8 @@ pub async fn backup_import_from_bytes(
     let characters_data =
         read_backup_file_bytes(&data, "data/characters.json", &encryption_params)?;
     let sessions_data = read_backup_file_bytes(&data, "data/sessions.json", &encryption_params)?;
+    let group_sessions_data =
+        read_backup_file_bytes(&data, "data/group_sessions.json", &encryption_params)?;
     let usage_records_data =
         read_backup_file_bytes(&data, "data/usage_records.json", &encryption_params)?;
     let lorebooks_data = read_backup_file_bytes(&data, "data/lorebooks.json", &encryption_params)?;
@@ -2539,91 +3099,171 @@ pub async fn backup_import_from_bytes(
 
     // Import data in correct order (respecting foreign key constraints)
     if let Some(file_data) = settings_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse settings JSON: {}", e),
+            )
+        })?;
         import_settings(&app, &json_value)?;
         log_info(&app, "backup", "Settings imported");
     }
 
     if let Some(file_data) = provider_credentials_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse provider_credentials JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse provider_credentials JSON: {}", e),
+            )
+        })?;
         import_provider_credentials(&app, &json_value)?;
         log_info(&app, "backup", "Provider credentials imported");
     }
 
     if let Some(file_data) = models_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse models JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse models JSON: {}", e),
+            )
+        })?;
         import_models(&app, &json_value)?;
         log_info(&app, "backup", "Models imported");
     }
 
     if let Some(file_data) = secrets_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse secrets JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse secrets JSON: {}", e),
+            )
+        })?;
         import_secrets(&app, &json_value)?;
         log_info(&app, "backup", "Secrets imported");
     }
 
     if let Some(file_data) = prompt_templates_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse prompt_templates JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse prompt_templates JSON: {}", e),
+            )
+        })?;
         import_prompt_templates(&app, &json_value)?;
         log_info(&app, "backup", "Prompt templates imported");
     }
 
     if let Some(file_data) = personas_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse personas JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse personas JSON: {}", e),
+            )
+        })?;
         import_personas(&app, &json_value)?;
         log_info(&app, "backup", "Personas imported");
     }
 
     if let Some(file_data) = characters_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse characters JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse characters JSON: {}", e),
+            )
+        })?;
         import_characters(&app, &json_value)?;
         log_info(&app, "backup", "Characters imported");
     }
 
     if let Some(file_data) = sessions_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse sessions JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse sessions JSON: {}", e),
+            )
+        })?;
         import_sessions(&app, &json_value)?;
         log_info(&app, "backup", "Sessions imported");
     }
 
+    if let Some(file_data) = group_sessions_data {
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse group sessions JSON: {}", e),
+            )
+        })?;
+        import_group_sessions(&app, &json_value)?;
+        log_info(&app, "backup", "Group sessions imported");
+    }
+
     if let Some(file_data) = usage_records_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse usage_records JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse usage_records JSON: {}", e),
+            )
+        })?;
         import_usage_records(&app, &json_value)?;
         log_info(&app, "backup", "Usage records imported");
     }
 
     // Lorebooks (no dependencies, import before character_lorebooks)
     if let Some(file_data) = lorebooks_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse lorebooks JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse lorebooks JSON: {}", e),
+            )
+        })?;
         import_lorebooks(&app, &json_value)?;
         log_info(&app, "backup", "Lorebooks imported");
     }
 
     // Character-lorebook links (depends on characters and lorebooks)
     if let Some(file_data) = character_lorebooks_data {
-        let json_str = String::from_utf8(file_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse character_lorebooks JSON: {}", e)))?;
+        let json_str = String::from_utf8(file_data)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let json_value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse character_lorebooks JSON: {}", e),
+            )
+        })?;
         import_character_lorebooks(&app, &json_value)?;
         log_info(&app, "backup", "Character-lorebook links imported");
     }
@@ -2633,16 +3273,21 @@ pub async fn backup_import_from_bytes(
     // Extract media files to staging directory
     let staging_dir = storage.join(".import_staging");
     if staging_dir.exists() {
-        fs::remove_dir_all(&staging_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&staging_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    fs::create_dir_all(&staging_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&staging_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Extract media files (images, avatars, attachments)
     let cursor = std::io::Cursor::new(&data);
-    let mut archive = ZipArchive::new(cursor).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut archive = ZipArchive::new(cursor)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let file_name = file.name().to_string();
 
         // Only process media directories
@@ -2656,16 +3301,23 @@ pub async fn backup_import_from_bytes(
 
         if file.is_dir() {
             let outpath = staging_dir.join(&file_name);
-            fs::create_dir_all(&outpath).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            fs::create_dir_all(&outpath)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         } else {
             let mut contents = Vec::new();
-            file.read_to_end(&mut contents).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            file.read_to_end(&mut contents)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
             // Decrypt if needed
             let (outpath, final_contents) = if let Some((ref key, ref nonce)) = encryption_params {
                 if file_name.ends_with(".enc") {
-                    let decrypted = decrypt_data(&contents, key, nonce)
-                        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decrypt {}: {}", file_name, e)))?;
+                    let decrypted = decrypt_data(&contents, key, nonce).map_err(|e| {
+                        crate::utils::err_msg(
+                            module_path!(),
+                            line!(),
+                            format!("Failed to decrypt {}: {}", file_name, e),
+                        )
+                    })?;
                     let out_name = file_name[..file_name.len() - 4].to_string();
                     (staging_dir.join(out_name), decrypted)
                 } else {
@@ -2676,10 +3328,12 @@ pub async fn backup_import_from_bytes(
             };
 
             if let Some(parent) = outpath.parent() {
-                fs::create_dir_all(parent).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                fs::create_dir_all(parent)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             }
 
-            let mut outfile = File::create(&outpath).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let mut outfile = File::create(&outpath)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             outfile
                 .write_all(&final_contents)
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -2693,13 +3347,16 @@ pub async fn backup_import_from_bytes(
 
     // Clear existing media directories
     if images_dir.exists() {
-        fs::remove_dir_all(&images_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&images_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     if avatars_dir.exists() {
-        fs::remove_dir_all(&avatars_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&avatars_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     if attachments_dir.exists() {
-        fs::remove_dir_all(&attachments_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&attachments_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     let staged_images = staging_dir.join("images");
@@ -2747,21 +3404,32 @@ pub async fn backup_check_dynamic_memory(
     );
 
     let file = open_backup_file(&app, &backup_path)?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read backup archive: {}", e)))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to read backup archive: {}", e),
+        )
+    })?;
 
     // Read manifest to check if encrypted
     let manifest: BackupManifest = {
-        let mut manifest_file = archive
-            .by_name("manifest.json")
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing manifest: {}", e)))?;
+        let mut manifest_file = archive.by_name("manifest.json").map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Invalid backup: missing manifest: {}", e),
+            )
+        })?;
 
         let mut manifest_str = String::new();
         manifest_file
             .read_to_string(&mut manifest_str)
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?
+        serde_json::from_str(&manifest_str).map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+        })?
     };
 
     log_info(
@@ -2819,9 +3487,13 @@ pub async fn backup_check_dynamic_memory(
         format!("Looking for characters at: {}", json_path),
     );
 
-    let mut json_file = archive
-        .by_name(json_path)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid backup: missing characters at {}: {}", json_path, e)))?;
+    let mut json_file = archive.by_name(json_path).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid backup: missing characters at {}: {}", json_path, e),
+        )
+    })?;
 
     let mut json_data = Vec::new();
     json_file
@@ -2847,9 +3519,15 @@ pub async fn backup_check_dynamic_memory(
     };
 
     // Parse JSON and check for dynamic memory
-    let json_str = String::from_utf8(final_json_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let characters: Vec<serde_json::Value> = serde_json::from_str(&json_str)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse characters JSON: {}", e)))?;
+    let json_str = String::from_utf8(final_json_data)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let characters: Vec<serde_json::Value> = serde_json::from_str(&json_str).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse characters JSON: {}", e),
+        )
+    })?;
 
     let dynamic_count = characters
         .iter()
@@ -2913,7 +3591,9 @@ pub async fn backup_check_dynamic_memory_from_bytes(
             .read_to_string(&mut manifest_str)
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-        serde_json::from_str(&manifest_str).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e)))?
+        serde_json::from_str(&manifest_str).map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Invalid manifest: {}", e))
+        })?
     };
 
     log_info(
@@ -2973,7 +3653,8 @@ pub async fn backup_check_dynamic_memory_from_bytes(
 
     // Re-open archive to read characters file
     let cursor = Cursor::new(&data);
-    let mut archive = ZipArchive::new(cursor).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut archive = ZipArchive::new(cursor)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut json_file = archive.by_name(json_path).map_err(|e| {
         log_info(
@@ -3008,9 +3689,15 @@ pub async fn backup_check_dynamic_memory_from_bytes(
     };
 
     // Parse JSON and check for dynamic memory
-    let json_str = String::from_utf8(final_json_data).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let characters: Vec<serde_json::Value> = serde_json::from_str(&json_str)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse characters JSON: {}", e)))?;
+    let json_str = String::from_utf8(final_json_data)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let characters: Vec<serde_json::Value> = serde_json::from_str(&json_str).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse characters JSON: {}", e),
+        )
+    })?;
 
     let dynamic_count = characters
         .iter()
@@ -3091,7 +3778,8 @@ pub async fn backup_disable_dynamic_memory(app: tauri::AppHandle) -> Result<(), 
             }),
         );
 
-        let new_json = serde_json::to_string(&settings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let new_json = serde_json::to_string(&settings)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         conn.execute(
             "UPDATE settings SET advanced_settings = ? WHERE id = 1",
             [&new_json],
