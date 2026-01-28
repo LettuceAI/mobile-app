@@ -1,8 +1,21 @@
-import { ArrowLeft, Check, Loader, Settings, HelpCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Loader,
+  Settings,
+  HelpCircle,
+  RefreshCw,
+  ChevronDown,
+  Search,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import { useModelController } from "./hooks/useModelController";
 import { getPlatform } from "../../../core/utils/platform";
+import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
+import { getProviderIcon } from "../../../core/utils/providerIcons";
 
 export function ModelSetupPage() {
   const navigate = useNavigate();
@@ -27,6 +40,69 @@ export function ModelSetupPage() {
     handleSkip,
     goToProviderSetup,
   } = useModelController();
+
+  const [fetchedModels, setFetchedModels] = useState<
+    Array<{ id: string; displayName?: string; description?: string }>
+  >([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [isManualInput, setIsManualInput] = useState(false);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const isLocalModel = selectedProvider?.providerId === "llamacpp";
+  const modelIdLabel = isLocalModel ? "Model Path (GGUF)" : "Model ID";
+  const modelIdPlaceholder = isLocalModel ? "/path/to/model.gguf" : "e.g. gpt-4o";
+
+  const filteredModels = useMemo(() => {
+    if (!searchQuery) return fetchedModels;
+    const q = searchQuery.toLowerCase();
+    return fetchedModels.filter((m) => {
+      return (
+        m.id.toLowerCase().includes(q) ||
+        (m.displayName && m.displayName.toLowerCase().includes(q)) ||
+        (m.description && m.description.toLowerCase().includes(q))
+      );
+    });
+  }, [fetchedModels, searchQuery]);
+
+  const fetchModels = async () => {
+    if (!selectedProvider) return;
+    if (selectedProvider.providerId === "llamacpp") {
+      setFetchedModels([]);
+      return;
+    }
+    setFetchingModels(true);
+    try {
+      const models = await invoke<any[]>("get_remote_models", {
+        credentialId: selectedProvider.id,
+      });
+      setFetchedModels(models ?? []);
+      if ((models ?? []).length > 0) {
+        setIsManualInput(false);
+      }
+    } catch (error) {
+      console.error("Failed to fetch models:", error);
+      setFetchedModels([]);
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  const handleSelectModel = (modelId: string, nextDisplayName?: string) => {
+    handleModelNameChange(modelId);
+    handleDisplayNameChange(nextDisplayName || modelId);
+    setShowModelSelector(false);
+  };
+
+  useEffect(() => {
+    setFetchedModels([]);
+    setIsManualInput(false);
+    setSearchQuery("");
+    if (selectedProvider && selectedProvider.providerId !== "llamacpp") {
+      void fetchModels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProvider?.id, selectedProvider?.providerId]);
 
   if (isLoading) {
     return (
@@ -76,15 +152,104 @@ export function ModelSetupPage() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-white/70">Model Name</label>
-        <input
-          type="text"
-          value={modelName}
-          onChange={(e) => handleModelNameChange(e.target.value)}
-          placeholder="gpt-4o, claude-3-sonnet"
-          className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
-        />
-        <p className="text-[11px] text-gray-500">Exact identifier used for API calls</p>
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+            {modelIdLabel}
+          </label>
+          <div className="flex items-center gap-3">
+            {!isLocalModel && fetchedModels.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsManualInput(!isManualInput)}
+                className="text-[10px] uppercase font-bold tracking-wider text-white/40 hover:text-white/80 transition"
+              >
+                {isManualInput ? "Show List" : "Manual Input"}
+              </button>
+            )}
+            {!isLocalModel && (
+              <button
+                type="button"
+                onClick={fetchModels}
+                disabled={fetchingModels || !selectedProvider}
+                className="text-white/40 hover:text-white/80 transition disabled:opacity-30"
+                title="Refresh model list"
+              >
+                <RefreshCw className={fetchingModels ? "animate-spin" : ""} size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!isLocalModel && !isManualInput ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowModelSelector(true)}
+              className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition hover:bg-black/30 active:scale-[0.99]"
+            >
+              <span className={`block truncate ${!modelName ? "text-white/40" : ""}`}>
+                {fetchedModels.find((m) => m.id === modelName)?.displayName ||
+                  modelName ||
+                  "Select a model..."}
+              </span>
+              <ChevronDown className="h-4 w-4 text-white/40" />
+            </button>
+
+            <BottomMenu
+              isOpen={showModelSelector}
+              onClose={() => setShowModelSelector(false)}
+              title="Select Model"
+            >
+              <div className="px-4 pb-2 sticky top-0 z-10 bg-[#0f1014]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search models..."
+                    className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <MenuSection>
+                {filteredModels.length > 0 ? (
+                  filteredModels.map((m) => {
+                    const isSelected = m.id === modelName;
+                    return (
+                      <MenuButton
+                        key={m.id}
+                        icon={getProviderIcon(selectedProvider?.providerId ?? "custom")}
+                        title={m.displayName || m.id}
+                        description={m.description || m.id}
+                        color="from-emerald-500 to-emerald-600"
+                        rightElement={
+                          isSelected ? <Check className="h-4 w-4 text-emerald-400" /> : undefined
+                        }
+                        onClick={() => handleSelectModel(m.id, m.displayName)}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center text-sm text-white/40">
+                    No models found matching "{searchQuery}"
+                  </div>
+                )}
+              </MenuSection>
+            </BottomMenu>
+          </>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={modelName}
+              onChange={(e) => handleModelNameChange(e.target.value)}
+              placeholder={modelIdPlaceholder}
+              className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
+            />
+            <p className="text-[11px] text-gray-500">Exact identifier used for API calls</p>
+          </>
+        )}
       </div>
 
       {verificationError && (
@@ -138,7 +303,9 @@ export function ModelSetupPage() {
             <ArrowLeft size={18} />
           </button>
           <div className="text-center">
-            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">Step 2 of 3</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">
+              Step 2 of 3
+            </p>
             <p className="text-xs text-gray-400 mt-0.5">Model Setup</p>
           </div>
           <div className="w-11" />
@@ -159,27 +326,43 @@ export function ModelSetupPage() {
                   return (
                     <button
                       key={provider.id}
-                      className={`w-full rounded-xl border px-4 py-3 text-left transition-all duration-200 ${isActive
-                        ? "border-emerald-400/40 bg-emerald-400/10 ring-1 ring-emerald-400/30"
-                        : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8 active:scale-[0.98]"
-                        }`}
+                      className={`w-full rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
+                        isActive
+                          ? "border-emerald-400/40 bg-emerald-400/10 ring-1 ring-emerald-400/30"
+                          : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8 active:scale-[0.98]"
+                      }`}
                       onClick={() => handleProviderSelect(provider)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${isActive ? "border-emerald-400/30 bg-emerald-400/10" : "border-white/15 bg-white/8"
-                          }`}>
-                          <Settings size={18} className={isActive ? "text-emerald-300" : "text-gray-300"} />
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                            isActive
+                              ? "border-emerald-400/30 bg-emerald-400/10"
+                              : "border-white/15 bg-white/8"
+                          }`}
+                        >
+                          <Settings
+                            size={18}
+                            className={isActive ? "text-emerald-300" : "text-gray-300"}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className={`text-sm font-medium ${isActive ? "text-emerald-100" : "text-white"}`}>
+                          <h3
+                            className={`text-sm font-medium ${isActive ? "text-emerald-100" : "text-white"}`}
+                          >
                             {provider.label}
                           </h3>
-                          <p className="text-xs text-gray-500 truncate">{getProviderDisplayName(provider.providerId)}</p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {getProviderDisplayName(provider.providerId)}
+                          </p>
                         </div>
-                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${isActive
-                          ? "border-emerald-400/60 bg-emerald-400/30 text-emerald-200"
-                          : "border-white/15 text-transparent"
-                          }`}>
+                        <div
+                          className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
+                            isActive
+                              ? "border-emerald-400/60 bg-emerald-400/30 text-emerald-200"
+                              : "border-white/15 text-transparent"
+                          }`}
+                        >
                           <Check size={10} />
                         </div>
                       </div>
@@ -236,7 +419,9 @@ export function ModelSetupPage() {
             <ArrowLeft size={16} />
           </button>
           <div className="text-center">
-            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">Step 2 of 3</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500">
+              Step 2 of 3
+            </p>
             <p className="text-xs text-gray-400 mt-0.5">Model Setup</p>
           </div>
           <div className="w-10" />
@@ -246,7 +431,8 @@ export function ModelSetupPage() {
         <div className="text-center space-y-2 mb-6">
           <h1 className="text-2xl font-bold text-white">Set your default model</h1>
           <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
-            Choose which provider and model name LettuceAI should use by default. You'll be able to add more later.
+            Choose which provider and model name LettuceAI should use by default. You'll be able to
+            add more later.
           </p>
           <button
             onClick={() => navigate("/onboarding/model-recommendations")}
@@ -264,10 +450,11 @@ export function ModelSetupPage() {
             return (
               <button
                 key={provider.id}
-                className={`w-full min-h-[60px] rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${isActive
-                  ? "border-white/25 bg-white/15 shadow-lg"
-                  : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
-                  }`}
+                className={`w-full min-h-[60px] rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
+                  isActive
+                    ? "border-white/25 bg-white/15 shadow-lg"
+                    : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
+                }`}
                 onClick={() => handleProviderSelect(provider)}
               >
                 <div className="flex items-center gap-3">
@@ -276,12 +463,17 @@ export function ModelSetupPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-white">{provider.label}</h3>
-                    <p className="text-xs text-gray-400 truncate">{getProviderDisplayName(provider.providerId)}</p>
+                    <p className="text-xs text-gray-400 truncate">
+                      {getProviderDisplayName(provider.providerId)}
+                    </p>
                   </div>
-                  <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${isActive
-                    ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-300"
-                    : "border-white/20 text-transparent"
-                    }`}>
+                  <div
+                    className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
+                      isActive
+                        ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-300"
+                        : "border-white/20 text-transparent"
+                    }`}
+                  >
                     <Check size={12} />
                   </div>
                 </div>
@@ -291,7 +483,9 @@ export function ModelSetupPage() {
         </div>
 
         {/* Model Configuration */}
-        <div className={`w-full max-w-sm transition-all duration-300 ${selectedProvider ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div
+          className={`w-full max-w-sm transition-all duration-300 ${selectedProvider ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
           <div className="text-center space-y-2 mb-6">
             <h2 className="text-lg font-semibold text-white">Model Details</h2>
             <p className="text-xs text-gray-400 leading-relaxed">

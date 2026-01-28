@@ -324,9 +324,8 @@ export function SecurityPage() {
                     </span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-white/45 leading-relaxed">
-                    Events are anonymous and contain only the event name and optional properties we
-                    define. We do not send message content or personal identifiers. Aptabase may
-                    infer a coarse location from your IP on their servers.
+                    Events are anonymous and contain only the event name and not-identifying properties we
+                    define. We do not send message content or personal identifiers.
                   </div>
                 </div>
               </div>

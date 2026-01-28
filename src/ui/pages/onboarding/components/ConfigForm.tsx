@@ -1,6 +1,11 @@
-import { AlertCircle, Loader } from "lucide-react";
+import { AlertCircle, Loader, RefreshCw, ChevronDown, Search, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { TestResult } from "../hooks/onboardingReducer";
+import type { ProviderCredential } from "../../../../core/storage/schemas";
+import { BottomMenu, MenuButton, MenuSection } from "../../../components/BottomMenu";
+import { getProviderIcon } from "../../../../core/utils/providerIcons";
 
 interface ProviderConfigFormProps {
   selectedProviderId: string;
@@ -252,6 +257,7 @@ export function ProviderConfigForm({
 }
 
 interface ModelConfigFormProps {
+  selectedCredential: ProviderCredential;
   displayName: string;
   modelName: string;
   error: string | null;
@@ -264,6 +270,7 @@ interface ModelConfigFormProps {
 }
 
 export function ModelConfigForm({
+  selectedCredential,
   displayName,
   modelName,
   error,
@@ -274,6 +281,72 @@ export function ModelConfigForm({
   onSave,
   onSkip,
 }: ModelConfigFormProps) {
+  const [fetchedModels, setFetchedModels] = useState<
+    Array<{ id: string; displayName?: string; description?: string }>
+  >([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [isManualInput, setIsManualInput] = useState(false);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const isLocalModel = selectedCredential.providerId === "llamacpp";
+  const modelIdLabel = isLocalModel ? "Model Path (GGUF)" : "Model ID";
+  const modelIdPlaceholder = isLocalModel ? "/path/to/model.gguf" : "e.g. gpt-4o";
+
+  const filteredModels = useMemo(() => {
+    if (!searchQuery) return fetchedModels;
+    const q = searchQuery.toLowerCase();
+    return fetchedModels.filter((m) => {
+      return (
+        m.id.toLowerCase().includes(q) ||
+        (m.displayName && m.displayName.toLowerCase().includes(q)) ||
+        (m.description && m.description.toLowerCase().includes(q))
+      );
+    });
+  }, [fetchedModels, searchQuery]);
+
+  const fetchModels = async () => {
+    if (selectedCredential.providerId === "llamacpp") {
+      setFetchedModels([]);
+      return;
+    }
+    setFetchingModels(true);
+    try {
+      const models = await invoke<any[]>("get_remote_models", {
+        credentialId: selectedCredential.id,
+      });
+      const next = models ?? [];
+      setFetchedModels(next);
+      if (next.length > 0) {
+        setIsManualInput(false);
+      } else {
+        setIsManualInput(true);
+      }
+    } catch (error) {
+      console.error("Failed to fetch models:", error);
+      setFetchedModels([]);
+      setIsManualInput(true);
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  const handleSelectModel = (modelId: string, nextDisplayName?: string) => {
+    onModelNameChange(modelId);
+    onDisplayNameChange(nextDisplayName || modelId);
+    setShowModelSelector(false);
+  };
+
+  useEffect(() => {
+    setFetchedModels([]);
+    setIsManualInput(false);
+    setSearchQuery("");
+    if (selectedCredential.providerId !== "llamacpp") {
+      void fetchModels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCredential.id, selectedCredential.providerId]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -289,15 +362,104 @@ export function ModelConfigForm({
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-white/70">Model Name</label>
-        <input
-          type="text"
-          value={modelName}
-          onChange={(e) => onModelNameChange(e.target.value)}
-          placeholder="gpt-4o, claude-3-sonnet"
-          className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
-        />
-        <p className="text-[11px] text-gray-500">Exact identifier used for API calls</p>
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
+            {modelIdLabel}
+          </label>
+          <div className="flex items-center gap-3">
+            {!isLocalModel && fetchedModels.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsManualInput(!isManualInput)}
+                className="text-[10px] uppercase font-bold tracking-wider text-white/40 hover:text-white/80 transition"
+              >
+                {isManualInput ? "Show List" : "Manual Input"}
+              </button>
+            )}
+            {!isLocalModel && (
+              <button
+                type="button"
+                onClick={fetchModels}
+                disabled={fetchingModels}
+                className="text-white/40 hover:text-white/80 transition disabled:opacity-30"
+                title="Refresh model list"
+              >
+                <RefreshCw className={fetchingModels ? "animate-spin" : ""} size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!isLocalModel && !isManualInput ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowModelSelector(true)}
+              className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white transition hover:bg-black/30 active:scale-[0.99]"
+            >
+              <span className={`block truncate ${!modelName ? "text-white/40" : ""}`}>
+                {fetchedModels.find((m) => m.id === modelName)?.displayName ||
+                  modelName ||
+                  "Select a model..."}
+              </span>
+              <ChevronDown className="h-4 w-4 text-white/40" />
+            </button>
+
+            <BottomMenu
+              isOpen={showModelSelector}
+              onClose={() => setShowModelSelector(false)}
+              title="Select Model"
+            >
+              <div className="px-4 pb-2 sticky top-0 z-10 bg-[#0f1014]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search models..."
+                    className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <MenuSection>
+                {filteredModels.length > 0 ? (
+                  filteredModels.map((m) => {
+                    const isSelected = m.id === modelName;
+                    return (
+                      <MenuButton
+                        key={m.id}
+                        icon={getProviderIcon(selectedCredential.providerId)}
+                        title={m.displayName || m.id}
+                        description={m.description || m.id}
+                        color="from-emerald-500 to-emerald-600"
+                        rightElement={
+                          isSelected ? <Check className="h-4 w-4 text-emerald-400" /> : undefined
+                        }
+                        onClick={() => handleSelectModel(m.id, m.displayName)}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center text-sm text-white/40">
+                    No models found matching "{searchQuery}"
+                  </div>
+                )}
+              </MenuSection>
+            </BottomMenu>
+          </>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={modelName}
+              onChange={(e) => onModelNameChange(e.target.value)}
+              placeholder={modelIdPlaceholder}
+              className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white placeholder-white/40 transition-colors focus:border-white/30 focus:outline-none"
+            />
+            <p className="text-[11px] text-gray-500">Exact identifier used for API calls</p>
+          </>
+        )}
       </div>
 
       {error && (
