@@ -93,6 +93,12 @@ impl ProviderAdapter for LlamaCppAdapter {
             None
         };
 
+        let explicit_reasoning_effort = if reasoning_enabled {
+            reasoning_effort
+        } else {
+            Some("none".to_string())
+        };
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -112,11 +118,7 @@ impl ProviderAdapter for LlamaCppAdapter {
             },
             frequency_penalty,
             presence_penalty,
-            reasoning_effort: if reasoning_enabled {
-                reasoning_effort
-            } else {
-                None
-            },
+            reasoning_effort: explicit_reasoning_effort,
             reasoning: reasoning_config,
             tools,
             tool_choice,

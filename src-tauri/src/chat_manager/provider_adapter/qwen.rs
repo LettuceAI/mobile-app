@@ -85,6 +85,12 @@ impl ProviderAdapter for QwenAdapter {
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
         // Qwen uses OpenAI-compatible body
+        let explicit_reasoning_effort = if reasoning_enabled {
+            reasoning_effort
+        } else {
+            Some("none".to_string())
+        };
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -96,15 +102,20 @@ impl ProviderAdapter for QwenAdapter {
             max_completion_tokens: None,
             frequency_penalty,
             presence_penalty,
-            reasoning_effort: if reasoning_enabled {
-                reasoning_effort
-            } else {
-                None
-            },
+            reasoning_effort: explicit_reasoning_effort,
             reasoning: None,
             tools,
             tool_choice,
         };
-        serde_json::to_value(body).unwrap_or_else(|_| json!({}))
+        let mut value = serde_json::to_value(body).unwrap_or_else(|_| json!({}));
+        if let Some(map) = value.as_object_mut() {
+            map.insert("enable_thinking".to_string(), json!(reasoning_enabled));
+            if reasoning_enabled {
+                if let Some(budget) = reasoning_budget {
+                    map.insert("thinking_budget".to_string(), json!(budget));
+                }
+            }
+        }
+        value
     }
 }

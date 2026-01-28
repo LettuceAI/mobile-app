@@ -86,6 +86,12 @@ impl ProviderAdapter for DeepSeekAdapter {
 
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
+        let explicit_reasoning_effort = if reasoning_enabled {
+            reasoning_effort
+        } else {
+            Some("none".to_string())
+        };
+
         let body = OpenAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -97,11 +103,7 @@ impl ProviderAdapter for DeepSeekAdapter {
             max_completion_tokens: None,
             frequency_penalty,
             presence_penalty,
-            reasoning_effort: if reasoning_enabled {
-                reasoning_effort
-            } else {
-                None
-            },
+            reasoning_effort: explicit_reasoning_effort,
             reasoning: None,
             tools,
             tool_choice,

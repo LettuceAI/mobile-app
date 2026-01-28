@@ -93,7 +93,7 @@ impl ProviderAdapter for MistralAdapter {
                 _ => "high".to_string(),
             })
         } else {
-            None
+            Some("none".to_string())
         };
 
         let body = OpenAIChatRequest {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::{deepseek::DeepSeekAdapter, ProviderAdapter};
 use crate::chat_manager::tooling::ToolConfig;
@@ -56,7 +56,7 @@ impl ProviderAdapter for MoonshotAdapter {
         reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value {
-        DeepSeekAdapter.body(
+        let mut value = DeepSeekAdapter.body(
             model_name,
             messages_for_api,
             system_prompt,
@@ -72,6 +72,15 @@ impl ProviderAdapter for MoonshotAdapter {
             reasoning_enabled,
             reasoning_effort,
             reasoning_budget,
-        )
+        );
+        if let Some(map) = value.as_object_mut() {
+            map.insert("enable_thinking".to_string(), json!(reasoning_enabled));
+            if reasoning_enabled {
+                if let Some(budget) = reasoning_budget {
+                    map.insert("thinking_budget".to_string(), json!(budget));
+                }
+            }
+        }
+        value
     }
 }

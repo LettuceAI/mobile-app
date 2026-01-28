@@ -104,6 +104,12 @@ impl ProviderAdapter for ZAIAdapter {
 
         let total_tokens = max_tokens + reasoning_budget.unwrap_or(0);
 
+        let explicit_reasoning_effort = if reasoning_enabled {
+            reasoning_effort
+        } else {
+            Some("none".to_string())
+        };
+
         let body = ZAIChatRequest {
             model: model_name,
             messages: messages_for_api,
@@ -113,11 +119,7 @@ impl ProviderAdapter for ZAIAdapter {
             stream: should_stream,
             tools,
             tool_choice,
-            reasoning_effort: if reasoning_enabled {
-                reasoning_effort
-            } else {
-                None
-            },
+            reasoning_effort: explicit_reasoning_effort,
         };
 
         serde_json::to_value(body).unwrap_or_else(|_| json!({}))
