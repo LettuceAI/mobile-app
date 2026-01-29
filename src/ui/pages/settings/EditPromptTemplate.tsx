@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { AnimatePresence, Reorder, motion, useDragControls } from "framer-motion";
+import { AnimatePresence, Reorder, motion, useDragControls, useMotionValue } from "framer-motion";
 import { useParams } from "react-router-dom";
 import {
   RotateCcw,
@@ -172,6 +172,8 @@ function PromptEntryCard({
   onToggle,
   onToggleCollapse,
   collapsed,
+  onTextareaRef,
+  onTextareaFocus,
 }: {
   entry: SystemPromptEntry;
   onUpdate: (id: string, updates: Partial<SystemPromptEntry>) => void;
@@ -179,6 +181,8 @@ function PromptEntryCard({
   onToggle: (id: string) => void;
   onToggleCollapse: (id: string) => void;
   collapsed: boolean;
+  onTextareaRef: (id: string, el: HTMLTextAreaElement | null) => void;
+  onTextareaFocus: (id: string) => void;
 }) {
   const controls = useDragControls();
   const toggleId = `prompt-entry-${entry.id}`;
@@ -325,8 +329,12 @@ function PromptEntryCard({
             </div>
 
             <textarea
+              ref={(el) => {
+                onTextareaRef(entry.id, el);
+              }}
               value={entry.content}
               onChange={(event) => onUpdate(entry.id, { content: event.target.value })}
+              onFocus={() => onTextareaFocus(entry.id)}
               rows={6}
               className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-white placeholder-white/30"
               placeholder="Write the prompt entry..."
@@ -589,6 +597,9 @@ export function EditPromptTemplate() {
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const entryTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const activeEntryIdRef = useRef<string | null>(null);
   const entriesRef = useRef<SystemPromptEntry[]>([]);
   const nameRef = useRef("");
   const contentRef = useRef("");
@@ -634,6 +645,38 @@ export function EditPromptTemplate() {
       promptType === "reply");
 
   const usesEntryEditor = true;
+  const quickInsertY = useMotionValue(0);
+
+  useEffect(() => {
+    const getScrollParent = (node: HTMLElement | null): HTMLElement | null => {
+      let current = node?.parentElement ?? null;
+      while (current) {
+        const style = getComputedStyle(current);
+        const overflowY = style.overflowY;
+        if (
+          (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+          current.scrollHeight > current.clientHeight
+        ) {
+          return current;
+        }
+        current = current.parentElement;
+      }
+      return null;
+    };
+
+    const target = sidebarRef.current;
+    const scrollParent = getScrollParent(target);
+
+    const handleScroll = () => {
+      const scrollTop = scrollParent ? scrollParent.scrollTop : window.scrollY;
+      quickInsertY.set(scrollTop);
+    };
+
+    const options: AddEventListenerOptions = { passive: true };
+    (scrollParent ?? window).addEventListener("scroll", handleScroll, options);
+    handleScroll();
+    return () => (scrollParent ?? window).removeEventListener("scroll", handleScroll, options);
+  }, [quickInsertY]);
 
   const variables = VARIABLES_BY_TYPE[promptType || "default"] || VARIABLES_BY_TYPE.default;
 
@@ -933,6 +976,28 @@ export function EditPromptTemplate() {
 
   function insertVariable(variable: string) {
     if (usesEntryEditor) {
+      const targetId = activeEntryIdRef.current;
+      const targetEl = targetId ? entryTextareaRefs.current[targetId] : null;
+      if (targetId && targetEl) {
+        const start = targetEl.selectionStart ?? 0;
+        const end = targetEl.selectionEnd ?? start;
+        setEntries((prev) =>
+          prev.map((entry) => {
+            if (entry.id !== targetId) return entry;
+            const nextContent =
+              entry.content.substring(0, start) + variable + entry.content.substring(end);
+            return { ...entry, content: nextContent };
+          }),
+        );
+        setTimeout(() => {
+          const el = entryTextareaRefs.current[targetId];
+          if (!el) return;
+          el.focus();
+          const newPos = start + variable.length;
+          el.setSelectionRange(newPos, newPos);
+        }, 0);
+        return;
+      }
       setEntries((prev) => {
         if (prev.length === 0) return prev;
         const targetIndex = prev.findIndex((entry) => entry.systemPrompt);
@@ -1281,6 +1346,12 @@ export function EditPromptTemplate() {
                           onToggle={handleEntryToggle}
                           onToggleCollapse={handleToggleEntryCollapse}
                           collapsed={collapsedEntries[entry.id] ?? true}
+                          onTextareaRef={(id, el) => {
+                            entryTextareaRefs.current[id] = el;
+                          }}
+                          onTextareaFocus={(id) => {
+                            activeEntryIdRef.current = id;
+                          }}
                         />
                       ))}
                     </Reorder.Group>
@@ -1395,9 +1466,13 @@ export function EditPromptTemplate() {
             </div>
 
             {/* Desktop Sidebar - Quick Insert Only */}
-            <div className="hidden lg:block w-80 shrink-0 space-y-4">
+            <motion.div
+              ref={sidebarRef}
+              style={{ y: quickInsertY }}
+              className="hidden lg:block w-80 shrink-0 space-y-4 self-start relative z-20"
+            >
               {/* Quick Insert Panel */}
-              <div className={cn(radius.lg, "border border-white/10 bg-white/5 p-4 sticky top-4")}>
+              <div className={cn(radius.lg, "border border-white/10 bg-white/5 p-4")}>
                 <h3 className="text-sm font-medium text-white mb-1">Quick Insert</h3>
                 <p className="text-xs text-white/40 mb-3">Click to insert at cursor</p>
 
@@ -1456,7 +1531,7 @@ export function EditPromptTemplate() {
                   </p>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </main>
@@ -1655,10 +1730,16 @@ export function EditPromptTemplate() {
             </div>
 
             <textarea
+              ref={(el) => {
+                entryTextareaRefs.current[selectedMobileEntry.id] = el;
+              }}
               value={selectedMobileEntry.content}
               onChange={(event) =>
                 handleEntryUpdate(selectedMobileEntry.id, { content: event.target.value })
               }
+              onFocus={() => {
+                activeEntryIdRef.current = selectedMobileEntry.id;
+              }}
               rows={10}
               className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-white placeholder-white/30"
               placeholder="Write the prompt entry..."
