@@ -185,6 +185,7 @@ function PromptEntryCard({
 
   return (
     <Reorder.Item
+      id={`prompt-entry-${entry.id}`}
       value={entry}
       dragListener={false}
       dragControls={controls}
@@ -425,6 +426,7 @@ function PromptEntryListItem({
 
   return (
     <Reorder.Item
+      id={`prompt-entry-${entry.id}`}
       value={entry}
       dragListener={false}
       dragControls={controls}
@@ -789,6 +791,12 @@ export function EditPromptTemplate() {
     const entry = createExtraEntry();
     setEntries((prev) => [...prev, entry]);
     setCollapsedEntries((prev) => ({ ...prev, [entry.id]: false }));
+    window.setTimeout(() => {
+      const target = document.getElementById(`prompt-entry-${entry.id}`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
   };
 
   const selectedMobileEntry = mobileEntryEditorId
