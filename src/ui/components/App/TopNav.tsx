@@ -92,7 +92,8 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     return (
       basePath === "/settings/usage" ||
       basePath === "/settings/changelog" ||
-      basePath === "/library"
+      basePath === "/library" ||
+      basePath === "/settings/models"
     );
   }, [basePath]);
 
@@ -252,6 +253,16 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
   const handleFilterClick = () => {
     if (basePath === "/settings/changelog") {
       window.dispatchEvent(new CustomEvent("changelog:openVersionSelector"));
+      return;
+    }
+    if (basePath === "/settings/models") {
+      const globalWindow = window as any;
+      if (typeof globalWindow.__openModelsSort === "function") {
+        globalWindow.__openModelsSort();
+      } else {
+        window.dispatchEvent(new CustomEvent("models:sort"));
+      }
+      return;
     } else if (basePath === "/library") {
       window.dispatchEvent(new CustomEvent("library:openFilter"));
     } else if (typeof window !== "undefined") {

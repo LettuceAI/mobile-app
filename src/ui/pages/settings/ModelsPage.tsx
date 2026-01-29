@@ -1,12 +1,22 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Check, ChevronRight, EthernetPort, Edit3, Trash2, Star, StarOff } from "lucide-react";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { useModelsController } from "./hooks/useModelsController";
 import { useNavigationManager } from "../../navigation";
+import { cn } from "../../design-tokens";
+
+type SortMode = "alphabetical" | "provider";
+const SORT_STORAGE_KEY = "lettuce.models.sortMode";
 
 export function ModelsPage() {
   const [selectedModel, setSelectedModel] = useState<any | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    if (typeof window === "undefined") return "alphabetical";
+    const stored = window.localStorage.getItem(SORT_STORAGE_KEY);
+    return stored === "provider" ? "provider" : "alphabetical";
+  });
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const { toNewModel, toEditModel } = useNavigationManager();
   const {
     state: { providers, models, defaultModelId },
@@ -42,6 +52,77 @@ export function ModelsPage() {
     };
   }, [toNewModel]);
 
+  useEffect(() => {
+    const globalWindow = window as any;
+    globalWindow.__openModelsSort = () => setShowSortMenu(true);
+    const listener = () => setShowSortMenu(true);
+    window.addEventListener("models:sort", listener);
+    return () => {
+      if (globalWindow.__openModelsSort) {
+        delete globalWindow.__openModelsSort;
+      }
+      window.removeEventListener("models:sort", listener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SORT_STORAGE_KEY, sortMode);
+  }, [sortMode]);
+
+  const getProviderLabel = useMemo(
+    () => (model: any) => {
+      const providerInfo = providers.find((p) => p.providerId === model.providerId);
+      return model.providerLabel || providerInfo?.label || model.providerId;
+    },
+    [providers],
+  );
+
+  const sortedModels = useMemo(() => {
+    const list = [...models];
+    if (sortMode === "alphabetical") {
+      return list.sort((a, b) => {
+        const aName = (a.displayName || a.name).toLowerCase();
+        const bName = (b.displayName || b.name).toLowerCase();
+        if (aName !== bName) return aName.localeCompare(bName);
+        return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      });
+    }
+
+    return list.sort((a, b) => {
+      const aProvider = getProviderLabel(a).toLowerCase();
+      const bProvider = getProviderLabel(b).toLowerCase();
+      if (aProvider !== bProvider) return aProvider.localeCompare(bProvider);
+      const aName = (a.displayName || a.name).toLowerCase();
+      const bName = (b.displayName || b.name).toLowerCase();
+      if (aName !== bName) return aName.localeCompare(bName);
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+  }, [models, sortMode, getProviderLabel]);
+
+  const listItems = useMemo(() => {
+    if (sortMode !== "provider") {
+      return sortedModels.map((model) => ({ type: "model" as const, model }));
+    }
+    const items: Array<
+      { type: "divider"; label: string; key: string } | { type: "model"; model: any }
+    > = [];
+    let lastProvider = "";
+    for (const model of sortedModels) {
+      const providerLabel = getProviderLabel(model);
+      if (providerLabel !== lastProvider) {
+        lastProvider = providerLabel;
+        items.push({
+          type: "divider",
+          label: providerLabel,
+          key: `provider-${providerLabel}`,
+        });
+      }
+      items.push({ type: "model", model });
+    }
+    return items;
+  }, [sortedModels, sortMode, getProviderLabel]);
+
   return (
     <div className="flex h-full flex-col">
       {/* List (TopNav handles title/back) */}
@@ -49,9 +130,20 @@ export function ModelsPage() {
         {models.length === 0 && <EmptyState onCreate={() => toNewModel()} />}
 
         {/* Model Cards */}
-        {models.map((model) => {
+        {listItems.map((item, idx) => {
+          if (item.type === "divider") {
+            return (
+              <div key={item.key} className={cn("flex items-center gap-3 px-1", idx > 0 && "pt-2")}>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                  {item.label}
+                </span>
+                <div className="h-px flex-1 bg-white/5" />
+              </div>
+            );
+          }
+          const model = item.model;
           const isDefault = model.id === defaultModelId;
-          const providerInfo = providers.find((p) => p.providerId === model.providerId);
+          const providerLabel = getProviderLabel(model);
           return (
             <button
               key={model.id}
@@ -73,9 +165,7 @@ export function ModelsPage() {
                     )}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-white/50">
-                    <span className="truncate">
-                      {model.providerLabel || providerInfo?.label || model.providerId}
-                    </span>
+                    <span className="truncate">{providerLabel}</span>
                     <span className="opacity-40">•</span>
                     <span className="truncate max-w-37.5 font-mono text-[10px]">{model.name}</span>
 
@@ -165,6 +255,31 @@ export function ModelsPage() {
             />
           </div>
         )}
+      </BottomMenu>
+
+      <BottomMenu isOpen={showSortMenu} onClose={() => setShowSortMenu(false)} title="Sort Models">
+        <div className="space-y-3">
+          <MenuButton
+            icon={sortMode === "alphabetical" ? Check : StarOff}
+            title="Alphabetical"
+            description="Sort by model name"
+            onClick={() => {
+              setSortMode("alphabetical");
+              setShowSortMenu(false);
+            }}
+            color="from-emerald-500 to-emerald-600"
+          />
+          <MenuButton
+            icon={sortMode === "provider" ? Check : StarOff}
+            title="By Provider"
+            description="Group models by provider"
+            onClick={() => {
+              setSortMode("provider");
+              setShowSortMenu(false);
+            }}
+            color="from-sky-500 to-blue-600"
+          />
+        </div>
       </BottomMenu>
     </div>
   );
