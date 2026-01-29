@@ -689,38 +689,31 @@ pub fn build_system_prompt_entries(
     settings: &Settings,
 ) -> Vec<SystemPromptEntry> {
     let mut debug_parts: Vec<Value> = Vec::new();
-    let mut base_template_source = "app_default_template";
-    let mut base_template_id: Option<String> = None;
 
-    let (base_content, base_entries) = if let Some(char_template_id) = &character.prompt_template_id
-    {
-        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
-            debug_parts.push(json!({
-                "source": "character_template",
-                "template_id": char_template_id
-            }));
-            base_template_source = "character_template";
-            base_template_id = Some(char_template_id.clone());
-            (template.content, template.entries)
+    let (base_content, base_entries, base_template_source, base_template_id) =
+        if let Some(char_template_id) = &character.prompt_template_id {
+            if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
+                debug_parts.push(json!({
+                    "source": "character_template",
+                    "template_id": char_template_id
+                }));
+                (
+                    template.content,
+                    template.entries,
+                    "character_template",
+                    Some(char_template_id.clone()),
+                )
+            } else {
+                debug_parts.push(json!({
+                    "source": "character_template_not_found",
+                    "template_id": char_template_id,
+                    "fallback": "app_default"
+                }));
+                get_app_default_template_content(app, settings, &mut debug_parts)
+            }
         } else {
-            debug_parts.push(json!({
-                "source": "character_template_not_found",
-                "template_id": char_template_id,
-                "fallback": "app_default"
-            }));
-            let (content, entries, source, id) =
-                get_app_default_template_content(app, settings, &mut debug_parts);
-            base_template_source = source;
-            base_template_id = id;
-            (content, entries)
-        }
-    } else {
-        let (content, entries, source, id) =
-            get_app_default_template_content(app, settings, &mut debug_parts);
-        base_template_source = source;
-        base_template_id = id;
-        (content, entries)
-    };
+            get_app_default_template_content(app, settings, &mut debug_parts)
+        };
 
     let base_entries = if base_entries.is_empty() && !base_content.trim().is_empty() {
         single_entry_from_content(&base_content)

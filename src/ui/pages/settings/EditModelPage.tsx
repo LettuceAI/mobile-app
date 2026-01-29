@@ -39,6 +39,7 @@ import {
   RefreshCw,
   Check,
   Search,
+  ChevronDown,
   ChevronRight,
   HelpCircle,
   AlertTriangle,
