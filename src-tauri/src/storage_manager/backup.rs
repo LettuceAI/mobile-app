@@ -260,13 +260,17 @@ fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, Str
 
     let rows = stmt
         .query_map([], |r| {
+            let entries_str: String = r.get(5)?;
+            let entries_value = serde_json::from_str::<JsonValue>(&entries_str)
+                .unwrap_or_else(|_| JsonValue::Array(vec![]));
+
             Ok(serde_json::json!({
                 "id": r.get::<_, String>(0)?,
                 "name": r.get::<_, String>(1)?,
                 "scope": r.get::<_, String>(2)?,
                 "target_ids": r.get::<_, String>(3)?,
                 "content": r.get::<_, String>(4)?,
-                "entries": r.get::<_, String>(5)?,
+                "entries": entries_value,
                 "created_at": r.get::<_, i64>(6)?,
                 "updated_at": r.get::<_, i64>(7)?,
             }))
@@ -1297,7 +1301,18 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
     if let Some(arr) = data.as_array() {
         for item in arr {
             let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            // We now actively restore all templates, including prompt_app_default if present
+
+            let entries_str = if let Some(entries_value) = item.get("entries") {
+                if entries_value.is_array() {
+                    serde_json::to_string(entries_value).unwrap_or_else(|_| "[]".to_string())
+                } else if let Some(s) = entries_value.as_str() {
+                    s.to_string()
+                } else {
+                    "[]".to_string()
+                }
+            } else {
+                "[]".to_string()
+            };
 
             conn.execute(
                 "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at)
@@ -1308,10 +1323,7 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
                     item.get("scope").and_then(|v| v.as_str()),
                     item.get("target_ids").and_then(|v| v.as_str()),
                     item.get("content").and_then(|v| v.as_str()),
-                    item
-                        .get("entries")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("[]"),
+                    entries_str,
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],
