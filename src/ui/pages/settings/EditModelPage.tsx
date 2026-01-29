@@ -120,6 +120,7 @@ export function EditModelPage() {
     handleReasoningEffortChange,
     handleReasoningBudgetChange,
     handleSave,
+    resetToInitial,
     fetchModels,
   } = useModelEditorController();
   const isLocalModel = editorModel?.providerId === "llamacpp";
@@ -202,6 +203,12 @@ export function EditModelPage() {
       delete globalWindow.__saveModelSaving;
     };
   }, [handleSave, canSave, saving, verifying]);
+
+  useEffect(() => {
+    const handleDiscard = () => resetToInitial();
+    window.addEventListener("unsaved:discard", handleDiscard);
+    return () => window.removeEventListener("unsaved:discard", handleDiscard);
+  }, [resetToInitial]);
 
   useEffect(() => {
     if (!isLocalModel) {

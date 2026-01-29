@@ -37,6 +37,7 @@ export function EditPersonaPage() {
     setAvatarCrop,
     setAvatarRoundPath,
     handleSave,
+    resetToInitial,
     canSave,
   } = usePersonaFormController(personaId);
 
@@ -53,6 +54,12 @@ export function EditPersonaPage() {
       delete globalWindow.__savePersonaSaving;
     };
   }, [handleSave, canSave, saving]);
+
+  useEffect(() => {
+    const handleDiscard = () => resetToInitial();
+    window.addEventListener("unsaved:discard", handleDiscard);
+    return () => window.removeEventListener("unsaved:discard", handleDiscard);
+  }, [resetToInitial]);
 
   const handleExport = async () => {
     if (!personaId) return;

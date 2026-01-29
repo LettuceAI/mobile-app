@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -73,6 +73,7 @@ type ControllerReturn = {
   handleSave: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleSetDefault: () => Promise<void>;
+  resetToInitial: () => void;
   clearError: () => void;
   fetchModels: () => Promise<void>;
 };
@@ -86,6 +87,10 @@ export function useModelEditorController(): ControllerReturn {
   const { modelId } = useParams<{ modelId: string }>();
   const isNew = !modelId || modelId === "new";
   const [state, dispatch] = useModelEditorState();
+  const initialStateRef = useRef<{
+    editorModel: Model | null;
+    modelAdvancedDraft: AdvancedModelSettings;
+  } | null>(null);
   const [capabilities, setCapabilities] = useReducer(
     (_: ProviderCapabilitiesCamel[], a: ProviderCapabilitiesCamel[]) => a,
     [],
@@ -192,6 +197,10 @@ export function useModelEditorController(): ControllerReturn {
               modelAdvancedDraft: nextDraft,
             },
           });
+          initialStateRef.current = {
+            editorModel: nextEditorModel ? JSON.parse(JSON.stringify(nextEditorModel)) : null,
+            modelAdvancedDraft: JSON.parse(JSON.stringify(nextDraft)),
+          };
         }
       } catch (error) {
         console.error("Failed to load model settings", error);
@@ -235,13 +244,20 @@ export function useModelEditorController(): ControllerReturn {
       providers.find(
         (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel,
       ) || providers.find((p) => p.providerId === editorModel.providerId);
-    return (
+    const valid =
       !!editorModel.displayName?.trim() &&
       !!editorModel.name?.trim() &&
       !!hasProvider &&
       !saving &&
-      !verifying
-    );
+      !verifying;
+    const initial = initialStateRef.current;
+    if (!initial) return false;
+    const editorChanged =
+      JSON.stringify(editorModel) !== JSON.stringify(initial.editorModel ?? null);
+    const draftChanged =
+      JSON.stringify(state.modelAdvancedDraft) !==
+      JSON.stringify(initial.modelAdvancedDraft ?? null);
+    return valid && (editorChanged || draftChanged);
   }, [state]);
 
   const handleDisplayNameChange = useCallback(
@@ -899,6 +915,21 @@ export function useModelEditorController(): ControllerReturn {
     }
   }, [state]);
 
+  const resetToInitial = useCallback(() => {
+    const initial = initialStateRef.current;
+    if (!initial) return;
+    dispatch({
+      type: "load_success",
+      payload: {
+        providers: state.providers,
+        defaultModelId: state.defaultModelId,
+        editorModel: initial.editorModel ? JSON.parse(JSON.stringify(initial.editorModel)) : null,
+        modelAdvancedDraft: JSON.parse(JSON.stringify(initial.modelAdvancedDraft)),
+      },
+    });
+    dispatch({ type: "set_error", payload: null });
+  }, [dispatch, state.defaultModelId, state.providers]);
+
   return {
     state,
     isNew,
@@ -945,6 +976,7 @@ export function useModelEditorController(): ControllerReturn {
     handleSave,
     handleDelete,
     handleSetDefault,
+    resetToInitial,
     clearError,
     fetchModels,
   };

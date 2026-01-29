@@ -116,6 +116,7 @@ export function EditCharacterPage() {
     startEditingScene,
     saveEditedScene,
     cancelEditingScene,
+    resetToInitial,
   } = actions;
 
   const { avatarInitial, canSave } = computed;
@@ -172,6 +173,12 @@ export function EditCharacterPage() {
       delete globalWindow.__saveCharacterSaving;
     };
   }, [handleSave, canSave, saving]);
+
+  React.useEffect(() => {
+    const handleDiscard = () => resetToInitial();
+    window.addEventListener("unsaved:discard", handleDiscard);
+    return () => window.removeEventListener("unsaved:discard", handleDiscard);
+  }, [resetToInitial]);
 
   const loadVoices = React.useCallback(async () => {
     setLoadingVoices(true);

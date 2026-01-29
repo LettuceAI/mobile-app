@@ -218,6 +218,23 @@ export function usePersonaFormController(personaId: string | undefined) {
     }
   }, [personaId, state, navigate]);
 
+  const resetToInitial = useCallback(() => {
+    const initial = initialStateRef.current;
+    if (!initial) return;
+    dispatch({
+      type: "set_fields",
+      payload: {
+        title: initial.title,
+        description: initial.description,
+        isDefault: initial.isDefault,
+        avatarPath: initial.avatarPath,
+        avatarCrop: JSON.parse(initial.avatarCrop) as AvatarCrop | null,
+        avatarRoundPath: JSON.parse(initial.avatarRoundPath) as string | null,
+      },
+    });
+    dispatch({ type: "set_error", payload: null });
+  }, []);
+
   // Compute canSave based on changes from initial state
   const canSave = (() => {
     // Must have name and description
@@ -248,6 +265,7 @@ export function usePersonaFormController(personaId: string | undefined) {
     setAvatarCrop,
     setAvatarRoundPath,
     handleSave,
+    resetToInitial,
     canSave,
   };
 }

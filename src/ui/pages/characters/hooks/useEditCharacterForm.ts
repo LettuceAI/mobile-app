@@ -573,6 +573,36 @@ export function useEditCharacterForm(characterId: string | undefined) {
     [setFields],
   );
 
+  const resetToInitial = useCallback(() => {
+    const initial = initialStateRef.current;
+    if (!initial) return;
+    setFields({
+      name: initial.name,
+      definition: initial.definition,
+      description: initial.description,
+      avatarPath: initial.avatarPath,
+      avatarCrop: JSON.parse(initial.avatarCrop) as AvatarCrop | null,
+      avatarRoundPath: JSON.parse(initial.avatarRoundPath) as string | null,
+      backgroundImagePath: initial.backgroundImagePath,
+      scenes: JSON.parse(initial.scenes) as Scene[],
+      defaultSceneId: initial.defaultSceneId,
+      selectedModelId: initial.selectedModelId,
+      systemPromptTemplateId: initial.systemPromptTemplateId,
+      disableAvatarGradient: initial.disableAvatarGradient,
+      customGradientEnabled: initial.customGradientEnabled,
+      customGradientColors: JSON.parse(initial.customGradientColors) as string[],
+      memoryType: initial.memoryType === "dynamic" ? "dynamic" : "manual",
+      voiceConfig: JSON.parse(initial.voiceConfig) as CharacterVoiceConfig | null,
+      voiceAutoplay: initial.voiceAutoplay,
+      newSceneContent: "",
+      newSceneDirection: "",
+      editingSceneId: null,
+      editingSceneContent: "",
+      editingSceneDirection: "",
+    });
+    setError(null);
+  }, [setError, setFields]);
+
   return {
     state,
     actions: {
@@ -586,6 +616,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
       cancelEditingScene,
       handleBackgroundImageUpload,
       handleAvatarUpload,
+      resetToInitial,
     },
     computed: {
       avatarInitial,
