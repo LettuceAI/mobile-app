@@ -42,7 +42,6 @@ import { BottomMenu } from "../../components";
 import { downloadJson, readFileAsText } from "../../../core/storage/personaTransfer";
 
 type TemplateUsage = {
-  models: number;
   characters: number;
 };
 
@@ -366,8 +365,7 @@ function PromptCard({
           <div className="text-[11px] text-white/30">
             {isSystem ? (
               <>
-                {usage.models} model{usage.models !== 1 && "s"} · {usage.characters} char
-                {usage.characters !== 1 && "s"}
+                {usage.characters} char{usage.characters !== 1 && "s"}
               </>
             ) : (
               "Internal feature"
@@ -529,12 +527,11 @@ export function SystemPromptsPage() {
       const bump = (id: string | null | undefined, key: keyof TemplateUsage) => {
         if (!id) return;
         if (!usage[id]) {
-          usage[id] = { models: 0, characters: 0 };
+          usage[id] = { characters: 0 };
         }
         usage[id][key] += 1;
       };
 
-      settings.models.forEach((model) => bump(model.promptTemplateId ?? null, "models"));
       characters.forEach((character) => bump(character.promptTemplateId ?? null, "characters"));
 
       const activeDefault = settings.promptTemplateId ?? APP_DEFAULT_TEMPLATE_ID;
@@ -728,7 +725,7 @@ export function SystemPromptsPage() {
                   key={template.id}
                   template={template}
                   isActiveDefault={template.id === activeDefaultId}
-                  usage={usageById[template.id] || { models: 0, characters: 0 }}
+                  usage={usageById[template.id] || { characters: 0 }}
                   onEdit={() => navigate(`/settings/prompts/${template.id}`)}
                   onDelete={() => {
                     setTemplateToDelete(template);
@@ -760,8 +757,8 @@ export function SystemPromptsPage() {
           </div>
 
           <p className="text-sm text-white/60">
-            This action cannot be undone. Any models or characters using this prompt will fall back
-            to the default.
+            This action cannot be undone. Any characters using this prompt will fall back to the
+            default.
           </p>
 
           <div className="flex gap-3">

@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 31;
+pub const CURRENT_MIGRATION_VERSION: u32 = 32;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -17,6 +17,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     if current_version >= CURRENT_MIGRATION_VERSION {
         migrate_v29_to_v30(app)?;
         migrate_v30_to_v31(app)?;
+        migrate_v31_to_v32(app)?;
         log_info(
             app,
             "migrations",
@@ -351,6 +352,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         version = 31;
     }
 
+    if version < 32 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v31 -> v32: Remove model-level prompts",
+        );
+        migrate_v31_to_v32(app)?;
+        version = 32;
+    }
+
     // Update the stored version
     set_migration_version(app, version)?;
 
@@ -438,8 +449,13 @@ fn set_migration_version(app: &AppHandle, version: u32) -> Result<(), String> {
 fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
     // Settings migration - add systemPrompt field if missing
     if let Ok(Some(settings_json)) = storage_read_settings(app.clone()) {
-        let mut settings: Value = serde_json::from_str(&settings_json)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings: {}", e)))?;
+        let mut settings: Value = serde_json::from_str(&settings_json).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse settings: {}", e),
+            )
+        })?;
 
         let mut changed = false;
 
@@ -474,7 +490,8 @@ fn migrate_v0_to_v1(app: &AppHandle) -> Result<(), String> {
         if changed {
             storage_write_settings(
                 app.clone(),
-                serde_json::to_string(&settings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+                serde_json::to_string(&settings)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             )?;
             log_info(app, "migrations", "Settings migration completed");
         }
@@ -517,18 +534,22 @@ fn migrate_v3_to_v4(app: &AppHandle) -> Result<(), String> {
     }
 
     // Read and parse JSON
-    let raw = fs::read_to_string(&old_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let raw = fs::read_to_string(&old_path)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if raw.trim().is_empty() {
         // Empty file; safe to remove
         let _ = fs::remove_file(&old_path);
         return Ok(());
     }
-    let secrets: SecretsFile = serde_json::from_str(&raw).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let secrets: SecretsFile = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Upsert into DB
     let mut conn = open_db(app)?;
     let now = now_ms();
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for (k, v) in secrets.entries.iter() {
         // keys are formatted as "service|account"
         if let Some((service, account)) = k.split_once('|') {
@@ -541,7 +562,8 @@ fn migrate_v3_to_v4(app: &AppHandle) -> Result<(), String> {
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Backup old file
     let _ = fs::rename(&old_path, dir.join("secrets.json.bak"));
@@ -569,10 +591,14 @@ fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
         templates: Vec<SystemPromptTemplate>,
     }
 
-    let content = fs::read_to_string(&path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let file: PromptTemplatesFile = serde_json::from_str(&content).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let content = fs::read_to_string(&path)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let file: PromptTemplatesFile = serde_json::from_str(&content)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut conn = open_db(app)?;
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for t in file.templates.iter() {
         let scope_str = match t.scope {
@@ -580,7 +606,8 @@ fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
             PromptScope::ModelSpecific => "ModelSpecific",
             PromptScope::CharacterSpecific => "CharacterSpecific",
         };
-        let target_ids_json = serde_json::to_string(&t.target_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let target_ids_json = serde_json::to_string(&t.target_ids)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tx.execute(
             "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -597,7 +624,8 @@ fn migrate_v4_to_v5(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     // Backup the old JSON file
     let _ = fs::rename(&path, path.with_extension("json.bak"));
     Ok(())
@@ -631,17 +659,24 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let content = fs::read_to_string(&path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let content = fs::read_to_string(&path)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if content.trim().is_empty() {
         let _ = fs::remove_file(&path);
         return Ok(());
     }
-    let file: ModelsCacheFile = serde_json::from_str(&content).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let file: ModelsCacheFile = serde_json::from_str(&content)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut conn = open_db(app)?;
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for (model_id, entry) in file.models.iter() {
         let pricing_json = match &entry.pricing {
-            Some(p) => Some(serde_json::to_string(p).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?),
+            Some(p) => Some(
+                serde_json::to_string(p)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            ),
             None => None,
         };
         tx.execute(
@@ -650,7 +685,8 @@ fn migrate_v5_to_v6(app: &AppHandle) -> Result<(), String> {
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let _ = fs::rename(&path, path.with_extension("json.bak"));
     Ok(())
 }
@@ -677,7 +713,8 @@ fn migrate_v6_to_v7(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     for row in rows {
-        let (cred_id, provider_id) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let (cred_id, provider_id) =
+            row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let account = format!("{}:{}", provider_id, cred_id);
         let key_opt: Option<String> = conn
             .query_row(
@@ -943,8 +980,13 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
 
     // Migrate Settings app-wide prompt
     if let Ok(Some(settings_json)) = storage_read_settings(app.clone()) {
-        let mut settings: Value = serde_json::from_str(&settings_json)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings: {}", e)))?;
+        let mut settings: Value = serde_json::from_str(&settings_json).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse settings: {}", e),
+            )
+        })?;
 
         let mut changed = false;
 
@@ -1018,7 +1060,8 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
         if changed {
             storage_write_settings(
                 app.clone(),
-                serde_json::to_string(&settings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+                serde_json::to_string(&settings)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             )?;
             log_info(
                 app,
@@ -1276,6 +1319,18 @@ fn migrate_v30_to_v31(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn migrate_v31_to_v32(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+    conn.execute(
+        "UPDATE models SET prompt_template_id = NULL, system_prompt = NULL",
+        [],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    Ok(())
+}
+
 fn migrate_v27_to_v28(app: &AppHandle) -> Result<(), String> {
     use crate::storage_manager::db::open_db;
 
@@ -1499,14 +1554,25 @@ fn migrate_v15_to_v16(app: &AppHandle) -> Result<(), String> {
 
         // Update the session if any embeddings were modified
         if updated {
-            let updated_json = serde_json::to_string(&embeddings)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize updated embeddings: {}", e)))?;
+            let updated_json = serde_json::to_string(&embeddings).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to serialize updated embeddings: {}", e),
+                )
+            })?;
 
             conn.execute(
                 "UPDATE sessions SET memory_embeddings = ?1 WHERE id = ?2",
                 [&updated_json, &session_id],
             )
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to update session {}: {}", session_id, e)))?;
+            .map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to update session {}: {}", session_id, e),
+                )
+            })?;
         }
     }
 
@@ -1629,7 +1695,13 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE characters ADD COLUMN custom_gradient_colors TEXT",
             [],
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to add custom_gradient_colors: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to add custom_gradient_colors: {}", e),
+            )
+        })?;
     }
 
     if !has_custom_text_color {
@@ -1638,7 +1710,13 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE characters ADD COLUMN custom_text_color TEXT",
             [],
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to add custom_text_color: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to add custom_text_color: {}", e),
+            )
+        })?;
     }
 
     if !has_custom_text_secondary {
@@ -1647,7 +1725,13 @@ fn migrate_v17_to_v18(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE characters ADD COLUMN custom_text_secondary TEXT",
             [],
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to add custom_text_secondary: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to add custom_text_secondary: {}", e),
+            )
+        })?;
     }
 
     log_info(app, "migrations", "v17->v18 migration completed");
@@ -1797,10 +1881,22 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
     let mut has_lorebook_id = false;
     let mut stmt = conn
         .prepare("PRAGMA table_info(lorebook_entries)")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read lorebook_entries schema: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read lorebook_entries schema: {}", e),
+            )
+        })?;
     let cols = stmt
         .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query lorebook_entries schema: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to query lorebook_entries schema: {}", e),
+            )
+        })?;
     for col in cols {
         let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         match name.as_str() {
@@ -1833,7 +1929,13 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "ALTER TABLE lorebook_entries RENAME TO lorebook_entries_v1",
             [],
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to rename legacy lorebook_entries: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to rename legacy lorebook_entries: {}", e),
+            )
+        })?;
     }
 
     conn.execute_batch(
@@ -1862,12 +1964,30 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
     // Create a default lorebook per character that has legacy entries and map it to the character.
     let mut stmt = conn
         .prepare("SELECT DISTINCT character_id FROM lorebook_entries_v1")
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read legacy lorebook entries: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read legacy lorebook entries: {}", e),
+            )
+        })?;
     let character_ids = stmt
         .query_map([], |row| row.get::<_, String>(0))
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to query legacy character ids: {}", e)))?
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to query legacy character ids: {}", e),
+            )
+        })?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to collect legacy character ids: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to collect legacy character ids: {}", e),
+            )
+        })?;
 
     for character_id in character_ids {
         let name: Option<String> = conn
@@ -1877,7 +1997,13 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read character name: {}", e)))?;
+            .map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to read character name: {}", e),
+                )
+            })?;
 
         let lorebook_id = Uuid::new_v4().to_string();
         let now = now_millis()? as i64;
@@ -1890,7 +2016,13 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "INSERT INTO lorebooks (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
             params![lorebook_id, lorebook_name, now, now],
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create migrated lorebook: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to create migrated lorebook: {}", e),
+            )
+        })?;
 
         conn.execute(
             r#"
@@ -1915,7 +2047,13 @@ fn migrate_v19_to_v20(app: &AppHandle) -> Result<(), String> {
             "#,
             params![character_id, lorebook_id],
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to migrate lorebook entries: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to migrate lorebook entries: {}", e),
+            )
+        })?;
     }
 
     log_info(app, "migrations", "v19->v20 migration completed");

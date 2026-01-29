@@ -1,3 +1,4 @@
+use blake3::Hasher;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
@@ -688,28 +689,18 @@ pub fn build_system_prompt_entries(
     settings: &Settings,
 ) -> Vec<SystemPromptEntry> {
     let mut debug_parts: Vec<Value> = Vec::new();
+    let mut base_template_source = "app_default_template";
+    let mut base_template_id: Option<String> = None;
 
-    let (base_content, base_entries) = if let Some(model_template_id) = &model.prompt_template_id {
-        if let Ok(Some(template)) = prompts::get_template(app, model_template_id) {
-            debug_parts.push(json!({
-                "source": "model_template",
-                "template_id": model_template_id
-            }));
-            (template.content, template.entries)
-        } else {
-            debug_parts.push(json!({
-                "source": "model_template_not_found",
-                "template_id": model_template_id,
-                "fallback": "character_or_app_default"
-            }));
-            get_character_or_app_template(app, character, settings, &mut debug_parts)
-        }
-    } else if let Some(char_template_id) = &character.prompt_template_id {
+    let (base_content, base_entries) = if let Some(char_template_id) = &character.prompt_template_id
+    {
         if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
             debug_parts.push(json!({
                 "source": "character_template",
                 "template_id": char_template_id
             }));
+            base_template_source = "character_template";
+            base_template_id = Some(char_template_id.clone());
             (template.content, template.entries)
         } else {
             debug_parts.push(json!({
@@ -717,10 +708,18 @@ pub fn build_system_prompt_entries(
                 "template_id": char_template_id,
                 "fallback": "app_default"
             }));
-            get_app_default_template_content(app, settings, &mut debug_parts)
+            let (content, entries, source, id) =
+                get_app_default_template_content(app, settings, &mut debug_parts);
+            base_template_source = source;
+            base_template_id = id;
+            (content, entries)
         }
     } else {
-        get_app_default_template_content(app, settings, &mut debug_parts)
+        let (content, entries, source, id) =
+            get_app_default_template_content(app, settings, &mut debug_parts);
+        base_template_source = source;
+        base_template_id = id;
+        (content, entries)
     };
 
     let base_entries = if base_entries.is_empty() && !base_content.trim().is_empty() {
@@ -803,38 +802,108 @@ pub fn build_system_prompt_entries(
         "memories_count": session.memories.len(),
     }));
 
-    super::super::utils::emit_debug(app, "system_prompt_built", json!({ "debug": debug_parts }));
+    let mut total_chars: usize = 0;
+    let mut enabled_count: usize = 0;
+    let mut system_count: usize = 0;
+    let mut has_ozone = false;
+    let mut has_no_ozone = false;
+    let mut entry_summaries: Vec<Value> = Vec::new();
+    let mut hasher = Hasher::new();
+
+    for entry in rendered_entries.iter() {
+        let content = &entry.content;
+        total_chars += content.len();
+        hasher.update(content.as_bytes());
+        hasher.update(b"\n");
+
+        if entry.enabled || entry.system_prompt {
+            enabled_count += 1;
+        }
+        if entry.system_prompt {
+            system_count += 1;
+        }
+
+        let lowered = content.to_ascii_lowercase();
+        let entry_has_ozone = lowered.contains("ozone");
+        let entry_has_no_ozone = lowered.contains("no ozone");
+        if entry_has_ozone {
+            has_ozone = true;
+        }
+        if entry_has_no_ozone {
+            has_no_ozone = true;
+        }
+
+        let mut entry_hasher = Hasher::new();
+        entry_hasher.update(content.as_bytes());
+        let entry_hash = entry_hasher.finalize().to_hex().to_string();
+
+        entry_summaries.push(json!({
+            "id": entry.id,
+            "name": entry.name,
+            "role": entry.role,
+            "enabled": entry.enabled,
+            "system_prompt": entry.system_prompt,
+            "injection_position": entry.injection_position,
+            "content_len": content.len(),
+            "content_hash": entry_hash,
+            "contains_ozone": entry_has_ozone,
+            "contains_no_ozone": entry_has_no_ozone,
+        }));
+    }
+
+    let combined_hash = hasher.finalize().to_hex().to_string();
+
+    super::super::utils::emit_debug(
+        app,
+        "system_prompt_built",
+        json!({
+            "debug": debug_parts,
+            "system_prompt_debug": {
+                "session_id": session.id,
+                "character_id": character.id,
+                "model_id": model.id,
+                "base_template_source": base_template_source,
+                "base_template_id": base_template_id,
+                "model_prompt_template_id": model.prompt_template_id,
+                "character_prompt_template_id": character.prompt_template_id,
+                "settings_prompt_template_id": settings.prompt_template_id,
+                "entry_count": rendered_entries.len(),
+                "enabled_entry_count": enabled_count,
+                "system_entry_count": system_count,
+                "total_chars": total_chars,
+                "combined_hash": combined_hash,
+                "contains_ozone": has_ozone,
+                "contains_no_ozone": has_no_ozone,
+                "entries": entry_summaries,
+            }
+        }),
+    );
+
+    super::super::utils::log_info(
+        app,
+        "prompt_engine",
+        format!(
+            "system_prompt_built session={} base_source={} base_id={:?} entries={} total_chars={} ozone={} no_ozone={}",
+            session.id,
+            base_template_source,
+            base_template_id,
+            rendered_entries.len(),
+            total_chars,
+            has_ozone,
+            has_no_ozone
+        ),
+    );
 
     rendered_entries
 }
 
 /// Helper function to check character template, then fall back to app default
-fn get_character_or_app_template(
-    app: &AppHandle,
-    character: &Character,
-    settings: &Settings,
-    debug_parts: &mut Vec<Value>,
-) -> (String, Vec<SystemPromptEntry>) {
-    // Try character template first
-    if let Some(char_template_id) = &character.prompt_template_id {
-        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
-            debug_parts.push(json!({
-                "source": "character_template",
-                "template_id": char_template_id
-            }));
-            return (template.content, template.entries);
-        }
-    }
-    // Fall back to app default
-    get_app_default_template_content(app, settings, debug_parts)
-}
-
 /// Helper function to get app default template content from database
 fn get_app_default_template_content(
     app: &AppHandle,
     settings: &Settings,
     debug_parts: &mut Vec<Value>,
-) -> (String, Vec<SystemPromptEntry>) {
+) -> (String, Vec<SystemPromptEntry>, &'static str, Option<String>) {
     // Try settings.prompt_template_id first (user's custom app default)
     if let Some(app_template_id) = &settings.prompt_template_id {
         if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
@@ -842,7 +911,12 @@ fn get_app_default_template_content(
                 "source": "app_wide_template",
                 "template_id": app_template_id
             }));
-            return (template.content, template.entries);
+            return (
+                template.content,
+                template.entries,
+                "app_wide_template",
+                Some(app_template_id.clone()),
+            );
         }
     }
 
@@ -852,7 +926,12 @@ fn get_app_default_template_content(
                 "source": "app_default_template",
                 "template_id": prompts::APP_DEFAULT_TEMPLATE_ID
             }));
-            (template.content, template.entries)
+            (
+                template.content,
+                template.entries,
+                "app_default_template",
+                Some(prompts::APP_DEFAULT_TEMPLATE_ID.to_string()),
+            )
         }
         _ => {
             debug_parts.push(json!({
@@ -860,7 +939,12 @@ fn get_app_default_template_content(
                 "warning": "app_default template not found in database"
             }));
             let content = default_system_prompt_template();
-            (content.clone(), default_modular_prompt_entries())
+            (
+                content.clone(),
+                default_modular_prompt_entries(),
+                "emergency_hardcoded_fallback",
+                None,
+            )
         }
     }
 }

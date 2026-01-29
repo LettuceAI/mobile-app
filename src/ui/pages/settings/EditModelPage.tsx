@@ -33,13 +33,10 @@ import {
 } from "../../components/AdvancedModelSettingsForm";
 import { BottomMenu, MenuButton, MenuSection } from "../../components/BottomMenu";
 import {
-  Loader2,
-  FileText,
   Info,
   Settings,
   Brain,
   RefreshCw,
-  ChevronDown,
   Check,
   Search,
   ChevronRight,
@@ -48,10 +45,8 @@ import {
 } from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { useModelEditorController } from "./hooks/useModelEditorController";
-import type { SystemPromptTemplate, ReasoningSupport } from "../../../core/storage/schemas";
+import type { ReasoningSupport } from "../../../core/storage/schemas";
 import { getProviderReasoningSupport } from "../../../core/storage/schemas";
-import { listPromptTemplates } from "../../../core/prompts/service";
-import { APP_DEFAULT_TEMPLATE_ID, isSystemPromptTemplate } from "../../../core/prompts/constants";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { cn } from "../../design-tokens";
 import { openDocs } from "../../../core/utils/docs";
@@ -64,8 +59,6 @@ type LlamaCppContextInfo = {
 };
 
 export function EditModelPage() {
-  const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -210,12 +203,6 @@ export function EditModelPage() {
   }, [handleSave, canSave, saving, verifying]);
 
   useEffect(() => {
-    if (editorModel?.id) {
-      loadPromptTemplates();
-    }
-  }, [editorModel?.id]);
-
-  useEffect(() => {
     if (!isLocalModel) {
       setLlamaContextInfo(null);
       setLlamaContextError(null);
@@ -263,28 +250,6 @@ export function EditModelPage() {
       clearTimeout(timer);
     };
   }, [editorModel?.name, isLocalModel]);
-
-  const loadPromptTemplates = async () => {
-    try {
-      setLoadingTemplates(true);
-      const templates = await listPromptTemplates();
-      const filtered = templates.filter(
-        (template) =>
-          isSystemPromptTemplate(template.id) && template.id !== APP_DEFAULT_TEMPLATE_ID,
-      );
-      setPromptTemplates(filtered);
-    } catch (err) {
-      console.error("Failed to load prompt templates:", err);
-    } finally {
-      setLoadingTemplates(false);
-    }
-  };
-
-  const handlePromptTemplateChange = (templateId: string) => {
-    if (!editorModel) return;
-    editorModel.promptTemplateId = templateId || null;
-    handleModelNameChange(editorModel.name); // Trigger state update
-  };
 
   const scopeOrder = ["text", "image", "audio"] as const;
   const toggleScope = (
@@ -568,38 +533,6 @@ export function EditModelPage() {
                 animate={{ height: "auto", opacity: 1 }}
                 className="overflow-hidden space-y-8 pt-2 px-1"
               >
-                {/* System Prompt Template */}
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold tracking-wider text-white/50 uppercase">
-                    System Prompt Template
-                  </label>
-                  {loadingTemplates ? (
-                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                      <Loader2 className="h-4 w-4 animate-spin text-white/50" />
-                      <span className="text-sm text-white/50">Loading templates...</span>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-                      <select
-                        value={editorModel.promptTemplateId || ""}
-                        onChange={(e) => handlePromptTemplateChange(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 pl-10 text-sm text-white transition focus:border-white/30 focus:outline-none"
-                      >
-                        <option value="" className="bg-[#16171d]">
-                          Use app default
-                        </option>
-                        {promptTemplates.map((template) => (
-                          <option key={template.id} value={template.id} className="bg-[#16171d]">
-                            {template.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-                    </div>
-                  )}
-                </div>
-
                 {/* Capabilities */}
                 <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5">
                   <div className="flex items-start justify-between">
