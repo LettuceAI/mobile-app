@@ -235,17 +235,22 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     };
   }, [isUnsaved]);
 
-  const handleBack = () => {
+  useEffect(() => {
     if (isUnsaved) {
-      toast.warningAction(
+      toast.warningSticky(
         "Unsaved changes",
         "Save or discard your changes before leaving.",
         "Discard",
-        () => {
-          window.dispatchEvent(new CustomEvent("unsaved:discard"));
-        },
+        () => window.dispatchEvent(new CustomEvent("unsaved:discard")),
         "unsaved-changes",
       );
+    } else {
+      toast.dismiss("unsaved-changes");
+    }
+  }, [isUnsaved]);
+
+  const handleBack = () => {
+    if (isUnsaved) {
       return;
     }
     if (onBackOverride) {

@@ -268,14 +268,14 @@ function AppContent() {
   const handleAndroidBack = useCallback(() => {
     const globalWindow = window as any;
     if (globalWindow.__unsavedChanges) {
-      toast.warningAction(
+      toast.warningSticky(
         "Unsaved changes",
         "Save or discard your changes before leaving.",
         "Discard",
         () => {
           window.dispatchEvent(new CustomEvent("unsaved:discard"));
         },
-        "unsaved-changes-android",
+        "unsaved-changes",
       );
       return false;
     }

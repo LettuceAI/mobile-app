@@ -32,6 +32,7 @@ type ToastActionOptions = {
   actionLabel?: string;
   onAction?: () => void;
   id?: string | number;
+  duration?: number | typeof Infinity;
 };
 
 function showToast(
@@ -66,7 +67,7 @@ function showToast(
     {
       className: cn(baseClassName, variantClasses[variant]),
       unstyled: true,
-      duration: 5000,
+      duration: options?.duration ?? 5000,
       id: options?.id,
     },
   );
@@ -75,16 +76,16 @@ function showToast(
 export const toast = {
   info: (title: string, description?: string, options?: ToastActionOptions) =>
     showToast("info", title, description, options),
-  
+
   warning: (title: string, description?: string, options?: ToastActionOptions) =>
     showToast("warning", title, description, options),
-  
+
   success: (title: string, description?: string, options?: ToastActionOptions) =>
     showToast("success", title, description, options),
-  
+
   error: (title: string, description?: string, options?: ToastActionOptions) =>
     showToast("error", title, description, options),
-  
+
   // Legacy support for warningAction
   warningAction: (
     title: string,
@@ -93,4 +94,18 @@ export const toast = {
     onAction: () => void,
     id?: string | number,
   ) => showToast("warning", title, description, { actionLabel, onAction, id }),
+  warningSticky: (
+    title: string,
+    description: string | undefined,
+    actionLabel: string,
+    onAction: () => void,
+    id?: string | number,
+  ) =>
+    showToast("warning", title, description, {
+      actionLabel,
+      onAction,
+      id,
+      duration: Infinity,
+    }),
+  dismiss: (id: string | number) => sonnerToast.dismiss(id),
 };
