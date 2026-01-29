@@ -888,7 +888,11 @@ async fn process_group_dynamic_memory_cycle(
             &window_message_ids,
             None,
         );
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Advanced settings missing"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Advanced settings missing",
+        ));
     };
 
     let summarisation_model_id = match advanced.summarisation_model_id.as_ref() {
@@ -905,7 +909,11 @@ async fn process_group_dynamic_memory_cycle(
                 &window_message_ids,
                 None,
             );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Summarisation model not configured"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Summarisation model not configured",
+            ));
         }
     };
 
@@ -924,7 +932,11 @@ async fn process_group_dynamic_memory_cycle(
                     &window_message_ids,
                     None,
                 );
-                return Err(crate::utils::err_msg(module_path!(), line!(), "Summarisation model unavailable"));
+                return Err(crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    "Summarisation model unavailable",
+                ));
             }
         };
 
@@ -1757,7 +1769,13 @@ fn load_character(conn: &rusqlite::Connection, character_id: &str) -> Result<Cha
                 ))
             },
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load character {}: {}", character_id, e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to load character {}: {}", character_id, e),
+            )
+        })?;
 
     let description = row.2;
     let definition = row.3.or(description.clone());
@@ -1830,8 +1848,8 @@ fn load_recent_group_messages(
 ) -> Result<Vec<GroupMessage>, String> {
     let messages_json =
         group_sessions::group_messages_list_internal(conn, session_id, limit, None, None)?;
-    let messages: Vec<GroupMessage> =
-        serde_json::from_str(&messages_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let messages: Vec<GroupMessage> = serde_json::from_str(&messages_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(messages)
 }
 
@@ -1842,14 +1860,19 @@ fn build_selection_context(
     user_message: &str,
 ) -> Result<GroupChatContext, String> {
     let session_json = group_sessions::group_session_get_internal(conn, session_id)?;
-    let session: GroupSession = serde_json::from_str(&session_json)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse session: {}", e)))?;
+    let session: GroupSession = serde_json::from_str(&session_json).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse session: {}", e),
+        )
+    })?;
 
     let characters = load_characters_info(conn, &session.character_ids)?;
 
     let stats_json = group_sessions::group_participation_stats_internal(conn, session_id)?;
-    let participation_stats: Vec<GroupParticipation> =
-        serde_json::from_str(&stats_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let participation_stats: Vec<GroupParticipation> = serde_json::from_str(&stats_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Load more messages for selection context (selection needs good context for fair decisions)
     let recent_messages = load_recent_group_messages(conn, session_id, 30)?;
@@ -3019,53 +3042,54 @@ pub async fn group_chat_send(
         }),
     );
 
-    let (selected_character_id, selection_reasoning, was_mentioned) =
-        if let Some(mentioned_id) = mention_result {
-            log_info(
-                &app,
-                "group_chat_send",
-                format!("User mentioned character {}", mentioned_id),
-            );
-            (
-                mentioned_id,
-                Some("User mentioned this character directly".to_string()),
-                true,
-            )
-        } else {
-            let selection_result = tokio::select! {
-                _ = &mut abort_rx => {
-                    log_warn(
-                        &app,
-                        "group_chat_send",
-                        format!("Request aborted by user for session {}", session_id),
-                    );
-                    return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
-                }
-                selection = select_speaker_via_llm(&app, &context, &settings) => selection,
-            };
-            match selection_result {
-                Ok(selection) => {
-                    log_info(
-                        &app,
-                        "group_chat_send",
-                        format!(
-                            "LLM selected character {}: {:?}",
-                            selection.character_id, selection.reasoning
-                        ),
-                    );
-                    (selection.character_id, selection.reasoning, false)
-                }
-                Err(err) => {
-                    log_error(
-                        &app,
-                        "group_chat_send",
-                        format!("LLM selection failed: {}, using heuristic", err),
-                    );
-                    let fallback = selection::heuristic_select_speaker(&context)?;
-                    (fallback.character_id, fallback.reasoning, false)
-                }
+    let (selected_character_id, selection_reasoning, was_mentioned) = if let Some(mentioned_id) =
+        mention_result
+    {
+        log_info(
+            &app,
+            "group_chat_send",
+            format!("User mentioned character {}", mentioned_id),
+        );
+        (
+            mentioned_id,
+            Some("User mentioned this character directly".to_string()),
+            true,
+        )
+    } else {
+        let selection_result = tokio::select! {
+            _ = &mut abort_rx => {
+                log_warn(
+                    &app,
+                    "group_chat_send",
+                    format!("Request aborted by user for session {}", session_id),
+                );
+                return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
             }
+            selection = select_speaker_via_llm(&app, &context, &settings) => selection,
         };
+        match selection_result {
+            Ok(selection) => {
+                log_info(
+                    &app,
+                    "group_chat_send",
+                    format!(
+                        "LLM selected character {}: {:?}",
+                        selection.character_id, selection.reasoning
+                    ),
+                );
+                (selection.character_id, selection.reasoning, false)
+            }
+            Err(err) => {
+                log_error(
+                    &app,
+                    "group_chat_send",
+                    format!("LLM selection failed: {}, using heuristic", err),
+                );
+                let fallback = selection::heuristic_select_speaker(&context)?;
+                (fallback.character_id, fallback.reasoning, false)
+            }
+        }
+    };
 
     if !context
         .session
@@ -3097,25 +3121,16 @@ pub async fn group_chat_send(
 
     context.recent_messages.push(user_msg);
 
-    let response_result = tokio::select! {
-        _ = &mut abort_rx => {
-            log_warn(
-                &app,
-                "group_chat_send",
-                format!("Request aborted by user for session {}", session_id),
-            );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
-        }
-        result = generate_character_response(
-            &app,
-            &mut context,
-            &selected_character_id,
-            &settings,
-            &pool,
-            &req_id,
-            UsageOperationType::GroupChatMessage,
-        ) => result,
-    };
+    let response_result = generate_character_response(
+        &app,
+        &mut context,
+        &selected_character_id,
+        &settings,
+        &pool,
+        &req_id,
+        UsageOperationType::GroupChatMessage,
+    )
+    .await;
 
     let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 
@@ -3144,8 +3159,8 @@ pub async fn group_chat_send(
     )?;
 
     let stats_json = group_sessions::group_participation_stats_internal(&conn, &session_id)?;
-    let participation_stats: Vec<GroupParticipation> =
-        serde_json::from_str(&stats_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let participation_stats: Vec<GroupParticipation> = serde_json::from_str(&stats_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let response = GroupChatResponse {
         message,
@@ -3178,8 +3193,8 @@ pub async fn group_chat_send(
 
     let conn = pool.get_connection()?;
     let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
-    let mut updated_session: GroupSession =
-        serde_json::from_str(&session_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut updated_session: GroupSession = serde_json::from_str(&session_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let dynamic_settings = effective_group_dynamic_memory_settings(&settings);
 
     if dynamic_settings.enabled {
@@ -3194,7 +3209,8 @@ pub async fn group_chat_send(
         }
     }
 
-    serde_json::to_string(&response).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&response)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -3215,8 +3231,8 @@ pub async fn group_chat_retry_dynamic_memory(
     let settings = load_settings(&app)?;
     let conn = pool.get_connection()?;
     let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
-    let mut session: GroupSession =
-        serde_json::from_str(&session_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut session: GroupSession = serde_json::from_str(&session_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let dynamic_settings = effective_group_dynamic_memory_settings(&settings);
 
     if !dynamic_settings.enabled {
@@ -3333,25 +3349,16 @@ pub async fn group_chat_regenerate(
         }),
     );
 
-    let response_result = tokio::select! {
-        _ = &mut abort_rx => {
-            log_warn(
-                &app,
-                "group_chat_regenerate",
-                format!("Request aborted by user for session {}", session_id),
-            );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
-        }
-        result = generate_character_response(
-            &app,
-            &mut context,
-            &selected_character_id,
-            &settings,
-            &pool,
-            &req_id,
-            UsageOperationType::GroupChatRegenerate,
-        ) => result,
-    };
+    let response_result = generate_character_response(
+        &app,
+        &mut context,
+        &selected_character_id,
+        &settings,
+        &pool,
+        &req_id,
+        UsageOperationType::GroupChatRegenerate,
+    )
+    .await;
 
     let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 
@@ -3406,13 +3413,13 @@ pub async fn group_chat_regenerate(
     }
 
     let stats_json = group_sessions::group_participation_stats_internal(&conn, &session_id)?;
-    let participation_stats: Vec<GroupParticipation> =
-        serde_json::from_str(&stats_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let participation_stats: Vec<GroupParticipation> = serde_json::from_str(&stats_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let messages_json =
         group_sessions::group_messages_list_internal(&conn, &session_id, 100, None, None)?;
-    let messages: Vec<GroupMessage> =
-        serde_json::from_str(&messages_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let messages: Vec<GroupMessage> = serde_json::from_str(&messages_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let message = messages
         .into_iter()
         .find(|m| m.id == message_id)
@@ -3437,7 +3444,8 @@ pub async fn group_chat_regenerate(
         }),
     );
 
-    serde_json::to_string(&response).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&response)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -3519,25 +3527,15 @@ pub async fn group_chat_continue(
         }),
     );
 
-    let response_result = tokio::select! {
-        _ = &mut abort_rx => {
-            log_warn(
-                &app,
-                "group_chat_continue",
-                format!("Request aborted by user for session {}", session_id),
-            );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
-        }
-        result = generate_character_response(
-            &app,
-            &mut context,
-            &selected_character_id,
-            &settings,
-            &pool,
-            &req_id,
-            UsageOperationType::GroupChatContinue,
-        ) => result,
-    };
+    let response_result = generate_character_response(
+        &app,
+        &mut context,
+        &selected_character_id,
+        &settings,
+        &pool,
+        &req_id,
+        UsageOperationType::GroupChatContinue,
+    ).await;
 
     let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 
@@ -3555,8 +3553,8 @@ pub async fn group_chat_continue(
     )?;
 
     let stats_json = group_sessions::group_participation_stats_internal(&conn, &session_id)?;
-    let participation_stats: Vec<GroupParticipation> =
-        serde_json::from_str(&stats_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let participation_stats: Vec<GroupParticipation> = serde_json::from_str(&stats_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let response = GroupChatResponse {
         message,
@@ -3577,7 +3575,8 @@ pub async fn group_chat_continue(
         }),
     );
 
-    serde_json::to_string(&response).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&response)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -3630,8 +3629,13 @@ pub async fn group_chat_generate_user_reply(
     let conn = pool.get_connection()?;
 
     let session_json = group_sessions::group_session_get_internal(&conn, &session_id)?;
-    let session: GroupSession = serde_json::from_str(&session_json)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse session: {}", e)))?;
+    let session: GroupSession = serde_json::from_str(&session_json).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse session: {}", e),
+        )
+    })?;
 
     let personas = load_personas(&app)?;
     let persona = personas
@@ -3640,11 +3644,20 @@ pub async fn group_chat_generate_user_reply(
 
     let messages_json =
         group_sessions::group_messages_list_internal(&conn, &session_id, 10, None, None)?;
-    let recent_msgs: Vec<GroupMessage> = serde_json::from_str(&messages_json)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse messages: {}", e)))?;
+    let recent_msgs: Vec<GroupMessage> = serde_json::from_str(&messages_json).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse messages: {}", e),
+        )
+    })?;
 
     if recent_msgs.is_empty() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No conversation history to base reply on"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No conversation history to base reply on",
+        ));
     }
 
     // Load all characters in this group
@@ -3655,13 +3668,21 @@ pub async fn group_chat_generate_user_reply(
     }
 
     if group_characters.is_empty() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No characters found in group session"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No characters found in group session",
+        ));
     }
 
     // Check if help me reply is enabled
     if let Some(advanced) = &settings.advanced_settings {
         if advanced.help_me_reply_enabled == Some(false) {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Help Me Reply is disabled in settings"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Help Me Reply is disabled in settings",
+            ));
         }
     }
 
