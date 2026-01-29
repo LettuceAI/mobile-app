@@ -185,7 +185,7 @@ function PromptEntryCard({
 
   return (
     <Reorder.Item
-      id={`prompt-entry-${entry.id}`}
+      id={`prompt-entry-row-${entry.id}`}
       value={entry}
       dragListener={false}
       dragControls={controls}
@@ -426,7 +426,7 @@ function PromptEntryListItem({
 
   return (
     <Reorder.Item
-      id={`prompt-entry-${entry.id}`}
+      id={`prompt-entry-row-mobile-${entry.id}`}
       value={entry}
       dragListener={false}
       dragControls={controls}
@@ -792,7 +792,11 @@ export function EditPromptTemplate() {
     setEntries((prev) => [...prev, entry]);
     setCollapsedEntries((prev) => ({ ...prev, [entry.id]: false }));
     window.setTimeout(() => {
-      const target = document.getElementById(`prompt-entry-${entry.id}`);
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+      const targetId = isMobile
+        ? `prompt-entry-row-mobile-${entry.id}`
+        : `prompt-entry-row-${entry.id}`;
+      const target = document.getElementById(targetId);
       if (target) {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -1575,6 +1579,18 @@ export function EditPromptTemplate() {
         {selectedMobileEntry ? (
           <div className="space-y-3">
             <div className="grid gap-2">
+              <div className="space-y-1">
+                <input
+                  value={selectedMobileEntry.name}
+                  onChange={(event) =>
+                    handleEntryUpdate(selectedMobileEntry.id, { name: event.target.value })
+                  }
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  placeholder="Entry name"
+                />
+                <p className="text-[11px] text-white/50">Name used for organization and preview.</p>
+              </div>
+
               <div className="space-y-1">
                 <select
                   value={selectedMobileEntry.role}
