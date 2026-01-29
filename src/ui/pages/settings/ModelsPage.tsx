@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Check, ChevronRight, EthernetPort, Edit3, Trash2, Star, StarOff } from "lucide-react";
 import { BottomMenu, MenuButton } from "../../components/BottomMenu";
+import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 import { useModelsController } from "./hooks/useModelsController";
 import { useNavigationManager } from "../../navigation";
@@ -241,15 +242,16 @@ export function ModelsPage() {
               icon={Trash2}
               title="Delete"
               description="Remove this model permanently"
-              onClick={() => {
-                if (
-                  confirm(
-                    `Are you sure you want to delete ${selectedModel.displayName || selectedModel.name}?`,
-                  )
-                ) {
-                  void handleDelete(selectedModel.id);
-                  setSelectedModel(null);
-                }
+              onClick={async () => {
+                const confirmed = await confirmBottomMenu({
+                  title: "Delete model?",
+                  message: `Are you sure you want to delete ${selectedModel.displayName || selectedModel.name}?`,
+                  confirmLabel: "Delete",
+                  destructive: true,
+                });
+                if (!confirmed) return;
+                void handleDelete(selectedModel.id);
+                setSelectedModel(null);
               }}
               color="from-rose-500 to-red-600"
             />

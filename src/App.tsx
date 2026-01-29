@@ -67,6 +67,7 @@ import {
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { V1UpgradeToast } from "./ui/components/V1UpgradeToast";
+import { ConfirmBottomMenuHost } from "./ui/components/ConfirmBottomMenu";
 import { isOnboardingCompleted } from "./core/storage/appState";
 import { TopNav, BottomNav } from "./ui/components/App";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
@@ -201,6 +202,7 @@ function App() {
               descriptionClassName: "text-xs text-white/70",
             }}
           />
+          <ConfirmBottomMenuHost />
           <AppContent />
         </div>
       </BrowserRouter>

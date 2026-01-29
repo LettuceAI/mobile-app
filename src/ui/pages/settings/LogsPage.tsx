@@ -21,6 +21,7 @@ import {
 } from "../../../core/storage/schemas";
 import { sanitizeAdvancedModelSettings } from "../../components/AdvancedModelSettingsForm";
 import { interactive, typography, cn } from "../../design-tokens";
+import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 
 const logger = logManager({ component: "LogsPage" });
 
@@ -262,7 +263,13 @@ export function LogsPage() {
   };
 
   const clearAllLogs = async () => {
-    if (!confirm("Are you sure you want to delete all log files?")) return;
+    const confirmed = await confirmBottomMenu({
+      title: "Delete all logs?",
+      message: "Are you sure you want to delete all log files?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
 
     try {
       await invoke("clear_all_logs");

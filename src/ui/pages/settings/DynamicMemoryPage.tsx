@@ -24,6 +24,7 @@ import { cn, typography, interactive } from "../../design-tokens";
 import { useNavigate } from "react-router-dom";
 import { EmbeddingUpgradePrompt } from "../../components/EmbeddingUpgradePrompt";
 import { BottomMenu } from "../../components/BottomMenu";
+import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
 
 const DEFAULT_DYNAMIC_MEMORY_SETTINGS: DynamicMemorySettings = {
@@ -780,17 +781,19 @@ export function DynamicMemoryPage() {
 
                 <button
                   onClick={async () => {
-                    if (
-                      window.confirm(
+                    const confirmed = await confirmBottomMenu({
+                      title: "Reinstall model?",
+                      message:
                         "Are you sure you want to reinstall the model? This will delete existing model files and require a re-download.",
-                      )
-                    ) {
-                      try {
-                        await storageBridge.deleteEmbeddingModel();
-                        navigate("/settings/embedding-download");
-                      } catch (err) {
-                        console.error("Failed to delete model:", err);
-                      }
+                      confirmLabel: "Reinstall",
+                      destructive: true,
+                    });
+                    if (!confirmed) return;
+                    try {
+                      await storageBridge.deleteEmbeddingModel();
+                      navigate("/settings/embedding-download");
+                    } catch (err) {
+                      console.error("Failed to delete model:", err);
                     }
                   }}
                   className={cn(

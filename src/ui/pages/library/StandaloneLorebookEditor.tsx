@@ -13,6 +13,7 @@ import {
   saveLorebook,
 } from "../../../core/storage/repo";
 import { BottomMenu, MenuButton } from "../../components";
+import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { TopNav } from "../../components/App";
 
 const DRAG_HOLD_MS = 450;
@@ -728,11 +729,16 @@ export function StandaloneLorebookEditor() {
               />
 
               <button
-                onClick={() => {
-                  if (confirm("Delete this entry?")) {
-                    handleDeleteEntry(selectedEntry.id);
-                    setSelectedEntry(null);
-                  }
+                onClick={async () => {
+                  const confirmed = await confirmBottomMenu({
+                    title: "Delete entry?",
+                    message: "Are you sure you want to delete this entry?",
+                    confirmLabel: "Delete",
+                    destructive: true,
+                  });
+                  if (!confirmed) return;
+                  handleDeleteEntry(selectedEntry.id);
+                  setSelectedEntry(null);
                 }}
                 className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition hover:border-red-500/50 hover:bg-red-500/20"
               >

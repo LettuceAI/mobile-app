@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn, radius, interactive } from "../../design-tokens";
 import { BottomMenu } from "../../components";
+import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { useNavigationManager } from "../../navigation";
 import {
   createPromptTemplate,
@@ -949,9 +950,13 @@ export function EditPromptTemplate() {
     if (!["system", "summary", "memory", "reply"].includes(promptType)) return;
 
     const promptTypeName = getPromptTypeName(promptType);
-    if (!confirm(`Reset to the original default ${promptTypeName}? This cannot be undone.`)) {
-      return;
-    }
+    const confirmed = await confirmBottomMenu({
+      title: `Reset ${promptTypeName}?`,
+      message: `Reset to the original default ${promptTypeName}? This cannot be undone.`,
+      confirmLabel: "Reset",
+      destructive: true,
+    });
+    if (!confirmed) return;
 
     setResetting(true);
     try {

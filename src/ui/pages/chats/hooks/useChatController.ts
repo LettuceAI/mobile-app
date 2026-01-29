@@ -41,6 +41,7 @@ import type { GeneratedImage } from "../../../../core/image-generation";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { type as getPlatform } from "@tauri-apps/plugin-os";
 import { impactFeedback } from "@tauri-apps/plugin-haptics";
+import { confirmBottomMenu } from "../../../components/ConfirmBottomMenu";
 import {
   consumeThinkDelta,
   createThinkStreamState,
@@ -1540,7 +1541,12 @@ export function useChatController(
         return;
       }
 
-      const confirmed = window.confirm("Delete this message?");
+      const confirmed = await confirmBottomMenu({
+        title: "Delete message?",
+        message: "Are you sure you want to delete this message?",
+        confirmLabel: "Delete",
+        destructive: true,
+      });
       if (!confirmed) return;
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
       dispatch({ type: "SET_ACTION_ERROR", payload: null });
@@ -1588,9 +1594,13 @@ export function useChatController(
         return;
       }
 
-      const confirmed = window.confirm(
-        "Rewind conversation to this message? All messages after this point will be removed.",
-      );
+      const confirmed = await confirmBottomMenu({
+        title: "Rewind conversation?",
+        message:
+          "Rewind conversation to this message? All messages after this point will be removed.",
+        confirmLabel: "Rewind",
+        destructive: true,
+      });
       if (!confirmed) return;
 
       dispatch({ type: "SET_ACTION_BUSY", payload: true });
@@ -1690,9 +1700,11 @@ export function useChatController(
         }
 
         const messageCount = messageIndex + 1;
-        const confirmed = window.confirm(
-          `Create a new chat branch from this point? The new chat will contain ${messageCount} message${messageCount > 1 ? "s" : ""}.`,
-        );
+        const confirmed = await confirmBottomMenu({
+          title: "Create chat branch?",
+          message: `Create a new chat branch from this point? The new chat will contain ${messageCount} message${messageCount > 1 ? "s" : ""}.`,
+          confirmLabel: "Create",
+        });
         if (!confirmed) {
           dispatch({ type: "SET_ACTION_BUSY", payload: false });
           return null;
