@@ -652,8 +652,16 @@ export function EditPromptTemplate() {
 
   const usesEntryEditor = true;
   const quickInsertY = useMotionValue(0);
+  const [scrollListenerMounted, setScrollListenerMounted] = useState(false);
+
+  // Trigger scroll listener setup after component mounts
+  useEffect(() => {
+    setScrollListenerMounted(true);
+  }, []);
 
   useEffect(() => {
+    if (!scrollListenerMounted) return;
+
     const getScrollParent = (node: HTMLElement | null): HTMLElement | null => {
       let current = node?.parentElement ?? null;
       while (current) {
@@ -671,6 +679,8 @@ export function EditPromptTemplate() {
     };
 
     const target = sidebarRef.current;
+    if (!target) return;
+
     const scrollParent = getScrollParent(target);
 
     const handleScroll = () => {
@@ -682,7 +692,7 @@ export function EditPromptTemplate() {
     (scrollParent ?? window).addEventListener("scroll", handleScroll, options);
     handleScroll();
     return () => (scrollParent ?? window).removeEventListener("scroll", handleScroll, options);
-  }, [quickInsertY]);
+  }, [scrollListenerMounted, quickInsertY]);
 
   const variables = VARIABLES_BY_TYPE[promptType || "default"] || VARIABLES_BY_TYPE.default;
 
