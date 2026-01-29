@@ -7,7 +7,7 @@ type ToastVariant = "info" | "warning" | "success" | "error";
 
 // Base styling that matches your UI design language
 const baseClassName =
-  "pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border border-white/10 bg-black/80 px-4 py-3 shadow-lg backdrop-blur-sm";
+  "pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border border-white/20 bg-black/80 px-4 py-3 shadow-lg backdrop-blur-md";
 
 const titleClassName = "text-sm font-semibold text-white leading-tight";
 const descriptionClassName = "text-xs text-white/80 leading-relaxed";
@@ -54,7 +54,7 @@ function showToast(
             if (options.id) sonnerToast.dismiss(options.id);
           }}
           className={cn(
-            "shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5",
+            "shrink-0 rounded-lg border border-white/30 bg-white/5 px-3 py-1.5",
             "text-xs font-medium text-white/70",
             "hover:bg-white/10 hover:text-white transition-colors",
           )}
