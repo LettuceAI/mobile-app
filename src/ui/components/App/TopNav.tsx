@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { typography, interactive, cn } from "../../design-tokens";
+import { toast } from "../toast";
 import { openDocs } from "../../../core/utils/docs";
 
 interface TopNavProps {
@@ -178,6 +179,7 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
   // Track save button state from window globals
   const [canSave, setCanSave] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const isUnsaved = showSaveButton && canSave && !isSaving;
 
   useEffect(() => {
     if (!showSaveButton) return;
@@ -223,7 +225,29 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     isPromptNew,
   ]);
 
+  useEffect(() => {
+    const globalWindow = window as any;
+    globalWindow.__unsavedChanges = isUnsaved;
+    return () => {
+      if (globalWindow.__unsavedChanges === isUnsaved) {
+        globalWindow.__unsavedChanges = false;
+      }
+    };
+  }, [isUnsaved]);
+
   const handleBack = () => {
+    if (isUnsaved) {
+      toast.warningAction(
+        "Unsaved changes",
+        "Save or discard your changes before leaving.",
+        "Discard",
+        () => {
+          window.dispatchEvent(new CustomEvent("unsaved:discard"));
+        },
+        "unsaved-changes",
+      );
+      return;
+    }
     if (onBackOverride) {
       onBackOverride();
       return;

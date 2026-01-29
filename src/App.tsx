@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Toaster } from "sonner";
 
@@ -265,7 +265,24 @@ function AppContent() {
     useFirstTimeTooltip("create_button");
   const [showDelayedTooltip, setShowDelayedTooltip] = useState(false);
 
-  useAndroidBackHandler();
+  const handleAndroidBack = useCallback(() => {
+    const globalWindow = window as any;
+    if (globalWindow.__unsavedChanges) {
+      toast.warningAction(
+        "Unsaved changes",
+        "Save or discard your changes before leaving.",
+        "Discard",
+        () => {
+          window.dispatchEvent(new CustomEvent("unsaved:discard"));
+        },
+        "unsaved-changes-android",
+      );
+      return false;
+    }
+    return true;
+  }, []);
+
+  useAndroidBackHandler({ canLeave: handleAndroidBack });
 
   useEffect(() => {
     if (isOnboardingRoute || isCreateRoute) {

@@ -604,6 +604,11 @@ export function EditPromptTemplate() {
   const nameRef = useRef("");
   const contentRef = useRef("");
   const savingRef = useRef(false);
+  const initialRef = useRef<{
+    name: string;
+    content: string;
+    entries: string;
+  } | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -687,7 +692,26 @@ export function EditPromptTemplate() {
 
   const hasEntryContent = entries.some((entry) => entry.content.trim().length > 0);
   const hasContent = content.trim().length > 0;
-  const canSave = name.trim().length > 0 && (hasEntryContent || hasContent);
+  const serializeEntries = (items: SystemPromptEntry[]) =>
+    JSON.stringify(
+      items.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        role: entry.role,
+        content: entry.content,
+        enabled: entry.enabled,
+        injectionPosition: entry.injectionPosition,
+        injectionDepth: entry.injectionDepth,
+        systemPrompt: entry.systemPrompt,
+      })),
+    );
+  const isDirty =
+    !loading &&
+    initialRef.current !== null &&
+    (name.trim() !== initialRef.current.name ||
+      content !== initialRef.current.content ||
+      serializeEntries(entries) !== initialRef.current.entries);
+  const canSave = isDirty && name.trim().length > 0 && (hasEntryContent || hasContent);
 
   // Expose save state to TopNav via window globals
   useEffect(() => {
@@ -700,6 +724,23 @@ export function EditPromptTemplate() {
       delete globalWindow.__savePromptSaving;
     };
   }, [canSave, saving]);
+
+  useEffect(() => {
+    const globalWindow = window as any;
+    const handleDiscard = () => resetToInitial();
+    globalWindow.__discardChanges = handleDiscard;
+    window.addEventListener("unsaved:discard", handleDiscard);
+    return () => {
+      if (globalWindow.__discardChanges === handleDiscard) {
+        delete globalWindow.__discardChanges;
+      }
+      window.removeEventListener("unsaved:discard", handleDiscard);
+    };
+  }, [id]);
+
+  useEffect(() => {
+    initialRef.current = null;
+  }, [id]);
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -789,6 +830,11 @@ export function EditPromptTemplate() {
           setCollapsedEntries(
             Object.fromEntries(normalizedEntries.map((entry) => [entry.id, true])),
           );
+          initialRef.current = {
+            name: template.name,
+            content: template.content,
+            entries: serializeEntries(normalizedEntries),
+          };
 
           if (isProtected) {
             const required = await getRequiredTemplateVariables(template.id);
@@ -801,6 +847,11 @@ export function EditPromptTemplate() {
         const seedEntries = [createDefaultEntry(def)];
         setEntries(seedEntries);
         setCollapsedEntries(Object.fromEntries(seedEntries.map((entry) => [entry.id, true])));
+        initialRef.current = {
+          name: "",
+          content: def,
+          entries: serializeEntries(seedEntries),
+        };
       }
     } catch (error) {
       console.error("Failed to load data:", error);
@@ -930,6 +981,20 @@ export function EditPromptTemplate() {
       setResetting(false);
     }
   }
+
+  const resetToInitial = () => {
+    if (!initialRef.current) return;
+    try {
+      const nextEntries = JSON.parse(initialRef.current.entries) as SystemPromptEntry[];
+      setName(initialRef.current.name);
+      setContent(initialRef.current.content);
+      setEntries(nextEntries);
+      setCollapsedEntries(Object.fromEntries(nextEntries.map((entry) => [entry.id, true])));
+      setMobileEntryEditorId(null);
+    } catch (error) {
+      console.error("Failed to reset prompt editor:", error);
+    }
+  };
 
   async function handlePreview() {
     if (!previewCharacterId) return;
