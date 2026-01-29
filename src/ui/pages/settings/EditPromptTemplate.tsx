@@ -587,6 +587,10 @@ export function EditPromptTemplate() {
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const entriesRef = useRef<SystemPromptEntry[]>([]);
+  const nameRef = useRef("");
+  const contentRef = useRef("");
+  const savingRef = useRef(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -652,17 +656,33 @@ export function EditPromptTemplate() {
     };
   }, [canSave, saving]);
 
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
+
+  useEffect(() => {
+    nameRef.current = name;
+  }, [name]);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+
   // Listen for save event from TopNav
   useEffect(() => {
     const handleSave = () => {
-      if (canSave && !saving) {
+      if (canSave && !savingRef.current) {
         handleSave_internal();
       }
     };
 
     window.addEventListener("prompt:save", handleSave);
     return () => window.removeEventListener("prompt:save", handleSave);
-  }, [canSave, saving, name, content, isAppDefault, id, missingVariables]);
+  }, [canSave]);
 
   useEffect(() => {
     loadData();
@@ -776,10 +796,13 @@ export function EditPromptTemplate() {
     : null;
 
   async function handleSave_internal() {
+    const entriesSnapshot = entriesRef.current;
+    const nameSnapshot = nameRef.current.trim();
+    const contentSnapshot = contentRef.current;
     const hasContent = usesEntryEditor
-      ? entries.some((entry) => entry.content.trim().length > 0)
-      : content.trim().length > 0;
-    if (!name.trim() || !hasContent) return;
+      ? entriesSnapshot.some((entry) => entry.content.trim().length > 0)
+      : contentSnapshot.trim().length > 0;
+    if (!nameSnapshot || !hasContent) return;
 
     if (isAppDefault && id && missingVariables.length > 0) {
       alert(`Cannot save: Missing required variables: ${missingVariables.join(", ")}`);
@@ -788,20 +811,22 @@ export function EditPromptTemplate() {
 
     setSaving(true);
     try {
-      const contentToSave = usesEntryEditor ? entriesToContent(entries) : content.trim();
+      const contentToSave = usesEntryEditor
+        ? entriesToContent(entriesSnapshot)
+        : contentSnapshot.trim();
       if (isEditing && id) {
         await updatePromptTemplate(id, {
-          name: name.trim(),
+          name: nameSnapshot,
           content: contentToSave,
-          entries: usesEntryEditor ? entries : undefined,
+          entries: usesEntryEditor ? entriesSnapshot : undefined,
         });
       } else {
         await createPromptTemplate(
-          name.trim(),
+          nameSnapshot,
           "appWide" as any,
           [],
           contentToSave,
-          usesEntryEditor ? entries : undefined,
+          usesEntryEditor ? entriesSnapshot : undefined,
         );
       }
       backOrReplace("/settings/prompts");
