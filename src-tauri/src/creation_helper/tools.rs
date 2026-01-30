@@ -284,8 +284,8 @@ pub fn get_creation_helper_system_prompt(goal: &CreationGoal, smart_selection: b
 
 ## Tools Available
 - Character tools: set_character_name, set_character_definition, add_scene, update_scene, toggle_avatar_gradient, set_default_model, set_system_prompt, get_system_prompt_list, get_model_list, use_uploaded_image_as_avatar, use_uploaded_image_as_chat_background, generate_image, show_preview, request_confirmation, list_character_lorebooks, set_character_lorebooks
-- Persona tools: list_personas, upsert_persona, use_uploaded_image_as_persona_avatar, generate_image, delete_persona, get_default_persona
-- Lorebook tools: list_lorebooks, upsert_lorebook, delete_lorebook, list_lorebook_entries, get_lorebook_entry, upsert_lorebook_entry, delete_lorebook_entry, create_blank_lorebook_entry, reorder_lorebook_entries
+- Persona tools: list_personas, upsert_persona, use_uploaded_image_as_persona_avatar, generate_image, show_preview, request_confirmation, delete_persona, get_default_persona
+- Lorebook tools: list_lorebooks, upsert_lorebook, delete_lorebook, list_lorebook_entries, get_lorebook_entry, upsert_lorebook_entry, delete_lorebook_entry, create_blank_lorebook_entry, reorder_lorebook_entries, show_preview, request_confirmation
 
 Remember: You are helping the user create something useful for roleplay. Make the process fun and collaborative!"#
             .to_string();
@@ -334,6 +334,7 @@ Remember: You're helping create a character for roleplay. Make the process fun a
 1. Ask what the persona should represent (voice, background, tone, goals)
 2. Ask follow-up questions to clarify style, preferences, and boundaries
 3. Use the tools to create or update the persona once you have enough detail
+4. Show a preview and ask if they'd like to keep editing or review it
 
 ## Guidelines
 - Keep responses conversational and helpful
@@ -345,6 +346,8 @@ Remember: You're helping create a character for roleplay. Make the process fun a
 - upsert_persona: Create or update a persona
 - use_uploaded_image_as_persona_avatar: Set a persona avatar from an uploaded image
 - generate_image: Generate a persona avatar image
+- show_preview: Let them see the persona so far
+- request_confirmation: Ask if they're ready to review/save
 - delete_persona: Remove a persona
 - get_default_persona: Check the current default persona
 
@@ -356,6 +359,7 @@ Remember: Personas define how the user wants to show up in chats. Make the proce
 1. Ask about the lorebook theme, scope, and key topics
 2. Gather details for entries (titles, keywords, content, always-active rules)
 3. Use the tools to create or update the lorebook and entries
+4. Show a preview and ask if they'd like to keep editing or review it
 
 ## Guidelines
 - Keep responses conversational and helpful
@@ -372,6 +376,8 @@ Remember: Personas define how the user wants to show up in chats. Make the proce
 - delete_lorebook_entry: Remove an entry
 - create_blank_lorebook_entry: Create a placeholder entry for edits
 - reorder_lorebook_entries: Adjust entry ordering
+- show_preview: Let them see the lorebook so far
+- request_confirmation: Ask if they're ready to review/save
 
 Remember: Lorebooks should be clear, scannable, and useful in roleplay. Make the process fun and collaborative!"#
             .to_string(),
@@ -473,6 +479,37 @@ fn persona_tools() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["prompt"]
+            }),
+        },
+        ToolDefinition {
+            name: "show_preview".to_string(),
+            description: Some(
+                "Show a preview of the persona to the user when you have enough information."
+                    .to_string(),
+            ),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "A message to show alongside the preview"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "request_confirmation".to_string(),
+            description: Some(
+                "Ask the user if they want to save the persona or continue editing.".to_string(),
+            ),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "A message asking for confirmation"
+                    }
+                }
             }),
         },
         ToolDefinition {
@@ -669,6 +706,37 @@ fn lorebook_tools() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["updates"]
+            }),
+        },
+        ToolDefinition {
+            name: "show_preview".to_string(),
+            description: Some(
+                "Show a preview of the lorebook to the user when you have enough information."
+                    .to_string(),
+            ),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "A message to show alongside the preview"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "request_confirmation".to_string(),
+            description: Some(
+                "Ask the user if they want to keep editing or review the lorebook.".to_string(),
+            ),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "A message asking for confirmation"
+                    }
+                }
             }),
         },
     ]

@@ -47,17 +47,23 @@ pub fn start_session(creation_goal: CreationGoal) -> Result<CreationSession, Str
         updated_at: now,
     };
 
-    let mut sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     sessions.insert(session_id.clone(), session.clone());
 
-    let mut images = UPLOADED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     images.insert(session_id, HashMap::new());
 
     Ok(session)
 }
 
 pub fn get_session(session_id: &str) -> Result<Option<CreationSession>, String> {
-    let sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(sessions.get(session_id).cloned())
 }
 
@@ -67,7 +73,9 @@ pub fn save_uploaded_image(
     data: String,
     mime_type: String,
 ) -> Result<(), String> {
-    let mut images = UPLOADED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let session_images = images
         .entry(session_id.to_string())
         .or_insert_with(HashMap::new);
@@ -86,7 +94,9 @@ pub fn get_uploaded_image(
     session_id: &str,
     image_id: &str,
 ) -> Result<Option<UploadedImage>, String> {
-    let images = UPLOADED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(images
         .get(session_id)
         .and_then(|session_images| session_images.get(image_id))
@@ -94,7 +104,9 @@ pub fn get_uploaded_image(
 }
 
 pub fn get_all_uploaded_images(session_id: &str) -> Result<Vec<UploadedImage>, String> {
-    let images = UPLOADED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(images
         .get(session_id)
         .map(|session_images| session_images.values().cloned().collect())
@@ -126,13 +138,17 @@ fn resolve_uploaded_image_id(session_id: &str, image_id: &str) -> Result<Option<
 }
 
 fn set_last_generated_image(session_id: &str, image_id: &str) -> Result<(), String> {
-    let mut latest = LAST_GENERATED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut latest = LAST_GENERATED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     latest.insert(session_id.to_string(), image_id.to_string());
     Ok(())
 }
 
 fn get_last_generated_image(session_id: &str) -> Result<Option<String>, String> {
-    let latest = LAST_GENERATED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let latest = LAST_GENERATED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(latest.get(session_id).cloned())
 }
 
@@ -437,7 +453,7 @@ async fn execute_tool(
             let message = arguments
                 .get("message")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Here's your character!");
+                .unwrap_or("Here's a preview of what we've built so far!");
 
             json!({
                 "success": true,
@@ -451,7 +467,7 @@ async fn execute_tool(
             let message = arguments
                 .get("message")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Are you happy with this character?");
+                .unwrap_or("Are you happy with this so far?");
 
             json!({
                 "success": true,
@@ -815,7 +831,8 @@ fn get_system_prompts(app: &AppHandle) -> Result<Vec<SystemPromptInfo>, String> 
 fn get_models(app: &AppHandle) -> Result<Vec<ModelInfo>, String> {
     let settings_json = internal_read_settings(app)?;
     if let Some(json_str) = settings_json {
-        let settings: Value = serde_json::from_str(&json_str).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let settings: Value = serde_json::from_str(&json_str)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if let Some(models) = settings.get("models").and_then(|v| v.as_array()) {
             let model_infos: Vec<ModelInfo> = models
                 .iter()
@@ -852,7 +869,8 @@ fn build_image_request(
 ) -> Result<(ImageGenerationRequest, ImageGenerationMeta), String> {
     let settings_json =
         internal_read_settings(app)?.ok_or_else(|| "No settings found".to_string())?;
-    let settings: Value = serde_json::from_str(&settings_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let settings: Value = serde_json::from_str(&settings_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let advanced = settings.get("advancedSettings");
     let image_model_id = advanced
         .and_then(|a| a.get("creationHelperImageModelId"))
@@ -963,7 +981,9 @@ pub async fn send_message(
     let now = now_ms() as i64;
 
     let mut session = {
-        let sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let sessions = SESSIONS
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         sessions
             .get(&session_id)
             .cloned()
@@ -1001,7 +1021,9 @@ pub async fn regenerate_response(
     request_id: Option<String>,
 ) -> Result<CreationSession, String> {
     let mut session = {
-        let sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let sessions = SESSIONS
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         sessions
             .get(&session_id)
             .cloned()
@@ -1031,7 +1053,11 @@ pub async fn regenerate_response(
 
         process_assistant_turn(app, session_id, session, request_id).await
     } else {
-        Err(crate::utils::err_msg(module_path!(), line!(), "No assistant message to regenerate"))
+        Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No assistant message to regenerate",
+        ))
     }
 }
 
@@ -1043,7 +1069,8 @@ async fn process_assistant_turn(
 ) -> Result<CreationSession, String> {
     let settings_json =
         internal_read_settings(&app)?.ok_or_else(|| "No settings found".to_string())?;
-    let settings: Value = serde_json::from_str(&settings_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let settings: Value = serde_json::from_str(&settings_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let advanced_settings = settings.get("advancedSettings");
 
@@ -1542,7 +1569,9 @@ async fn process_assistant_turn(
     session.updated_at = now_ms() as i64;
 
     {
-        let mut sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut sessions = SESSIONS
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         sessions.insert(session_id.clone(), session.clone());
     }
 
@@ -1560,7 +1589,9 @@ async fn process_assistant_turn(
 }
 
 pub fn get_draft(session_id: &str) -> Result<Option<DraftCharacter>, String> {
-    let sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(sessions.get(session_id).map(|s| s.draft.clone()))
 }
 
@@ -1584,7 +1615,9 @@ pub fn cancel_session(app: &AppHandle, session_id: &str) -> Result<(), String> {
     }
 
     // Then update the session status
-    let mut sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(session) = sessions.get_mut(session_id) {
         session.status = CreationStatus::Cancelled;
     }
@@ -1592,7 +1625,9 @@ pub fn cancel_session(app: &AppHandle, session_id: &str) -> Result<(), String> {
 }
 
 pub fn complete_session(session_id: &str) -> Result<DraftCharacter, String> {
-    let mut sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if let Some(session) = sessions.get_mut(session_id) {
         session.status = CreationStatus::Completed;
         let mut draft = session.draft.clone();
@@ -1617,14 +1652,22 @@ pub fn complete_session(session_id: &str) -> Result<DraftCharacter, String> {
 
         return Ok(draft);
     }
-    Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"))
+    Err(crate::utils::err_msg(
+        module_path!(),
+        line!(),
+        "Session not found",
+    ))
 }
 
 #[allow(dead_code)]
 pub fn cleanup_old_sessions(max_age_ms: i64) -> Result<usize, String> {
     let now = now_ms() as i64;
-    let mut sessions = SESSIONS.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let mut images = UPLOADED_IMAGES.lock().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let old_ids: Vec<String> = sessions
         .iter()

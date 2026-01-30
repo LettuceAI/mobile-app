@@ -11,12 +11,14 @@ import {
   RefreshCw,
   Image as ImageIcon,
   Eye,
+  User,
+  BookOpen,
 } from "lucide-react";
 import { TopNav } from "../../components/App";
 import { cn, typography, animations, radius } from "../../design-tokens";
 import { BottomMenu, MenuButton, MenuSection } from "../../components";
 import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
-import { CharacterPreviewCard } from "./components";
+import { CharacterPreviewCard, PersonaPreviewCard, LorebookPreviewCard } from "./components";
 import { CreationHelperFooter } from "./components/CreationHelperFooter";
 import { ReferenceSelector, ReferenceAvatar, Reference } from "./components/ReferenceSelector";
 import { listCharacters, listPersonas, readSettings } from "../../../core/storage/repo";
@@ -60,6 +62,30 @@ interface DraftScene {
   id: string;
   content: string;
   direction: string | null;
+}
+
+interface PreviewPersona {
+  id?: string;
+  title?: string;
+  description?: string;
+  avatarPath?: string | null;
+  isDefault?: boolean;
+}
+
+interface PreviewLorebook {
+  id?: string;
+  name?: string;
+}
+
+interface PreviewLorebookEntry {
+  id: string;
+  lorebookId?: string;
+  title?: string;
+  content?: string;
+  keywords?: string[];
+  alwaysActive?: boolean;
+  enabled?: boolean;
+  displayOrder?: number;
 }
 
 interface CreationSession {
@@ -996,6 +1022,115 @@ export function CreationHelperPage() {
     [imageGenerations],
   );
 
+  const { previewPersona, previewLorebook, previewLorebookEntries } = useMemo(() => {
+    const data: {
+      persona: PreviewPersona | null;
+      lorebook: PreviewLorebook | null;
+      entries: PreviewLorebookEntry[];
+    } = {
+      persona: null,
+      lorebook: null,
+      entries: [],
+    };
+
+    if (!session?.messages?.length) {
+      return {
+        previewPersona: data.persona,
+        previewLorebook: data.lorebook,
+        previewLorebookEntries: data.entries,
+      };
+    }
+
+    const entriesById = new Map<string, PreviewLorebookEntry>();
+
+    for (const message of session.messages) {
+      if (!message.toolResults?.length) continue;
+      for (const result of message.toolResults) {
+        const payload = result.result as any;
+        if (!payload || typeof payload !== "object") continue;
+
+        if (payload.persona && typeof payload.persona === "object") {
+          data.persona = payload.persona as PreviewPersona;
+        }
+
+        if (payload.lorebook && typeof payload.lorebook === "object") {
+          data.lorebook = payload.lorebook as PreviewLorebook;
+        }
+
+        if (Array.isArray(payload.entries)) {
+          for (const entry of payload.entries) {
+            if (entry?.id) entriesById.set(entry.id, entry as PreviewLorebookEntry);
+          }
+        }
+
+        if (payload.entry && typeof payload.entry === "object" && payload.entry.id) {
+          entriesById.set(payload.entry.id, payload.entry as PreviewLorebookEntry);
+        }
+      }
+    }
+
+    const allEntries = Array.from(entriesById.values());
+    const lorebookId = data.lorebook?.id;
+    const filteredEntries = lorebookId
+      ? allEntries.filter((entry) => entry.lorebookId === lorebookId)
+      : allEntries;
+
+    filteredEntries.sort((a, b) => {
+      const orderA = a.displayOrder ?? 0;
+      const orderB = b.displayOrder ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.title ?? "").localeCompare(b.title ?? "");
+    });
+
+    data.entries = filteredEntries;
+
+    const fallbackPersona =
+      data.persona ||
+      (session?.draft?.name || session?.draft?.description || session?.draft?.avatarPath
+        ? {
+            title: session?.draft?.name ?? undefined,
+            description: session?.draft?.description ?? session?.draft?.definition ?? undefined,
+            avatarPath: session?.draft?.avatarPath ?? undefined,
+          }
+        : null);
+
+    const fallbackLorebook =
+      data.lorebook ||
+      (session?.draft?.name
+        ? {
+            name: session.draft.name,
+          }
+        : null);
+
+    return {
+      previewPersona: fallbackPersona,
+      previewLorebook: fallbackLorebook,
+      previewLorebookEntries: data.entries,
+    };
+  }, [session?.messages, session?.draft]);
+
+  const previewTitle = showConfirmation
+    ? activeGoal === "persona"
+      ? "Ready to Save Persona?"
+      : activeGoal === "lorebook"
+        ? "Ready to Save Lorebook?"
+        : "Ready to Save?"
+    : activeGoal === "persona"
+      ? "Persona Preview"
+      : activeGoal === "lorebook"
+        ? "Lorebook Preview"
+        : "Character Preview";
+
+  const handleOpenPersona = useCallback(() => {
+    if (!previewPersona?.id) return;
+    navigate(`/settings/personas/${previewPersona.id}/edit`);
+  }, [previewPersona?.id, navigate]);
+
+  const handleOpenLorebook = useCallback(() => {
+    if (!previewLorebook?.id) return;
+    navigate(`/library/lorebooks/${previewLorebook.id}`);
+  }, [previewLorebook?.id, navigate]);
+
   return (
     <div className="flex h-screen flex-col bg-[#050505]">
       <TopNav
@@ -1003,9 +1138,12 @@ export function CreationHelperPage() {
         onBackOverride={handleBack}
         titleOverride={`AI ${goalLabel} Creator`}
         rightAction={
-          activeGoal === "character" ? (
+          activeGoal ? (
             <button
-              onClick={() => setShowPreview(true)}
+              onClick={() => {
+                setShowConfirmation(false);
+                setShowPreview(true);
+              }}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all",
                 "bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10",
@@ -1380,49 +1518,105 @@ export function CreationHelperPage() {
       />
 
       {/* Preview Bottom Sheet */}
-      {activeGoal === "character" && (
-        <BottomMenu
-          isOpen={showPreview}
-          onClose={() => {
-            setShowPreview(false);
-            setShowConfirmation(false);
-          }}
-          title={showConfirmation ? "Ready to Save?" : "Character Preview"}
-        >
-          {session?.draft && (
-            <div className="space-y-4">
-              <CharacterPreviewCard draft={session.draft} sessionId={session.id} />
+      <BottomMenu
+        isOpen={showPreview}
+        onClose={() => {
+          setShowPreview(false);
+          setShowConfirmation(false);
+        }}
+        title={previewTitle}
+      >
+        {activeGoal === "character" && session?.draft && (
+          <div className="space-y-4">
+            <CharacterPreviewCard draft={session.draft} sessionId={session.id} />
 
-              <MenuSection>
-                <MenuButton
-                  icon={Check}
-                  title="Use This Character"
-                  description="Save and start chatting"
-                  color="from-emerald-500 to-teal-600"
-                  onClick={handleUseCharacter}
-                />
-                <MenuButton
-                  icon={RefreshCw}
-                  title="Keep Editing"
-                  description="Continue the conversation"
-                  color="from-blue-500 to-cyan-600"
-                  onClick={() => {
-                    setShowPreview(false);
-                    setShowConfirmation(false);
-                  }}
-                />
-                <MenuButton
-                  icon={PenLine}
-                  title="Edit Manually"
-                  description="Fine-tune in the editor"
-                  color="from-amber-500 to-orange-600"
-                  onClick={handleEditManually}
-                />
-              </MenuSection>
-            </div>
-          )}
-        </BottomMenu>
-      )}
+            <MenuSection>
+              <MenuButton
+                icon={Check}
+                title="Use This Character"
+                description="Save and start chatting"
+                color="from-emerald-500 to-teal-600"
+                onClick={handleUseCharacter}
+              />
+              <MenuButton
+                icon={RefreshCw}
+                title="Keep Editing"
+                description="Continue the conversation"
+                color="from-blue-500 to-cyan-600"
+                onClick={() => {
+                  setShowPreview(false);
+                  setShowConfirmation(false);
+                }}
+              />
+              <MenuButton
+                icon={PenLine}
+                title="Edit Manually"
+                description="Fine-tune in the editor"
+                color="from-amber-500 to-orange-600"
+                onClick={handleEditManually}
+              />
+            </MenuSection>
+          </div>
+        )}
+
+        {activeGoal === "persona" && (
+          <div className="space-y-4">
+            <PersonaPreviewCard persona={previewPersona} sessionId={session?.id} />
+
+            <MenuSection>
+              <MenuButton
+                icon={User}
+                title="Open Persona"
+                description={
+                  previewPersona?.id ? "Review and edit your persona" : "Create a persona first"
+                }
+                color="from-emerald-500 to-teal-600"
+                onClick={handleOpenPersona}
+                disabled={!previewPersona?.id}
+              />
+              <MenuButton
+                icon={RefreshCw}
+                title="Keep Editing"
+                description="Continue the conversation"
+                color="from-blue-500 to-cyan-600"
+                onClick={() => {
+                  setShowPreview(false);
+                  setShowConfirmation(false);
+                }}
+              />
+            </MenuSection>
+          </div>
+        )}
+
+        {activeGoal === "lorebook" && (
+          <div className="space-y-4">
+            <LorebookPreviewCard lorebook={previewLorebook} entries={previewLorebookEntries} />
+
+            <MenuSection>
+              <MenuButton
+                icon={BookOpen}
+                title="Open Lorebook"
+                description={
+                  previewLorebook?.id ? "Review entries in the library" : "Create a lorebook first"
+                }
+                color="from-emerald-500 to-teal-600"
+                onClick={handleOpenLorebook}
+                disabled={!previewLorebook?.id}
+              />
+              <MenuButton
+                icon={RefreshCw}
+                title="Keep Editing"
+                description="Continue the conversation"
+                color="from-blue-500 to-cyan-600"
+                onClick={() => {
+                  setShowPreview(false);
+                  setShowConfirmation(false);
+                }}
+              />
+            </MenuSection>
+          </div>
+        )}
+      </BottomMenu>
 
       {/* Tool Detail Bottom Sheet */}
       <BottomMenu
