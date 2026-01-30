@@ -213,6 +213,7 @@ pub fn run() {
             storage_manager::entity_transfer::character_list_formats,
             storage_manager::entity_transfer::character_detect_format,
             storage_manager::entity_transfer::convert_export_to_uec,
+            storage_manager::entity_transfer::convert_export_to_format,
             storage_manager::entity_transfer::persona_export,
             storage_manager::entity_transfer::persona_import,
             storage_manager::entity_transfer::import_package,

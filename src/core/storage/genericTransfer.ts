@@ -46,6 +46,25 @@ export async function convertImportToUec(importJson: string): Promise<string> {
 }
 
 /**
+ * Convert a character export package to a target format.
+ */
+export async function convertImportToFormat(
+  importJson: string,
+  targetFormat: "chara_card_v2" | "chara_card_v3" | "uec",
+): Promise<string> {
+  try {
+    const convertedJson = await invoke<string>("convert_export_to_format", {
+      importJson,
+      targetFormat,
+    });
+    return convertedJson;
+  } catch (error) {
+    console.error("[convertImportToFormat] Failed to convert package:", error);
+    throw new Error(typeof error === "string" ? error : "Failed to convert package");
+  }
+}
+
+/**
  * Helper to check if import JSON is a character export
  */
 export function isCharacterExport(importJson: string): boolean {

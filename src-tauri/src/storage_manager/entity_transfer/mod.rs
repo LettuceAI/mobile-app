@@ -1507,6 +1507,75 @@ pub fn convert_export_to_uec(import_json: String) -> Result<String, String> {
     }
 }
 
+/// Convert a character export between supported formats without importing.
+#[tauri::command]
+pub fn convert_export_to_format(
+    import_json: String,
+    target_format: CharacterFileFormat,
+) -> Result<String, String> {
+    if target_format == CharacterFileFormat::Uec {
+        return convert_export_to_uec(import_json);
+    }
+
+    let raw_value: JsonValue = serde_json::from_str(&import_json).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid import data: {}", e),
+        )
+    })?;
+
+    if looks_like_uec(&raw_value) {
+        let kind = raw_value
+            .get("kind")
+            .and_then(|value| value.as_str())
+            .unwrap_or("character");
+        if kind == "persona" {
+            return Err("Persona conversions are only supported for UEC.".to_string());
+        }
+    }
+
+    let package = if looks_like_uec(&raw_value) {
+        parse_uec_character(&raw_value)?
+    } else if engine::guess_chara_card_format(&raw_value).is_some() {
+        parse_character_import_payload(&raw_value)?.0
+    } else if let Ok(package) = serde_json::from_value::<CharacterExportPackage>(raw_value.clone())
+    {
+        package
+    } else {
+        return Err("Unsupported or invalid character format".to_string());
+    };
+
+    let json = match target_format {
+        CharacterFileFormat::CharaCardV2 => {
+            let card = engine::export_chara_card_v2(&package);
+            serde_json::to_string_pretty(&card).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to serialize export: {}", e),
+                )
+            })?
+        }
+        CharacterFileFormat::CharaCardV3 => {
+            let card = engine::export_chara_card_v3(&package, None, None);
+            serde_json::to_string_pretty(&card).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to serialize export: {}", e),
+                )
+            })?
+        }
+        CharacterFileFormat::Uec => unreachable!(),
+        CharacterFileFormat::LegacyJson | CharacterFileFormat::CharaCardV1 => {
+            return Err("Target format is not supported for conversion.".to_string());
+        }
+    };
+
+    Ok(json)
+}
+
 /// Helper: Read avatar as base64 data URL
 fn read_avatar_as_base64(
     app: &tauri::AppHandle,
