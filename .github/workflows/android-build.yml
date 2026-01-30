@@ -1,6 +1,7 @@
 name: Android Build (Tauri)
 
 on:
+  push:
   workflow_dispatch:
 
 env:

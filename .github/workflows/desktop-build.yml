@@ -1,6 +1,7 @@
 name: Desktop Build (Tauri)
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
