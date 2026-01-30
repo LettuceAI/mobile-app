@@ -88,7 +88,7 @@ impl ProviderAdapter for QwenAdapter {
         let explicit_reasoning_effort = if reasoning_enabled {
             reasoning_effort
         } else {
-            Some("none".to_string())
+            None
         };
 
         let body = OpenAIChatRequest {
@@ -108,9 +108,9 @@ impl ProviderAdapter for QwenAdapter {
             tool_choice,
         };
         let mut value = serde_json::to_value(body).unwrap_or_else(|_| json!({}));
-        if let Some(map) = value.as_object_mut() {
-            map.insert("enable_thinking".to_string(), json!(reasoning_enabled));
-            if reasoning_enabled {
+        if reasoning_enabled {
+            if let Some(map) = value.as_object_mut() {
+                map.insert("enable_thinking".to_string(), json!(true));
                 if let Some(budget) = reasoning_budget {
                     map.insert("thinking_budget".to_string(), json!(budget));
                 }

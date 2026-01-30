@@ -87,7 +87,7 @@ impl ProviderAdapter for OpenAIAdapter {
         let explicit_reasoning_effort = if reasoning_enabled {
             reasoning_effort
         } else {
-            Some("none".to_string())
+            None
         };
 
         let body = OpenAIChatRequest {
@@ -211,10 +211,7 @@ impl ProviderAdapter for OpenRouterAdapter {
                 })
             }
         } else {
-            Some(super::ReasoningConfig {
-                effort: Some("none".to_string()),
-                max_tokens: None,
-            })
+            None
         };
 
         let body = OpenAIChatRequest {

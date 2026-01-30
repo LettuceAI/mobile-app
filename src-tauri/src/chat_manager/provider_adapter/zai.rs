@@ -107,7 +107,7 @@ impl ProviderAdapter for ZAIAdapter {
         let explicit_reasoning_effort = if reasoning_enabled {
             reasoning_effort
         } else {
-            Some("none".to_string())
+            None
         };
 
         let body = ZAIChatRequest {

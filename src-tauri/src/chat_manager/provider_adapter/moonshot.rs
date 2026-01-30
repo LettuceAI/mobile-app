@@ -73,9 +73,9 @@ impl ProviderAdapter for MoonshotAdapter {
             reasoning_effort,
             reasoning_budget,
         );
-        if let Some(map) = value.as_object_mut() {
-            map.insert("enable_thinking".to_string(), json!(reasoning_enabled));
-            if reasoning_enabled {
+        if reasoning_enabled {
+            if let Some(map) = value.as_object_mut() {
+                map.insert("enable_thinking".to_string(), json!(true));
                 if let Some(budget) = reasoning_budget {
                     map.insert("thinking_budget".to_string(), json!(budget));
                 }
