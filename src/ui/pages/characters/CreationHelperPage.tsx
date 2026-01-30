@@ -298,6 +298,31 @@ export function CreationHelperPage() {
   const sessionIdRef = useRef<string | null>(null);
   const initGuardRef = useRef<string | null>(null);
   const [imageGenerations, setImageGenerations] = useState<ImageGenerationEntry[]>([]);
+
+  const resolveErrorMessage = useCallback((err: unknown, fallback: string) => {
+    if (typeof err === "string") return err;
+    if (!err || typeof err !== "object") return fallback;
+    const anyErr = err as any;
+    if (anyErr.message) return String(anyErr.message);
+    if (anyErr.error) {
+      if (typeof anyErr.error === "string") return anyErr.error;
+      if (anyErr.error?.message) return String(anyErr.error.message);
+      try {
+        return JSON.stringify(anyErr.error);
+      } catch {
+        return fallback;
+      }
+    }
+    if (anyErr.data) {
+      if (typeof anyErr.data === "string") return anyErr.data;
+      if (anyErr.data?.message) return String(anyErr.data.message);
+      if (anyErr.data?.error) {
+        if (typeof anyErr.data.error === "string") return anyErr.data.error;
+        if (anyErr.data.error?.message) return String(anyErr.data.error.message);
+      }
+    }
+    return fallback;
+  }, []);
   const activeGoal = session?.creationGoal ?? creationGoal;
   const goalLabel = smartToolSelection
     ? activeGoal === "persona"
@@ -639,12 +664,11 @@ export function CreationHelperPage() {
             });
           }
         } else if (payload.type === "error") {
-          const message =
-            payload.data?.message ||
-            payload.data?.error ||
-            (payload as any).message ||
-            "Streaming error. Please try again.";
-          setError(String(message));
+          const message = resolveErrorMessage(
+            payload.data ?? payload,
+            "Streaming error. Please try again.",
+          );
+          setError(message);
           setStreamingContent("");
           streamingContentRef.current = "";
           setStreamingReasoning("");
@@ -697,10 +721,7 @@ export function CreationHelperPage() {
       }
     } catch (err: any) {
       console.error("Failed to send message:", err);
-      // Display actual error message from backend
-      const errorMsg =
-        typeof err === "string" ? err : err.message || "Failed to send message. Please try again.";
-      setError(errorMsg);
+      setError(resolveErrorMessage(err, "Failed to send message. Please try again."));
 
       // Remove optimistic message on failure
       setSession((prev) =>
@@ -803,12 +824,11 @@ export function CreationHelperPage() {
             });
           }
         } else if (payload.type === "error") {
-          const message =
-            payload.data?.message ||
-            payload.data?.error ||
-            (payload as any).message ||
-            "Streaming error. Please try again.";
-          setError(String(message));
+          const message = resolveErrorMessage(
+            payload.data ?? payload,
+            "Streaming error. Please try again.",
+          );
+          setError(message);
           setStreamingContent("");
           streamingContentRef.current = "";
           setStreamingReasoning("");
@@ -847,9 +867,7 @@ export function CreationHelperPage() {
       }
     } catch (err: any) {
       console.error("Failed to regenerate:", err);
-      const errorMsg =
-        typeof err === "string" ? err : err.message || "Failed to regenerate. Please try again.";
-      setError(errorMsg);
+      setError(resolveErrorMessage(err, "Failed to regenerate. Please try again."));
     } finally {
       if (unlistenStream) {
         unlistenStream();
@@ -879,7 +897,7 @@ export function CreationHelperPage() {
       });
     } catch (err: any) {
       console.error("Failed to complete character:", err);
-      setError(typeof err === "string" ? err : "Failed to save character.");
+      setError(resolveErrorMessage(err, "Failed to save character."));
     }
   }, [session, navigate]);
 

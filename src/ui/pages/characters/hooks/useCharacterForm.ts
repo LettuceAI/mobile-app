@@ -501,6 +501,23 @@ export function useCharacterForm(draftCharacter?: any) {
       return;
     }
 
+    const resolveErrorMessage = (err: unknown, fallback: string) => {
+      if (typeof err === "string") return err;
+      if (!err || typeof err !== "object") return fallback;
+      const anyErr = err as any;
+      if (anyErr.message) return String(anyErr.message);
+      if (anyErr.error) {
+        if (typeof anyErr.error === "string") return anyErr.error;
+        if (anyErr.error?.message) return String(anyErr.error.message);
+        try {
+          return JSON.stringify(anyErr.error);
+        } catch {
+          return fallback;
+        }
+      }
+      return fallback;
+    };
+
     try {
       dispatch({ type: "SET_SAVING", payload: true });
       dispatch({ type: "SET_ERROR", payload: null });
@@ -575,7 +592,7 @@ export function useCharacterForm(draftCharacter?: any) {
       return true; // Success
     } catch (e: any) {
       console.error("Failed to save character:", e);
-      dispatch({ type: "SET_ERROR", payload: e?.message || "Failed to save character" });
+      dispatch({ type: "SET_ERROR", payload: resolveErrorMessage(e, "Failed to save character") });
       return false; // Failure
     } finally {
       dispatch({ type: "SET_SAVING", payload: false });
