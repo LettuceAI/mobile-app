@@ -79,6 +79,21 @@ import { getPlatform } from "./core/utils/platform";
 const chatLog = logManager({ component: "Chat" });
 
 function App() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsMobile(media.matches);
+    update();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -195,7 +210,8 @@ function App() {
       >
         <div id="app-root" className="min-h-screen bg-[#050505] text-gray-100 antialiased">
           <Toaster
-            position="top-center"
+            position={isMobile ? "bottom-center" : "top-center"}
+            offset={isMobile ? { bottom: 24 } : { top: 16 }}
             toastOptions={{
               unstyled: true,
               className: "pointer-events-auto w-full max-w-md",

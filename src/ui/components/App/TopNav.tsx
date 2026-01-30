@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -235,8 +235,8 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
     };
   }, [isUnsaved]);
 
-  useEffect(() => {
-    if (isUnsaved) {
+  const ensureUnsavedToast = useCallback(() => {
+    if (!toast.isVisible("unsaved-changes")) {
       toast.warningSticky(
         "Unsaved changes",
         "Save or discard your changes before leaving.",
@@ -244,13 +244,27 @@ export function TopNav({ currentPath, onBackOverride, titleOverride, rightAction
         () => window.dispatchEvent(new CustomEvent("unsaved:discard")),
         "unsaved-changes",
       );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isUnsaved) {
+      ensureUnsavedToast();
     } else {
       toast.dismiss("unsaved-changes");
     }
-  }, [isUnsaved]);
+  }, [isUnsaved, ensureUnsavedToast]);
+
+  useEffect(() => {
+    if (!isUnsaved) return;
+    const handleInput = () => ensureUnsavedToast();
+    document.addEventListener("input", handleInput, true);
+    return () => document.removeEventListener("input", handleInput, true);
+  }, [isUnsaved, ensureUnsavedToast]);
 
   const handleBack = () => {
     if (isUnsaved) {
+      ensureUnsavedToast();
       return;
     }
     if (onBackOverride) {

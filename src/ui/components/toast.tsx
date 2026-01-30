@@ -108,4 +108,6 @@ export const toast = {
       duration: Infinity,
     }),
   dismiss: (id: string | number) => sonnerToast.dismiss(id),
+  isVisible: (id: string | number) =>
+    sonnerToast.getToasts().some((entry: any) => entry?.id === id && !entry?.dismiss),
 };
