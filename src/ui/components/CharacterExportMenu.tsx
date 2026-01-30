@@ -17,6 +17,14 @@ const FALLBACK_FORMATS: CharacterFormatInfo[] = [
     readOnly: false,
   },
   {
+    id: "chara_card_v3",
+    label: "Character Card V3",
+    extension: ".json",
+    canExport: true,
+    canImport: true,
+    readOnly: false,
+  },
+  {
     id: "chara_card_v2",
     label: "Character Card V2",
     extension: ".json",
@@ -39,6 +47,11 @@ const FORMAT_META: Record<
     icon: FileCode,
     color: "from-amber-500 to-orange-600",
     description: "Legacy JSON (import-only).",
+  },
+  chara_card_v3: {
+    icon: FileCode,
+    color: "from-indigo-500 to-blue-600",
+    description: "Character Card V3 JSON (latest spec).",
   },
   chara_card_v2: {
     icon: FileCode,
@@ -77,7 +90,44 @@ export function CharacterExportMenu({
     listCharacterFormats()
       .then((data) => {
         if (!active) return;
-        setFormats(data);
+        const fallbackById = new Map(FALLBACK_FORMATS.map((format) => [format.id, format]));
+        const merged = new Map<CharacterFileFormat, CharacterFormatInfo>();
+        data.forEach((format) => merged.set(format.id, format));
+        FALLBACK_FORMATS.forEach((format) => {
+          if (!merged.has(format.id)) {
+            merged.set(format.id, format);
+          }
+        });
+
+        const preferredOrder: CharacterFileFormat[] = [
+          "uec",
+          "chara_card_v3",
+          "chara_card_v2",
+          "chara_card_v1",
+          "legacy_json",
+        ];
+        const sorted = Array.from(merged.values()).sort((a, b) => {
+          const indexA = preferredOrder.indexOf(a.id);
+          const indexB = preferredOrder.indexOf(b.id);
+          if (indexA === -1 && indexB === -1) return a.label.localeCompare(b.label);
+          if (indexA === -1) return 1;
+          if (indexB === -1) return -1;
+          return indexA - indexB;
+        });
+
+        sorted.forEach((format) => {
+          if (format.label?.trim()) return;
+          const fallback = fallbackById.get(format.id);
+          if (fallback) {
+            format.label = fallback.label;
+            format.extension = fallback.extension;
+            format.canExport = fallback.canExport;
+            format.canImport = fallback.canImport;
+            format.readOnly = fallback.readOnly;
+          }
+        });
+
+        setFormats(sorted);
       })
       .catch((error: unknown) => {
         if (!active) return;

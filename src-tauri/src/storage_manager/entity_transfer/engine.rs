@@ -9,6 +9,7 @@ use super::{CharacterExportData, CharacterExportPackage, SceneExport};
 pub enum CharacterFileFormat {
     Uec,
     LegacyJson,
+    CharaCardV3,
     CharaCardV2,
     CharaCardV1,
 }
@@ -50,6 +51,14 @@ pub fn character_format_info(format: CharacterFileFormat) -> CharacterFormatInfo
             can_import: true,
             read_only: false,
         },
+        CharacterFileFormat::CharaCardV3 => CharacterFormatInfo {
+            id: format,
+            label: "Character Card V3".to_string(),
+            extension: ".json".to_string(),
+            can_export: true,
+            can_import: true,
+            read_only: false,
+        },
         CharacterFileFormat::CharaCardV1 => CharacterFormatInfo {
             id: format,
             label: "Character Card V1".to_string(),
@@ -64,6 +73,7 @@ pub fn character_format_info(format: CharacterFileFormat) -> CharacterFormatInfo
 pub fn all_character_formats() -> Vec<CharacterFormatInfo> {
     vec![
         character_format_info(CharacterFileFormat::Uec),
+        character_format_info(CharacterFileFormat::CharaCardV3),
         character_format_info(CharacterFileFormat::CharaCardV2),
         character_format_info(CharacterFileFormat::CharaCardV1),
         character_format_info(CharacterFileFormat::LegacyJson),
@@ -98,6 +108,76 @@ pub struct CharaCardV2 {
     pub spec_version: String,
     #[serde(default)]
     pub data: CharaCardV2Data,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CharaCardV3 {
+    #[serde(default)]
+    pub spec: String,
+    #[serde(default)]
+    pub spec_version: String,
+    #[serde(default)]
+    pub data: CharaCardV3Data,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CharaCardV3Data {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub personality: String,
+    #[serde(default)]
+    pub scenario: String,
+    #[serde(default)]
+    pub first_mes: String,
+    #[serde(default)]
+    pub mes_example: String,
+    #[serde(default)]
+    pub creator_notes: String,
+    #[serde(default)]
+    pub system_prompt: String,
+    #[serde(default)]
+    pub post_history_instructions: String,
+    #[serde(default)]
+    pub alternate_greetings: Vec<String>,
+    #[serde(default)]
+    pub character_book: Option<CharaCardCharacterBook>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub creator: String,
+    #[serde(default)]
+    pub character_version: String,
+    #[serde(default = "empty_object")]
+    pub extensions: JsonValue,
+    #[serde(default)]
+    pub assets: Option<Vec<CharaCardAsset>>,
+    #[serde(default)]
+    pub nickname: Option<String>,
+    #[serde(default)]
+    pub creator_notes_multilingual: Option<JsonValue>,
+    #[serde(default)]
+    pub source: Option<Vec<String>>,
+    #[serde(default)]
+    pub group_only_greetings: Vec<String>,
+    #[serde(default)]
+    pub creation_date: Option<i64>,
+    #[serde(default)]
+    pub modification_date: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CharaCardAsset {
+    #[serde(rename = "type", default)]
+    pub asset_type: String,
+    #[serde(default)]
+    pub uri: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub ext: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -189,6 +269,15 @@ pub fn looks_like_chara_card_v2(value: &JsonValue) -> bool {
         .get("spec")
         .and_then(|v| v.as_str())
         .map(|v| v == "chara_card_v2")
+        .unwrap_or(false)
+        && value.get("data").and_then(|v| v.as_object()).is_some()
+}
+
+pub fn looks_like_chara_card_v3(value: &JsonValue) -> bool {
+    value
+        .get("spec")
+        .and_then(|v| v.as_str())
+        .map(|v| v == "chara_card_v3")
         .unwrap_or(false)
         && value.get("data").and_then(|v| v.as_object()).is_some()
 }
@@ -375,8 +464,13 @@ pub fn build_scenes_from_greetings(
 }
 
 pub fn parse_chara_card_v1(value: &JsonValue) -> Result<CharacterExportPackage, String> {
-    let card: CharaCardV1 = serde_json::from_value(value.clone())
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid chara card v1: {}", e)))?;
+    let card: CharaCardV1 = serde_json::from_value(value.clone()).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid chara card v1: {}", e),
+        )
+    })?;
 
     let definition = build_definition_from_fields(
         &card.description,
@@ -417,8 +511,13 @@ pub fn parse_chara_card_v1(value: &JsonValue) -> Result<CharacterExportPackage, 
 }
 
 pub fn parse_chara_card_v2(value: &JsonValue) -> Result<CharacterExportPackage, String> {
-    let card: CharaCardV2 = serde_json::from_value(value.clone())
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid chara card v2: {}", e)))?;
+    let card: CharaCardV2 = serde_json::from_value(value.clone()).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid chara card v2: {}", e),
+        )
+    })?;
 
     let data = card.data;
     let definition = build_definition_from_fields(
@@ -458,6 +557,81 @@ pub fn parse_chara_card_v2(value: &JsonValue) -> Result<CharacterExportPackage, 
         },
         avatar_data: None,
         background_image_data: None,
+    })
+}
+
+fn resolve_asset_uri(assets: &[CharaCardAsset], asset_type: &str) -> Option<String> {
+    let mut selected: Option<&CharaCardAsset> = None;
+    for asset in assets.iter().filter(|asset| asset.asset_type == asset_type) {
+        if asset.name == "main" {
+            return Some(asset.uri.clone());
+        }
+        if selected.is_none() {
+            selected = Some(asset);
+        }
+    }
+    selected.map(|asset| asset.uri.clone())
+}
+
+pub fn parse_chara_card_v3(value: &JsonValue) -> Result<CharacterExportPackage, String> {
+    let card: CharaCardV3 = serde_json::from_value(value.clone()).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid chara card v3: {}", e),
+        )
+    })?;
+
+    let data = card.data;
+    let definition = build_definition_from_fields(
+        &data.description,
+        &data.personality,
+        &data.scenario,
+        &data.system_prompt,
+        &data.post_history_instructions,
+        &data.mes_example,
+    );
+
+    let (scenes, default_scene_id) =
+        build_scenes_from_greetings(&data.first_mes, &data.alternate_greetings);
+
+    let (avatar_data, background_image_data) = data
+        .assets
+        .as_ref()
+        .map(|assets| {
+            let icon_uri = resolve_asset_uri(assets, "icon");
+            let background_uri = resolve_asset_uri(assets, "background");
+            let icon = icon_uri.filter(|uri| uri.starts_with("data:"));
+            let background = background_uri.filter(|uri| uri.starts_with("data:"));
+            (icon, background)
+        })
+        .unwrap_or((None, None));
+
+    Ok(CharacterExportPackage {
+        version: 1,
+        exported_at: now_ms() as i64,
+        character: CharacterExportData {
+            name: data.name,
+            description: Some(data.description).filter(|v| !v.trim().is_empty()),
+            definition,
+            rules: Vec::new(),
+            scenes,
+            default_scene_id,
+            default_model_id: None,
+            memory_type: Some("manual".to_string()),
+            prompt_template_id: None,
+            system_prompt: None,
+            voice_config: None,
+            voice_autoplay: None,
+            disable_avatar_gradient: false,
+            avatar_crop: None,
+            custom_gradient_enabled: None,
+            custom_gradient_colors: None,
+            custom_text_color: None,
+            custom_text_secondary: None,
+        },
+        avatar_data,
+        background_image_data,
     })
 }
 
@@ -512,6 +686,68 @@ pub fn export_chara_card_v2(package: &CharacterExportPackage) -> CharaCardV2 {
     }
 }
 
+pub fn export_chara_card_v3(
+    package: &CharacterExportPackage,
+    created_at: Option<i64>,
+    updated_at: Option<i64>,
+) -> CharaCardV3 {
+    let definition = package.character.definition.clone().unwrap_or_default();
+    let sections = parse_definition_sections(&definition);
+
+    let description = if !package
+        .character
+        .description
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .is_empty()
+    {
+        package.character.description.clone().unwrap_or_default()
+    } else {
+        sections.base
+    };
+
+    let mut first_mes = String::new();
+    let mut alternate_greetings = Vec::new();
+    if let Some(first_scene) = package.character.scenes.first() {
+        first_mes = first_scene.content.clone();
+        for scene in package.character.scenes.iter().skip(1) {
+            if !scene.content.trim().is_empty() {
+                alternate_greetings.push(scene.content.clone());
+            }
+        }
+    }
+
+    CharaCardV3 {
+        spec: "chara_card_v3".to_string(),
+        spec_version: "3.0".to_string(),
+        data: CharaCardV3Data {
+            name: package.character.name.clone(),
+            description,
+            personality: sections.personality,
+            scenario: sections.scenario,
+            first_mes,
+            mes_example: sections.mes_example,
+            creator_notes: String::new(),
+            system_prompt: sections.system_prompt,
+            post_history_instructions: sections.post_history_instructions,
+            alternate_greetings,
+            character_book: None,
+            tags: Vec::new(),
+            creator: String::new(),
+            character_version: String::new(),
+            extensions: JsonValue::Object(JsonMap::new()),
+            assets: None,
+            nickname: None,
+            creator_notes_multilingual: None,
+            source: None,
+            group_only_greetings: Vec::new(),
+            creation_date: created_at.map(|v| v / 1000),
+            modification_date: updated_at.map(|v| v / 1000),
+        },
+    }
+}
+
 #[allow(dead_code)]
 pub fn export_chara_card_v1(package: &CharacterExportPackage) -> CharaCardV1 {
     let definition = package.character.definition.clone().unwrap_or_default();
@@ -546,6 +782,9 @@ pub fn export_chara_card_v1(package: &CharacterExportPackage) -> CharaCardV1 {
 }
 
 pub fn guess_chara_card_format(value: &JsonValue) -> Option<CharacterFileFormat> {
+    if looks_like_chara_card_v3(value) {
+        return Some(CharacterFileFormat::CharaCardV3);
+    }
     if looks_like_chara_card_v2(value) {
         return Some(CharacterFileFormat::CharaCardV2);
     }

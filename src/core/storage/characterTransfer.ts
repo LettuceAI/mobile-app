@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AvatarCrop, Character } from "./schemas";
 
-export type CharacterFileFormat = "uec" | "legacy_json" | "chara_card_v2" | "chara_card_v1";
+export type CharacterFileFormat =
+  | "uec"
+  | "legacy_json"
+  | "chara_card_v3"
+  | "chara_card_v2"
+  | "chara_card_v1";
 
 export interface CharacterFormatInfo {
   id: CharacterFileFormat;

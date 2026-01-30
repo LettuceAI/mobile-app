@@ -30,6 +30,7 @@ export enum Step {
 
 const FORMAT_LABELS: Record<CharacterFileFormat, string> = {
   uec: "Unified Entity Card (UEC)",
+  chara_card_v3: "Character Card V3",
   chara_card_v2: "Character Card V2",
   chara_card_v1: "Character Card V1",
   legacy_json: "Legacy JSON",
