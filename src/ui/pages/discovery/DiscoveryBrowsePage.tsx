@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, TrendingUp, Flame, Clock, AlertCircle, ArrowUpDown, Check } from "lucide-react";
 import { cn, typography, interactive } from "../../design-tokens";
 import { DiscoveryCard, DiscoveryGridSkeleton } from "./components";
+import { resolveBackTarget, Routes, useNavigationManager } from "../../navigation";
 import {
   fetchDiscoveryCards,
   type DiscoveryCard as DiscoveryCardType,
@@ -61,6 +62,8 @@ const SORT_OPTIONS: SortOptionItem[] = [
 
 export function DiscoveryBrowsePage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { go, backOrReplace } = useNavigationManager();
   const [searchParams] = useSearchParams();
 
   const sectionParam = searchParams.get("section") as CardType | null;
@@ -102,9 +105,15 @@ export function DiscoveryBrowsePage() {
     [navigate],
   );
 
-  const handleBack = () => {
-    navigate("/discover");
-  };
+  const handleBack = useCallback(() => {
+    const currentPath = location.pathname + location.search;
+    const target = resolveBackTarget(currentPath);
+    if (target) {
+      go(target, { replace: true });
+      return;
+    }
+    backOrReplace(Routes.discover);
+  }, [location.pathname, location.search, go, backOrReplace]);
 
   const handleSortChange = (newSort: SortOption) => {
     setSortBy(newSort);

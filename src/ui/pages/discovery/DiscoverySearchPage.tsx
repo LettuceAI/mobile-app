@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ArrowLeft, X, Loader2, TrendingUp, Clock, Sparkles } from "lucide-react";
 import { cn, typography, interactive } from "../../design-tokens";
 import { DiscoveryCard, DiscoveryGridSkeleton } from "./components";
+import { resolveBackTarget, Routes, useNavigationManager } from "../../navigation";
 import {
   searchDiscoveryCards,
   type DiscoveryCard as DiscoveryCardType,
@@ -63,6 +64,8 @@ const TRENDING_SEARCHES = [
 
 export function DiscoverySearchPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { go, backOrReplace } = useNavigationManager();
   const [searchParams] = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -191,9 +194,15 @@ export function DiscoverySearchPage() {
     [navigate],
   );
 
-  const handleBack = () => {
-    navigate(-1);
-  };
+  const handleBack = useCallback(() => {
+    const currentPath = location.pathname + location.search;
+    const target = resolveBackTarget(currentPath);
+    if (target) {
+      go(target, { replace: true });
+      return;
+    }
+    backOrReplace(Routes.discover);
+  }, [location.pathname, location.search, go, backOrReplace]);
 
   const handleClearQuery = () => {
     setQuery("");

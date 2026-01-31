@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Download,
@@ -36,6 +36,7 @@ import {
 import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
 import { BottomMenu, MenuButton, MenuButtonGroup } from "../../components";
 import { createSession } from "../../../core/storage/repo";
+import { resolveBackTarget, Routes, useNavigationManager } from "../../navigation";
 
 interface TokenStat {
   label: string;
@@ -61,6 +62,8 @@ function TokenStatCard({ label, value, icon: Icon }: TokenStat) {
 
 export function DiscoveryCardDetailPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { go, backOrReplace } = useNavigationManager();
   const { path } = useParams<{ path: string }>();
 
   const [cardData, setCardData] = useState<DiscoveryCardDetailResponse | null>(null);
@@ -136,9 +139,15 @@ export function DiscoveryCardDetailPage() {
     loadCard();
   }, [path]);
 
-  const handleBack = () => {
-    navigate(-1);
-  };
+  const handleBack = useCallback(() => {
+    const currentPath = location.pathname + location.search;
+    const target = resolveBackTarget(currentPath);
+    if (target) {
+      go(target, { replace: true });
+      return;
+    }
+    backOrReplace(Routes.discover);
+  }, [location.pathname, location.search, go, backOrReplace]);
 
   const handleShare = async () => {
     if (!cardData?.card) return;
