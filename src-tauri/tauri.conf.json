@@ -24,9 +24,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": [
-          "$APPDATA/**"
-        ]
+        "scope": ["$APPDATA/**"]
       }
     }
   },
@@ -40,10 +38,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-  "resources": [
-    "./feedback_sounds/fail.mp3",
-    "./feedback_sounds/send.mp3",
-    "./feedback_sounds/success.mp3"
-  ]
+    "resources": [
+      "./feedback_sounds/fail.mp3",
+      "./feedback_sounds/send.mp3",
+      "./feedback_sounds/success.mp3",
+      "./onnxruntime"
+    ]
   }
 }

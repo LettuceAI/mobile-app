@@ -19,6 +19,7 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
     let target_os = env::var("CARGO_CFG_TARGET_OS")?;
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH")?;
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
 
     let target_dir = out_dir
         .ancestors()
@@ -127,6 +128,15 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
     println!(
         "cargo:warning=Extracted ONNX Runtime library to {:?}",
         dest_path
+    );
+
+    let resource_dir = manifest_dir.join("onnxruntime");
+    fs::create_dir_all(&resource_dir)?;
+    let resource_path = resource_dir.join(simple_lib_name);
+    fs::copy(&dest_path, &resource_path)?;
+    println!(
+        "cargo:warning=Copied ONNX Runtime library to {:?}",
+        resource_path
     );
 
     Ok(())

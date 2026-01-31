@@ -106,6 +106,8 @@ pub fn run() {
                 utils::log_error_global("panic", message);
             }));
 
+            configure_onnxruntime_dylib(app.handle());
+
             match storage_manager::db::init_pool(app.handle()) {
                 Ok(pool) => {
                     let swappable = storage_manager::db::SwappablePool::new(pool);
@@ -430,4 +432,72 @@ pub fn run() {
             }
             _ => {}
         });
+}
+
+fn configure_onnxruntime_dylib(app: &tauri::AppHandle) {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use tauri::path::BaseDirectory;
+        use tauri::Manager;
+
+        if let Ok(value) = std::env::var("ORT_DYLIB_PATH") {
+            if !value.trim().is_empty() {
+                utils::log_info(
+                    app,
+                    "embedding_debug",
+                    format!("ORT_DYLIB_PATH already set to {}", value),
+                );
+                return;
+            }
+        }
+
+        if let Some(value) = option_env!("ORT_DYLIB_PATH") {
+            if !value.trim().is_empty() {
+                std::env::set_var("ORT_DYLIB_PATH", value);
+                utils::log_info(
+                    app,
+                    "embedding_debug",
+                    format!("Set ORT_DYLIB_PATH from compile-time env: {}", value),
+                );
+                return;
+            }
+        }
+
+        let lib_name = if cfg!(target_os = "windows") {
+            "onnxruntime.dll"
+        } else if cfg!(target_os = "macos") {
+            "libonnxruntime.dylib"
+        } else {
+            "libonnxruntime.so"
+        };
+
+        match app
+            .path()
+            .resolve(format!("onnxruntime/{}", lib_name), BaseDirectory::Resource)
+        {
+            Ok(path) => {
+                if path.exists() {
+                    std::env::set_var("ORT_DYLIB_PATH", &path);
+                    utils::log_info(
+                        app,
+                        "embedding_debug",
+                        format!("Set ORT_DYLIB_PATH={}", path.display()),
+                    );
+                } else {
+                    utils::log_warn(
+                        app,
+                        "embedding_debug",
+                        format!("ONNX Runtime library not found at {}", path.display()),
+                    );
+                }
+            }
+            Err(err) => {
+                utils::log_warn(
+                    app,
+                    "embedding_debug",
+                    format!("Failed to resolve ONNX Runtime resource path: {}", err),
+                );
+            }
+        }
+    }
 }
