@@ -140,6 +140,14 @@ export function DiscoveryCardDetailPage() {
   }, [path]);
 
   const handleBack = useCallback(() => {
+    const stateFrom = (location.state as { from?: string } | null | undefined)?.from || undefined;
+    const fromParam = new URLSearchParams(location.search).get("from");
+    const decodedFrom = fromParam ? decodeURIComponent(fromParam) : undefined;
+    const searchFrom = decodedFrom || stateFrom;
+    if (searchFrom && searchFrom.startsWith(Routes.discoverSearch)) {
+      go(searchFrom, { replace: true });
+      return;
+    }
     const currentPath = location.pathname + location.search;
     const target = resolveBackTarget(currentPath);
     if (target) {
@@ -147,7 +155,7 @@ export function DiscoveryCardDetailPage() {
       return;
     }
     backOrReplace(Routes.discover);
-  }, [location.pathname, location.search, go, backOrReplace]);
+  }, [location.pathname, location.search, location.state, go, backOrReplace]);
 
   const handleShare = async () => {
     if (!cardData?.card) return;

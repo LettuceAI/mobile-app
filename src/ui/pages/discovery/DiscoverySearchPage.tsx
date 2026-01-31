@@ -187,11 +187,21 @@ export function DiscoverySearchPage() {
 
   const handleCardClick = useCallback(
     (card: DiscoveryCardType) => {
-      if (card.path) {
-        navigate(`/discover/card/${encodeURIComponent(card.path)}`);
+      if (!card.path) return;
+      const trimmedQuery = query.trim();
+      const fromParams = new URLSearchParams(location.search);
+      if (trimmedQuery) {
+        fromParams.set("q", trimmedQuery);
       }
+      const from = trimmedQuery
+        ? `${Routes.discoverSearch}?${fromParams.toString()}`
+        : location.pathname + location.search;
+      const encodedFrom = encodeURIComponent(from);
+      navigate(`/discover/card/${encodeURIComponent(card.path)}?from=${encodedFrom}`, {
+        state: { from },
+      });
     },
-    [navigate],
+    [navigate, location.pathname, location.search, query],
   );
 
   const handleBack = useCallback(() => {
