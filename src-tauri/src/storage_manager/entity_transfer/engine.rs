@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use super::super::db::now_ms;
@@ -140,7 +140,7 @@ pub struct CharaCardV3Data {
     pub system_prompt: String,
     #[serde(default)]
     pub post_history_instructions: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_vec")]
     pub alternate_greetings: Vec<String>,
     #[serde(default)]
     pub character_book: Option<CharaCardCharacterBook>,
@@ -212,6 +212,15 @@ pub struct CharaCardV2Data {
     pub character_version: String,
     #[serde(default = "empty_object")]
     pub extensions: JsonValue,
+}
+
+fn deserialize_null_as_empty_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let value = Option::<Vec<T>>::deserialize(deserializer)?;
+    Ok(value.unwrap_or_default())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
