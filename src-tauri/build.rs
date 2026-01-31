@@ -63,14 +63,26 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
         "libonnxruntime.so"
     };
     let dest_path = target_dir.join(simple_lib_name);
+    let resource_dir = manifest_dir.join("onnxruntime");
+    let resource_path = resource_dir.join(simple_lib_name);
 
-    // if dest_path.exists() {
-    //     println!(
-    //         "cargo:warning=ONNX Runtime library already exists at {:?}",
-    //         dest_path
-    //     );
-    //     return Ok(());
-    // }
+    if dest_path.exists() {
+        if resource_path.exists() {
+            println!(
+                "cargo:warning=ONNX Runtime library already exists at {:?} and {:?}",
+                dest_path, resource_path
+            );
+            return Ok(());
+        }
+
+        fs::create_dir_all(&resource_dir)?;
+        fs::copy(&dest_path, &resource_path)?;
+        println!(
+            "cargo:warning=Copied ONNX Runtime library to {:?}",
+            resource_path
+        );
+        return Ok(());
+    }
 
     println!(
         "cargo:warning=Downloading ONNX Runtime v{} from {}...",
@@ -130,9 +142,7 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
         dest_path
     );
 
-    let resource_dir = manifest_dir.join("onnxruntime");
     fs::create_dir_all(&resource_dir)?;
-    let resource_path = resource_dir.join(simple_lib_name);
     fs::copy(&dest_path, &resource_path)?;
     println!(
         "cargo:warning=Copied ONNX Runtime library to {:?}",
