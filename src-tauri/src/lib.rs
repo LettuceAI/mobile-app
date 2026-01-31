@@ -442,6 +442,7 @@ fn configure_onnxruntime_dylib(app: &tauri::AppHandle) {
 
         if let Ok(value) = std::env::var("ORT_DYLIB_PATH") {
             if !value.trim().is_empty() {
+                let _ = ort::util::preload_dylib(&value);
                 utils::log_info(
                     app,
                     "embedding_debug",
@@ -454,6 +455,7 @@ fn configure_onnxruntime_dylib(app: &tauri::AppHandle) {
         if let Some(value) = option_env!("ORT_DYLIB_PATH") {
             if !value.trim().is_empty() {
                 std::env::set_var("ORT_DYLIB_PATH", value);
+                let _ = ort::util::preload_dylib(value);
                 utils::log_info(
                     app,
                     "embedding_debug",
@@ -478,6 +480,7 @@ fn configure_onnxruntime_dylib(app: &tauri::AppHandle) {
             Ok(path) => {
                 if path.exists() {
                     std::env::set_var("ORT_DYLIB_PATH", &path);
+                    let _ = ort::util::preload_dylib(&path);
                     utils::log_info(
                         app,
                         "embedding_debug",
