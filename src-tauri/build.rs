@@ -177,6 +177,15 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
 
 fn setup_android_libs() -> anyhow::Result<()> {
     let ort_version = "1.22.0";
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let resource_dir = manifest_dir.join("onnxruntime");
+    if !resource_dir.exists() {
+        fs::create_dir_all(&resource_dir)?;
+        println!(
+            "cargo:warning=Created ONNX Runtime resource dir at {:?} for Android build",
+            resource_dir
+        );
+    }
     let jni_libs_path = PathBuf::from("gen/android/app/src/main/jniLibs");
 
     let targets = vec![
