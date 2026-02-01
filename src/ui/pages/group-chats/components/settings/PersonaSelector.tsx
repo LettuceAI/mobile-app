@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import type { TouchEvent } from "react";
 import { User, Check, Search, UserX, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -79,15 +80,39 @@ interface PersonaOptionItemProps {
 function PersonaOptionItem({ persona, isSelected, onClick, onLongPress }: PersonaOptionItemProps) {
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
   const [isLongPressTriggered, setIsLongPressTriggered] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const didMoveRef = useRef(false);
+  const suppressClickRef = useRef(false);
 
-  const handleTouchStart = () => {
-    if (!onLongPress) return;
+  const handleTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
     setIsLongPressTriggered(false);
-    const timer = window.setTimeout(() => {
-      setIsLongPressTriggered(true);
-      onLongPress();
-    }, 500);
-    setLongPressTimer(timer);
+    const touch = event.touches[0];
+    touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    didMoveRef.current = false;
+    suppressClickRef.current = false;
+    if (onLongPress) {
+      const timer = window.setTimeout(() => {
+        setIsLongPressTriggered(true);
+        onLongPress();
+      }, 500);
+      setLongPressTimer(timer);
+    }
+  };
+
+  const handleTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    if (!touchStartRef.current) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    if (deltaX > 6 || deltaY > 6) {
+      didMoveRef.current = true;
+      suppressClickRef.current = true;
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+    }
   };
 
   const handleTouchEnd = () => {
@@ -95,12 +120,31 @@ function PersonaOptionItem({ persona, isSelected, onClick, onLongPress }: Person
       clearTimeout(longPressTimer);
       setLongPressTimer(null);
     }
-    if (!isLongPressTriggered) {
+    if (!isLongPressTriggered && !didMoveRef.current) {
       onClick();
+      suppressClickRef.current = true;
+    } else if (didMoveRef.current) {
+      suppressClickRef.current = true;
     }
+    touchStartRef.current = null;
+    didMoveRef.current = false;
+  };
+
+  const handleTouchCancel = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    touchStartRef.current = null;
+    didMoveRef.current = false;
+    suppressClickRef.current = true;
   };
 
   const handleClick = () => {
+    if (suppressClickRef.current || isLongPressTriggered) {
+      suppressClickRef.current = false;
+      return;
+    }
     if (!isLongPressTriggered) {
       onClick();
     }
@@ -116,7 +160,9 @@ function PersonaOptionItem({ persona, isSelected, onClick, onLongPress }: Person
       initial={false}
       transition={{ duration: 0.12, ease: "easeOut" }}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       onClick={handleClick}
       className={cn(
         "group relative flex w-full items-center gap-3",
