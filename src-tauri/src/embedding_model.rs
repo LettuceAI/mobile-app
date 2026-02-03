@@ -681,25 +681,48 @@ fn ensure_ort_init() -> Result<(), String> {
     }
 
     let init_result =
-        std::panic::catch_unwind(|| ort::init().with_name("lettuce-embedding").commit());
-    match init_result {
-        Ok(true) => {}
-        Ok(false) => {
-            return Err(crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                "Failed to initialize ONNX Runtime".to_string(),
-            ));
-        }
-        Err(_) => {
-            return Err(crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                "ONNX Runtime initialization panicked (likely incompatible DLL).".to_string(),
-            ));
-        }
+        std::panic::catch_unwind(|| ort::init().with_name("lettuce-embedding").commit()).map_err(
+            |_| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    "ONNX Runtime initialization panicked (likely incompatible DLL).".to_string(),
+                )
+            },
+        )?;
+
+    let init_ok = init_result.into_init_result().map_err(|err| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to initialize ONNX Runtime: {}", err),
+        )
+    })?;
+
+    if !init_ok {
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Failed to initialize ONNX Runtime".to_string(),
+        ));
     }
     Ok(())
+}
+
+trait IntoInitResult {
+    fn into_init_result(self) -> Result<bool, String>;
+}
+
+impl IntoInitResult for bool {
+    fn into_init_result(self) -> Result<bool, String> {
+        Ok(self)
+    }
+}
+
+impl<E: std::fmt::Display> IntoInitResult for Result<bool, E> {
+    fn into_init_result(self) -> Result<bool, String> {
+        self.map_err(|err| err.to_string())
+    }
 }
 
 #[tauri::command]
