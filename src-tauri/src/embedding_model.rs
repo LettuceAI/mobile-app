@@ -649,12 +649,55 @@ fn compute_embedding_with_session(
 }
 
 fn ensure_ort_init() -> Result<(), String> {
-    if !ort::init().with_name("lettuce-embedding").commit() {
-        return Err(crate::utils::err_msg(
-            module_path!(),
-            line!(),
-            "Failed to initialize ONNX Runtime".to_string(),
-        ));
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use std::path::Path;
+
+        let dylib_path = std::env::var("ORT_DYLIB_PATH").unwrap_or_default();
+        if dylib_path.trim().is_empty() {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "ONNX Runtime library not configured. Expected bundled onnxruntime library; ORT_DYLIB_PATH is not set.".to_string(),
+            ));
+        }
+
+        let dylib_path = Path::new(&dylib_path);
+        if !dylib_path.exists() {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("ONNX Runtime library not found at {}", dylib_path.display()),
+            ));
+        }
+
+        if let Err(err) = ort::util::preload_dylib(dylib_path) {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to preload ONNX Runtime library: {}", err),
+            ));
+        }
+    }
+
+    let init_result =
+        std::panic::catch_unwind(|| ort::init().with_name("lettuce-embedding").commit());
+    match init_result {
+        Ok(true) => {}
+        Ok(false) => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Failed to initialize ONNX Runtime".to_string(),
+            ));
+        }
+        Err(_) => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "ONNX Runtime initialization panicked (likely incompatible DLL).".to_string(),
+            ));
+        }
     }
     Ok(())
 }
