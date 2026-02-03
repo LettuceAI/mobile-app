@@ -9,7 +9,7 @@ env:
 
 jobs:
   android:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
 
