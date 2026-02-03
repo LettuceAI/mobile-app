@@ -1,6 +1,7 @@
 use futures_util::StreamExt;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::io::AsyncWriteExt;
@@ -26,6 +27,7 @@ const HUGGINGFACE_BASE_V2: &str = "https://huggingface.co/Zeolit/lettuce-emb-512
 
 const MAX_SEQ_LENGTH_V1: usize = 512;
 const MAX_SEQ_LENGTH_V2: usize = 4096;
+const ORT_VERSION: &str = "1.22.0";
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub enum EmbeddingModelVersion {
@@ -648,30 +650,12 @@ fn compute_embedding_with_session(
     }
 }
 
-fn ensure_ort_init() -> Result<(), String> {
+async fn ensure_ort_init(app: &AppHandle) -> Result<(), String> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        use std::path::Path;
-
-        let dylib_path = std::env::var("ORT_DYLIB_PATH").unwrap_or_default();
-        if dylib_path.trim().is_empty() {
-            return Err(crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                "ONNX Runtime library not configured. Expected bundled onnxruntime library; ORT_DYLIB_PATH is not set.".to_string(),
-            ));
-        }
-
-        let dylib_path = Path::new(&dylib_path);
-        if !dylib_path.exists() {
-            return Err(crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                format!("ONNX Runtime library not found at {}", dylib_path.display()),
-            ));
-        }
-
-        if let Err(err) = ort::util::preload_dylib(dylib_path) {
+        let dylib_path = resolve_or_download_onnxruntime(app).await?;
+        std::env::set_var("ORT_DYLIB_PATH", &dylib_path);
+        if let Err(err) = ort::util::preload_dylib(&dylib_path) {
             return Err(crate::utils::err_msg(
                 module_path!(),
                 line!(),
@@ -707,6 +691,180 @@ fn ensure_ort_init() -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+async fn resolve_or_download_onnxruntime(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Ok(value) = std::env::var("ORT_DYLIB_PATH") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            let path = Path::new(trimmed);
+            if path.exists() {
+                return Ok(path.to_path_buf());
+            }
+        }
+    }
+
+    let lettuce_dir = crate::utils::ensure_lettuce_dir(app)?;
+    let ort_dir = lettuce_dir.join("onnxruntime");
+    fs::create_dir_all(&ort_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let (archive_url, lib_path_in_archive, lib_name) = ort_download_info()?;
+    let dest_path = ort_dir.join(lib_name);
+    if dest_path.exists() {
+        return Ok(dest_path);
+    }
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&archive_url)
+        .send()
+        .await
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to download ONNX Runtime: {}", e),
+            )
+        })?;
+    if !response.status().is_success() {
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to download ONNX Runtime: {}", response.status()),
+        ));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    extract_onnxruntime_archive(&archive_url, &bytes, &lib_path_in_archive, &dest_path)?;
+
+    if !dest_path.exists() {
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!(
+                "ONNX Runtime library not found after download: {}",
+                dest_path.display()
+            ),
+        ));
+    }
+
+    Ok(dest_path)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn ort_download_info() -> Result<(String, String, &'static str), String> {
+    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+    match (os, arch) {
+        ("windows", "x86_64") => Ok((
+            format!(
+                "https://github.com/microsoft/onnxruntime/releases/download/v{0}/onnxruntime-win-x64-{0}.zip",
+                ORT_VERSION
+            ),
+            format!("onnxruntime-win-x64-{}/lib/onnxruntime.dll", ORT_VERSION),
+            "onnxruntime.dll",
+        )),
+        ("linux", "x86_64") => Ok((
+            format!(
+                "https://github.com/microsoft/onnxruntime/releases/download/v{0}/onnxruntime-linux-x64-{0}.tgz",
+                ORT_VERSION
+            ),
+            format!(
+                "onnxruntime-linux-x64-{}/lib/libonnxruntime.so.{}",
+                ORT_VERSION, ORT_VERSION
+            ),
+            "libonnxruntime.so",
+        )),
+        ("macos", "aarch64") => Ok((
+            format!(
+                "https://github.com/microsoft/onnxruntime/releases/download/v{0}/onnxruntime-osx-arm64-{0}.tgz",
+                ORT_VERSION
+            ),
+            format!(
+                "onnxruntime-osx-arm64-{}/lib/libonnxruntime.dylib",
+                ORT_VERSION
+            ),
+            "libonnxruntime.dylib",
+        )),
+        ("macos", "x86_64") => Ok((
+            format!(
+                "https://github.com/microsoft/onnxruntime/releases/download/v{0}/onnxruntime-osx-x86_64-{0}.tgz",
+                ORT_VERSION
+            ),
+            format!(
+                "onnxruntime-osx-x86_64-{}/lib/libonnxruntime.dylib",
+                ORT_VERSION
+            ),
+            "libonnxruntime.dylib",
+        )),
+        _ => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Unsupported platform for ONNX Runtime: {} {}", os, arch),
+        )),
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn extract_onnxruntime_archive(
+    archive_url: &str,
+    bytes: &[u8],
+    lib_path_in_archive: &str,
+    dest_path: &Path,
+) -> Result<(), String> {
+    let reader = Cursor::new(bytes);
+    if archive_url.ends_with(".zip") {
+        let mut zip = zip::ZipArchive::new(reader)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut file = zip
+            .by_name(lib_path_in_archive)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut outfile = fs::File::create(dest_path)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        std::io::copy(&mut file, &mut outfile)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        return Ok(());
+    }
+
+    if archive_url.ends_with(".tgz") {
+        let tar = flate2::read::GzDecoder::new(reader);
+        let mut archive = tar::Archive::new(tar);
+        for entry in archive
+            .entries()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+        {
+            let mut entry = entry
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let path = entry
+                .path()
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+                .to_string_lossy()
+                .into_owned();
+            if path == lib_path_in_archive {
+                let mut outfile = fs::File::create(dest_path)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                std::io::copy(&mut entry, &mut outfile)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                return Ok(());
+            }
+        }
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Could not find {} in archive", lib_path_in_archive),
+        ));
+    }
+
+    Err(crate::utils::err_msg(
+        module_path!(),
+        line!(),
+        format!("Unsupported archive type: {}", archive_url),
+    ))
 }
 
 trait IntoInitResult {
@@ -824,7 +982,7 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
         format!("tokenizer_path status {}", describe_path(&tokenizer_path)),
     );
 
-    ensure_ort_init()?;
+    ensure_ort_init(&app).await?;
     log_info(&app, "embedding_debug", "ort initialized");
 
     let mut session = Session::builder()
@@ -925,7 +1083,7 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
         ));
     }
 
-    ensure_ort_init()?;
+    ensure_ort_init(&app).await?;
     log_info(&app, "embedding_init", "ort initialized");
 
     let _session = Session::builder()
@@ -1159,7 +1317,7 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
 
         let tokenizer_path = model_dir.join("tokenizer.json");
 
-        ensure_ort_init()?;
+        ensure_ort_init(&app_for_test).await?;
         log_info(&app_for_test, "embedding_test", "ort initialized");
 
         let mut session = Session::builder()

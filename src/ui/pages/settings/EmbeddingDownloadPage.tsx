@@ -41,6 +41,7 @@ export function EmbeddingDownloadPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [preStepStatus, setPreStepStatus] = useState<"idle" | "preparing" | "ready">("idle");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "passed" | "failed">("idle");
   const [testResults, setTestResults] = useState<{
     success: boolean;
@@ -82,6 +83,7 @@ export function EmbeddingDownloadPage() {
             setProgress(progressData);
 
             if (progressData.status === "completed") {
+              setPreStepStatus("ready");
               setIsDownloading(false);
               void (async () => {
                 try {
@@ -94,6 +96,9 @@ export function EmbeddingDownloadPage() {
               })();
             } else if (progressData.status === "failed" || progressData.status === "cancelled") {
               setIsDownloading(false);
+              setPreStepStatus("idle");
+            } else if (progressData.status === "downloading") {
+              setPreStepStatus("ready");
             }
           }
         });
@@ -103,6 +108,7 @@ export function EmbeddingDownloadPage() {
           console.log("Download already in progress, attaching...");
           setShowCapacitySelection(false);
           setIsDownloading(true);
+          setPreStepStatus("ready");
           setProgress(currentProgress);
         }
       } catch (err) {
@@ -125,8 +131,10 @@ export function EmbeddingDownloadPage() {
     setShowCapacitySelection(false);
     setIsDownloading(true);
     setError(null);
+    setPreStepStatus("preparing");
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 300));
       // Always download v2 model (the backend defaults to v2)
       await storageBridge.startEmbeddingDownload("v2");
 
@@ -134,10 +142,12 @@ export function EmbeddingDownloadPage() {
       await updateAdvancedSetting("embeddingMaxTokens", selectedCapacity);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
+      setPreStepStatus("idle");
 
       if (errorMessage.includes("Download already in progress")) {
         console.log("Race condition caught, attaching to existing download...");
         setIsDownloading(true);
+        setPreStepStatus("ready");
       } else {
         setError(errorMessage);
         setIsDownloading(false);
@@ -253,6 +263,20 @@ export function EmbeddingDownloadPage() {
         ? (progress.downloaded / progress.total) * 100
         : 0;
 
+  const headerDescription = showCapacitySelection
+    ? "Choose your preferred memory context capacity"
+    : testStatus === "idle"
+      ? preStepStatus === "preparing"
+        ? "Preparing download..."
+        : "Dynamic Memory requires a local embedding model to function"
+      : testStatus === "testing"
+        ? "Verifying model functionality..."
+        : testStatus === "passed"
+          ? `Redirecting in ${countdown} seconds...`
+          : testStatus === "failed"
+            ? "Model verification failed. Please try again."
+            : "";
+
   return (
     <div className="flex min-h-screen flex-col">
       <main className="flex-1 px-4 pb-24 pt-6">
@@ -266,26 +290,16 @@ export function EmbeddingDownloadPage() {
             <h1 className="text-2xl font-bold text-white">
               {showCapacitySelection &&
                 (isUpgrade ? "Upgrade Embedding Model" : "Setup Embedding Model")}
-              {!showCapacitySelection && testStatus === "idle" && "Downloading Embedding Model"}
+              {!showCapacitySelection &&
+                testStatus === "idle" &&
+                (preStepStatus === "preparing"
+                  ? "Preparing Download"
+                  : "Downloading Embedding Model")}
               {!showCapacitySelection && testStatus === "testing" && "Testing Model"}
               {!showCapacitySelection && testStatus === "passed" && "Test Passed!"}
               {!showCapacitySelection && testStatus === "failed" && "Test Failed"}
             </h1>
-            <p className="mt-2 text-sm text-white/60">
-              {showCapacitySelection && "Choose your preferred memory context capacity"}
-              {!showCapacitySelection &&
-                testStatus === "idle" &&
-                "Dynamic Memory requires a local embedding model to function"}
-              {!showCapacitySelection &&
-                testStatus === "testing" &&
-                "Verifying model functionality..."}
-              {!showCapacitySelection &&
-                testStatus === "passed" &&
-                `Redirecting in ${countdown} seconds...`}
-              {!showCapacitySelection &&
-                testStatus === "failed" &&
-                "Model verification failed. Please try again."}
-            </p>
+            <p className="mt-2 text-sm text-white/60">{headerDescription}</p>
             {!showCapacitySelection &&
               testStatus === "testing" &&
               testProgress &&
@@ -448,7 +462,13 @@ export function EmbeddingDownloadPage() {
 
                 {/* Status */}
                 <div className="text-center text-sm text-white/60">
-                  {testStatus === "idle" && progress.status === "downloading" && "Downloading..."}
+                  {testStatus === "idle" &&
+                    preStepStatus === "preparing" &&
+                    "Preparing download..."}
+                  {testStatus === "idle" &&
+                    preStepStatus !== "preparing" &&
+                    progress.status === "downloading" &&
+                    "Downloading..."}
                   {testStatus === "idle" &&
                     progress.status === "completed" &&
                     "Download completed!"}
