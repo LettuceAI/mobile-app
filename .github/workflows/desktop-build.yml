@@ -20,10 +20,10 @@ jobs:
         with:
           node-version: "lts/*"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 9
+          bun-version: "latest"
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -46,7 +46,7 @@ jobs:
             patchelf
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install --frozen-lockfile
 
       - name: Create dev config override
         run: |
@@ -60,9 +60,9 @@ jobs:
             "version": "$VERSION",
             "identifier": "dev.lettuceai.app",
             "build": {
-              "beforeDevCommand": "npm run dev",
+              "beforeDevCommand": "bun run dev",
               "devUrl": "http://localhost:1420",
-              "beforeBuildCommand": "npm run build",
+              "beforeBuildCommand": "bun run build",
               "frontendDist": "../dist"
             },
             "app": {
@@ -108,7 +108,7 @@ jobs:
       - name: Build Tauri (Linux, Dev build)
         env:
           RUSTFLAGS: "--cfg DEV_BUILD"
-        run: pnpm tauri build --config dev-config.json
+        run: bun run tauri build --config dev-config.json
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -132,10 +132,10 @@ jobs:
         with:
           node-version: "lts/*"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 9
+          bun-version: "latest"
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -150,7 +150,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install --frozen-lockfile
 
       - name: Create dev config override
         run: |
@@ -164,9 +164,9 @@ jobs:
             "version": "$VERSION",
             "identifier": "dev.lettuceai.app",
             "build": {
-              "beforeDevCommand": "npm run dev",
+              "beforeDevCommand": "bun run dev",
               "devUrl": "http://localhost:1420",
-              "beforeBuildCommand": "npm run build",
+              "beforeBuildCommand": "bun run build",
               "frontendDist": "../dist"
             },
             "app": {
@@ -214,7 +214,7 @@ jobs:
         env:
           RUSTFLAGS: "--cfg DEV_BUILD -C target-feature=-crt-static"
           CMAKE_MSVC_RUNTIME_LIBRARY: "MultiThreadedDLL"
-        run: pnpm tauri build --config dev-config.json
+        run: bun run tauri build --config dev-config.json
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

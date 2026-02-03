@@ -22,10 +22,10 @@ jobs:
         with:
           node-version: "lts/*"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 9
+          bun-version: "latest"
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -98,12 +98,12 @@ jobs:
             >> "$GITHUB_ENV"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install --frozen-lockfile
 
       - name: Init Android project (Dev build)
         run: |
           rm -rf src-tauri/gen/android
-          pnpm tauri android init --ci --config "$TAURI_CONFIG_OVERRIDE"
+          bun run tauri android init --ci --config "$TAURI_CONFIG_OVERRIDE"
 
       - name: Configure Android signing
         env:
@@ -139,7 +139,7 @@ jobs:
           RUST_BACKTRACE: 1
           RUSTFLAGS: "--cfg DEV_BUILD"
         run: |
-          pnpm tauri android build --ci --config "$TAURI_CONFIG_OVERRIDE" --apk true --aab false
+          bun run tauri android build --ci --config "$TAURI_CONFIG_OVERRIDE" --apk
 
       - name: Ensure signed APK output
         env:
