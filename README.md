@@ -29,12 +29,6 @@ cd mobile-app
 
 # Install dependencies
 bun install
-
-# Run web dev server
-bun run dev
-
-# Run Tauri desktop app
-bun run tauri dev
 ```
 
 ## Development
@@ -42,10 +36,6 @@ bun run tauri dev
 ### Common Commands
 
 ```bash
-# Web
-bun run dev
-bun run build
-
 # Desktop (Tauri)
 bun run tauri dev
 bun run tauri build
@@ -56,21 +46,7 @@ bun run tauri android build
 
 # Quality
 bunx tsc --noEmit
-bun run format
-```
-
-### Project Layout
-
-```
-src/
-  core/        # Chat logic, providers, storage, secure creds
-  ui/          # Pages and reusable components
-  assets/      # Static assets and resources
-
-src-tauri/
-  src/         # Rust backend (custom commands, entry point)
-  capabilities/
-  icons/
+bun run check
 ```
 
 ## Android
