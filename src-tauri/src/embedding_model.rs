@@ -1270,6 +1270,8 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
     );
 
     let app_for_test = app.clone();
+    ensure_ort_init(&app_for_test).await?;
+
     let test_future = tokio::task::spawn_blocking(move || {
         let mut scores: Vec<ScoreComparison> = Vec::new();
         let mut all_passed = true;
@@ -1317,7 +1319,6 @@ pub async fn run_embedding_test(app: AppHandle) -> Result<TestResult, String> {
 
         let tokenizer_path = model_dir.join("tokenizer.json");
 
-        ensure_ort_init(&app_for_test).await?;
         log_info(&app_for_test, "embedding_test", "ort initialized");
 
         let mut session = Session::builder()
