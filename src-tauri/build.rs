@@ -70,7 +70,6 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
             "cargo:warning=ONNX Runtime library already exists at {:?} and {:?}",
             dest_path, resource_path
         );
-        println!("cargo:rustc-env=ORT_DYLIB_PATH={}", resource_path.display());
         return Ok(());
     }
 
@@ -81,7 +80,12 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
             "cargo:warning=Copied ONNX Runtime library to {:?}",
             resource_path
         );
-        println!("cargo:rustc-env=ORT_DYLIB_PATH={}", resource_path.display());
+        if !resource_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Expected ONNX Runtime library at {:?} after copy",
+                resource_path
+            ));
+        }
         return Ok(());
     }
 
@@ -149,7 +153,12 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
         "cargo:warning=Copied ONNX Runtime library to {:?}",
         resource_path
     );
-    println!("cargo:rustc-env=ORT_DYLIB_PATH={}", resource_path.display());
+    if !resource_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Expected ONNX Runtime library at {:?} after extraction",
+            resource_path
+        ));
+    }
 
     Ok(())
 }
