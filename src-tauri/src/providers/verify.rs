@@ -23,7 +23,7 @@ pub async fn verify_provider_api_key(
     api_key: Option<String>,
     base_url: Option<String>,
 ) -> Result<VerifyProviderApiKeyResult, String> {
-    let unsupported_providers: &[&str] = &[];
+    let unsupported_providers: &[&str] = &["chutes", "chutes.ai"];
 
     if unsupported_providers.contains(&provider_id.as_str()) {
         return Ok(VerifyProviderApiKeyResult {
