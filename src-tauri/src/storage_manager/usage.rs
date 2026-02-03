@@ -1,5 +1,6 @@
 use rusqlite::OptionalExtension;
 use std::fs;
+use std::time::Duration;
 
 use super::db::{db_path, open_db};
 use super::legacy::storage_root;
@@ -17,31 +18,54 @@ pub struct StorageUsageSummary {
 pub fn storage_clear_all(app: tauri::AppHandle) -> Result<(), String> {
     let dir = storage_root(&app)?;
     if dir.exists() {
-        fs::remove_dir_all(&dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    fs::create_dir_all(&dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn storage_reset_database(app: tauri::AppHandle) -> Result<(), String> {
-    // Get the database path
-    let db_path = db_path(&app)?;
+    // Clear database contents in-place to avoid file lock issues on Windows.
+    if let Ok(mut conn) = open_db(&app) {
+        let _ = conn.busy_timeout(Duration::from_secs(2));
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); PRAGMA foreign_keys=OFF;");
 
-    // Delete the database file if it exists
-    if db_path.exists() {
-        fs::remove_file(&db_path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete database: {}", e)))?;
-    }
+        let tables: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+                )
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let table_iter = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    // Delete WAL and SHM files if they exist
-    let wal_path = db_path.with_extension("db-wal");
-    if wal_path.exists() {
-        let _ = fs::remove_file(&wal_path);
-    }
+            let mut out = Vec::new();
+            for table in table_iter {
+                out.push(
+                    table.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+                );
+            }
+            out
+        };
 
-    let shm_path = db_path.with_extension("db-shm");
-    if shm_path.exists() {
-        let _ = fs::remove_file(&shm_path);
+        let tx = conn
+            .transaction()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        for table in tables {
+            let safe_name = table.replace('"', "\"\"");
+            let sql = format!("DELETE FROM \"{}\";", safe_name);
+            tx.execute(&sql, [])
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        }
+        tx.commit()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+        let _ = conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA wal_checkpoint(TRUNCATE);");
+        let _ = conn.execute_batch("VACUUM;");
     }
 
     // Delete storage directories (images, avatars, attachments)
@@ -105,10 +129,12 @@ pub fn storage_usage_summary(app: tauri::AppHandle) -> Result<StorageUsageSummar
         ("personas", "SELECT MAX(updated_at) FROM personas"),
         ("sessions", "SELECT MAX(updated_at) FROM sessions"),
     ] {
-        let max_ts: Option<i64> = conn
-            .query_row(sql, [], |r| r.get(0))
-            .optional()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("{}: {}", table, e)))?;
+        let max_ts: Option<i64> =
+            conn.query_row(sql, [], |r| r.get(0))
+                .optional()
+                .map_err(|e| {
+                    crate::utils::err_msg(module_path!(), line!(), format!("{}: {}", table, e))
+                })?;
         if let Some(ts) = max_ts {
             latest = Some(latest.map_or(ts as u64, |cur| cur.max(ts as u64)));
         }

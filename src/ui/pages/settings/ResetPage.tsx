@@ -22,7 +22,13 @@ export function ResetPage() {
       await exit(0);
     } catch (error: any) {
       console.error("Reset failed:", error);
-      alert(`Reset failed: ${error.message}`);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      alert(`Reset failed: ${message}`);
       setIsResetting(false);
       setShowConfirmModal(false);
     }
@@ -44,7 +50,7 @@ export function ResetPage() {
           className={cn(
             "mx-auto mb-8 flex h-24 w-24 items-center justify-center border border-red-400/30 bg-red-400/10 text-red-300",
             radius.full,
-            shadows.lg
+            shadows.lg,
           )}
         >
           <AlertTriangle size={44} strokeWidth={2} />
@@ -61,7 +67,8 @@ export function ResetPage() {
             Reset Everything
           </h2>
           <p className={cn(typography.body.size, typography.body.lineHeight, "text-white/50")}>
-            This will permanently delete all providers, models, characters, chat sessions, and preferences from this device.
+            This will permanently delete all providers, models, characters, chat sessions, and
+            preferences from this device.
           </p>
         </motion.div>
 
@@ -70,10 +77,7 @@ export function ResetPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className={cn(
-            "mb-8 border border-red-400/30 bg-red-400/5 p-4",
-            radius.lg
-          )}
+          className={cn("mb-8 border border-red-400/30 bg-red-400/5 p-4", radius.lg)}
         >
           <div className="flex items-center justify-center gap-2">
             <AlertTriangle size={16} className="text-red-300" strokeWidth={2.5} />
@@ -102,7 +106,7 @@ export function ResetPage() {
               shadows.glow,
               interactive.transition.default,
               "active:scale-[0.97] active:border-red-400/60 active:bg-red-400/30",
-              "disabled:cursor-not-allowed disabled:opacity-50"
+              "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
             <div className="flex items-center justify-center gap-2">
@@ -121,7 +125,7 @@ export function ResetPage() {
               "border border-white/10 bg-white/5 text-white/60",
               interactive.transition.default,
               "active:scale-[0.97] active:bg-white/10",
-              "disabled:cursor-not-allowed disabled:opacity-50"
+              "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
             Cancel
@@ -143,7 +147,7 @@ export function ResetPage() {
               className={cn(
                 "w-full max-w-md border border-white/10 bg-[#0b0b0d] p-6",
                 "rounded-t-3xl sm:rounded-3xl",
-                shadows.xl
+                shadows.xl,
               )}
               initial={{ y: "100%", opacity: 0, scale: 0.95 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -156,7 +160,7 @@ export function ResetPage() {
                 <div
                   className={cn(
                     "mx-auto mb-4 flex h-16 w-16 items-center justify-center border border-red-400/40 bg-red-400/15 text-red-300",
-                    radius.full
+                    radius.full,
                   )}
                 >
                   <AlertTriangle size={28} strokeWidth={2.5} />
@@ -165,7 +169,8 @@ export function ResetPage() {
                   Are You Sure?
                 </h3>
                 <p className={cn(typography.body.size, "text-white/50")}>
-                  All your data will be permanently deleted. The app will return to first-time setup.
+                  All your data will be permanently deleted. The app will return to first-time
+                  setup.
                 </p>
               </div>
 
@@ -182,7 +187,7 @@ export function ResetPage() {
                     "border border-red-400/40 bg-red-400/20 text-red-100",
                     interactive.transition.fast,
                     "active:scale-[0.97] active:bg-red-400/30",
-                    "disabled:cursor-not-allowed disabled:opacity-50"
+                    "disabled:cursor-not-allowed disabled:opacity-50",
                   )}
                 >
                   {isResetting ? (
@@ -204,7 +209,7 @@ export function ResetPage() {
                     "text-white/60",
                     interactive.transition.fast,
                     "active:scale-[0.97] active:text-white",
-                    "disabled:cursor-not-allowed disabled:opacity-50"
+                    "disabled:cursor-not-allowed disabled:opacity-50",
                   )}
                 >
                   Cancel
