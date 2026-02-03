@@ -20,9 +20,6 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH")?;
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "release".to_string());
-    let is_release = profile == "release";
-
     let target_dir = out_dir
         .ancestors()
         .nth(3)
@@ -68,37 +65,23 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
     let resource_dir = manifest_dir.join("onnxruntime");
     let resource_path = resource_dir.join(simple_lib_name);
 
-    if !is_release {
+    if dest_path.exists() && resource_path.exists() {
         println!(
-            "cargo:warning=Debug build detected; will avoid writing into {:?}",
-            resource_dir
+            "cargo:warning=ONNX Runtime library already exists at {:?} and {:?}",
+            dest_path, resource_path
         );
+        println!("cargo:rustc-env=ORT_DYLIB_PATH={}", resource_path.display());
+        return Ok(());
     }
 
-    if dest_path.exists() {
-        if !is_release {
-            println!(
-                "cargo:warning=ONNX Runtime library already exists at {:?}",
-                dest_path
-            );
-            println!("cargo:rustc-env=ORT_DYLIB_PATH={}", dest_path.display());
-            return Ok(());
-        }
-
-        if resource_path.exists() {
-            println!(
-                "cargo:warning=ONNX Runtime library already exists at {:?} and {:?}",
-                dest_path, resource_path
-            );
-            return Ok(());
-        }
-
+    if dest_path.exists() && !resource_path.exists() {
         fs::create_dir_all(&resource_dir)?;
         fs::copy(&dest_path, &resource_path)?;
         println!(
             "cargo:warning=Copied ONNX Runtime library to {:?}",
             resource_path
         );
+        println!("cargo:rustc-env=ORT_DYLIB_PATH={}", resource_path.display());
         return Ok(());
     }
 
@@ -160,17 +143,13 @@ fn setup_desktop_libs() -> anyhow::Result<()> {
         dest_path
     );
 
-    if !is_release {
-        println!("cargo:rustc-env=ORT_DYLIB_PATH={}", dest_path.display());
-        return Ok(());
-    }
-
     fs::create_dir_all(&resource_dir)?;
     fs::copy(&dest_path, &resource_path)?;
     println!(
         "cargo:warning=Copied ONNX Runtime library to {:?}",
         resource_path
     );
+    println!("cargo:rustc-env=ORT_DYLIB_PATH={}", resource_path.display());
 
     Ok(())
 }
