@@ -580,6 +580,58 @@ fn conversation_window(messages: &[GroupMessage], limit: usize) -> Vec<GroupMess
     convo
 }
 
+fn fetch_group_conversation_messages_range(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+    start: usize,
+    end: usize,
+) -> Result<Vec<GroupMessage>, String> {
+    if end <= start {
+        return Ok(Vec::new());
+    }
+
+    let limit = (end - start) as i64;
+    let offset = start as i64;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, session_id, role, content, speaker_character_id, turn_number, created_at, is_pinned
+             FROM group_messages
+             WHERE session_id = ?1 AND (role = 'user' OR role = 'assistant')
+             ORDER BY created_at ASC, id ASC
+             LIMIT ?2 OFFSET ?3",
+        )
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![session_id, limit, offset], |r| {
+            Ok(GroupMessage {
+                id: r.get(0)?,
+                session_id: r.get(1)?,
+                role: r.get(2)?,
+                content: r.get(3)?,
+                speaker_character_id: r.get(4)?,
+                turn_number: r.get(5)?,
+                created_at: r.get(6)?,
+                usage: None,
+                variants: None,
+                selected_variant_id: None,
+                is_pinned: r.get::<_, i64>(7)? != 0,
+                attachments: Vec::new(),
+                reasoning: None,
+                selection_reasoning: None,
+                model_id: None,
+            })
+        })
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
+    }
+    Ok(out)
+}
+
 fn manual_window_size(settings: &Settings) -> usize {
     settings
         .advanced_settings
@@ -765,34 +817,18 @@ async fn process_group_dynamic_memory_cycle(
             conversation_count(&messages)
         }
     };
-    let convo_window = conversation_window(&messages, window_size);
-    let window_start = total_convo.saturating_sub(window_size);
-    let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
 
     log_info(
         app,
         "group_dynamic_memory",
         format!(
-            "snapshot: window_size={} total_convo={} total_messages={} non_convo_messages={} convo_window_count={}",
+            "snapshot: window_size={} total_convo={} total_messages={} non_convo_messages={}",
             window_size,
             total_convo,
             total_messages,
-            total_messages.saturating_sub(total_convo),
-            convo_window.len()
+            total_messages.saturating_sub(total_convo)
         ),
     );
-
-    if convo_window.is_empty() {
-        log_warn(
-            app,
-            "group_dynamic_memory",
-            format!(
-                "no messages in window; skipping (total_convo={})",
-                total_convo
-            ),
-        );
-        return Ok(());
-    }
 
     // Check if enough new messages since last run (match normal chat behavior)
     // Use last_window_end from memory_tool_events to track progress
@@ -834,20 +870,72 @@ async fn process_group_dynamic_memory_cycle(
         return Ok(());
     }
 
-    if total_convo - last_window_end < window_size {
+    let new_convo = total_convo.saturating_sub(last_window_end);
+    if new_convo < window_size {
         let next_window_end = last_window_end + window_size;
         log_info(
             app,
             "group_dynamic_memory",
             format!(
                 "not enough new messages since last run (needed {}, got {}, next_window_end={})",
-                window_size,
-                total_convo - last_window_end,
-                next_window_end
+                window_size, new_convo, next_window_end
             ),
         );
         return Ok(());
     }
+
+    // Cursor-based delta summary window: summarize everything since last_window_end.
+    // If backlog > window_size, include the whole backlog in this run (one-time catch-up).
+    let mut window_start = last_window_end;
+    let mut window_end = total_convo;
+    let convo_window = match fetch_group_conversation_messages_range(
+        &*conn,
+        &session.id,
+        window_start,
+        window_end,
+    ) {
+        Ok(msgs) => msgs,
+        Err(err) => {
+            log_warn(
+                app,
+                "group_dynamic_memory",
+                format!(
+                    "failed to fetch conversation range from DB (start={} end={}): {}; falling back to in-memory window",
+                    window_start, window_end, err
+                ),
+            );
+            let fallback = conversation_window(&messages, window_size);
+            window_end = total_convo;
+            window_start = window_end.saturating_sub(fallback.len());
+            fallback
+        }
+    };
+    let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
+
+    if convo_window.is_empty() {
+        log_warn(
+            app,
+            "group_dynamic_memory",
+            format!(
+                "no messages in computed window; skipping (window_start={} window_end={} total_convo={})",
+                window_start, window_end, total_convo
+            ),
+        );
+        return Ok(());
+    }
+
+    log_info(
+        app,
+        "group_dynamic_memory",
+        format!(
+            "window computed: window_start={} window_end={} window_count={} new_convo={} window_size={}",
+            window_start,
+            window_end,
+            convo_window.len(),
+            new_convo,
+            window_size
+        ),
+    );
 
     // Apply importance decay
     let pinned_fixed = ensure_pinned_hot(&mut session.memory_embeddings);
@@ -884,7 +972,7 @@ async fn process_group_dynamic_memory_cycle(
             "Advanced settings missing",
             "settings",
             window_start,
-            total_convo,
+            window_end,
             &window_message_ids,
             None,
         );
@@ -905,7 +993,7 @@ async fn process_group_dynamic_memory_cycle(
                 "Summarisation model not configured",
                 "summary_model",
                 window_start,
-                total_convo,
+                window_end,
                 &window_message_ids,
                 None,
             );
@@ -928,7 +1016,7 @@ async fn process_group_dynamic_memory_cycle(
                     "Summarisation model unavailable",
                     "summary_model",
                     window_start,
-                    total_convo,
+                    window_end,
                     &window_message_ids,
                     None,
                 );
@@ -950,7 +1038,7 @@ async fn process_group_dynamic_memory_cycle(
                 &err,
                 "summary_api_key",
                 window_start,
-                total_convo,
+                window_end,
                 &window_message_ids,
                 None,
             );
@@ -988,7 +1076,7 @@ async fn process_group_dynamic_memory_cycle(
                 &err,
                 "summarization",
                 window_start,
-                total_convo,
+                window_end,
                 &window_message_ids,
                 None,
             );
@@ -1039,7 +1127,7 @@ async fn process_group_dynamic_memory_cycle(
                 &err,
                 "memory_tools",
                 window_start,
-                total_convo,
+                window_end,
                 &window_message_ids,
                 Some(summary_snapshot.as_str()),
             );
@@ -3535,7 +3623,8 @@ pub async fn group_chat_continue(
         &pool,
         &req_id,
         UsageOperationType::GroupChatContinue,
-    ).await;
+    )
+    .await;
 
     let (response_content, reasoning, message_usage, model_id_str) = response_result?;
 

@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+use rusqlite::params;
+
 use crate::api::{api_request, ApiRequest};
 use crate::chat_manager::storage::{get_base_prompt, PromptType};
 use crate::embedding_model;
+use crate::storage_manager::db::open_db;
 use crate::utils::{log_error, log_info, log_warn, now_millis};
 
 use super::dynamic_memory::{
@@ -206,6 +209,57 @@ fn conversation_count(messages: &[StoredMessage]) -> usize {
         .iter()
         .filter(|m| m.role == "user" || m.role == "assistant")
         .count()
+}
+
+fn fetch_conversation_messages_range(
+    app: &AppHandle,
+    session_id: &str,
+    start: usize,
+    end: usize,
+) -> Result<Vec<StoredMessage>, String> {
+    if end <= start {
+        return Ok(Vec::new());
+    }
+
+    let conn = open_db(app)?;
+    let limit = (end - start) as i64;
+    let offset = start as i64;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, role, content, created_at, is_pinned
+             FROM messages
+             WHERE session_id = ?1 AND (role = 'user' OR role = 'assistant')
+             ORDER BY created_at ASC, id ASC
+             LIMIT ?2 OFFSET ?3",
+        )
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let rows = stmt
+        .query_map(params![session_id, limit, offset], |r| {
+            let created_at: i64 = r.get(3)?;
+            let is_pinned: i64 = r.get(4)?;
+            Ok(StoredMessage {
+                id: r.get(0)?,
+                role: r.get(1)?,
+                content: r.get(2)?,
+                created_at: created_at.max(0) as u64,
+                usage: None,
+                variants: Vec::new(),
+                selected_variant_id: None,
+                memory_refs: Vec::new(),
+                is_pinned: is_pinned != 0,
+                attachments: Vec::new(),
+                reasoning: None,
+            })
+        })
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?);
+    }
+    Ok(out)
 }
 
 /// Build an enriched query from the last 2 messages for better memory retrieval.
@@ -1005,7 +1059,11 @@ pub async fn chat_completion(
                 "chat_completion",
                 format!("session {} not found", &session_id),
             );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Session not found",
+            ));
         }
     };
 
@@ -1706,7 +1764,11 @@ pub async fn chat_regenerate(
                 "chat_regenerate",
                 format!("session {} not found", &session_id),
             );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Session not found",
+            ));
         }
     };
 
@@ -1721,7 +1783,11 @@ pub async fn chat_regenerate(
     );
 
     if session.messages.is_empty() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No messages available for regeneration"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No messages available for regeneration",
+        ));
     }
 
     let target_index = session
@@ -1731,11 +1797,19 @@ pub async fn chat_regenerate(
         .ok_or_else(|| "Assistant message not found".to_string())?;
 
     if target_index + 1 != session.messages.len() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Can only regenerate the latest assistant response"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Can only regenerate the latest assistant response",
+        ));
     }
 
     if target_index == 0 {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Assistant message has no preceding user prompt"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Assistant message has no preceding user prompt",
+        ));
     }
 
     let preceding_index = target_index - 1;
@@ -1752,7 +1826,11 @@ pub async fn chat_regenerate(
     if session.messages[target_index].role != "assistant"
         && session.messages[target_index].role != "scene"
     {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Selected message is not an assistant or scene response"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Selected message is not an assistant or scene response",
+        ));
     }
 
     let character = match context.find_character(&session.character_id) {
@@ -2130,7 +2208,11 @@ pub async fn chat_regenerate(
         return if err_message == fallback {
             Err(err_message)
         } else {
-            Err(crate::utils::err_msg(module_path!(), line!(), format!("{} (status {})", err_message, api_response.status)))
+            Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("{} (status {})", err_message, api_response.status),
+            ))
         };
     }
 
@@ -2310,7 +2392,11 @@ pub async fn chat_continue(
                 "chat_continue",
                 format!("session {} not found", &session_id),
             );
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Session not found",
+            ));
         }
     };
 
@@ -2687,7 +2773,11 @@ pub async fn chat_continue(
         return if err_message == fallback {
             Err(err_message)
         } else {
-            Err(crate::utils::err_msg(module_path!(), line!(), format!("{} (status {})", err_message, api_response.status)))
+            Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("{} (status {})", err_message, api_response.status),
+            ))
         };
     }
 
@@ -3177,58 +3267,42 @@ async fn process_dynamic_memory_cycle_with_model(
             conversation_count(&session.messages)
         }
     };
-    let convo_window = conversation_window(&session.messages, window_size);
-    log_info(
-        app,
-        "dynamic_memory",
-        format!(
-            "snapshot taken: window_size={} total_convo_at_start={} total_messages={} non_convo_messages={} convo_window_count={}",
-            window_size,
-            total_convo_at_start,
-            total_messages,
-            total_messages.saturating_sub(total_convo_at_start),
-            convo_window.len()
-        ),
-    );
-    if convo_window.is_empty() {
-        log_warn(
-            app,
-            "dynamic_memory",
-            format!(
-                "no messages in window; skipping (total_convo_at_start={})",
-                total_convo_at_start
-            ),
-        );
-        return Ok(());
-    }
 
-    // For retry or manual trigger, skip the window end check or minimum size check
-    if model_id_override.is_none() && !force {
-        let mut last_window_end = session
-            .memory_tool_events
-            .last()
-            .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
-            .unwrap_or(0) as usize;
-        if total_convo_at_start < last_window_end {
-            log_info(
-                app,
-                "dynamic_memory",
-                format!(
-                    "conversation shrank (total_convo_at_start={} < last_window_end={}); resetting window end",
-                    total_convo_at_start, last_window_end
-                ),
-            );
-            last_window_end = 0;
-        }
+    // Cursor-based delta summary window:
+    // - Normal cycles summarize all new conversation messages since last windowEnd.
+    // - If backlog > window_size, include the whole backlog in this run (one-time catch-up),
+    //   then future cycles continue at window_size cadence.
+    // - Forced cycles (retry/manual trigger/model override) summarize the most recent window_size
+    //   messages, even if there are no new messages.
+    let mut last_window_end = session
+        .memory_tool_events
+        .last()
+        .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
+        .unwrap_or(0) as usize;
+    if total_convo_at_start < last_window_end {
         log_info(
             app,
             "dynamic_memory",
             format!(
-                "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={}",
-                total_convo_at_start, window_size, last_window_end
+                "conversation shrank (total_convo_at_start={} < last_window_end={}); resetting window end",
+                total_convo_at_start, last_window_end
             ),
         );
+        last_window_end = 0;
+    }
 
+    let new_convo = total_convo_at_start.saturating_sub(last_window_end);
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={} new_convo={}",
+            total_convo_at_start, window_size, last_window_end, new_convo
+        ),
+    );
+
+    // For retry/manual trigger/model override, skip the "enough new messages" gate.
+    if model_id_override.is_none() && !force {
         if total_convo_at_start <= last_window_end {
             log_info(
                 app,
@@ -3241,21 +3315,78 @@ async fn process_dynamic_memory_cycle_with_model(
             return Ok(());
         }
 
-        if total_convo_at_start - last_window_end < window_size {
+        if new_convo < window_size {
             let next_window_end = last_window_end + window_size;
             log_info(
                 app,
                 "dynamic_memory",
                 format!(
                     "not enough new messages since last run (needed {}, got {}, next_window_end={})",
-                    window_size,
-                    total_convo_at_start - last_window_end,
-                    next_window_end
+                    window_size, new_convo, next_window_end
                 ),
             );
             return Ok(());
         }
     }
+
+    let mut window_start = if force || model_id_override.is_some() {
+        total_convo_at_start.saturating_sub(window_size)
+    } else {
+        last_window_end
+    };
+    let mut window_end = total_convo_at_start;
+
+    let convo_window = match fetch_conversation_messages_range(
+        app,
+        &session.id,
+        window_start,
+        window_end,
+    ) {
+        Ok(msgs) => msgs,
+        Err(err) => {
+            log_warn(
+                app,
+                "dynamic_memory",
+                format!(
+                    "failed to fetch conversation range from DB (start={} end={}): {}; falling back to in-memory window",
+                    window_start, window_end, err
+                ),
+            );
+            let fallback = conversation_window(&session.messages, window_size);
+            window_end = total_convo_at_start;
+            window_start = window_end.saturating_sub(fallback.len());
+            fallback
+        }
+    };
+
+    if convo_window.is_empty() {
+        log_warn(
+            app,
+            "dynamic_memory",
+            format!(
+                "no messages in computed window; skipping (window_start={} window_end={} total_convo_at_start={})",
+                window_start, window_end, total_convo_at_start
+            ),
+        );
+        return Ok(());
+    }
+
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "snapshot taken: window_start={} window_end={} window_count={} window_size={} total_convo_at_start={} total_messages={} non_convo_messages={}",
+            window_start,
+            window_end,
+            convo_window.len(),
+            window_size,
+            total_convo_at_start,
+            total_messages,
+            total_messages.saturating_sub(total_convo_at_start),
+        ),
+    );
+
+    let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
 
     // Apply importance decay to all hot, unpinned memories
     let decay_rate = dynamic_decay_rate(settings);
@@ -3321,8 +3452,6 @@ async fn process_dynamic_memory_cycle_with_model(
             return Err(err);
         }
     };
-    let window_message_ids: Vec<String> = convo_window.iter().map(|m| m.id.clone()).collect();
-
     // Set processing state
     session.memory_status = Some("processing".to_string());
     session.memory_error = None;
@@ -3408,8 +3537,8 @@ async fn process_dynamic_memory_cycle_with_model(
 
             let event = json!({
                 "id": Uuid::new_v4().to_string(),
-                "windowStart": total_convo_at_start.saturating_sub(window_size),
-                "windowEnd": total_convo_at_start,
+                "windowStart": window_start,
+                "windowEnd": window_end,
                 "windowMessageIds": window_message_ids,
                 "summary": summary,
                 "actions": [],
@@ -3444,8 +3573,8 @@ async fn process_dynamic_memory_cycle_with_model(
     session.memory_summary_token_count = crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
     let event = json!({
         "id": Uuid::new_v4().to_string(),
-        "windowStart": total_convo_at_start.saturating_sub(window_size),
-        "windowEnd": total_convo_at_start,
+        "windowStart": window_start,
+        "windowEnd": window_end,
         "windowMessageIds": window_message_ids,
         "summary": summary,
         "actions": actions,
@@ -3492,7 +3621,7 @@ async fn process_dynamic_memory_cycle_with_model(
             session.memory_tool_events.len(),
             session.memories.len(),
             session.memory_embeddings.len(),
-            total_convo_at_start
+            window_end
         ),
     );
 
@@ -3505,8 +3634,13 @@ fn update_summarisation_model_setting(app: &AppHandle, model_id: &str) -> Result
     let settings_json =
         internal_read_settings(app)?.ok_or_else(|| "Settings not found".to_string())?;
 
-    let settings_value: serde_json::Value = serde_json::from_str(&settings_json)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse settings: {}", e)))?;
+    let settings_value: serde_json::Value = serde_json::from_str(&settings_json).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse settings: {}", e),
+        )
+    })?;
 
     let mut advanced = settings_value
         .get("advancedSettings")
@@ -3520,8 +3654,13 @@ fn update_summarisation_model_setting(app: &AppHandle, model_id: &str) -> Result
         );
     }
 
-    let advanced_json = serde_json::to_string(&advanced)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to serialize advanced settings: {}", e)))?;
+    let advanced_json = serde_json::to_string(&advanced).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to serialize advanced settings: {}", e),
+        )
+    })?;
 
     settings_set_advanced(app.clone(), advanced_json)?;
     Ok(())
@@ -4206,7 +4345,11 @@ pub async fn chat_add_message_attachment(
     } = args;
 
     if base64_data.trim().is_empty() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "base64Data cannot be empty"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "base64Data cannot be empty",
+        ));
     }
 
     let mut session = super::storage::load_session(&app, &session_id)?
@@ -4257,11 +4400,12 @@ pub async fn chat_add_message_attachment(
     // Persist meta + the updated message (even if it's not the last message).
     let mut meta = session.clone();
     meta.messages = Vec::new();
-    let meta_json = serde_json::to_string(&meta).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let meta_json = serde_json::to_string(&meta)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     session_upsert_meta(app.clone(), meta_json)?;
 
-    let payload =
-        serde_json::to_string(&vec![updated_message.clone()]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let payload = serde_json::to_string(&vec![updated_message.clone()])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     messages_upsert_batch(app.clone(), session_id, payload)?;
 
     Ok(updated_message)
@@ -4277,7 +4421,13 @@ pub async fn search_messages(
 
     let session = match context.load_session(&session_id)? {
         Some(s) => s,
-        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        None => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Session not found",
+            ))
+        }
     };
 
     let query_lower = query.to_lowercase();
@@ -4322,13 +4472,23 @@ pub async fn chat_generate_user_reply(
     // Check if help me reply is enabled
     if let Some(advanced) = &settings.advanced_settings {
         if advanced.help_me_reply_enabled == Some(false) {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Help Me Reply is disabled in settings"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Help Me Reply is disabled in settings",
+            ));
         }
     }
 
     let session = match context.load_session(&session_id)? {
         Some(s) => s,
-        None => return Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        None => {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Session not found",
+            ))
+        }
     };
 
     let character = context.find_character(&session.character_id)?;
@@ -4338,7 +4498,11 @@ pub async fn chat_generate_user_reply(
     let recent_msgs = recent_messages(&session, 10);
 
     if recent_msgs.is_empty() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No conversation history to base reply on"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No conversation history to base reply on",
+        ));
     }
 
     // Use help me reply model if configured, otherwise fall back to default
