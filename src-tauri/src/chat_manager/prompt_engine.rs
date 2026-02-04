@@ -679,6 +679,16 @@ fn has_placeholder(entries: &[SystemPromptEntry], placeholder: &str) -> bool {
         .any(|entry| entry.content.contains(placeholder))
 }
 
+fn is_dynamic_memory_active(settings: &Settings, character: &Character) -> bool {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.enabled)
+        .unwrap_or(false)
+        && character.memory_type.eq_ignore_ascii_case("dynamic")
+}
+
 /// character template > model template > app default template (from database)
 pub fn build_system_prompt_entries(
     app: &AppHandle,
@@ -689,6 +699,7 @@ pub fn build_system_prompt_entries(
     settings: &Settings,
 ) -> Vec<SystemPromptEntry> {
     let mut debug_parts: Vec<Value> = Vec::new();
+    let dynamic_memory_active = is_dynamic_memory_active(settings, character);
 
     let (base_content, base_entries, base_template_source, base_template_id) =
         if let Some(char_template_id) = &character.prompt_template_id {
@@ -736,7 +747,7 @@ pub fn build_system_prompt_entries(
         rendered_entries.push(output_entry);
     }
 
-    if !has_placeholder(&base_entries, "{{context_summary}}") {
+    if dynamic_memory_active && !has_placeholder(&base_entries, "{{context_summary}}") {
         if let Some(summary) = &session.memory_summary {
             if !summary.trim().is_empty() {
                 rendered_entries.push(SystemPromptEntry {
@@ -1128,14 +1139,20 @@ fn render_with_context_internal(
     // Legacy support for {{rules}} placeholder
     result = result.replace("{{rules}}", "");
 
-    let context_summary_text = session
-        .memory_summary
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or("");
-
-    result = result.replace("{{context_summary}}", context_summary_text);
+    let dynamic_memory_active = is_dynamic_memory_active(settings, character);
+    if dynamic_memory_active {
+        let context_summary_text = session
+            .memory_summary
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("");
+        result = result.replace("{{context_summary}}", context_summary_text);
+    } else {
+        result = result.replace("# Context Summary\n    {{context_summary}}", "");
+        result = result.replace("# Context Summary\n{{context_summary}}", "");
+        result = result.replace("{{context_summary}}", "");
+    }
 
     let key_memories_text = if session.memories.is_empty() {
         String::new()

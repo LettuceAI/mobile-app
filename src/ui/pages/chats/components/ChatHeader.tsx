@@ -35,8 +35,15 @@ export function ChatHeader({
   const avatarUrl = useAvatar("character", character?.id, character?.avatarPath, "round");
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
+  const isDynamic = useMemo(() => character?.memoryType === "dynamic", [character?.memoryType]);
 
   useEffect(() => {
+    if (!isDynamic) {
+      setMemoryBusy(false);
+      setMemoryError(null);
+      return;
+    }
+
     let unlistenProcessing: (() => void) | undefined;
     let unlistenSuccess: (() => void) | undefined;
     let unlistenError: (() => void) | undefined;
@@ -77,7 +84,7 @@ export function ChatHeader({
       unlistenSuccess?.();
       unlistenError?.();
     };
-  }, [sessionId, onSessionUpdate]);
+  }, [sessionId, onSessionUpdate, isDynamic]);
 
   const avatarImageUrl = useMemo(() => {
     if (avatarUrl && isImageLike(avatarUrl)) return avatarUrl;
@@ -125,9 +132,9 @@ export function ChatHeader({
             {/* Memory Button */}
             {session &&
               (() => {
-                const isBusy = memoryBusy || session.memoryStatus === "processing";
-                const isError = !!memoryError || session.memoryStatus === "failed";
-                const effectiveError = memoryError || session.memoryError;
+                const isBusy = isDynamic && (memoryBusy || session.memoryStatus === "processing");
+                const isError = isDynamic && (!!memoryError || session.memoryStatus === "failed");
+                const effectiveError = isDynamic ? memoryError || session.memoryError : null;
 
                 return (
                   <button

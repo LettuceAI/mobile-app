@@ -441,6 +441,7 @@ mod tests {
                 definition: Some("A friendly AI assistant".to_string()),
                 description: Some("A friendly AI assistant".to_string()),
                 personality_summary: Some("Friendly and helpful".to_string()),
+                memory_type: "manual".to_string(),
             },
             CharacterInfo {
                 id: "char-2".to_string(),
@@ -448,6 +449,7 @@ mod tests {
                 definition: Some("A technical expert".to_string()),
                 description: Some("A technical expert".to_string()),
                 personality_summary: Some("Technical and precise".to_string()),
+                memory_type: "manual".to_string(),
             },
             CharacterInfo {
                 id: "char-3".to_string(),
@@ -455,6 +457,7 @@ mod tests {
                 definition: None,
                 description: None,
                 personality_summary: None,
+                memory_type: "manual".to_string(),
             },
         ]
     }

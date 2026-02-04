@@ -122,7 +122,11 @@ pub fn resolve_api_key(
             provider_cred.id.as_str()
         ),
     );
-    Err(crate::utils::err_msg(module_path!(), line!(), "Provider credential missing API key"))
+    Err(crate::utils::err_msg(
+        module_path!(),
+        line!(),
+        "Provider credential missing API key",
+    ))
 }
 
 pub async fn record_usage_if_available(
@@ -169,20 +173,31 @@ pub async fn record_usage_if_available(
         metadata: Default::default(),
     };
 
-    // Calculate memory and summary token counts
-    let mut memory_token_count = 0u64;
-    for emb in &session.memory_embeddings {
-        memory_token_count += emb.token_count as u64;
-    }
+    // Calculate memory and summary token counts only when dynamic memory is active.
+    let dynamic_memory_active = context
+        .settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.enabled)
+        .unwrap_or(false)
+        && character.memory_type.eq_ignore_ascii_case("dynamic");
 
-    let summary_token_count = session.memory_summary_token_count as u64;
+    if dynamic_memory_active {
+        let mut memory_token_count = 0u64;
+        for emb in &session.memory_embeddings {
+            memory_token_count += emb.token_count as u64;
+        }
 
-    if memory_token_count > 0 {
-        request_usage.memory_tokens = Some(memory_token_count);
-    }
+        let summary_token_count = session.memory_summary_token_count as u64;
 
-    if summary_token_count > 0 {
-        request_usage.summary_tokens = Some(summary_token_count);
+        if memory_token_count > 0 {
+            request_usage.memory_tokens = Some(memory_token_count);
+        }
+
+        if summary_token_count > 0 {
+            request_usage.summary_tokens = Some(summary_token_count);
+        }
     }
 
     if provider_cred.provider_id.eq_ignore_ascii_case("openrouter") {
