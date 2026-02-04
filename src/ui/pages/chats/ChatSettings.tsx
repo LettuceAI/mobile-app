@@ -597,28 +597,37 @@ function ChatSettingsContent({ character }: { character: Character }) {
     return count;
   }, [currentSession, sessionAdvancedSettings, baseAdvancedSettings]);
 
+  const isDynamic = useMemo(() => {
+    return currentCharacter?.memoryType === "dynamic";
+  }, [currentCharacter?.memoryType]);
+
   const memorySummaryPreview = useMemo(() => {
     if (!currentSession) return "Open a chat session to view memory";
+    if (!isDynamic) {
+      const memoryCount = currentSession.memories?.length ?? 0;
+      if (memoryCount > 0) return "Manual memories available for this session";
+      return "No memories yet — add manual memories from the Memories page";
+    }
     const summary = (currentSession.memorySummary ?? "").trim();
     if (summary) return summary;
     const memoryCount =
       currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
     if (memoryCount > 0) return "No summary yet — memories exist for this session";
     return "No memories yet — open to add summary, tags, and history";
-  }, [currentSession]);
+  }, [currentSession, isDynamic]);
 
   const memoryMetaLine = useMemo(() => {
     if (!currentSession) return "Session required";
     const memoryCount =
-      currentSession.memoryEmbeddings?.length ?? currentSession.memories?.length ?? 0;
-    const toolsCount = currentSession.memoryToolEvents?.length ?? 0;
-    const tokenCount = currentSession.memorySummaryTokenCount ?? 0;
+      (isDynamic ? currentSession.memoryEmbeddings?.length : currentSession.memories?.length) ?? 0;
+    const toolsCount = isDynamic ? (currentSession.memoryToolEvents?.length ?? 0) : 0;
+    const tokenCount = isDynamic ? (currentSession.memorySummaryTokenCount ?? 0) : 0;
     const parts: string[] = [];
     parts.push(`${memoryCount.toLocaleString()} items`);
     if (toolsCount > 0) parts.push(`${toolsCount.toLocaleString()} tool events`);
     if (tokenCount > 0) parts.push(`${tokenCount.toLocaleString()} summary tokens`);
     return parts.join(" • ");
-  }, [currentSession]);
+  }, [currentSession, isDynamic]);
 
   const handleBack = () => {
     if (characterId) {

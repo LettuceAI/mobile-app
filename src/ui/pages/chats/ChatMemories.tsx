@@ -247,10 +247,14 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
 
       if (targetSession) {
         setSession(targetSession);
-        const pinned = await listPinnedMessages(targetSession.id).catch(
-          () => [] as StoredMessage[],
-        );
-        setPinnedMessages(pinned);
+        if (foundChar?.memoryType === "dynamic") {
+          const pinned = await listPinnedMessages(targetSession.id).catch(
+            () => [] as StoredMessage[],
+          );
+          setPinnedMessages(pinned);
+        } else {
+          setPinnedMessages([]);
+        }
       } else {
         setError("Session not found");
         setPinnedMessages([]);
@@ -515,13 +519,16 @@ export function ChatMemoriesPage() {
   const { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin } =
     useMemoryActions(session, (s) => setSession(s));
   const [ui, dispatch] = useReducer(uiReducer, searchParams.get("error"), initUi);
+  const isDynamic = useMemo(() => {
+    return character?.memoryType === "dynamic";
+  }, [character?.memoryType]);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [allModels, setAllModels] = useState<Model[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
 
   const handleSetColdState = useCallback(
     async (memoryIndex: number, isCold: boolean) => {
-      if (!session?.id) return;
+      if (!session?.id || !isDynamic) return;
       dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: memoryIndex });
       try {
         const updated = await setMemoryColdState(session.id, memoryIndex, isCold);
@@ -537,11 +544,11 @@ export function ChatMemoriesPage() {
         dispatch({ type: "SET_MEMORY_TEMP_BUSY", value: null });
       }
     },
-    [session?.id, setSession],
+    [session?.id, isDynamic, setSession],
   );
 
   useEffect(() => {
-    if (!session?.id) return;
+    if (!session?.id || !isDynamic) return;
     let unlisteners: (() => void)[] = [];
 
     const setup = async () => {
@@ -577,21 +584,23 @@ export function ChatMemoriesPage() {
     return () => {
       unlisteners.forEach((u) => u());
     };
-  }, [session?.id, reload]);
+  }, [session?.id, isDynamic, reload]);
 
   useEffect(() => {
     dispatch({ type: "SYNC_SUMMARY_FROM_SESSION", value: session?.memorySummary ?? "" });
   }, [session?.memorySummary]);
 
-  const isDynamic = useMemo(() => {
-    return character?.memoryType === "dynamic";
-  }, [character?.memoryType]);
+  useEffect(() => {
+    if (!isDynamic && ui.activeTab !== "memories") {
+      dispatch({ type: "SET_TAB", tab: "memories" });
+    }
+  }, [isDynamic, ui.activeTab]);
 
   const cycleMap = useMemo(() => {
     const map = new Map<string, string>();
     const textMap = new Map<string, string>();
 
-    if (session?.memoryToolEvents) {
+    if (isDynamic && session?.memoryToolEvents) {
       session.memoryToolEvents.forEach((event: any) => {
         const cycleStr = `${event.windowStart}-${event.windowEnd}`;
         if (event.actions) {
@@ -610,10 +619,10 @@ export function ChatMemoriesPage() {
       });
     }
     return { map, textMap };
-  }, [session?.memoryToolEvents]);
+  }, [isDynamic, session?.memoryToolEvents]);
 
   const memoryItems = useMemo(() => {
-    if (session?.memoryEmbeddings && session.memoryEmbeddings.length > 0) {
+    if (isDynamic && session?.memoryEmbeddings && session.memoryEmbeddings.length > 0) {
       return session.memoryEmbeddings
         .map((emb, index) => {
           const id = emb.id || `mem-${index}`;
@@ -677,7 +686,7 @@ export function ChatMemoriesPage() {
         if (a.isCold !== b.isCold) return a.isCold ? 1 : -1;
         return b.importanceScore - a.importanceScore;
       });
-  }, [session, cycleMap]);
+  }, [isDynamic, session, cycleMap]);
 
   const filteredMemories = useMemo(() => {
     if (!ui.searchTerm.trim()) return memoryItems;
@@ -691,20 +700,20 @@ export function ChatMemoriesPage() {
     const ai = memoryItems.filter((m) => m.isAi).length;
     const user = total - ai;
     const totalMemoryTokens = memoryItems.reduce((sum, m) => sum + m.tokenCount, 0);
-    const summaryTokens = session?.memorySummaryTokenCount || 0;
+    const summaryTokens = isDynamic ? session?.memorySummaryTokenCount || 0 : 0;
     const totalTokens = totalMemoryTokens + summaryTokens;
     return { total, ai, user, totalMemoryTokens, summaryTokens, totalTokens };
-  }, [memoryItems, session?.memorySummaryTokenCount]);
+  }, [isDynamic, memoryItems, session?.memorySummaryTokenCount]);
 
   const refreshPinnedMessages = useCallback(async () => {
-    if (!session?.id) return;
+    if (!session?.id || !isDynamic) return;
     const pinned = await listPinnedMessages(session.id).catch(() => [] as StoredMessage[]);
     setPinnedMessages(pinned);
-  }, [session?.id, setPinnedMessages]);
+  }, [isDynamic, session?.id, setPinnedMessages]);
 
   const handleUnpin = useCallback(
     async (messageId: string) => {
-      if (!session) return;
+      if (!session || !isDynamic) return;
       try {
         await toggleMessagePin(session.id, messageId);
         await refreshPinnedMessages();
@@ -714,7 +723,7 @@ export function ChatMemoriesPage() {
         dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to unpin message" });
       }
     },
-    [session, refreshPinnedMessages],
+    [session, isDynamic, refreshPinnedMessages],
   );
 
   const handleScrollToMessage = useCallback(
@@ -787,6 +796,7 @@ export function ChatMemoriesPage() {
   const [retryingWithModel, setRetryingWithModel] = useState(false);
 
   useEffect(() => {
+    if (!isDynamic) return;
     // Load available models when component mounts or menu opens
     const loadModels = async () => {
       setLoadingModels(true);
@@ -800,7 +810,7 @@ export function ChatMemoriesPage() {
       }
     };
     void loadModels();
-  }, []);
+  }, [isDynamic]);
 
   const filteredModels = useMemo(() => {
     if (!modelSearchQuery) return allModels;
@@ -810,9 +820,20 @@ export function ChatMemoriesPage() {
     );
   }, [allModels, modelSearchQuery]);
 
+  const tabs = useMemo(() => {
+    if (!isDynamic) {
+      return [{ id: "memories" as const, icon: Bot, label: "Memories" }];
+    }
+    return [
+      { id: "memories" as const, icon: Bot, label: "Memories" },
+      { id: "pinned" as const, icon: Pin, label: "Pinned" },
+      { id: "tools" as const, icon: Clock, label: "Activity" },
+    ];
+  }, [isDynamic]);
+
   const handleRetryWithModel = useCallback(
     async (modelId?: string) => {
-      if (!session?.id) return;
+      if (!session?.id || !isDynamic) return;
       setRetryingWithModel(true);
       setShowModelSelector(false);
       dispatch({ type: "SET_RETRY_STATUS", value: "retrying" });
@@ -834,7 +855,7 @@ export function ChatMemoriesPage() {
         setRetryingWithModel(false);
       }
     },
-    [session?.id, reload],
+    [session?.id, isDynamic, reload],
   );
 
   const handleDismissError = useCallback(async () => {
@@ -864,7 +885,7 @@ export function ChatMemoriesPage() {
   }, [reload, session?.id]);
 
   const handleTriggerManual = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || !isDynamic) return;
     try {
       await storageBridge.triggerDynamicMemory(sessionId);
       dispatch({ type: "SET_ACTION_ERROR", value: null });
@@ -874,7 +895,7 @@ export function ChatMemoriesPage() {
         value: err?.message || "Failed to trigger memory processing",
       });
     }
-  }, [sessionId]);
+  }, [sessionId, isDynamic]);
 
   if (loading) {
     return (
@@ -937,7 +958,7 @@ export function ChatMemoriesPage() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 ml-auto">
-            {session.memoryStatus === "processing" && (
+            {isDynamic && session.memoryStatus === "processing" && (
               <div
                 className={cn(
                   radius.full,
@@ -955,11 +976,13 @@ export function ChatMemoriesPage() {
       <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
         {/* Error Banner */}
         {(ui.actionError ||
-          session.memoryError ||
-          ui.retryStatus !== "idle" ||
-          session.memoryStatus === "processing") && (
+          (isDynamic &&
+            (session.memoryError ||
+              ui.retryStatus !== "idle" ||
+              session.memoryStatus === "processing"))) && (
           <div className="px-3 pt-3">
-            {ui.retryStatus === "retrying" || session.memoryStatus === "processing" ? (
+            {isDynamic &&
+            (ui.retryStatus === "retrying" || session.memoryStatus === "processing") ? (
               <div
                 className={cn(
                   radius.md,
@@ -975,7 +998,7 @@ export function ChatMemoriesPage() {
                   </p>
                 </div>
               </div>
-            ) : ui.retryStatus === "success" ? (
+            ) : isDynamic && ui.retryStatus === "success" ? (
               <div
                 className={cn(
                   radius.md,
@@ -993,7 +1016,7 @@ export function ChatMemoriesPage() {
                   <X size={16} />
                 </button>
               </div>
-            ) : ui.actionError || session.memoryError ? (
+            ) : ui.actionError || (isDynamic && session.memoryError) ? (
               <div
                 className={cn(
                   radius.md,
@@ -1003,17 +1026,23 @@ export function ChatMemoriesPage() {
                 <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
                 <div className="flex-1 text-sm text-red-200">
                   <div className="flex items-start justify-between">
-                    <p className="font-semibold mb-1">Memory System Error</p>
-                    <button
-                      onClick={handleDismissError}
-                      className="text-red-400/60 hover:text-red-400 transition-colors"
-                      title="Dismiss error"
-                    >
-                      <X size={16} />
-                    </button>
+                    <p className="font-semibold mb-1">
+                      {isDynamic ? "Memory System Error" : "Error"}
+                    </p>
+                    {isDynamic && (
+                      <button
+                        onClick={handleDismissError}
+                        className="text-red-400/60 hover:text-red-400 transition-colors"
+                        title="Dismiss error"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
                   </div>
-                  <p className="opacity-90">{ui.actionError || session.memoryError}</p>
-                  {(ui.actionError || session.memoryError) && (
+                  <p className="opacity-90">
+                    {ui.actionError || (isDynamic ? session.memoryError : null)}
+                  </p>
+                  {isDynamic && (ui.actionError || session.memoryError) && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         onClick={handleRetry}
@@ -1473,34 +1502,36 @@ export function ChatMemoriesPage() {
                                       )}
                                     </button>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        await handleTogglePin(item.index);
-                                        dispatch({ type: "SET_ACTION_ERROR", value: null });
-                                      } catch (err: any) {
-                                        console.error("Failed to toggle pin:", err);
-                                        dispatch({
-                                          type: "SET_ACTION_ERROR",
-                                          value: err?.message || "Failed to toggle pin",
-                                        });
-                                      }
-                                    }}
-                                    className={cn(
-                                      "flex items-center justify-center",
-                                      radius.lg,
-                                      item.isPinned
-                                        ? "bg-pink-500/20 text-pink-400"
-                                        : "bg-white/5 text-white/50",
-                                      "transition-all hover:bg-pink-500/20 hover:text-pink-400",
-                                      "active:scale-95",
-                                    )}
-                                    aria-label={item.isPinned ? "Unpin memory" : "Pin memory"}
-                                  >
-                                    <Pin size={13} />
-                                  </button>
+                                  {isDynamic && (
+                                    <button
+                                      type="button"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await handleTogglePin(item.index);
+                                          dispatch({ type: "SET_ACTION_ERROR", value: null });
+                                        } catch (err: any) {
+                                          console.error("Failed to toggle pin:", err);
+                                          dispatch({
+                                            type: "SET_ACTION_ERROR",
+                                            value: err?.message || "Failed to toggle pin",
+                                          });
+                                        }
+                                      }}
+                                      className={cn(
+                                        "flex items-center justify-center",
+                                        radius.lg,
+                                        item.isPinned
+                                          ? "bg-pink-500/20 text-pink-400"
+                                          : "bg-white/5 text-white/50",
+                                        "transition-all hover:bg-pink-500/20 hover:text-pink-400",
+                                        "active:scale-95",
+                                      )}
+                                      aria-label={item.isPinned ? "Unpin memory" : "Pin memory"}
+                                    >
+                                      <Pin size={13} />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -1605,7 +1636,7 @@ export function ChatMemoriesPage() {
               )}
             </div>
           </div>
-        ) : ui.activeTab === "tools" ? (
+        ) : isDynamic && ui.activeTab === "tools" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
             <SectionHeader
               icon={Clock}
@@ -1646,7 +1677,7 @@ export function ChatMemoriesPage() {
             />
             <ToolLog events={(session.memoryToolEvents as MemoryToolEvent[]) || []} />
           </div>
-        ) : (
+        ) : isDynamic && ui.activeTab === "pinned" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
             <SectionHeader
               icon={Pin}
@@ -1780,7 +1811,7 @@ export function ChatMemoriesPage() {
               </div>
             )}
           </div>
-        )}
+        ) : null}
       </main>
 
       {/* Bottom Tab Bar */}
@@ -1791,11 +1822,7 @@ export function ChatMemoriesPage() {
         )}
       >
         <div className={cn(radius.lg, "grid grid-cols-3 gap-2 p-1", colors.surface.elevated)}>
-          {[
-            { id: "memories" as const, icon: Bot, label: "Memories" },
-            { id: "pinned" as const, icon: Pin, label: "Pinned" },
-            { id: "tools" as const, icon: Clock, label: "Activity" },
-          ].map(({ id, icon: Icon, label }) => (
+          {tabs.map(({ id, icon: Icon, label }) => (
             <button
               key={id}
               onClick={() => dispatch({ type: "SET_TAB", tab: id })}
