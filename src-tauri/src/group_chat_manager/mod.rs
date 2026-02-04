@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
+use rusqlite::OptionalExtension;
+
 use crate::abort_manager::AbortRegistry;
 use crate::api::{api_request, ApiRequest};
 use crate::models::get_model_pricing;
@@ -580,6 +582,69 @@ fn conversation_window(messages: &[GroupMessage], limit: usize) -> Vec<GroupMess
     convo
 }
 
+fn resolve_group_conversation_index_by_message_id(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+    message_id: &str,
+) -> Result<Option<usize>, String> {
+    let created_at: Option<i64> = conn
+        .query_row(
+            "SELECT created_at FROM group_messages
+             WHERE session_id = ?1 AND id = ?2 AND (role = 'user' OR role = 'assistant')",
+            rusqlite::params![session_id, message_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let Some(created_at) = created_at else {
+        return Ok(None);
+    };
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(1) FROM group_messages
+             WHERE session_id = ?1 AND (role = 'user' OR role = 'assistant')
+               AND (created_at < ?2 OR (created_at = ?2 AND id <= ?3))",
+            rusqlite::params![session_id, created_at, message_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    Ok(Some(count.max(0) as usize))
+}
+
+/// Resolve the last valid cursor (windowEnd) from memory tool events by anchoring on message IDs.
+/// Returns (window_end_index, cursor_rewound).
+fn resolve_last_valid_group_window_end(
+    conn: &rusqlite::Connection,
+    session: &GroupSession,
+) -> Result<(usize, bool), String> {
+    if session.memory_tool_events.is_empty() {
+        return Ok((0, false));
+    }
+
+    for (rev_idx, event) in session.memory_tool_events.iter().rev().enumerate() {
+        let end_id = event
+            .get("windowMessageIds")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.last())
+            .and_then(|v| v.as_str());
+
+        let Some(end_id) = end_id else {
+            continue;
+        };
+
+        if let Some(window_end) =
+            resolve_group_conversation_index_by_message_id(conn, &session.id, end_id)?
+        {
+            return Ok((window_end, rev_idx != 0));
+        }
+    }
+
+    Ok((0, true))
+}
+
 fn fetch_group_conversation_messages_range(
     conn: &rusqlite::Connection,
     session_id: &str,
@@ -832,33 +897,18 @@ async fn process_group_dynamic_memory_cycle(
 
     // Check if enough new messages since last run (match normal chat behavior)
     // Use last_window_end from memory_tool_events to track progress
-    let mut last_window_end = session
-        .memory_tool_events
-        .last()
-        .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
-        .unwrap_or(0) as usize;
-    if total_convo < last_window_end {
-        log_info(
-            app,
-            "group_dynamic_memory",
-            format!(
-                "conversation shrank (total_convo={} < last_window_end={}); resetting window end",
-                total_convo, last_window_end
-            ),
-        );
-        last_window_end = 0;
-    }
+    let (last_window_end, cursor_rewound) = resolve_last_valid_group_window_end(&*conn, session)?;
 
     log_info(
         app,
         "group_dynamic_memory",
         format!(
-            "considering dynamic memory: total_convo={} window_size={} last_window_end={}",
-            total_convo, window_size, last_window_end
+            "considering dynamic memory: total_convo={} window_size={} last_window_end={} cursor_rewound={}",
+            total_convo, window_size, last_window_end, cursor_rewound
         ),
     );
 
-    if total_convo <= last_window_end {
+    if !cursor_rewound && total_convo <= last_window_end {
         log_info(
             app,
             "group_dynamic_memory",
@@ -871,7 +921,7 @@ async fn process_group_dynamic_memory_cycle(
     }
 
     let new_convo = total_convo.saturating_sub(last_window_end);
-    if new_convo < window_size {
+    if !cursor_rewound && new_convo < window_size {
         let next_window_end = last_window_end + window_size;
         log_info(
             app,
@@ -886,7 +936,7 @@ async fn process_group_dynamic_memory_cycle(
 
     // Cursor-based delta summary window: summarize everything since last_window_end.
     // If backlog > window_size, include the whole backlog in this run (one-time catch-up).
-    let mut window_start = last_window_end;
+    let mut window_start = if cursor_rewound { 0 } else { last_window_end };
     let mut window_end = total_convo;
     let convo_window = match fetch_group_conversation_messages_range(
         &*conn,
@@ -1058,7 +1108,7 @@ async fn process_group_dynamic_memory_cycle(
         summary_model,
         &api_key,
         &convo_window,
-        if session.memory_summary.is_empty() {
+        if cursor_rewound || session.memory_summary.is_empty() {
             None
         } else {
             Some(session.memory_summary.as_str())

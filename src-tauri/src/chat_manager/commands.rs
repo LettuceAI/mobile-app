@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::api::{api_request, ApiRequest};
 use crate::chat_manager::storage::{get_base_prompt, PromptType};
@@ -209,6 +209,76 @@ fn conversation_count(messages: &[StoredMessage]) -> usize {
         .iter()
         .filter(|m| m.role == "user" || m.role == "assistant")
         .count()
+}
+
+fn resolve_conversation_index_by_message_id(
+    app: &AppHandle,
+    session_id: &str,
+    message_id: &str,
+) -> Result<Option<usize>, String> {
+    let conn = open_db(app)?;
+
+    // Find the message's position in the canonical ordering (created_at ASC, id ASC),
+    // restricted to conversation messages.
+    let created_at: Option<i64> = conn
+        .query_row(
+            "SELECT created_at FROM messages WHERE session_id = ?1 AND id = ?2 AND (role = 'user' OR role = 'assistant')",
+            params![session_id, message_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let Some(created_at) = created_at else {
+        return Ok(None);
+    };
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(1) FROM messages
+             WHERE session_id = ?1 AND (role = 'user' OR role = 'assistant')
+               AND (created_at < ?2 OR (created_at = ?2 AND id <= ?3))",
+            params![session_id, created_at, message_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    Ok(Some(count.max(0) as usize))
+}
+
+/// Resolve the last valid cursor (windowEnd) from memory tool events by anchoring on message IDs.
+/// This self-heals when messages are deleted (counts shrink) or the conversation is rewound.
+/// Returns (window_end_index, cursor_rewound).
+fn resolve_last_valid_window_end(
+    app: &AppHandle,
+    session: &Session,
+) -> Result<(usize, bool), String> {
+    if session.memory_tool_events.is_empty() {
+        return Ok((0, false));
+    }
+
+    // Walk backwards to find the newest event whose last summarized message still exists.
+    for (rev_idx, event) in session.memory_tool_events.iter().rev().enumerate() {
+        let end_id = event
+            .get("windowMessageIds")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.last())
+            .and_then(|v| v.as_str());
+
+        let Some(end_id) = end_id else {
+            continue;
+        };
+
+        if let Some(window_end) =
+            resolve_conversation_index_by_message_id(app, &session.id, end_id)?
+        {
+            // If we had to skip one or more newer events, the conversation was rewound.
+            return Ok((window_end, rev_idx != 0));
+        }
+    }
+
+    // No event could be anchored; treat as rewind (cursor reset).
+    Ok((0, true))
 }
 
 fn fetch_conversation_messages_range(
@@ -3274,35 +3344,21 @@ async fn process_dynamic_memory_cycle_with_model(
     //   then future cycles continue at window_size cadence.
     // - Forced cycles (retry/manual trigger/model override) summarize the most recent window_size
     //   messages, even if there are no new messages.
-    let mut last_window_end = session
-        .memory_tool_events
-        .last()
-        .and_then(|e| e.get("windowEnd").and_then(|v| v.as_u64()))
-        .unwrap_or(0) as usize;
-    if total_convo_at_start < last_window_end {
-        log_info(
-            app,
-            "dynamic_memory",
-            format!(
-                "conversation shrank (total_convo_at_start={} < last_window_end={}); resetting window end",
-                total_convo_at_start, last_window_end
-            ),
-        );
-        last_window_end = 0;
-    }
+    let (last_window_end, cursor_rewound) = resolve_last_valid_window_end(app, session)?;
 
     let new_convo = total_convo_at_start.saturating_sub(last_window_end);
     log_info(
         app,
         "dynamic_memory",
         format!(
-            "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={} new_convo={}",
-            total_convo_at_start, window_size, last_window_end, new_convo
+            "considering dynamic memory: total_convo_at_start={} window_size={} last_window_end={} new_convo={} cursor_rewound={}",
+            total_convo_at_start, window_size, last_window_end, new_convo, cursor_rewound
         ),
     );
 
     // For retry/manual trigger/model override, skip the "enough new messages" gate.
-    if model_id_override.is_none() && !force {
+    // Also skip if we detected a rewind; we need to rebuild the summary/memory state.
+    if model_id_override.is_none() && !force && !cursor_rewound {
         if total_convo_at_start <= last_window_end {
             log_info(
                 app,
@@ -3329,7 +3385,9 @@ async fn process_dynamic_memory_cycle_with_model(
         }
     }
 
-    let mut window_start = if force || model_id_override.is_some() {
+    let mut window_start = if cursor_rewound {
+        0
+    } else if force || model_id_override.is_some() {
         total_convo_at_start.saturating_sub(window_size)
     } else {
         last_window_end
@@ -3467,8 +3525,8 @@ async fn process_dynamic_memory_cycle_with_model(
         app,
         "dynamic_memory",
         format!(
-            "running summarisation with model={} window_size={} total_convo_at_start={} window_ids={:?}",
-            summary_model.name, window_size, total_convo_at_start, window_message_ids
+            "running summarisation with model={} window_size={} total_convo_at_start={} window_start={} window_end={} window_ids={:?}",
+            summary_model.name, window_size, total_convo_at_start, window_start, window_end, window_message_ids
         ),
     );
     let _ = app.emit(
@@ -3482,7 +3540,11 @@ async fn process_dynamic_memory_cycle_with_model(
         summary_model,
         &api_key,
         &convo_window,
-        session.memory_summary.as_deref(),
+        if cursor_rewound {
+            None
+        } else {
+            session.memory_summary.as_deref()
+        },
         character,
         session,
         settings,
