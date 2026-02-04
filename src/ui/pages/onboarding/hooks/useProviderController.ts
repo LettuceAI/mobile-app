@@ -76,7 +76,8 @@ export function useProviderController(): ControllerReturn {
 
   const handleTestConnection = useCallback(async () => {
     const isLocalProvider = ["ollama", "lmstudio"].includes(selectedProviderId || "");
-    if (!selectedProviderId || isLocalProvider || !apiKey.trim()) {
+    const skipValidationProvider = ["chutes"].includes(selectedProviderId || "");
+    if (!selectedProviderId || isLocalProvider || skipValidationProvider || !apiKey.trim()) {
       return;
     }
 
@@ -143,7 +144,7 @@ export function useProviderController(): ControllerReturn {
       const credentialId = crypto.randomUUID();
       const trimmedKey = apiKey.trim();
 
-      const requiresVerification = ["chutes", "openai", "anthropic", "openrouter"].includes(
+      const requiresVerification = ["openai", "anthropic", "openrouter"].includes(
         selectedProviderId,
       );
 
@@ -228,7 +229,10 @@ export function useProviderController(): ControllerReturn {
 
   const canTest = useMemo(() => {
     const isLocalProvider = ["ollama", "lmstudio"].includes(selectedProviderId || "");
-    return Boolean(selectedProviderId && !isLocalProvider && apiKey.trim().length > 0);
+    const skipValidationProvider = ["chutes"].includes(selectedProviderId || "");
+    return Boolean(
+      selectedProviderId && !isLocalProvider && !skipValidationProvider && apiKey.trim().length > 0,
+    );
   }, [apiKey, selectedProviderId]);
 
   const canSave = useMemo(() => {

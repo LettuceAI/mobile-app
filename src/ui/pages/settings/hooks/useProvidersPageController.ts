@@ -151,7 +151,7 @@ export function useProvidersPageController(): ControllerReturn {
       );
       const requiresVerification =
         !isLocalProvider &&
-        ["chutes", "openai", "anthropic", "openrouter", "groq", "mistral"].includes(
+        ["openai", "anthropic", "openrouter", "groq", "mistral"].includes(
           editorProvider.providerId,
         );
       const trimmedKey = apiKey.trim();

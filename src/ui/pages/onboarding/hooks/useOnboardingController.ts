@@ -200,7 +200,8 @@ export function useOnboardingController(): OnboardingController {
   }, []);
 
   const handleTestConnection = useCallback(async () => {
-    if (!state.selectedProviderId || !state.apiKey.trim()) return;
+    const skipValidationProvider = ["chutes"].includes(state.selectedProviderId || "");
+    if (!state.selectedProviderId || skipValidationProvider || !state.apiKey.trim()) return;
 
     dispatch({ type: "SET_TESTING", payload: true });
     dispatch({ type: "SET_TEST_RESULT", payload: null });
@@ -253,8 +254,7 @@ export function useOnboardingController(): OnboardingController {
         selectedProviderId,
       );
       const requiresVerification =
-        !isLocalProvider &&
-        ["chutes", "openai", "anthropic", "openrouter"].includes(selectedProviderId);
+        !isLocalProvider && ["openai", "anthropic", "openrouter"].includes(selectedProviderId);
 
       // Local providers require base URL
       if (["ollama", "lmstudio"].includes(selectedProviderId) && !baseUrl?.trim()) {
@@ -446,7 +446,10 @@ export function useOnboardingController(): OnboardingController {
   }, [state.memoryType, navigate, saveMemorySettings]);
 
   const canTestProvider = useMemo(() => {
-    return Boolean(state.selectedProviderId && state.apiKey.trim().length > 0);
+    const skipValidationProvider = ["chutes"].includes(state.selectedProviderId || "");
+    return Boolean(
+      state.selectedProviderId && !skipValidationProvider && state.apiKey.trim().length > 0,
+    );
   }, [state.selectedProviderId, state.apiKey]);
 
   const canSaveProvider = useMemo(() => {
