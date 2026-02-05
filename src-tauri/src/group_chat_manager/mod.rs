@@ -24,10 +24,10 @@ use crate::usage::add_usage_record;
 use crate::usage::tracking::{RequestUsage, UsageFinishReason, UsageOperationType};
 
 use crate::chat_manager::dynamic_memory::{
-    apply_memory_decay, calculate_hot_memory_tokens, effective_group_dynamic_memory_settings,
-    enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id, mark_memories_accessed,
-    normalize_query_text, promote_cold_memories, search_cold_memory_indices_by_keyword,
-    select_relevant_memory_indices, trim_memories_to_max,
+    apply_memory_decay, calculate_hot_memory_tokens, cosine_similarity,
+    effective_group_dynamic_memory_settings, enforce_hot_memory_budget, ensure_pinned_hot,
+    generate_memory_id, mark_memories_accessed, normalize_query_text, promote_cold_memories,
+    search_cold_memory_indices_by_keyword, select_relevant_memory_indices, trim_memories_to_max,
 };
 use crate::chat_manager::prompts::{
     self, APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
@@ -1590,6 +1590,23 @@ async fn run_group_memory_tool_update(
                                 None
                             }
                         };
+                    if let Some(ref new_emb) = embedding {
+                        let is_duplicate = session.memory_embeddings.iter().any(|existing| {
+                            !existing.embedding.is_empty()
+                                && cosine_similarity(new_emb, &existing.embedding) > 0.85
+                        });
+                        if is_duplicate {
+                            log_info(app, "group_dynamic_memory", format!("Skipping duplicate memory (cosine > 0.85): {}", &text));
+                            actions_log.push(json!({
+                                "name": "create_memory",
+                                "arguments": call.arguments,
+                                "skipped": true,
+                                "reason": "duplicate (cosine > 0.85)",
+                                "timestamp": now_millis().unwrap_or_default(),
+                            }));
+                            continue;
+                        }
+                    }
                     let token_count = crate::tokenizer::count_tokens(app, &text).unwrap_or(0);
                     let is_pinned = call
                         .arguments

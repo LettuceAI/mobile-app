@@ -13,10 +13,11 @@ use crate::utils::{log_error, log_info, log_warn, now_millis};
 
 use super::dynamic_memory::{
     apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled,
-    dynamic_cold_threshold, dynamic_decay_rate, dynamic_hot_memory_token_budget,
-    dynamic_max_entries, dynamic_min_similarity, dynamic_window_size, enforce_hot_memory_budget,
-    ensure_pinned_hot, generate_memory_id, mark_memories_accessed, normalize_query_text,
-    promote_cold_memories, search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
+    cosine_similarity, dynamic_cold_threshold, dynamic_decay_rate,
+    dynamic_hot_memory_token_budget, dynamic_max_entries, dynamic_min_similarity,
+    dynamic_window_size, enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id,
+    mark_memories_accessed, normalize_query_text, promote_cold_memories,
+    search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
     trim_memories_to_max, MEMORY_ID_SPACE,
 };
 use super::prompt_engine;
@@ -3941,6 +3942,23 @@ async fn run_memory_tool_update(
                                 None
                             }
                         };
+                    if let Some(ref new_emb) = embedding {
+                        let is_duplicate = session.memory_embeddings.iter().any(|existing| {
+                            !existing.embedding.is_empty()
+                                && cosine_similarity(new_emb, &existing.embedding) > 0.85
+                        });
+                        if is_duplicate {
+                            log_info(app, "dynamic_memory", format!("Skipping duplicate memory (cosine > 0.85): {}", &text));
+                            actions_log.push(json!({
+                                "name": "create_memory",
+                                "arguments": call.arguments,
+                                "skipped": true,
+                                "reason": "duplicate (cosine > 0.85)",
+                                "timestamp": now_millis().unwrap_or_default(),
+                            }));
+                            continue;
+                        }
+                    }
                     let token_count = crate::tokenizer::count_tokens(app, &text).unwrap_or(0);
                     // Check if memory should be pinned
                     let is_pinned = call
