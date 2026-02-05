@@ -363,7 +363,8 @@ pub fn apply_memory_decay<E: MemoryEntry>(
             continue;
         }
 
-        let next_score = (mem.importance_score() - decay_rate).max(0.0);
+        let adaptive_rate = decay_rate / (1.0 + (mem.access_count() as f32).sqrt());
+        let next_score = (mem.importance_score() - adaptive_rate).max(0.0);
         mem.set_importance_score(next_score);
         decayed += 1;
 
