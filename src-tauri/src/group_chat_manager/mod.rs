@@ -1649,20 +1649,39 @@ async fn run_group_memory_tool_update(
                         };
 
                     if let Some(idx) = target_idx {
-                        if idx < session.memory_embeddings.len() {
-                            let removed = session.memory_embeddings.remove(idx);
-                            log_info(
-                                app,
-                                "group_dynamic_memory",
-                                format!("Deleted memory {}", removed.id),
-                            );
+                        let confidence = call.arguments.get("confidence").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                        if confidence < 0.7 {
+                            // Soft-delete: move to cold storage instead of removing
+                            if idx < session.memory_embeddings.len() {
+                                let cold_threshold = dynamic_settings.cold_threshold;
+                                session.memory_embeddings[idx].is_cold = true;
+                                session.memory_embeddings[idx].importance_score = cold_threshold;
+                                log_info(app, "group_dynamic_memory", format!("Soft-deleted memory (confidence={:.2})", confidence));
+                            }
+                            actions_log.push(json!({
+                                "name": "delete_memory",
+                                "arguments": call.arguments,
+                                "softDelete": true,
+                                "confidence": confidence,
+                                "timestamp": now_millis().unwrap_or_default(),
+                                "updatedMemories": format_memories_with_ids(session),
+                            }));
+                        } else {
+                            if idx < session.memory_embeddings.len() {
+                                let removed = session.memory_embeddings.remove(idx);
+                                log_info(
+                                    app,
+                                    "group_dynamic_memory",
+                                    format!("Deleted memory {}", removed.id),
+                                );
+                            }
+                            actions_log.push(json!({
+                                "name": "delete_memory",
+                                "arguments": call.arguments,
+                                "timestamp": now_millis().unwrap_or_default(),
+                                "updatedMemories": format_memories_with_ids(session),
+                            }));
                         }
-                        actions_log.push(json!({
-                            "name": "delete_memory",
-                            "arguments": call.arguments,
-                            "timestamp": now_millis().unwrap_or_default(),
-                            "updatedMemories": format_memories_with_ids(session),
-                        }));
                     } else {
                         log_warn(
                             app,
@@ -1778,11 +1797,12 @@ fn build_memory_tool_config() -> ToolConfig {
             },
             ToolDefinition {
                 name: "delete_memory".to_string(),
-                description: Some("Delete an outdated or redundant memory.".to_string()),
+                description: Some("Delete an outdated or redundant memory. Low confidence (< 0.7) triggers soft-delete to cold storage.".to_string()),
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "text": { "type": "string", "description": "Memory ID (6-digit) or exact text to remove" }
+                        "text": { "type": "string", "description": "Memory ID (6-digit) or exact text to remove" },
+                        "confidence": { "type": "number", "description": "Confidence that this memory should be deleted (0.0-1.0). Below 0.7 triggers soft-delete to cold storage." }
                     },
                     "required": ["text"]
                 }),
