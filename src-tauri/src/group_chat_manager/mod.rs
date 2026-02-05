@@ -1174,14 +1174,54 @@ async fn process_group_dynamic_memory_cycle(
         Some(session.memory_summary.clone())
     };
 
+    // Step 1: Summarize messages
     log_info(
         app,
         "group_dynamic_memory",
-        "invoking single-pass memory+summary cycle",
+        "invoking summarize_group_messages",
     );
 
-    // Run memory tool update (includes summary generation)
-    let (summary_opt, actions) = match run_group_memory_tool_update(
+    let summary = match summarize_group_messages(
+        app,
+        summary_provider,
+        summary_model,
+        &api_key,
+        &convo_window,
+        prior_summary.as_deref(),
+        settings,
+    )
+    .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            log_error(
+                app,
+                "group_dynamic_memory",
+                format!("summarization failed: {}", err),
+            );
+            record_group_dynamic_memory_error(
+                app,
+                session,
+                pool,
+                &err,
+                "summarization",
+                window_start,
+                window_end,
+                &window_message_ids,
+                prior_summary.as_deref(),
+            );
+            return Ok(());
+        }
+    };
+
+    // Step 2: Run memory tool update
+    log_info(
+        app,
+        "group_dynamic_memory",
+        "invoking run_group_memory_tool_update",
+    );
+
+    let actions = match run_group_memory_tool_update(
         app,
         summary_provider,
         summary_model,
@@ -1189,7 +1229,7 @@ async fn process_group_dynamic_memory_cycle(
         session,
         settings,
         &dynamic_settings,
-        prior_summary.as_deref(),
+        &summary,
         &convo_window,
     )
     .await
@@ -1215,11 +1255,6 @@ async fn process_group_dynamic_memory_cycle(
             return Ok(());
         }
     };
-
-    // Update summary
-    let summary = summary_opt.unwrap_or_else(|| {
-        session.memory_summary.clone()
-    });
     log_info(
         app,
         "group_dynamic_memory",
@@ -1478,9 +1513,9 @@ async fn run_group_memory_tool_update(
     session: &mut GroupSession,
     settings: &Settings,
     dynamic_settings: &DynamicMemorySettings,
-    prior_summary: Option<&str>,
+    summary: &str,
     convo_window: &[GroupMessage],
-) -> Result<(Option<String>, Vec<Value>), String> {
+) -> Result<Vec<Value>, String> {
     let tool_config = build_memory_tool_config();
     let max_entries = dynamic_settings.max_entries.max(1) as usize;
 
@@ -1523,15 +1558,12 @@ async fn run_group_memory_tool_update(
         .iter()
         .map(|m| format!("{}: {}", m.role, m.content))
         .collect();
-    let prev_summary_text = prior_summary
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or("No previous summary.");
 
     messages_for_api.push(json!({
         "role": "user",
         "content": format!(
-            "Previous summary:\n{}\n\nRecent messages:\n{}\n\nCurrent memories (with IDs):\n{}\n\nFirst call write_summary to produce an updated cumulative summary, then manage memories (create/delete/pin/unpin), then call done.",
-            prev_summary_text,
+            "Group conversation summary:\n{}\n\nRecent messages:\n{}\n\nCurrent memories (with IDs):\n{}",
+            summary,
             convo_text.join("\n"),
             if memory_lines.is_empty() { "none".to_string() } else { memory_lines.join("\n") }
         )
@@ -1609,23 +1641,12 @@ async fn run_group_memory_tool_update(
             "group_dynamic_memory",
             "memory tool call returned no tool usage",
         );
-        return Ok((None, Vec::new()));
+        return Ok(Vec::new());
     }
 
     let mut actions_log: Vec<Value> = Vec::new();
-    let mut extracted_summary: Option<String> = None;
     for call in calls {
         match call.name.as_str() {
-            "write_summary" => {
-                if let Some(s) = call.arguments.get("summary").and_then(|v| v.as_str()) {
-                    extracted_summary = Some(s.to_string());
-                    actions_log.push(json!({
-                        "name": "write_summary",
-                        "arguments": call.arguments,
-                        "timestamp": now_millis().unwrap_or_default(),
-                    }));
-                }
-            }
             "create_memory" => {
                 if let Some(text) = extract_text_argument(&call) {
                     let mem_id = generate_memory_id();
@@ -1799,7 +1820,7 @@ async fn run_group_memory_tool_update(
         }
     }
 
-    Ok((extracted_summary, actions_log))
+    Ok(actions_log)
 }
 
 fn extract_text_argument(call: &ToolCall) -> Option<String> {
@@ -1832,17 +1853,6 @@ fn sanitize_memory_id(id: &str) -> String {
 fn build_memory_tool_config() -> ToolConfig {
     ToolConfig {
         tools: vec![
-            ToolDefinition {
-                name: "write_summary".to_string(),
-                description: Some("Write a concise, cumulative summary of the conversation so far. Call this FIRST before managing memories.".to_string()),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "summary": { "type": "string", "description": "Cumulative summary integrating previous summary with new events" }
-                    },
-                    "required": ["summary"]
-                }),
-            },
             ToolDefinition {
                 name: "create_memory".to_string(),
                 description: Some(
