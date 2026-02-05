@@ -1603,6 +1603,7 @@ async fn run_group_memory_tool_update(
                         .get("important")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
+                    let category = call.arguments.get("category").and_then(|v| v.as_str()).map(String::from);
 
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
@@ -1615,6 +1616,7 @@ async fn run_group_memory_tool_update(
                         importance_score: 1.0,
                         is_pinned,
                         access_count: 0,
+                        category,
                     });
 
                     actions_log.push(json!({
@@ -1790,7 +1792,12 @@ fn build_memory_tool_config() -> ToolConfig {
                     "type": "object",
                     "properties": {
                         "text": { "type": "string", "description": "Concise memory to store" },
-                        "important": { "type": "boolean", "description": "If true, memory will be pinned (never decays)" }
+                        "important": { "type": "boolean", "description": "If true, memory will be pinned (never decays)" },
+                        "category": {
+                            "type": "string",
+                            "enum": ["character_trait", "relationship", "plot_event", "world_detail", "preference", "other"],
+                            "description": "Category of this memory for organization"
+                        }
                     },
                     "required": ["text"]
                 }),

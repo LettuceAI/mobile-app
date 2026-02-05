@@ -392,6 +392,9 @@ pub struct MemoryEmbedding {
     /// Ephemeral match score (similarity) from retrieval
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub match_score: Option<f32>,
+    /// Category tag for clustering (e.g. character_trait, relationship, plot_event)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
 }
 
 fn default_importance_score() -> f32 {

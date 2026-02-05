@@ -105,6 +105,9 @@ pub struct MemoryEmbedding {
     pub access_count: i32,
     #[serde(default)]
     pub is_pinned: bool,
+    /// Category tag for clustering (e.g. character_trait, relationship, plot_event)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
 }
 
 fn default_importance() -> f32 {
@@ -1814,6 +1817,7 @@ pub async fn group_session_add_memory(
         last_accessed_at: now_ms() as i64,
         access_count: 0,
         is_pinned: false,
+        category: None,
     });
 
     // Save back

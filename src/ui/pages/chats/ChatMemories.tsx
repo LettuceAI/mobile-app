@@ -646,6 +646,7 @@ export function ChatMemoriesPage() {
             lastAccessedAt: emb.lastAccessedAt ?? 0,
             isPinned: emb.isPinned ?? false,
             cycle,
+            category: (emb as Record<string, unknown>).category as string | null ?? null,
           };
         })
         .sort((a, b) => {
@@ -679,6 +680,7 @@ export function ChatMemoriesPage() {
           lastAccessedAt: 0,
           isPinned: false,
           cycle,
+          category: null as string | null,
         };
       })
       .sort((a, b) => {
@@ -1459,6 +1461,11 @@ export function ChatMemoriesPage() {
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-pink-500/10 text-pink-300/80 border border-pink-500/20">
                                       <Pin size={8} />
                                       Pinned
+                                    </span>
+                                  )}
+                                  {item.category && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-500/10 text-purple-300/80 border border-purple-500/20">
+                                      {item.category.replace(/_/g, " ")}
                                     </span>
                                   )}
                                 </div>

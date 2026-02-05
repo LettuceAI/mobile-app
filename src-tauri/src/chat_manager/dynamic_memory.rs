@@ -3,7 +3,7 @@
 //! This module provides constants and helper functions for dynamic memory
 //! that are shared between chat_manager and group_chat_manager.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::types::{DynamicMemorySettings, Settings};
 
@@ -25,6 +25,7 @@ pub trait MemoryEntry {
     fn set_last_accessed_at(&mut self, value: u64);
     fn access_count(&self) -> u32;
     fn set_access_count(&mut self, value: u32);
+    fn category(&self) -> Option<&str>;
 }
 
 impl MemoryEntry for crate::chat_manager::types::MemoryEmbedding {
@@ -67,6 +68,9 @@ impl MemoryEntry for crate::chat_manager::types::MemoryEmbedding {
     fn set_access_count(&mut self, value: u32) {
         self.access_count = value;
     }
+    fn category(&self) -> Option<&str> {
+        self.category.as_deref()
+    }
 }
 
 impl MemoryEntry for crate::storage_manager::group_sessions::MemoryEmbedding {
@@ -108,6 +112,9 @@ impl MemoryEntry for crate::storage_manager::group_sessions::MemoryEmbedding {
     }
     fn set_access_count(&mut self, value: u32) {
         self.access_count = value as i32;
+    }
+    fn category(&self) -> Option<&str> {
+        self.category.as_deref()
     }
 }
 
@@ -444,12 +451,36 @@ pub fn select_relevant_memory_indices<E: MemoryEntry>(
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
-    scored
+    let filtered: Vec<(f32, usize)> = scored
         .into_iter()
         .filter(|(score, _)| *score >= min_similarity)
-        .take(limit)
-        .map(|(score, idx)| (idx, score))
-        .collect()
+        .collect();
+
+    // Apply category diversity: max 2 per category in result set
+    let mut category_counts: HashMap<String, usize> = HashMap::new();
+    let mut result: Vec<(usize, f32)> = Vec::new();
+    let mut remaining: Vec<(f32, usize)> = Vec::new();
+
+    for (score, idx) in &filtered {
+        let cat = memories[*idx].category().unwrap_or("other").to_string();
+        let count = category_counts.entry(cat).or_insert(0);
+        if *count < 2 && result.len() < limit {
+            *count += 1;
+            result.push((*idx, *score));
+        } else {
+            remaining.push((*score, *idx));
+        }
+    }
+
+    // Fill remaining slots from overflow candidates
+    for (score, idx) in remaining {
+        if result.len() >= limit {
+            break;
+        }
+        result.push((idx, score));
+    }
+
+    result
 }
 
 /// Keyword search over cold memories. Returns indices.
