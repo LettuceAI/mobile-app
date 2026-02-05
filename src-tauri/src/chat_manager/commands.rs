@@ -3527,62 +3527,31 @@ async fn process_dynamic_memory_cycle_with_model(
         json!({ "sessionId": session.id }),
     );
 
-    let summary = match summarize_messages(
-        app,
-        summary_provider,
-        summary_model,
-        &api_key,
-        &convo_window,
-        if cursor_rewound {
-            None
-        } else {
-            session.memory_summary.as_deref()
-        },
-        character,
-        session,
-        settings,
-        None,
-    )
-    .await
-    {
-        Ok(s) => s,
-        Err(err) => {
-            record_dynamic_memory_error(app, session, &err, "summarization");
-            return Err(err);
-        }
+    let prior_summary = if cursor_rewound {
+        None
+    } else {
+        session.memory_summary.as_deref().map(|s| s.to_string())
     };
-    log_info(
-        app,
-        "dynamic_memory",
-        format!(
-            "summary generated: length={} chars tokens={}",
-            summary.len(),
-            crate::tokenizer::count_tokens(app, &summary).unwrap_or(0)
-        ),
-    );
 
     log_info(
         app,
         "dynamic_memory",
-        format!(
-            "summary length={} chars; invoking memory tools",
-            summary.len()
-        ),
+        "invoking single-pass memory+summary cycle",
     );
-    let actions = match run_memory_tool_update(
+    let (summary_opt, actions) = match run_memory_tool_update(
         app,
         summary_provider,
         summary_model,
         &api_key,
         session,
         settings,
-        &summary,
+        prior_summary.as_deref(),
         &convo_window,
         character,
     )
     .await
     {
-        Ok(actions) => actions,
+        Ok(result) => result,
         Err(err) => {
             log_error(
                 app,
@@ -3595,15 +3564,11 @@ async fn process_dynamic_memory_cycle_with_model(
                 "windowStart": window_start,
                 "windowEnd": window_end,
                 "windowMessageIds": window_message_ids,
-                "summary": summary,
                 "actions": [],
                 "error": err,
                 "status": "error",
                 "createdAt": now_millis().unwrap_or_default(),
             });
-            session.memory_summary = Some(summary.clone());
-            session.memory_summary_token_count =
-                crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
             session.memory_tool_events.push(event);
             if session.memory_tool_events.len() > 50 {
                 let excess = session.memory_tool_events.len() - 50;
@@ -3623,6 +3588,22 @@ async fn process_dynamic_memory_cycle_with_model(
             return Ok(());
         }
     };
+
+    let summary = summary_opt.unwrap_or_else(|| {
+        session
+            .memory_summary
+            .clone()
+            .unwrap_or_default()
+    });
+    log_info(
+        app,
+        "dynamic_memory",
+        format!(
+            "summary generated: length={} chars tokens={}",
+            summary.len(),
+            crate::tokenizer::count_tokens(app, &summary).unwrap_or(0)
+        ),
+    );
 
     session.memory_summary = Some(summary.clone());
     session.memory_summary_token_count = crate::tokenizer::count_tokens(app, &summary).unwrap_or(0);
@@ -3772,10 +3753,10 @@ async fn run_memory_tool_update(
     api_key: &str,
     session: &mut Session,
     settings: &Settings,
-    summary: &str,
+    prior_summary: Option<&str>,
     convo_window: &[StoredMessage],
     character: &super::types::Character,
-) -> Result<Vec<Value>, String> {
+) -> Result<(Option<String>, Vec<Value>), String> {
     let tool_config = build_memory_tool_config();
     let max_entries = dynamic_max_entries(settings);
 
@@ -3814,11 +3795,14 @@ async fn run_memory_tool_update(
         Some(rendered),
     );
     let memory_lines = format_memories_with_ids(session);
+    let prev_summary_text = prior_summary
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("No previous summary.");
     messages_for_api.push(json!({
         "role": "user",
         "content": format!(
-            "Conversation summary:\n{}\n\nRecent messages:\n{}\n\nCurrent memories (with IDs):\n{}",
-            summary,
+            "Previous summary:\n{}\n\nRecent messages:\n{}\n\nCurrent memories (with IDs):\n{}\n\nFirst call write_summary to produce an updated cumulative summary, then manage memories (create/delete/pin/unpin), then call done.",
+            prev_summary_text,
             convo_window.iter().map(|m| format!("{}: {}", m.role, m.content)).collect::<Vec<_>>().join("\n"),
             if memory_lines.is_empty() { "none".to_string() } else { memory_lines.join("\n") }
         )
@@ -3913,12 +3897,23 @@ async fn run_memory_tool_update(
             "dynamic_memory",
             "memory tool call returned no tool usage",
         );
-        return Ok(Vec::new());
+        return Ok((None, Vec::new()));
     }
 
     let mut actions_log: Vec<Value> = Vec::new();
+    let mut extracted_summary: Option<String> = None;
     for call in calls {
         match call.name.as_str() {
+            "write_summary" => {
+                if let Some(s) = call.arguments.get("summary").and_then(|v| v.as_str()) {
+                    extracted_summary = Some(s.to_string());
+                    actions_log.push(json!({
+                        "name": "write_summary",
+                        "arguments": call.arguments,
+                        "timestamp": now_millis().unwrap_or_default(),
+                    }));
+                }
+            }
             "create_memory" => {
                 if let Some(text) = extract_text_argument(&call) {
                     let mem_id = generate_memory_id();
@@ -4113,7 +4108,7 @@ async fn run_memory_tool_update(
 
     session.updated_at = now_millis()?;
     save_session(app, session)?;
-    Ok(actions_log)
+    Ok((extracted_summary, actions_log))
 }
 
 fn extract_text_argument(call: &ToolCall) -> Option<String> {
@@ -4131,6 +4126,17 @@ fn extract_text_argument(call: &ToolCall) -> Option<String> {
 fn build_memory_tool_config() -> ToolConfig {
     ToolConfig {
         tools: vec![
+            ToolDefinition {
+                name: "write_summary".to_string(),
+                description: Some("Write a concise, cumulative summary of the conversation so far. Call this FIRST before managing memories.".to_string()),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "summary": { "type": "string", "description": "Cumulative summary integrating previous summary with new events" }
+                    },
+                    "required": ["summary"]
+                }),
+            },
             ToolDefinition {
                 name: "create_memory".to_string(),
                 description: Some(
