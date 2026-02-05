@@ -363,47 +363,195 @@ function useMemoryActions(session: Session | null, setSession: (s: Session) => v
   return { handleAdd, handleRemove, handleUpdate, handleSaveSummary, handleTogglePin };
 }
 
-function UpdatedMemoriesList({ memories }: { memories: string[] }) {
-  const [isOpen, setIsOpen] = useState(false);
+function relativeTime(ts: number): string {
+  const now = Date.now();
+  const diff = now - ts;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
 
-  if (!memories || memories.length === 0) return null;
+const ACTION_STYLES: Record<string, { icon: ComponentType<{ size?: string | number; className?: string }>; color: string; label: string; bg: string; border: string }> = {
+  create_memory: { icon: Plus, color: "text-emerald-300", label: "Created", bg: "bg-emerald-400/10", border: "border-emerald-400/20" },
+  delete_memory: { icon: Trash2, color: "text-red-300", label: "Deleted", bg: "bg-red-400/10", border: "border-red-400/20" },
+  pin_memory:    { icon: Pin, color: "text-amber-300", label: "Pinned", bg: "bg-amber-400/10", border: "border-amber-400/20" },
+  unpin_memory:  { icon: Pin, color: "text-amber-300/60", label: "Unpinned", bg: "bg-amber-400/10", border: "border-amber-400/20" },
+  done:          { icon: Check, color: "text-blue-300", label: "Done", bg: "bg-blue-400/10", border: "border-blue-400/20" },
+};
+
+function ActionCard({ action }: { action: MemoryToolEvent["actions"][number] }) {
+  const style = ACTION_STYLES[action.name] || {
+    icon: Cpu,
+    color: "text-zinc-300",
+    label: action.name,
+    bg: "bg-white/5",
+    border: "border-white/10",
+  };
+  const Icon = style.icon;
+  const args = action.arguments as Record<string, unknown> | undefined;
+  const memoryText = args?.text as string | undefined;
+  const category = args?.category as string | undefined;
+  const important = args?.important as boolean | undefined;
+  const confidence = args?.confidence as number | undefined;
+  const id = args?.id as string | undefined;
 
   return (
-    <div className="pt-2">
+    <div className={cn(radius.md, "border px-3 py-2.5 flex items-start gap-2.5", style.bg, style.border)}>
+      <Icon size={14} className={cn(style.color, "mt-0.5 shrink-0")} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={cn("text-[11px] font-semibold", style.color)}>{style.label}</span>
+          {category && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              {category.replace(/_/g, " ")}
+            </span>
+          )}
+          {important && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              pinned
+            </span>
+          )}
+          {confidence != null && (
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full border",
+              confidence < 0.7
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                : "bg-red-500/20 text-red-300 border-red-500/30",
+            )}>
+              {confidence < 0.7 ? "soft-delete" : `${Math.round(confidence * 100)}%`}
+            </span>
+          )}
+        </div>
+        {memoryText && (
+          <p className={cn(typography.caption.size, colors.text.secondary, "mt-1 leading-relaxed")}>{memoryText}</p>
+        )}
+        {id && !memoryText && (
+          <p className={cn(typography.caption.size, colors.text.tertiary, "mt-1 font-mono")}>#{id}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function summarizeActions(actions: MemoryToolEvent["actions"]): string {
+  const counts: Record<string, number> = {};
+  for (const a of actions) {
+    const label = ACTION_STYLES[a.name]?.label || a.name;
+    counts[label] = (counts[label] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([label, count]) => `${count} ${label.toLowerCase()}`)
+    .join(", ");
+}
+
+function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen: boolean }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const hasError = !!event.error;
+  const actionSummary = event.actions?.length ? summarizeActions(event.actions) : null;
+
+  return (
+    <div className={cn(
+      components.card.base,
+      "overflow-hidden",
+      hasError && "border-red-400/20",
+    )}>
+      {/* Collapsed header */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex w-full items-center justify-between",
-          components.listItem.base,
-          "px-3 py-2",
+          "w-full flex items-center gap-3 px-4 py-3 text-left",
           interactive.hover.brightness,
         )}
       >
-        <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              isOpen ? "bg-emerald-400" : "bg-emerald-400/50",
+        {/* Timeline dot */}
+        <div className={cn(
+          "h-2 w-2 rounded-full shrink-0",
+          hasError ? "bg-red-400" : "bg-emerald-400",
+        )} />
+
+        <div className="flex-1 min-w-0">
+          {/* Top line: relative time + action counts */}
+          <div className="flex items-center gap-2">
+            <span className={cn(typography.caption.size, colors.text.secondary, "font-medium")}>
+              {relativeTime(event.createdAt || 0)}
+            </span>
+            {actionSummary && (
+              <span className={cn(typography.caption.size, colors.text.tertiary)}>
+                — {actionSummary}
+              </span>
             )}
-          />
-          <span className={cn(typography.caption.size, colors.text.secondary, "font-medium")}>
-            Updated Memory State ({memories.length})
-          </span>
+            {hasError && (
+              <AlertTriangle size={12} className="text-red-400 shrink-0" />
+            )}
+          </div>
+
+          {/* Truncated summary */}
+          {event.summary && !isOpen && (
+            <p className={cn(
+              "text-[11px] mt-0.5 truncate",
+              colors.text.tertiary,
+            )}>
+              {event.summary}
+            </p>
+          )}
         </div>
-        {isOpen ? (
-          <ChevronUp size={14} className={colors.text.tertiary} />
-        ) : (
-          <ChevronDown size={14} className={colors.text.tertiary} />
-        )}
+
+        <ChevronDown
+          size={14}
+          className={cn(
+            colors.text.tertiary,
+            "shrink-0 transition-transform",
+            isOpen && "rotate-180",
+          )}
+        />
       </button>
 
+      {/* Expanded content */}
       {isOpen && (
-        <div className={cn("mt-2 space-y-2 pl-1", spacing.tight)}>
-          {memories.map((m, i) => (
-            <div key={i} className={cn(radius.sm, colors.accent.emerald.subtle, "px-3 py-2")}>
-              <p className={cn(typography.caption.size, "leading-relaxed")}>{m}</p>
+        <div className="px-4 pb-4 space-y-3">
+          {/* Summary */}
+          {event.summary && (
+            <div className={cn(radius.md, "border border-blue-400/20 bg-blue-400/10 px-3 py-2.5")}>
+              <p className={cn("text-[12px] leading-relaxed text-blue-200/90")}>{event.summary}</p>
             </div>
-          ))}
+          )}
+
+          {/* Error */}
+          {event.error && (
+            <div className={cn(radius.md, "border border-red-400/20 bg-red-400/10 px-3 py-2.5")}>
+              <p className={cn("text-[12px] text-red-200/90")}>{event.error}</p>
+              {event.stage && (
+                <p className={cn("text-[11px] mt-1 text-red-200/60")}>
+                  Failed at: {event.stage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Action cards */}
+          {event.actions && event.actions.length > 0 && (
+            <div className="space-y-2">
+              {event.actions
+                .filter((a) => a.name !== "done")
+                .map((action, idx) => (
+                  <ActionCard key={idx} action={action} />
+                ))}
+            </div>
+          )}
+
+          {/* Footer meta */}
+          <div className={cn("flex items-center gap-3 pt-1", typography.caption.size, colors.text.disabled)}>
+            <span>Window {event.windowStart}–{event.windowEnd}</span>
+            <span>{new Date(event.createdAt || 0).toLocaleString()}</span>
+          </div>
         </div>
       )}
     </div>
@@ -422,85 +570,9 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
   }
 
   return (
-    <div className={cn(spacing.item, "space-y-3")}>
-      {events.map((event) => (
-        <div key={event.id} className={cn(components.card.base, "p-4 space-y-3")}>
-          {/* Event Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock size={14} className={colors.text.tertiary} />
-              <span className={cn(typography.caption.size, colors.text.tertiary)}>
-                Messages {event.windowStart}–{event.windowEnd}
-              </span>
-            </div>
-            <span className={cn(typography.caption.size, colors.text.disabled)}>
-              {new Date(event.createdAt || 0).toLocaleDateString()}
-            </span>
-          </div>
-
-          {/* Summary */}
-          {event.summary && (
-            <div className={cn(radius.md, "border border-blue-400/20 bg-blue-400/10 px-3 py-3")}>
-              <p className={cn(typography.bodySmall.size, "text-blue-200/90")}>{event.summary}</p>
-            </div>
-          )}
-
-          {event.error && (
-            <div className={cn(radius.md, "border border-red-400/20 bg-red-400/10 px-3 py-3")}>
-              <p className={cn(typography.bodySmall.size, "text-red-200/90")}>{event.error}</p>
-              {event.stage && (
-                <p className={cn(typography.caption.size, "mt-1 text-red-200/70")}>
-                  Stage: {event.stage}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Actions */}
-          {event.actions && event.actions.length > 0 && (
-            <div className={spacing.field}>
-              <p className={cn(typography.caption.size, colors.text.tertiary, "font-semibold")}>
-                Actions ({event.actions.length})
-              </p>
-              {event.actions.map((action, idx) => (
-                <div
-                  key={idx}
-                  className={cn(radius.md, "border border-white/5 bg-black/20 p-3", spacing.field)}
-                >
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={cn(
-                        typography.bodySmall.size,
-                        "font-semibold uppercase tracking-wide text-emerald-300",
-                      )}
-                    >
-                      {action.name}
-                    </span>
-                    {action.timestamp && (
-                      <span className={cn(typography.caption.size, colors.text.disabled)}>
-                        {new Date(action.timestamp).toLocaleTimeString()}
-                      </span>
-                    )}
-                  </div>
-
-                  {action.arguments && (
-                    <div className={cn(radius.sm, "bg-black/40 p-3 overflow-x-auto")}>
-                      <pre
-                        className={cn(typography.caption.size, colors.text.secondary, "font-mono")}
-                      >
-                        {JSON.stringify(action.arguments, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  {action.updatedMemories?.length ? (
-                    <UpdatedMemoriesList memories={action.updatedMemories} />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className={cn(spacing.item, "space-y-2")}>
+      {events.map((event, idx) => (
+        <CycleCard key={event.id} event={event} defaultOpen={idx === events.length - 1} />
       ))}
     </div>
   );
