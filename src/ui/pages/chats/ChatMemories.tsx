@@ -76,6 +76,7 @@ type UiState = {
   expandedMemories: Set<number>;
   memoryTempBusy: number | null;
   pendingRefresh: boolean;
+  selectedCategory: string | null;
 };
 
 type UiAction =
@@ -97,7 +98,8 @@ type UiAction =
   | { type: "TOGGLE_EXPANDED"; index: number }
   | { type: "SHIFT_EXPANDED_AFTER_DELETE"; index: number }
   | { type: "SET_MEMORY_TEMP_BUSY"; value: number | null }
-  | { type: "SET_PENDING_REFRESH"; value: boolean };
+  | { type: "SET_PENDING_REFRESH"; value: boolean }
+  | { type: "SET_CATEGORY"; value: string | null };
 
 function initUi(errorParam: string | null): UiState {
   return {
@@ -116,6 +118,7 @@ function initUi(errorParam: string | null): UiState {
     expandedMemories: new Set<number>(),
     memoryTempBusy: null,
     pendingRefresh: false,
+    selectedCategory: null,
   };
 }
 
@@ -171,6 +174,8 @@ function uiReducer(state: UiState, action: UiAction): UiState {
       return { ...state, memoryTempBusy: action.value };
     case "SET_PENDING_REFRESH":
       return { ...state, pendingRefresh: action.value };
+    case "SET_CATEGORY":
+      return { ...state, selectedCategory: action.value };
     default:
       return state;
   }
@@ -690,12 +695,23 @@ export function ChatMemoriesPage() {
       });
   }, [isDynamic, session, cycleMap]);
 
+  const categories = useMemo(() => {
+    const cats = new Set(memoryItems.map((m) => m.category).filter(Boolean));
+    return Array.from(cats).sort() as string[];
+  }, [memoryItems]);
+
   const filteredMemories = useMemo(() => {
-    if (!ui.searchTerm.trim()) return memoryItems;
-    return memoryItems.filter((item) =>
-      item.text.toLowerCase().includes(ui.searchTerm.toLowerCase()),
-    );
-  }, [memoryItems, ui.searchTerm]);
+    let items = memoryItems;
+    if (ui.searchTerm.trim()) {
+      items = items.filter((item) =>
+        item.text.toLowerCase().includes(ui.searchTerm.toLowerCase()),
+      );
+    }
+    if (ui.selectedCategory) {
+      items = items.filter((item) => item.category === ui.selectedCategory);
+    }
+    return items;
+  }, [memoryItems, ui.searchTerm, ui.selectedCategory]);
 
   const stats = useMemo(() => {
     const total = memoryItems.length;
@@ -1247,6 +1263,44 @@ export function ChatMemoriesPage() {
                       <X size={16} />
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* Category Filter Chips */}
+              {isDynamic && categories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: "SET_CATEGORY", value: null })}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                      !ui.selectedCategory
+                        ? "bg-purple-500/20 text-purple-200 border-purple-500/40"
+                        : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10",
+                    )}
+                  >
+                    All
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() =>
+                        dispatch({
+                          type: "SET_CATEGORY",
+                          value: ui.selectedCategory === cat ? null : cat,
+                        })
+                      }
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                        ui.selectedCategory === cat
+                          ? "bg-purple-500/20 text-purple-200 border-purple-500/40"
+                          : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10",
+                      )}
+                    >
+                      {cat.replace(/_/g, " ")}
+                    </button>
+                  ))}
                 </div>
               )}
 
