@@ -18,7 +18,7 @@ use super::dynamic_memory::{
     dynamic_window_size, enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id,
     mark_memories_accessed, normalize_query_text, promote_cold_memories,
     search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
-    trim_memories_to_max, MEMORY_ID_SPACE,
+    trim_memories_to_max,
 };
 use super::prompt_engine;
 use super::prompts;
@@ -358,17 +358,9 @@ fn build_enriched_query(messages: &[StoredMessage]) -> String {
 
 fn format_memories_with_ids(session: &Session) -> Vec<String> {
     session
-        .memories
+        .memory_embeddings
         .iter()
-        .enumerate()
-        .map(|(idx, text)| {
-            let id = session
-                .memory_embeddings
-                .get(idx)
-                .map(|m| m.id.clone())
-                .unwrap_or_else(|| format!("{:06}", (idx as u64) % MEMORY_ID_SPACE));
-            format!("[{}] {}", id, text)
-        })
+        .map(|m| format!("[{}] {}", m.id, m.text))
         .collect()
 }
 
@@ -3966,7 +3958,6 @@ async fn run_memory_tool_update(
                         .get("important")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
-                    session.memories.push(text.clone());
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
                         text,

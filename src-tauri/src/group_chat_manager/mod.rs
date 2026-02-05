@@ -1614,7 +1614,6 @@ async fn run_group_memory_tool_update(
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
-                    session.memories.push(text.clone());
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
                         text,

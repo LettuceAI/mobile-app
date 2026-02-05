@@ -764,22 +764,35 @@ pub fn build_system_prompt_entries(
         }
     }
 
-    if !has_placeholder(&base_entries, "{{key_memories}}") && !session.memories.is_empty() {
-        let mut content = String::from("# Key Memories\n");
-        content.push_str("Important facts to remember in this conversation:\n");
-        for memory in &session.memories {
-            content.push_str(&format!("- {}\n", memory));
+    if !has_placeholder(&base_entries, "{{key_memories}}") {
+        let has_memories = if dynamic_memory_active {
+            !session.memory_embeddings.is_empty()
+        } else {
+            !session.memories.is_empty()
+        };
+        if has_memories {
+            let mut content = String::from("# Key Memories\n");
+            content.push_str("Important facts to remember in this conversation:\n");
+            if dynamic_memory_active {
+                for mem in &session.memory_embeddings {
+                    content.push_str(&format!("- {}\n", mem.text));
+                }
+            } else {
+                for memory in &session.memories {
+                    content.push_str(&format!("- {}\n", memory));
+                }
+            }
+            rendered_entries.push(SystemPromptEntry {
+                id: "entry_key_memories".to_string(),
+                name: "Key Memories".to_string(),
+                role: PromptEntryRole::System,
+                content: content.trim().to_string(),
+                enabled: true,
+                injection_position: PromptEntryPosition::Relative,
+                injection_depth: 0,
+                system_prompt: true,
+            });
         }
-        rendered_entries.push(SystemPromptEntry {
-            id: "entry_key_memories".to_string(),
-            name: "Key Memories".to_string(),
-            role: PromptEntryRole::System,
-            content: content.trim().to_string(),
-            enabled: true,
-            injection_position: PromptEntryPosition::Relative,
-            injection_depth: 0,
-            system_prompt: true,
-        });
     }
 
     if !has_placeholder(&base_entries, "{{lorebook}}") {
@@ -1154,7 +1167,14 @@ fn render_with_context_internal(
         result = result.replace("{{context_summary}}", "");
     }
 
-    let key_memories_text = if session.memories.is_empty() {
+    let key_memories_text = if dynamic_memory_active && !session.memory_embeddings.is_empty() {
+        session
+            .memory_embeddings
+            .iter()
+            .map(|m| format!("- {}", m.text))
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else if session.memories.is_empty() {
         String::new()
     } else {
         session
