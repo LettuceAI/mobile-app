@@ -1008,8 +1008,9 @@ export function ChatMemoriesPage() {
       {/* Header */}
       <header
         className={cn(
-          "border-b border-white/10 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 sticky top-0 z-20",
-          "bg-[#050505]",
+          "sticky top-0 z-20 border-b border-white/10 px-4",
+          "pt-[calc(env(safe-area-inset-top)+12px)] pb-3",
+          colors.glass.strong,
         )}
       >
         <div className="flex items-center gap-3">
@@ -1020,14 +1021,23 @@ export function ChatMemoriesPage() {
                   characterId ? Routes.chatSession(characterId, sessionId) : Routes.chat,
                 )
               }
-              className="flex shrink-0 px-[0.6em] py-[0.3em] items-center justify-center -ml-2 text-white transition hover:text-white/80"
+              className={cn(
+                "flex shrink-0 items-center justify-center -ml-2 px-2 py-1",
+                colors.text.primary,
+                interactive.transition.fast,
+                "hover:text-white/80",
+              )}
               aria-label="Go back"
             >
               <ArrowLeft size={14} strokeWidth={2.5} />
             </button>
             <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-xl font-bold text-white/90">Memories</p>
-              <p className="mt-0.5 truncate text-xs text-white/50">{character.name}</p>
+              <p className={cn("truncate", typography.h1.size, typography.h1.weight, colors.text.primary)}>
+                Memories
+              </p>
+              <p className={cn("mt-0.5 truncate", typography.bodySmall.size, colors.text.tertiary)}>
+                {character.name}
+              </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 ml-auto">
@@ -1035,7 +1045,11 @@ export function ChatMemoriesPage() {
               <div
                 className={cn(
                   radius.full,
-                  "border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+                  "border px-2 py-1",
+                  typography.overline.size,
+                  typography.overline.weight,
+                  typography.overline.tracking,
+                  typography.overline.transform,
                   "border-blue-500/30 bg-blue-500/15 text-blue-200",
                 )}
               >
@@ -1063,7 +1077,7 @@ export function ChatMemoriesPage() {
                 )}
               >
                 <RefreshCw className="h-5 w-5 text-blue-400 shrink-0 animate-spin" />
-                <div className="flex-1 text-sm text-blue-200">
+                <div className={cn("flex-1", typography.body.size, "text-blue-200")}>
                   <p className="font-semibold">
                     {session.memoryStatus === "processing"
                       ? "AI is organizing memories..."
@@ -1079,7 +1093,7 @@ export function ChatMemoriesPage() {
                 )}
               >
                 <Check className="h-5 w-5 text-emerald-400 shrink-0" />
-                <div className="flex-1 text-sm text-emerald-200">
+                <div className={cn("flex-1", typography.body.size, "text-emerald-200")}>
                   <p className="font-semibold">Memory Cycle Processed Successfully!</p>
                 </div>
                 <button
@@ -1097,7 +1111,7 @@ export function ChatMemoriesPage() {
                 )}
               >
                 <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-                <div className="flex-1 text-sm text-red-200">
+                <div className={cn("flex-1", typography.body.size, "text-red-200")}>
                   <div className="flex items-start justify-between">
                     <p className="font-semibold mb-1">
                       {isDynamic ? "Memory System Error" : "Error"}
@@ -1119,14 +1133,14 @@ export function ChatMemoriesPage() {
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         onClick={handleRetry}
-                        className="flex items-center gap-1.5 rounded-md bg-red-500/20 px-2.5 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95"
+                        className={cn("flex items-center gap-1.5 px-2.5 py-1.5", radius.md, typography.bodySmall.size, "font-semibold bg-red-500/20 text-red-200", interactive.transition.fast, "hover:bg-red-500/30", interactive.active.scale)}
                       >
                         <RefreshCw size={12} />
                         Try Again
                       </button>
                       <button
                         onClick={() => setShowModelSelector(true)}
-                        className="flex items-center gap-1.5 rounded-md bg-blue-500/20 px-2.5 py-1.5 text-xs font-semibold text-blue-200 transition hover:bg-blue-500/30 active:scale-95"
+                        className={cn("flex items-center gap-1.5 px-2.5 py-1.5", radius.md, typography.bodySmall.size, "font-semibold bg-blue-500/20 text-blue-200", interactive.transition.fast, "hover:bg-blue-500/30", interactive.active.scale)}
                       >
                         <Cpu size={12} />
                         Try Different Model
@@ -1520,7 +1534,9 @@ export function ChatMemoriesPage() {
                                   )}
                                   <span
                                     className={cn(
-                                      "text-[11px] font-semibold uppercase tracking-wider",
+                                      typography.caption.size,
+                                      typography.caption.weight,
+                                      "uppercase tracking-wider",
                                       item.isAi ? "text-blue-400/90" : "text-emerald-400/90",
                                     )}
                                   >
@@ -1530,22 +1546,22 @@ export function ChatMemoriesPage() {
                                   {/* Status badges */}
                                   {isDynamic &&
                                     (item.isCold ? (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-300/80 border border-blue-500/20">
+                                      <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-blue-500/10 text-blue-300/80 border border-blue-500/20")}>
                                         Cold
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-300/80 border border-amber-500/20">
+                                      <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-amber-500/10 text-amber-300/80 border border-amber-500/20")}>
                                         Hot {item.importanceScore.toFixed(1)}
                                       </span>
                                     ))}
                                   {item.isPinned && (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-pink-500/10 text-pink-300/80 border border-pink-500/20">
+                                    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-pink-500/10 text-pink-300/80 border border-pink-500/20")}>
                                       <Pin size={8} />
                                       Pinned
                                     </span>
                                   )}
                                   {item.category && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-500/10 text-purple-300/80 border border-purple-500/20">
+                                    <span className={cn("inline-flex items-center px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-purple-500/10 text-purple-300/80 border border-purple-500/20")}>
                                       {item.category.replace(/_/g, " ")}
                                     </span>
                                   )}
@@ -1673,7 +1689,9 @@ export function ChatMemoriesPage() {
                               {/* Memory Content */}
                               <p
                                 className={cn(
-                                  "text-[13px] text-white/75 leading-[1.6]",
+                                  typography.bodySmall.size,
+                                  colors.text.secondary,
+                                  "leading-relaxed",
                                   expanded ? "whitespace-pre-wrap" : "line-clamp-2",
                                 )}
                               >
@@ -1682,7 +1700,7 @@ export function ChatMemoriesPage() {
 
                               {/* Footer / Meta */}
                               <div className="flex items-center justify-between pt-1">
-                                <div className="flex items-center gap-3 text-[10px] text-white/35">
+                                <div className={cn("flex items-center gap-3", typography.overline.size, colors.text.disabled)}>
                                   {item.tokenCount > 0 && (
                                     <span>{item.tokenCount.toLocaleString()} tokens</span>
                                   )}
@@ -1697,7 +1715,10 @@ export function ChatMemoriesPage() {
                                 {/* Expand hint */}
                                 <div
                                   className={cn(
-                                    "flex items-center gap-1 text-[10px] text-white/30 transition-colors",
+                                    "flex items-center gap-1",
+                                    typography.overline.size,
+                                    colors.text.disabled,
+                                    interactive.transition.fast,
                                     "group-hover:text-white/40",
                                   )}
                                 >
@@ -1909,14 +1930,19 @@ export function ChatMemoriesPage() {
           colors.glass.strong,
         )}
       >
-        <div className={cn(radius.lg, "grid grid-cols-3 gap-2 p-1", colors.surface.elevated)}>
+        <div
+          className={cn(radius.lg, "grid gap-2 p-1", colors.surface.elevated)}
+          style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+        >
           {tabs.map(({ id, icon: Icon, label }) => (
             <button
               key={id}
               onClick={() => dispatch({ type: "SET_TAB", tab: id })}
               className={cn(
                 radius.md,
-                "px-3 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-2",
+                typography.body.size,
+                "font-semibold flex items-center justify-center gap-2 px-3 py-2.5",
+                interactive.transition.fast,
                 interactive.active.scale,
                 ui.activeTab === id
                   ? "bg-white/10 text-white"
