@@ -11,7 +11,7 @@ mod selection;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
@@ -793,21 +793,82 @@ async fn select_relevant_memories(
             }
         };
 
-    let hot_indices = select_relevant_memory_indices(
+    // 1. Get top (limit-2) by cosine similarity (min 1)
+    let cosine_limit = (limit.saturating_sub(2)).max(1);
+    let cosine_indices = select_relevant_memory_indices(
         &query_embedding,
         &session.memory_embeddings,
-        limit,
+        cosine_limit,
         min_similarity,
     );
 
-    let mut hot_results = Vec::new();
-    for (idx, _score) in hot_indices {
-        if let Some(mem) = session.memory_embeddings.get(idx) {
-            hot_results.push(mem.clone());
+    let mut selected: HashSet<usize> = HashSet::new();
+    let mut results: Vec<MemoryEmbedding> = Vec::new();
+
+    for (idx, _score) in &cosine_indices {
+        if let Some(mem) = session.memory_embeddings.get(*idx) {
+            results.push(mem.clone());
+            selected.insert(*idx);
         }
     }
 
-    if hot_results.is_empty() {
+    // 2. Add 1 most recently created hot memory (if not already selected)
+    if results.len() < limit {
+        if let Some(recent_idx) = session
+            .memory_embeddings
+            .iter()
+            .enumerate()
+            .filter(|(i, m)| !m.is_cold && !selected.contains(i))
+            .max_by_key(|(_, m)| m.created_at)
+            .map(|(i, _)| i)
+        {
+            if let Some(mem) = session.memory_embeddings.get(recent_idx) {
+                results.push(mem.clone());
+                selected.insert(recent_idx);
+            }
+        }
+    }
+
+    // 3. Add 1 most frequently accessed hot memory (if not already selected, access_count > 0)
+    if results.len() < limit {
+        if let Some(freq_idx) = session
+            .memory_embeddings
+            .iter()
+            .enumerate()
+            .filter(|(i, m)| !m.is_cold && !selected.contains(i) && m.access_count > 0)
+            .max_by_key(|(_, m)| m.access_count)
+            .map(|(i, _)| i)
+        {
+            if let Some(mem) = session.memory_embeddings.get(freq_idx) {
+                results.push(mem.clone());
+                selected.insert(freq_idx);
+            }
+        }
+    }
+
+    // 4. Fill remaining slots with next best cosine results
+    if results.len() < limit {
+        let extra_indices = select_relevant_memory_indices(
+            &query_embedding,
+            &session.memory_embeddings,
+            limit,
+            min_similarity,
+        );
+        for (idx, _score) in extra_indices {
+            if results.len() >= limit {
+                break;
+            }
+            if !selected.contains(&idx) {
+                if let Some(mem) = session.memory_embeddings.get(idx) {
+                    results.push(mem.clone());
+                    selected.insert(idx);
+                }
+            }
+        }
+    }
+
+    // 5. Cold keyword fallback as last resort
+    if results.is_empty() {
         let normalized_query = normalize_query_text(query);
         let cold_indices = search_cold_memory_indices_by_keyword(
             &session.memory_embeddings,
@@ -827,7 +888,7 @@ async fn select_relevant_memories(
             .collect();
     }
 
-    hot_results
+    results
 }
 
 /// Format memories as a string block for injection into prompts
