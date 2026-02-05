@@ -75,7 +75,6 @@ type UiState = {
   memoryStatus: MemoryStatus; // This is now for local UI transitions, but session.memoryStatus is source of truth
   expandedMemories: Set<number>;
   memoryTempBusy: number | null;
-  pendingRefresh: boolean;
   selectedCategory: string | null;
 };
 
@@ -98,7 +97,7 @@ type UiAction =
   | { type: "TOGGLE_EXPANDED"; index: number }
   | { type: "SHIFT_EXPANDED_AFTER_DELETE"; index: number }
   | { type: "SET_MEMORY_TEMP_BUSY"; value: number | null }
-  | { type: "SET_PENDING_REFRESH"; value: boolean }
+
   | { type: "SET_CATEGORY"; value: string | null };
 
 function initUi(errorParam: string | null): UiState {
@@ -117,7 +116,6 @@ function initUi(errorParam: string | null): UiState {
     memoryStatus: "idle",
     expandedMemories: new Set<number>(),
     memoryTempBusy: null,
-    pendingRefresh: false,
     selectedCategory: null,
   };
 }
@@ -172,8 +170,7 @@ function uiReducer(state: UiState, action: UiAction): UiState {
     }
     case "SET_MEMORY_TEMP_BUSY":
       return { ...state, memoryTempBusy: action.value };
-    case "SET_PENDING_REFRESH":
-      return { ...state, pendingRefresh: action.value };
+
     case "SET_CATEGORY":
       return { ...state, selectedCategory: action.value };
     default:
@@ -638,7 +635,6 @@ export function ChatMemoriesPage() {
         });
         const u2 = await listen("dynamic-memory:success", (e: any) => {
           if (e.payload?.sessionId === session.id) {
-            dispatch({ type: "SET_PENDING_REFRESH", value: true });
             dispatch({ type: "SET_MEMORY_STATUS", value: "idle" });
             void reload();
           }
@@ -932,10 +928,8 @@ export function ChatMemoriesPage() {
         // If not, it's a simple retry with existing settings
         await storageBridge.retryDynamicMemory(session.id, modelId, modelId ? true : undefined);
         dispatch({ type: "SET_RETRY_STATUS", value: "success" });
-        dispatch({ type: "SET_PENDING_REFRESH", value: true });
         window.setTimeout(() => {
           dispatch({ type: "SET_RETRY_STATUS", value: "idle" });
-          void reload();
         }, 3000);
       } catch (err: any) {
         console.error("Failed to retry memory processing:", err);
@@ -962,17 +956,6 @@ export function ChatMemoriesPage() {
   const handleRetry = useCallback(async () => {
     await handleRetryWithModel();
   }, [handleRetryWithModel]);
-
-  const handleRefresh = useCallback(async () => {
-    if (!session?.id) return;
-    try {
-      await reload();
-      dispatch({ type: "SET_PENDING_REFRESH", value: false });
-      dispatch({ type: "SET_ACTION_ERROR", value: null });
-    } catch (err: any) {
-      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to refresh" });
-    }
-  }, [reload, session?.id]);
 
   const handleTriggerManual = useCallback(async () => {
     if (!sessionId || !isDynamic) return;
@@ -1162,34 +1145,6 @@ export function ChatMemoriesPage() {
           </div>
         )}
 
-        {ui.pendingRefresh && ui.memoryStatus !== "processing" && (
-          <div className="px-3 pt-3">
-            <div
-              className={cn(
-                radius.md,
-                "bg-white/5 border border-white/10 p-3 flex items-center justify-between gap-3",
-              )}
-            >
-              <div className={cn(typography.bodySmall.size, colors.text.secondary)}>
-                New memory updates available
-              </div>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                className={cn(
-                  typography.caption.size,
-                  "font-semibold px-3 py-1",
-                  radius.full,
-                  "border border-white/15 bg-white/10 text-white/80",
-                  interactive.transition.fast,
-                  interactive.active.scale,
-                )}
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-        )}
 
         {ui.activeTab === "memories" ? (
           <div className={cn("px-3 py-4", "space-y-5")}>
