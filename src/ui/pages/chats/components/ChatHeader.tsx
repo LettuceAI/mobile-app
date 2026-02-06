@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { ArrowLeft, Brain, Loader2, AlertTriangle, Search, BookOpen } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { Character, Session } from "../../../../core/storage/schemas";
+import type { Character, Persona, Session } from "../../../../core/storage/schemas";
 import { AvatarImage } from "../../../components/AvatarImage";
 import { useAvatar } from "../../../hooks/useAvatar";
 import { listen } from "@tauri-apps/api/event";
@@ -9,6 +9,8 @@ import { Routes } from "../../../navigation";
 
 interface ChatHeaderProps {
   character: Character;
+  persona?: Persona | null;
+  swapPlaces?: boolean;
   sessionId?: string;
   session?: Session | null;
   hasBackgroundImage?: boolean;
@@ -25,6 +27,8 @@ function isImageLike(value?: string) {
 
 export function ChatHeader({
   character,
+  persona = null,
+  swapPlaces = false,
   sessionId,
   session,
   hasBackgroundImage,
@@ -32,7 +36,12 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const navigate = useNavigate();
   const { characterId } = useParams<{ characterId: string }>();
-  const avatarUrl = useAvatar("character", character?.id, character?.avatarPath, "round");
+  const avatarUrl = useAvatar(
+    swapPlaces ? "persona" : "character",
+    swapPlaces ? persona?.id : character?.id,
+    swapPlaces ? persona?.avatarPath : character?.avatarPath,
+    "round",
+  );
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const isDynamic = useMemo(() => character?.memoryType === "dynamic", [character?.memoryType]);
@@ -92,8 +101,11 @@ export function ChatHeader({
   }, [avatarUrl]);
 
   const initials = useMemo(() => {
+    if (swapPlaces) {
+      return persona?.title ? persona.title.slice(0, 2).toUpperCase() : "?";
+    }
     return character?.name ? character.name.slice(0, 2).toUpperCase() : "?";
-  }, [character]);
+  }, [character, persona, swapPlaces]);
 
   const avatarFallback = (
     <div className="flex h-full w-full items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">
@@ -101,7 +113,10 @@ export function ChatHeader({
     </div>
   );
 
-  const headerTitle = useMemo(() => character?.name ?? "Unknown", [character?.name]);
+  const headerTitle = useMemo(() => {
+    if (swapPlaces) return persona?.title ?? "Unknown";
+    return character?.name ?? "Unknown";
+  }, [character?.name, persona?.title, swapPlaces]);
 
   return (
     <>
@@ -216,8 +231,8 @@ export function ChatHeader({
               {avatarImageUrl ? (
                 <AvatarImage
                   src={avatarImageUrl}
-                  alt={character?.name || "Avatar"}
-                  crop={character?.avatarCrop}
+                  alt={swapPlaces ? persona?.title || "Avatar" : character?.name || "Avatar"}
+                  crop={swapPlaces ? persona?.avatarCrop : character?.avatarCrop}
                   applyCrop
                   className="absolute inset-0 z-10"
                 />

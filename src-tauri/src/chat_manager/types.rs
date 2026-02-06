@@ -561,6 +561,8 @@ pub struct ChatCompletionArgs {
     pub user_message: String,
     #[serde(alias = "personaId")]
     pub persona_id: Option<String>,
+    #[serde(default, alias = "swapPlaces")]
+    pub swap_places: Option<bool>,
     pub stream: Option<bool>,
     #[serde(alias = "requestId")]
     pub request_id: Option<String>,
@@ -575,6 +577,8 @@ pub struct ChatRegenerateArgs {
     pub session_id: String,
     #[serde(alias = "messageId")]
     pub message_id: String,
+    #[serde(default, alias = "swapPlaces")]
+    pub swap_places: Option<bool>,
     pub stream: Option<bool>,
     #[serde(alias = "requestId")]
     pub request_id: Option<String>,
@@ -589,6 +593,8 @@ pub struct ChatContinueArgs {
     pub character_id: String,
     #[serde(alias = "personaId")]
     pub persona_id: Option<String>,
+    #[serde(default, alias = "swapPlaces")]
+    pub swap_places: Option<bool>,
     pub stream: Option<bool>,
     #[serde(alias = "requestId")]
     pub request_id: Option<String>,

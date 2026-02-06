@@ -123,9 +123,13 @@ export interface ChatController {
   clearPendingAttachments: () => void;
 
   // Actions
-  handleSend: (message: string, attachments?: ImageAttachment[]) => Promise<void>;
-  handleContinue: () => Promise<void>;
-  handleRegenerate: (message: StoredMessage) => Promise<void>;
+  handleSend: (
+    message: string,
+    attachments?: ImageAttachment[],
+    options?: { swapPlaces?: boolean },
+  ) => Promise<void>;
+  handleContinue: (options?: { swapPlaces?: boolean }) => Promise<void>;
+  handleRegenerate: (message: StoredMessage, options?: { swapPlaces?: boolean }) => Promise<void>;
   handleAbort: () => Promise<void>;
   getVariantState: (message: StoredMessage) => VariantState;
   applyVariantSelection: (messageId: string, variantId: string) => Promise<void>;
@@ -937,7 +941,11 @@ export function useChatController(
   );
 
   const handleSend = useCallback(
-    async (message: string, attachments?: ImageAttachment[]) => {
+    async (
+      message: string,
+      attachments?: ImageAttachment[],
+      options?: { swapPlaces?: boolean },
+    ) => {
       if (!state.session || !state.character) return;
       const requestId = crypto.randomUUID();
 
@@ -1011,6 +1019,7 @@ export function useChatController(
           characterId: state.character.id,
           message,
           personaId: state.persona?.id,
+          swapPlaces: options?.swapPlaces ?? false,
           stream: true,
           requestId,
           attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
@@ -1079,126 +1088,136 @@ export function useChatController(
     ],
   );
 
-  const handleContinue = useCallback(async () => {
-    if (!state.session || !state.character) return;
-    const requestId = crypto.randomUUID();
+  const handleContinue = useCallback(
+    async (options?: { swapPlaces?: boolean }) => {
+      if (!state.session || !state.character) return;
+      const requestId = crypto.randomUUID();
 
-    const assistantPlaceholder = createPlaceholderMessage("assistant", "");
+      const assistantPlaceholder = createPlaceholderMessage("assistant", "");
 
-    dispatch({
-      type: "BATCH",
-      actions: [
-        { type: "SET_SENDING", payload: true },
-        { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
-        { type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] },
-      ],
-    });
+      dispatch({
+        type: "BATCH",
+        actions: [
+          { type: "SET_SENDING", payload: true },
+          { type: "SET_ACTIVE_REQUEST_ID", payload: requestId },
+          { type: "SET_MESSAGES", payload: [...state.messages, assistantPlaceholder] },
+        ],
+      });
 
-    let unlistenNormalized: UnlistenFn | null = null;
-    const streamBatcher = createStreamBatcher(dispatch);
-    const thinkState = createThinkStreamState();
+      let unlistenNormalized: UnlistenFn | null = null;
+      const streamBatcher = createStreamBatcher(dispatch);
+      const thinkState = createThinkStreamState();
 
-    try {
-      // Only use normalized provider-agnostic stream
-      unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
-        try {
-          const payload =
-            typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
-          if (payload && payload.type === "delta" && payload.data?.text) {
-            const { content, reasoning } = consumeThinkDelta(thinkState, String(payload.data.text));
-            if (content) {
-              streamBatcher.update(assistantPlaceholder.id, content);
-            }
-            if (reasoning) {
+      try {
+        // Only use normalized provider-agnostic stream
+        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          try {
+            const payload =
+              typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+            if (payload && payload.type === "delta" && payload.data?.text) {
+              const { content, reasoning } = consumeThinkDelta(
+                thinkState,
+                String(payload.data.text),
+              );
+              if (content) {
+                streamBatcher.update(assistantPlaceholder.id, content);
+              }
+              if (reasoning) {
+                dispatch({
+                  type: "UPDATE_MESSAGE_REASONING",
+                  payload: { messageId: assistantPlaceholder.id, reasoning },
+                });
+              }
+              if (content || reasoning) {
+                void triggerTypingHaptic();
+              }
+            } else if (payload && payload.type === "reasoning" && payload.data?.text) {
               dispatch({
                 type: "UPDATE_MESSAGE_REASONING",
-                payload: { messageId: assistantPlaceholder.id, reasoning },
+                payload: {
+                  messageId: assistantPlaceholder.id,
+                  reasoning: String(payload.data.text),
+                },
               });
+            } else if (payload && payload.type === "error" && payload.data?.message) {
+              dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
             }
-            if (content || reasoning) {
-              void triggerTypingHaptic();
-            }
-          } else if (payload && payload.type === "reasoning" && payload.data?.text) {
-            dispatch({
-              type: "UPDATE_MESSAGE_REASONING",
-              payload: { messageId: assistantPlaceholder.id, reasoning: String(payload.data.text) },
-            });
-          } else if (payload && payload.type === "error" && payload.data?.message) {
-            dispatch({ type: "SET_ERROR", payload: String(payload.data.message) });
+          } catch {
+            // ignore malformed payloads
           }
-        } catch {
-          // ignore malformed payloads
+        });
+
+        const result = await continueConversation({
+          sessionId: state.session.id,
+          characterId: state.character.id,
+          personaId: state.persona?.id,
+          swapPlaces: options?.swapPlaces ?? false,
+          stream: true,
+          requestId,
+        });
+
+        const replaced = messagesRef.current.map((msg) => {
+          if (msg.id === assistantPlaceholder.id) return result.assistantMessage;
+          return msg;
+        });
+        messagesRef.current = replaced;
+        dispatch({
+          type: "BATCH",
+          actions: [
+            { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
+            { type: "SET_MESSAGES", payload: replaced },
+            // Transfer reasoning from placeholder to real message ID
+            {
+              type: "TRANSFER_REASONING",
+              payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id },
+            },
+          ],
+        });
+
+        void runInChatImageGeneration(result.assistantMessage.id);
+      } catch (err) {
+        console.error("ChatController: continue failed", err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        dispatch({ type: "SET_ERROR", payload: errMsg });
+
+        const abortedByUser =
+          errMsg.toLowerCase().includes("aborted by user") ||
+          errMsg.toLowerCase().includes("cancelled");
+        if (!abortedByUser) {
+          const cleaned = messagesRef.current.filter((msg) => msg.id !== assistantPlaceholder.id);
+          messagesRef.current = cleaned;
+          dispatch({ type: "SET_MESSAGES", payload: cleaned });
         }
-      });
-
-      const result = await continueConversation({
-        sessionId: state.session.id,
-        characterId: state.character.id,
-        personaId: state.persona?.id,
-        stream: true,
-        requestId,
-      });
-
-      const replaced = messagesRef.current.map((msg) => {
-        if (msg.id === assistantPlaceholder.id) return result.assistantMessage;
-        return msg;
-      });
-      messagesRef.current = replaced;
-      dispatch({
-        type: "BATCH",
-        actions: [
-          { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
-          { type: "SET_MESSAGES", payload: replaced },
-          // Transfer reasoning from placeholder to real message ID
-          {
-            type: "TRANSFER_REASONING",
-            payload: { fromId: assistantPlaceholder.id, toId: result.assistantMessage.id },
-          },
-        ],
-      });
-
-      void runInChatImageGeneration(result.assistantMessage.id);
-    } catch (err) {
-      console.error("ChatController: continue failed", err);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      dispatch({ type: "SET_ERROR", payload: errMsg });
-
-      const abortedByUser =
-        errMsg.toLowerCase().includes("aborted by user") ||
-        errMsg.toLowerCase().includes("cancelled");
-      if (!abortedByUser) {
-        const cleaned = messagesRef.current.filter((msg) => msg.id !== assistantPlaceholder.id);
-        messagesRef.current = cleaned;
-        dispatch({ type: "SET_MESSAGES", payload: cleaned });
-      }
-    } finally {
-      const tail = finalizeThinkStream(thinkState);
-      if (tail.content) {
+      } finally {
+        const tail = finalizeThinkStream(thinkState);
+        if (tail.content) {
+          dispatch({
+            type: "UPDATE_MESSAGE_CONTENT",
+            payload: { messageId: assistantPlaceholder.id, content: tail.content },
+          });
+        }
+        if (tail.reasoning) {
+          dispatch({
+            type: "UPDATE_MESSAGE_REASONING",
+            payload: { messageId: assistantPlaceholder.id, reasoning: tail.reasoning },
+          });
+        }
+        streamBatcher.cancel();
+        if (unlistenNormalized) unlistenNormalized();
         dispatch({
-          type: "UPDATE_MESSAGE_CONTENT",
-          payload: { messageId: assistantPlaceholder.id, content: tail.content },
+          type: "BATCH",
+          actions: [
+            { type: "SET_SENDING", payload: false },
+            { type: "SET_ACTIVE_REQUEST_ID", payload: null },
+          ],
         });
       }
-      if (tail.reasoning) {
-        dispatch({
-          type: "UPDATE_MESSAGE_REASONING",
-          payload: { messageId: assistantPlaceholder.id, reasoning: tail.reasoning },
-        });
-      }
-      streamBatcher.cancel();
-      if (unlistenNormalized) unlistenNormalized();
-      dispatch({
-        type: "BATCH",
-        actions: [
-          { type: "SET_SENDING", payload: false },
-          { type: "SET_ACTIVE_REQUEST_ID", payload: null },
-        ],
-      });
-    }
-  }, [runInChatImageGeneration, state.character, state.persona?.id, state.session]);
+    },
+    [runInChatImageGeneration, state.character, state.persona?.id, state.session],
+  );
 
   const handleRegenerate = useCallback(
-    async (message: StoredMessage) => {
+    async (message: StoredMessage, options?: { swapPlaces?: boolean }) => {
       if (!state.session) return;
       if (
         state.messages.length === 0 ||
@@ -1284,6 +1303,7 @@ export function useChatController(
         const result = await regenerateAssistantMessage({
           sessionId: state.session.id,
           messageId: message.id,
+          swapPlaces: options?.swapPlaces ?? false,
           stream: true,
           requestId,
         });

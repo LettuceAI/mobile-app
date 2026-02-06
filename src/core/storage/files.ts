@@ -278,11 +278,17 @@ export const storageBridge = {
       }[]
     >("search_messages", { sessionId, query }),
 
-  chatGenerateUserReply: (sessionId: string, currentDraft?: string, requestId?: string) =>
+  chatGenerateUserReply: (
+    sessionId: string,
+    currentDraft?: string,
+    requestId?: string,
+    swapPlaces?: boolean,
+  ) =>
     invoke<string>("chat_generate_user_reply", {
       sessionId,
       currentDraft: currentDraft ?? null,
       requestId: requestId ?? null,
+      swapPlaces: swapPlaces ?? null,
     }),
 
   groupChatGenerateUserReply: (sessionId: string, currentDraft?: string, requestId?: string) =>

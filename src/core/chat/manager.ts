@@ -29,11 +29,21 @@ export async function sendChatTurn(params: {
   characterId: string;
   message: string;
   personaId?: string | null;
+  swapPlaces?: boolean;
   stream?: boolean;
   requestId?: string;
   attachments?: ImageAttachment[];
 }): Promise<ChatTurnResult> {
-  const { sessionId, characterId, message, personaId, stream = true, requestId, attachments = [] } = params;
+  const {
+    sessionId,
+    characterId,
+    message,
+    personaId,
+    swapPlaces = false,
+    stream = true,
+    requestId,
+    attachments = [],
+  } = params;
   if (!message.trim() && attachments.length === 0) {
     throw new Error("Message cannot be empty");
   }
@@ -44,10 +54,11 @@ export async function sendChatTurn(params: {
       characterId,
       userMessage: message,
       personaId: personaId ?? null,
+      swapPlaces,
       stream,
       requestId: requestId ?? null,
       attachments,
-    }
+    },
   });
 }
 
@@ -55,33 +66,44 @@ export async function continueConversation(params: {
   sessionId: string;
   characterId: string;
   personaId?: string | null;
+  swapPlaces?: boolean;
   stream?: boolean;
   requestId?: string;
 }): Promise<ChatContinueResult> {
-  const { sessionId, characterId, personaId, stream = true, requestId } = params;
+  const {
+    sessionId,
+    characterId,
+    personaId,
+    swapPlaces = false,
+    stream = true,
+    requestId,
+  } = params;
 
   return invoke<ChatContinueResult>("chat_continue", {
     args: {
       sessionId,
       characterId,
       personaId: personaId ?? null,
+      swapPlaces,
       stream,
       requestId: requestId ?? null,
-    }
+    },
   });
 }
 
 export async function regenerateAssistantMessage(params: {
   sessionId: string;
   messageId: string;
+  swapPlaces?: boolean;
   stream?: boolean;
   requestId?: string;
 }): Promise<ChatRegenerateResult> {
-  const { sessionId, messageId, stream = true, requestId } = params;
+  const { sessionId, messageId, swapPlaces = false, stream = true, requestId } = params;
   return invoke<ChatRegenerateResult>("chat_regenerate", {
     args: {
       sessionId,
       messageId,
+      swapPlaces,
       stream,
       requestId: requestId ?? null,
     },

@@ -8,8 +8,8 @@ import {
   useState,
 } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, X } from "lucide-react";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { ArrowLeftRight, ChevronDown, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AccessibilitySettings,
@@ -131,6 +131,7 @@ export function ChatConversationPage() {
 
   // Help Me Reply states
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [swapPlaces, setSwapPlaces] = useState(false);
   const [showChoiceMenu, setShowChoiceMenu] = useState(false);
   const [showResultMenu, setShowResultMenu] = useState(false);
   const [generatedReply, setGeneratedReply] = useState<string | null>(null);
@@ -239,6 +240,7 @@ export function ChatConversationPage() {
 
   const backgroundImageData = useImageData(character?.backgroundImagePath);
   const [theme, setTheme] = useState<ThemeColors>(getThemeForBackground(false));
+  const [isBackgroundLight, setIsBackgroundLight] = useState(false);
   const unloadProviderIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -302,6 +304,7 @@ export function ChatConversationPage() {
 
   useEffect(() => {
     if (!backgroundImageData) {
+      setIsBackgroundLight(false);
       setTheme(getThemeForBackground(false));
       return;
     }
@@ -310,6 +313,7 @@ export function ChatConversationPage() {
 
     isImageLight(backgroundImageData).then((isLight) => {
       if (mounted) {
+        setIsBackgroundLight(isLight);
         setTheme(getThemeForBackground(isLight));
       }
     });
@@ -331,6 +335,22 @@ export function ChatConversationPage() {
       backgroundRepeat: "no-repeat",
     };
   }, [backgroundImageData]);
+
+  const swapOverlayStyle = useMemo<CSSProperties>(() => {
+    const tintRgb = isBackgroundLight ? "22, 101, 52" : "16, 185, 129";
+    const edgeAlpha = isBackgroundLight ? 0.045 : 0.08;
+    const sideAlpha = isBackgroundLight ? 0.02 : 0.045;
+    const topBottomAlpha = isBackgroundLight ? 0.02 : 0.03;
+    const baseScrim = isBackgroundLight ? 0.34 : 0.14;
+    return {
+      background: `
+        linear-gradient(rgba(0, 0, 0, ${baseScrim}), rgba(0, 0, 0, ${baseScrim})),
+        radial-gradient(132% 102% at 50% 50%, rgba(${tintRgb}, 0) 54%, rgba(${tintRgb}, ${edgeAlpha}) 100%),
+        linear-gradient(to right, rgba(${tintRgb}, ${sideAlpha}) 0%, rgba(${tintRgb}, 0) 16%, rgba(${tintRgb}, 0) 84%, rgba(${tintRgb}, ${sideAlpha}) 100%),
+        linear-gradient(to bottom, rgba(${tintRgb}, ${topBottomAlpha}) 0%, rgba(${tintRgb}, 0) 20%, rgba(${tintRgb}, 0) 80%, rgba(${tintRgb}, ${topBottomAlpha}) 100%)
+      `,
+    };
+  }, [isBackgroundLight]);
 
   const ensureAudioProviders = useCallback(async () => {
     if (audioCacheRef.current.providers) {
@@ -897,6 +917,15 @@ export function ChatConversationPage() {
     setShowPlusMenu(true);
   }, []);
 
+  const handleEnableSwapPlaces = useCallback(() => {
+    setSwapPlaces(true);
+    setShowPlusMenu(false);
+  }, []);
+
+  const handleDisableSwapPlaces = useCallback(() => {
+    setSwapPlaces(false);
+  }, []);
+
   const handleHelpMeReply = useCallback(
     async (mode: "new" | "enrich") => {
       if (!session?.id) return;
@@ -952,7 +981,7 @@ export function ChatConversationPage() {
         });
 
         const currentDraft = mode === "enrich" && draft.trim() ? draft : undefined;
-        const result = await generateUserReply(session.id, currentDraft, requestId);
+        const result = await generateUserReply(session.id, currentDraft, requestId, swapPlaces);
 
         // If we didn't get streaming updates, use the final result
         if (!streamingText.trim()) {
@@ -982,7 +1011,7 @@ export function ChatConversationPage() {
         }
       }
     },
-    [session?.id, draft],
+    [session?.id, draft, swapPlaces],
   );
 
   const handleUseReply = useCallback(() => {
@@ -1087,10 +1116,10 @@ export function ChatConversationPage() {
       const content = draft.trim();
       setDraft("");
       playAccessibilitySound("send", accessibilitySettings);
-      await handleSend(content);
+      await handleSend(content, undefined, { swapPlaces });
     } else {
       playAccessibilitySound("send", accessibilitySettings);
-      await handleContinue();
+      await handleContinue({ swapPlaces });
     }
   }, [
     sending,
@@ -1101,7 +1130,15 @@ export function ChatConversationPage() {
     handleContinue,
     pendingAttachments,
     accessibilitySettings,
+    swapPlaces,
   ]);
+
+  const handleRegenerateMessage = useCallback(
+    async (message: StoredMessage) => {
+      await handleRegenerate(message, { swapPlaces });
+    },
+    [handleRegenerate, swapPlaces],
+  );
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
@@ -1283,17 +1320,63 @@ export function ChatConversationPage() {
       {backgroundImageData && (
         <div className="pointer-events-none fixed inset-0 z-0" style={chatBackgroundStyle} />
       )}
+      <AnimatePresence>
+        {swapPlaces && (
+          <motion.div
+            key="swap-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="pointer-events-none fixed inset-0 z-[25]"
+            style={swapOverlayStyle}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <div className="relative z-20">
         <ChatHeader
           character={character}
+          persona={persona}
+          swapPlaces={swapPlaces}
           sessionId={sessionId}
           session={sessionForHeader}
           hasBackgroundImage={!!backgroundImageData}
           onSessionUpdate={handleSessionUpdate}
         />
       </div>
+
+      <AnimatePresence>
+        {swapPlaces && (
+          <motion.div
+            key="swap-banner"
+            initial={{ opacity: 0, y: -10, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.985 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+56px)] z-40 w-[min(560px,calc(100vw-16px))] -translate-x-1/2 px-1"
+          >
+            <div
+              className={cn(
+                "flex items-center justify-between gap-2 border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-emerald-100 backdrop-blur-md",
+                radius.full,
+              )}
+            >
+              <span className="text-sm">Swap places is active</span>
+              <button
+                type="button"
+                onClick={handleDisableSwapPlaces}
+                className={cn(
+                  "rounded-full border border-emerald-200/40 px-3 py-1 text-xs font-medium text-emerald-50 hover:bg-emerald-100/10",
+                )}
+              >
+                End swap
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main content area */}
       <main
@@ -1304,7 +1387,13 @@ export function ChatConversationPage() {
         <div
           className="space-y-6 px-3 pb-24 pt-4"
           style={{
-            backgroundColor: backgroundImageData ? theme.contentOverlay : "transparent",
+            backgroundColor: backgroundImageData
+              ? swapPlaces
+                ? isBackgroundLight
+                  ? "rgba(5, 12, 11, 0.44)"
+                  : "rgba(5, 12, 11, 0.22)"
+                : theme.contentOverlay
+              : "transparent",
           }}
         >
           {hasMoreMessagesBefore && (
@@ -1322,65 +1411,86 @@ export function ChatConversationPage() {
             </div>
           )}
 
-          {messages.map((message, index) => {
-            const isAssistant = message.role === "assistant";
-            const isUser = message.role === "user";
-            const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");
-            // Replace placeholders for display only
-            const charName = character?.name ?? "";
-            const personaName = chatController.persona?.title ?? "";
-            const parsed = splitThinkTags(message.content);
-            const displayContent = replacePlaceholders(parsed.content, charName, personaName);
-            const combinedReasoning = [message.reasoning ?? "", parsed.reasoning]
-              .filter(Boolean)
-              .join("\n");
-            const eventHandlers = actionable
-              ? {
-                  onMouseDown: handlePressStart(message),
-                  onMouseMove: handlePressMove,
-                  onMouseUp: handlePressEnd,
-                  onMouseLeave: handlePressEnd,
-                  onTouchStart: handlePressStart(message),
-                  onTouchMove: handlePressMove,
-                  onTouchEnd: handlePressEnd,
-                  onTouchCancel: handlePressEnd,
-                  onContextMenu: handleContextMenu(message),
-                }
-              : {};
+          <LayoutGroup id="swap-message-layout">
+            {messages.map((message, index) => {
+              const renderedMessage =
+                swapPlaces && (message.role === "user" || message.role === "assistant")
+                  ? {
+                      ...message,
+                      role: (message.role === "user" ? "assistant" : "user") as
+                        | "assistant"
+                        | "user",
+                    }
+                  : message;
+              const isAssistant = renderedMessage.role === "assistant";
+              const isUser = renderedMessage.role === "user";
+              const actionable = (isAssistant || isUser) && !message.id.startsWith("placeholder");
+              // Replace placeholders for display only
+              const charName = swapPlaces
+                ? (chatController.persona?.title ?? "")
+                : (character?.name ?? "");
+              const personaName = swapPlaces
+                ? (character?.name ?? "")
+                : (chatController.persona?.title ?? "");
+              const parsed = splitThinkTags(message.content);
+              const displayContent = replacePlaceholders(parsed.content, charName, personaName);
+              const combinedReasoning = [message.reasoning ?? "", parsed.reasoning]
+                .filter(Boolean)
+                .join("\n");
+              const eventHandlers = actionable
+                ? {
+                    onMouseDown: handlePressStart(message),
+                    onMouseMove: handlePressMove,
+                    onMouseUp: handlePressEnd,
+                    onMouseLeave: handlePressEnd,
+                    onTouchStart: handlePressStart(message),
+                    onTouchMove: handlePressMove,
+                    onTouchEnd: handlePressEnd,
+                    onTouchCancel: handlePressEnd,
+                    onContextMenu: handleContextMenu(message),
+                  }
+                : {};
 
-            return (
-              <div
-                key={message.id}
-                id={`message-${message.id}`}
-                className="scroll-mt-24 transition-colors duration-500"
-              >
-                <ChatMessage
+              return (
+                <motion.div
                   key={message.id}
-                  message={message}
-                  index={index}
-                  messagesLength={messages.length}
-                  heldMessageId={heldMessageId}
-                  regeneratingMessageId={regeneratingMessageId}
-                  sending={sending}
-                  eventHandlers={eventHandlers}
-                  getVariantState={getVariantState}
-                  handleVariantDrag={handleVariantDrag}
-                  handleRegenerate={handleRegenerate}
-                  isStartingSceneMessage={isStartingSceneMessage(message)}
-                  theme={theme}
-                  displayContent={displayContent}
-                  character={character}
-                  persona={persona}
-                  audioStatus={audioStatusByMessage[message.id]}
-                  onPlayAudio={handlePlayMessageAudio}
-                  onStopAudio={handleStopAudio}
-                  onCancelAudio={handleCancelAudio}
-                  onImageClick={handleImageClick}
-                  reasoning={streamingReasoning[message.id] || combinedReasoning || undefined}
-                />
-              </div>
-            );
-          })}
+                  id={`message-${message.id}`}
+                  className="scroll-mt-24 transition-colors duration-500"
+                  layout="position"
+                  transition={{
+                    layout: { type: "spring", stiffness: 280, damping: 30, mass: 0.9 },
+                    duration: 0.18,
+                  }}
+                >
+                  <ChatMessage
+                    key={message.id}
+                    message={renderedMessage}
+                    index={index}
+                    messagesLength={messages.length}
+                    heldMessageId={heldMessageId}
+                    regeneratingMessageId={regeneratingMessageId}
+                    sending={sending}
+                    eventHandlers={eventHandlers}
+                    getVariantState={getVariantState}
+                    handleVariantDrag={handleVariantDrag}
+                    handleRegenerate={handleRegenerateMessage}
+                    isStartingSceneMessage={isStartingSceneMessage(message)}
+                    theme={theme}
+                    displayContent={displayContent}
+                    character={character}
+                    persona={persona}
+                    audioStatus={audioStatusByMessage[message.id]}
+                    onPlayAudio={handlePlayMessageAudio}
+                    onStopAudio={handleStopAudio}
+                    onCancelAudio={handleCancelAudio}
+                    onImageClick={handleImageClick}
+                    reasoning={streamingReasoning[message.id] || combinedReasoning || undefined}
+                    swapPlaces={swapPlaces}
+                  />
+                </motion.div>
+              );
+            })}
+          </LayoutGroup>
         </div>
       </main>
 
@@ -1503,6 +1613,23 @@ export function ChatConversationPage() {
       {/* Plus Menu - Upload Image | Help Me Reply */}
       <BottomMenu isOpen={showPlusMenu} onClose={() => setShowPlusMenu(false)} title="Add Content">
         <div className="space-y-2">
+          <MenuButton
+            icon={ArrowLeftRight}
+            title={swapPlaces ? "Swap Places (On)" : "Swap Places"}
+            description={
+              swapPlaces
+                ? "You are chatting as the character. Tap top banner to end."
+                : "Temporarily chat as the character and let AI reply as your persona."
+            }
+            onClick={
+              swapPlaces
+                ? () => {
+                    handleDisableSwapPlaces();
+                    setShowPlusMenu(false);
+                  }
+                : handleEnableSwapPlaces
+            }
+          />
           {supportsImageInput && (
             <MenuButton icon={Image} title="Upload Image" onClick={handlePlusMenuImageUpload} />
           )}

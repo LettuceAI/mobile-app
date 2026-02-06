@@ -35,7 +35,7 @@ use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
     Character, ChatAddMessageAttachmentArgs, ChatCompletionArgs, ChatContinueArgs,
-    ChatRegenerateArgs, ChatTurnResult, ContinueResult, MemoryEmbedding, Model,
+    ChatRegenerateArgs, ChatTurnResult, ContinueResult, MemoryEmbedding, Model, Persona,
     PromptEntryPosition, PromptScope, ProviderCredential, RegenerateResult, Session, Settings,
     StoredMessage, SystemPromptEntry, SystemPromptTemplate,
 };
@@ -1133,6 +1133,51 @@ fn load_attachment_data(app: &AppHandle, message: &StoredMessage) -> StoredMessa
     loaded_message
 }
 
+fn role_swap_enabled(flag: Option<bool>) -> bool {
+    flag.unwrap_or(false)
+}
+
+fn swap_role_for_api(role: &str) -> &str {
+    match role {
+        "user" => "assistant",
+        "assistant" => "user",
+        _ => role,
+    }
+}
+
+fn maybe_swap_message_for_api(message: &StoredMessage, swap_places: bool) -> StoredMessage {
+    if !swap_places {
+        return message.clone();
+    }
+    let mut swapped = message.clone();
+    swapped.role = swap_role_for_api(message.role.as_str()).to_string();
+    swapped
+}
+
+fn swapped_prompt_entities(
+    character: &Character,
+    persona: Option<&Persona>,
+) -> (Character, Option<Persona>) {
+    let Some(persona) = persona else {
+        return (character.clone(), None);
+    };
+
+    let mut swapped_character = character.clone();
+    swapped_character.name = persona.title.clone();
+    swapped_character.definition = Some(persona.description.clone());
+    swapped_character.description = Some(persona.description.clone());
+
+    let mut swapped_persona = persona.clone();
+    swapped_persona.title = character.name.clone();
+    swapped_persona.description = character
+        .definition
+        .clone()
+        .or(character.description.clone())
+        .unwrap_or_default();
+
+    (swapped_character, Some(swapped_persona))
+}
+
 #[tauri::command]
 pub async fn chat_completion(
     app: AppHandle,
@@ -1143,10 +1188,12 @@ pub async fn chat_completion(
         character_id,
         user_message,
         persona_id,
+        swap_places,
         stream,
         request_id,
         attachments,
     } = args;
+    let swap_places = role_swap_enabled(swap_places);
 
     log_info(
         &app,
@@ -1283,10 +1330,23 @@ pub async fn chat_completion(
         }),
     );
 
-    let prompt_entries = append_image_directive_instructions(
-        context.build_system_prompt(&character, model, persona, &session),
-        settings,
-    );
+    let prompt_entries = if swap_places {
+        let (prompt_character, prompt_persona) = swapped_prompt_entities(&character, persona);
+        append_image_directive_instructions(
+            context.build_system_prompt(
+                &prompt_character,
+                model,
+                prompt_persona.as_ref(),
+                &session,
+            ),
+            settings,
+        )
+    } else {
+        append_image_directive_instructions(
+            context.build_system_prompt(&character, model, persona, &session),
+            settings,
+        )
+    };
     let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     // Determine message window: use conversation_window for dynamic memory (limited context),
@@ -1376,6 +1436,19 @@ pub async fn chat_completion(
             entry,
         );
     }
+    if swap_places {
+        let persona_title = persona
+            .map(|p| p.title.clone())
+            .unwrap_or_else(|| "the user persona".to_string());
+        crate::chat_manager::messages::push_system_message(
+            &mut messages_for_api,
+            &system_role,
+            Some(format!(
+                "Swap places mode is active for this turn. The human is speaking as character '{}' and you must respond as persona '{}'. Keep the response in first person as '{}'.",
+                character.name, persona_title, persona_title
+            )),
+        );
+    }
 
     // Inject memory context when available
     // - Dynamic memory: inject semantically relevant memories as context
@@ -1413,8 +1486,16 @@ pub async fn chat_completion(
         );
     }
 
-    let char_name = &character.name;
-    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    let char_name = if swap_places {
+        persona.map(|p| p.title.as_str()).unwrap_or("User")
+    } else {
+        character.name.as_str()
+    };
+    let persona_name = if swap_places {
+        character.name.as_str()
+    } else {
+        persona.map(|p| p.title.as_str()).unwrap_or("")
+    };
     let allow_image_input = model
         .input_scopes
         .iter()
@@ -1426,6 +1507,7 @@ pub async fn chat_completion(
     // Pinned messages are always included but don't count against the sliding window limit
     for msg in &pinned_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
+        let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut chat_messages,
             &msg_with_data,
@@ -1437,6 +1519,7 @@ pub async fn chat_completion(
 
     for msg in &recent_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
+        let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut chat_messages,
             &msg_with_data,
@@ -1996,9 +2079,11 @@ pub async fn chat_regenerate(
     let ChatRegenerateArgs {
         session_id,
         message_id,
+        swap_places,
         stream,
         request_id,
     } = args;
+    let swap_places = role_swap_enabled(swap_places);
 
     let context = ChatContext::initialize(app.clone())?;
     let settings = &context.settings;
@@ -2190,10 +2275,23 @@ pub async fn chat_regenerate(
         }
     }
 
-    let prompt_entries = append_image_directive_instructions(
-        context.build_system_prompt(&character, model, persona, &session),
-        settings,
-    );
+    let prompt_entries = if swap_places {
+        let (prompt_character, prompt_persona) = swapped_prompt_entities(&character, persona);
+        append_image_directive_instructions(
+            context.build_system_prompt(
+                &prompt_character,
+                model,
+                prompt_persona.as_ref(),
+                &session,
+            ),
+            settings,
+        )
+    } else {
+        append_image_directive_instructions(
+            context.build_system_prompt(&character, model, persona, &session),
+            settings,
+        )
+    };
     let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     let system_role = super::request_builder::system_role_for(provider_cred);
@@ -2202,9 +2300,30 @@ pub async fn chat_regenerate(
         for entry in &relative_entries {
             crate::chat_manager::messages::push_prompt_entry_message(&mut out, &system_role, entry);
         }
+        if swap_places {
+            let persona_title = persona
+                .map(|p| p.title.clone())
+                .unwrap_or_else(|| "the user persona".to_string());
+            crate::chat_manager::messages::push_system_message(
+                &mut out,
+                &system_role,
+                Some(format!(
+                    "Swap places mode is active for this turn. The human is speaking as character '{}' and you must respond as persona '{}'. Keep the response in first person as '{}'.",
+                    character.name, persona_title, persona_title
+                )),
+            );
+        }
 
-        let char_name = &character.name;
-        let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+        let char_name = if swap_places {
+            persona.map(|p| p.title.as_str()).unwrap_or("User")
+        } else {
+            character.name.as_str()
+        };
+        let persona_name = if swap_places {
+            character.name.as_str()
+        } else {
+            persona.map(|p| p.title.as_str()).unwrap_or("")
+        };
         let allow_image_input = model
             .input_scopes
             .iter()
@@ -2225,6 +2344,7 @@ pub async fn chat_regenerate(
 
             for msg in &pinned_msgs {
                 let msg_with_data = load_attachment_data(&app, msg);
+                let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                     &mut chat_messages,
                     &msg_with_data,
@@ -2236,6 +2356,7 @@ pub async fn chat_regenerate(
 
             for msg in &recent_msgs {
                 let msg_with_data = load_attachment_data(&app, msg);
+                let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                     &mut chat_messages,
                     &msg_with_data,
@@ -2257,6 +2378,7 @@ pub async fn chat_regenerate(
                     continue;
                 }
                 let msg_with_data = load_attachment_data(&app, msg);
+                let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
                 crate::chat_manager::messages::push_user_or_assistant_message_with_context(
                     &mut chat_messages,
                     &msg_with_data,
@@ -2648,9 +2770,11 @@ pub async fn chat_continue(
         session_id,
         character_id,
         persona_id,
+        swap_places,
         stream,
         request_id,
     } = args;
+    let swap_places = role_swap_enabled(swap_places);
 
     let context = ChatContext::initialize(app.clone())?;
     let settings = &context.settings;
@@ -2798,10 +2922,23 @@ pub async fn chat_continue(
         }
     }
 
-    let prompt_entries = append_image_directive_instructions(
-        context.build_system_prompt(&character, model, persona, &session),
-        settings,
-    );
+    let prompt_entries = if swap_places {
+        let (prompt_character, prompt_persona) = swapped_prompt_entities(&character, persona);
+        append_image_directive_instructions(
+            context.build_system_prompt(
+                &prompt_character,
+                model,
+                prompt_persona.as_ref(),
+                &session,
+            ),
+            settings,
+        )
+    } else {
+        append_image_directive_instructions(
+            context.build_system_prompt(&character, model, persona, &session),
+            settings,
+        )
+    };
     let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
@@ -2823,9 +2960,30 @@ pub async fn chat_continue(
             entry,
         );
     }
+    if swap_places {
+        let persona_title = persona
+            .map(|p| p.title.clone())
+            .unwrap_or_else(|| "the user persona".to_string());
+        crate::chat_manager::messages::push_system_message(
+            &mut messages_for_api,
+            &system_role,
+            Some(format!(
+                "Swap places mode is active for this turn. The human is speaking as character '{}' and you must respond as persona '{}'. Keep the response in first person as '{}'.",
+                character.name, persona_title, persona_title
+            )),
+        );
+    }
 
-    let char_name = &character.name;
-    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("");
+    let char_name = if swap_places {
+        persona.map(|p| p.title.as_str()).unwrap_or("User")
+    } else {
+        character.name.as_str()
+    };
+    let persona_name = if swap_places {
+        character.name.as_str()
+    } else {
+        persona.map(|p| p.title.as_str()).unwrap_or("")
+    };
     let allow_image_input = model
         .input_scopes
         .iter()
@@ -2834,6 +2992,7 @@ pub async fn chat_continue(
     let mut chat_messages = Vec::new();
     for msg in &pinned_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
+        let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut chat_messages,
             &msg_with_data,
@@ -2845,6 +3004,7 @@ pub async fn chat_continue(
 
     for msg in &recent_msgs {
         let msg_with_data = load_attachment_data(&app, msg);
+        let msg_with_data = maybe_swap_message_for_api(&msg_with_data, swap_places);
         crate::chat_manager::messages::push_user_or_assistant_message_with_context(
             &mut chat_messages,
             &msg_with_data,
@@ -4875,6 +5035,7 @@ pub async fn chat_generate_user_reply(
     session_id: String,
     current_draft: Option<String>,
     request_id: Option<String>,
+    swap_places: Option<bool>,
 ) -> Result<String, String> {
     log_info(
         &app,
@@ -4886,6 +5047,7 @@ pub async fn chat_generate_user_reply(
         ),
     );
 
+    let swap_places = role_swap_enabled(swap_places);
     let context = ChatContext::initialize(app.clone())?;
     let settings = &context.settings;
 
@@ -4912,8 +5074,12 @@ pub async fn chat_generate_user_reply(
     };
 
     let character = context.find_character(&session.character_id)?;
-
     let persona = context.choose_persona(resolve_persona_id(&session, None));
+    let (prompt_character, prompt_persona) = if swap_places {
+        swapped_prompt_entities(&character, persona)
+    } else {
+        (character.clone(), persona.cloned())
+    };
 
     let recent_msgs = recent_messages(&session, 10);
 
@@ -4971,14 +5137,20 @@ pub async fn chat_generate_user_reply(
         .and_then(|advanced| advanced.help_me_reply_streaming)
         .unwrap_or(true);
 
-    let char_name = &character.name;
-    let char_desc = character
+    let char_name = &prompt_character.name;
+    let char_desc = prompt_character
         .definition
         .as_deref()
-        .or(character.description.as_deref())
+        .or(prompt_character.description.as_deref())
         .unwrap_or("");
-    let persona_name = persona.map(|p| p.title.as_str()).unwrap_or("User");
-    let persona_desc = persona.map(|p| p.description.as_str()).unwrap_or("");
+    let persona_name = prompt_persona
+        .as_ref()
+        .map(|p| p.title.as_str())
+        .unwrap_or("User");
+    let persona_desc = prompt_persona
+        .as_ref()
+        .map(|p| p.description.as_str())
+        .unwrap_or("");
 
     let mut system_prompt = base_prompt;
     system_prompt = system_prompt.replace("{{char.name}}", char_name);
@@ -5011,13 +5183,21 @@ pub async fn chat_generate_user_reply(
         remove_if_block(&mut system_prompt);
     }
 
+    let effective_user_name = if swap_places { char_name } else { persona_name };
+    let effective_assistant_name = if swap_places { persona_name } else { char_name };
+
     let conversation_context = recent_msgs
         .iter()
         .map(|msg| {
-            let role_label = if msg.role == "user" {
-                persona_name
+            let effective_role = if swap_places {
+                swap_role_for_api(msg.role.as_str())
             } else {
-                char_name
+                msg.role.as_str()
+            };
+            let role_label = if effective_role == "user" {
+                effective_user_name
+            } else {
+                effective_assistant_name
             };
             format!("{}: {}", role_label, msg.content)
         })
@@ -5026,7 +5206,7 @@ pub async fn chat_generate_user_reply(
 
     let user_prompt = format!(
         "Here is the recent conversation:\n\n{}\n\nGenerate a reply for {} to say next.",
-        conversation_context, persona_name
+        conversation_context, effective_user_name
     );
 
     let messages_for_api: Vec<Value> = vec![
@@ -5108,7 +5288,7 @@ pub async fn chat_generate_user_reply(
     let cleaned = generated_text
         .trim()
         .trim_matches('"')
-        .trim_start_matches(&format!("{}:", persona_name))
+        .trim_start_matches(&format!("{}:", effective_user_name))
         .trim()
         .to_string();
 
@@ -5123,7 +5303,7 @@ pub async fn chat_generate_user_reply(
         &context,
         &usage,
         &session,
-        &character,
+        &prompt_character,
         &model,
         &provider_cred,
         &api_key,

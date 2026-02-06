@@ -785,8 +785,9 @@ export async function generateUserReply(
   sessionId: string,
   currentDraft?: string,
   requestId?: string,
+  swapPlaces?: boolean,
 ): Promise<string> {
-  return storageBridge.chatGenerateUserReply(sessionId, currentDraft, requestId);
+  return storageBridge.chatGenerateUserReply(sessionId, currentDraft, requestId, swapPlaces);
 }
 
 export async function generateGroupChatUserReply(

@@ -1,5 +1,5 @@
 import { motion, type PanInfo, AnimatePresence } from "framer-motion";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Pin, User, Bot, ChevronDown, Volume2, Loader2, Square } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { StoredMessage, Character, Persona } from "../../../../core/storage/schemas";
@@ -37,6 +37,7 @@ interface ChatMessageProps {
   onStopAudio?: (message: StoredMessage) => void;
   onCancelAudio?: (message: StoredMessage) => void;
   reasoning?: string;
+  swapPlaces?: boolean;
 }
 
 // Avatar component for user/assistant
@@ -241,7 +242,32 @@ function ChatMessageInner({
   onStopAudio,
   onCancelAudio,
   reasoning,
+  swapPlaces = false,
 }: ChatMessageProps) {
+  const prevRoleRef = useRef(message.role);
+  const [crossShift, setCrossShift] = useState(0);
+
+  useLayoutEffect(() => {
+    const prevRole = prevRoleRef.current;
+    const nextRole = message.role;
+    const isPrevSwappable = prevRole === "user" || prevRole === "assistant";
+    const isNextSwappable = nextRole === "user" || nextRole === "assistant";
+    if (isPrevSwappable && isNextSwappable && prevRole !== nextRole) {
+      const prevSide = prevRole === "user" ? 1 : -1;
+      const nextSide = nextRole === "user" ? 1 : -1;
+      const viewport = typeof window !== "undefined" ? window.innerWidth : 1000;
+      const travel = Math.max(240, Math.round(viewport * 0.36));
+      const offset = (prevSide - nextSide) * travel;
+      setCrossShift(offset);
+      prevRoleRef.current = nextRole;
+      const raf = requestAnimationFrame(() => {
+        setCrossShift(0);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+    prevRoleRef.current = nextRole;
+  }, [message.role]);
+
   // Memoize all computed values
   const computed = useMemo(() => {
     const isAssistant = message.role === "assistant";
@@ -369,7 +395,17 @@ function ChatMessageInner({
   const loadedAttachments = useSessionAttachments(message.attachments);
 
   return (
-    <div
+    <motion.div
+      layout="position"
+      animate={{ x: crossShift }}
+      transition={
+        swapPlaces
+          ? {
+              x: { type: "tween", duration: 0.42, ease: [0.22, 0.61, 0.36, 1] },
+              layout: { type: "spring", stiffness: 260, damping: 28, mass: 0.85 },
+            }
+          : { x: { duration: 0.16, ease: "easeOut" }, layout: { duration: 0.16, ease: "easeOut" } }
+      }
       className={cn(
         "relative flex gap-2",
         message.role === "user" ? "justify-end" : "justify-start",
@@ -560,7 +596,7 @@ function ChatMessageInner({
           onRegenerate={() => void handleRegenerate(message)}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
 
