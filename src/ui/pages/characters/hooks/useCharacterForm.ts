@@ -49,6 +49,7 @@ interface CharacterFormState {
   definition: string;
   description: string;
   selectedModelId: string | null;
+  selectedFallbackModelId: string | null;
   systemPromptTemplateId: string | null;
   memoryType: "manual" | "dynamic";
   dynamicMemoryEnabled: boolean;
@@ -81,6 +82,7 @@ type CharacterFormAction =
   | { type: "SET_DEFINITION"; payload: string }
   | { type: "SET_DESCRIPTION"; payload: string }
   | { type: "SET_SELECTED_MODEL_ID"; payload: string | null }
+  | { type: "SET_SELECTED_FALLBACK_MODEL_ID"; payload: string | null }
   | { type: "SET_SYSTEM_PROMPT_TEMPLATE_ID"; payload: string | null }
   | { type: "SET_MEMORY_TYPE"; payload: "manual" | "dynamic" }
   | { type: "SET_DYNAMIC_MEMORY_ENABLED"; payload: boolean }
@@ -107,6 +109,7 @@ const initialState: CharacterFormState = {
   definition: "",
   description: "",
   selectedModelId: null,
+  selectedFallbackModelId: null,
   systemPromptTemplateId: null,
   memoryType: "manual",
   dynamicMemoryEnabled: false,
@@ -148,6 +151,8 @@ function characterFormReducer(
       return { ...state, description: action.payload };
     case "SET_SELECTED_MODEL_ID":
       return { ...state, selectedModelId: action.payload };
+    case "SET_SELECTED_FALLBACK_MODEL_ID":
+      return { ...state, selectedFallbackModelId: action.payload };
     case "SET_SYSTEM_PROMPT_TEMPLATE_ID":
       return { ...state, systemPromptTemplateId: action.payload };
     case "SET_MEMORY_TYPE":
@@ -223,6 +228,10 @@ export function useCharacterForm(draftCharacter?: any) {
               settings.defaultModelId ||
               settings.models[0]?.id ||
               null,
+          });
+          dispatch({
+            type: "SET_SELECTED_FALLBACK_MODEL_ID",
+            payload: draftCharacter.fallbackModelId || null,
           });
           dispatch({
             type: "SET_SYSTEM_PROMPT_TEMPLATE_ID",
@@ -575,6 +584,7 @@ export function useCharacterForm(draftCharacter?: any) {
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
+        fallbackModelId: state.selectedFallbackModelId,
         promptTemplateId: state.systemPromptTemplateId,
         memoryType: state.dynamicMemoryEnabled ? state.memoryType : "manual",
         disableAvatarGradient: state.disableAvatarGradient,
@@ -608,6 +618,7 @@ export function useCharacterForm(draftCharacter?: any) {
     state.definition,
     state.description,
     state.selectedModelId,
+    state.selectedFallbackModelId,
     state.systemPromptTemplateId,
     state.memoryType,
     state.dynamicMemoryEnabled,

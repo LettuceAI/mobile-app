@@ -5,12 +5,12 @@ use super::db::{now_ms, open_db};
 use crate::utils::{log_error, log_info};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
-    let (name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, bg_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<f64>, Option<f64>, Option<f64>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
+    let (name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, bg_path, description, definition, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<f64>, Option<f64>, Option<f64>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
         .query_row(
-            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get::<_, i64>(15)?, r.get::<_, i64>(16)?, r.get(17)?, r.get(18)?, r.get(19)?, r.get(20)?, r.get(21)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?, r.get(18)?, r.get(19)?, r.get(20)?, r.get(21)?, r.get(22)?
             )),
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -24,7 +24,9 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
         .query_map(params![id], |r| Ok(r.get::<_, String>(0)?))
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for it in q {
-        rules.push(JsonValue::String(it.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?));
+        rules.push(JsonValue::String(it.map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
     }
 
     // scenes
@@ -58,7 +60,8 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut variants: Vec<JsonValue> = Vec::new();
         for v in var_rows {
-            let (vid, vcontent, vdirection, vcreated) = v.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let (vid, vcontent, vdirection, vcreated) =
+                v.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mut variant_obj =
                 serde_json::json!({"id": vid, "content": vcontent, "createdAt": vcreated});
             if let Some(dir) = vdirection {
@@ -112,6 +115,9 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
     }
     if let Some(dm) = default_model_id {
         root.insert("defaultModelId".into(), JsonValue::String(dm));
+    }
+    if let Some(fm) = fallback_model_id {
+        root.insert("fallbackModelId".into(), JsonValue::String(fm));
     }
     let memory_value = memory_type.unwrap_or_else(|| "manual".to_string());
     root.insert("memoryType".into(), JsonValue::String(memory_value));
@@ -204,13 +210,15 @@ pub fn characters_list(app: tauri::AppHandle) -> Result<String, String> {
         "characters_list",
         format!("Found {} characters", out.len()),
     );
-    Ok(serde_json::to_string(&out).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
+    Ok(serde_json::to_string(&out)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result<String, String> {
     let mut conn = open_db(&app)?;
-    let c: JsonValue = serde_json::from_str(&character_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let c: JsonValue = serde_json::from_str(&character_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = c
         .get("id")
         .and_then(|v| v.as_str())
@@ -250,6 +258,10 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .or_else(|| description.clone());
     let default_model_id = c
         .get("defaultModelId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let fallback_model_id = c
+        .get("fallbackModelId")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     let prompt_template_id = c
@@ -298,7 +310,9 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .map(|s| s.to_string());
     let now = now_ms() as i64;
 
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let existing_created: Option<i64> = tx
         .query_row(
             "SELECT created_at FROM characters WHERE id = ?",
@@ -310,8 +324,8 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               avatar_path=excluded.avatar_path,
@@ -322,6 +336,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               description=excluded.description,
               definition=excluded.definition,
               default_model_id=excluded.default_model_id,
+              fallback_model_id=excluded.fallback_model_id,
               prompt_template_id=excluded.prompt_template_id,
               system_prompt=excluded.system_prompt,
               voice_config=excluded.voice_config,
@@ -344,6 +359,7 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
             description,
             definition,
             default_model_id,
+            fallback_model_id,
             prompt_template_id,
             system_prompt,
             voice_config,
@@ -462,7 +478,10 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     );
 
     let conn2 = open_db(&app)?;
-    read_character(&conn2, &id).and_then(|v| serde_json::to_string(&v).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)))
+    read_character(&conn2, &id).and_then(|v| {
+        serde_json::to_string(&v)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    })
 }
 
 #[tauri::command]

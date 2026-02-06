@@ -348,6 +348,12 @@ pub struct StoredMessage {
     /// Reasoning/thinking content from thinking models (not sent in API requests)
     #[serde(default)]
     pub reasoning: Option<String>,
+    /// Model used to generate this message (assistant messages)
+    #[serde(default)]
+    pub model_id: Option<String>,
+    /// Primary model that failed before falling back for this message
+    #[serde(default)]
+    pub fallback_from_model_id: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -488,6 +494,8 @@ pub struct Character {
     pub default_scene_id: Option<String>,
     #[serde(default)]
     pub default_model_id: Option<String>,
+    #[serde(default)]
+    pub fallback_model_id: Option<String>,
     #[serde(default = "default_memory_type")]
     pub memory_type: String,
     /// Reference to a character-specific system prompt template (if any)

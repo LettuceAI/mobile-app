@@ -1668,7 +1668,11 @@ async fn run_group_memory_tool_update(
                                 && cosine_similarity(new_emb, &existing.embedding) > 0.85
                         });
                         if is_duplicate {
-                            log_info(app, "group_dynamic_memory", format!("Skipping duplicate memory (cosine > 0.85): {}", &text));
+                            log_info(
+                                app,
+                                "group_dynamic_memory",
+                                format!("Skipping duplicate memory (cosine > 0.85): {}", &text),
+                            );
                             actions_log.push(json!({
                                 "name": "create_memory",
                                 "arguments": call.arguments,
@@ -1685,7 +1689,11 @@ async fn run_group_memory_tool_update(
                         .get("important")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
-                    let category = call.arguments.get("category").and_then(|v| v.as_str()).map(String::from);
+                    let category = call
+                        .arguments
+                        .get("category")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
 
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
@@ -1733,14 +1741,22 @@ async fn run_group_memory_tool_update(
                         };
 
                     if let Some(idx) = target_idx {
-                        let confidence = call.arguments.get("confidence").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                        let confidence = call
+                            .arguments
+                            .get("confidence")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(1.0) as f32;
                         if confidence < 0.7 {
                             // Soft-delete: move to cold storage instead of removing
                             if idx < session.memory_embeddings.len() {
                                 let cold_threshold = dynamic_settings.cold_threshold;
                                 session.memory_embeddings[idx].is_cold = true;
                                 session.memory_embeddings[idx].importance_score = cold_threshold;
-                                log_info(app, "group_dynamic_memory", format!("Soft-deleted memory (confidence={:.2})", confidence));
+                                log_info(
+                                    app,
+                                    "group_dynamic_memory",
+                                    format!("Soft-deleted memory (confidence={:.2})", confidence),
+                                );
                             }
                             actions_log.push(json!({
                                 "name": "delete_memory",
@@ -2049,6 +2065,7 @@ fn load_character(conn: &rusqlite::Connection, character_id: &str) -> Result<Cha
         created_at: row.4 as u64,
         updated_at: row.5 as u64,
         default_model_id: row.6,
+        fallback_model_id: None,
         avatar_path: None,
         background_image_path: None,
         rules: Vec::new(),

@@ -12,6 +12,7 @@ import {
   Trash2,
   Info,
   Sparkles,
+  TriangleAlert,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -282,6 +283,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   );
   const backgroundImageData = useImageData(currentCharacter?.backgroundImagePath);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [modelSelectorTarget, setModelSelectorTarget] = useState<"primary" | "fallback">("primary");
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [showPersonaSelector, setShowPersonaSelector] = useState(false);
@@ -371,6 +373,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
   }, [currentCharacter?.defaultModelId, globalDefaultModelId]);
 
   const selectedModelId = currentCharacter?.defaultModelId ?? null;
+  const selectedFallbackModelId = currentCharacter?.fallbackModelId ?? null;
   const effectiveModelId = getEffectiveModelId();
   const currentModel = useMemo(
     () => models.find((m) => m.id === effectiveModelId),
@@ -429,6 +432,20 @@ function ChatSettingsContent({ character }: { character: Character }) {
       }*/
     } catch (error) {
       console.error("Failed to change character model:", error);
+    }
+  };
+
+  const handleChangeFallbackModel = async (modelId: string | null) => {
+    if (!characterId) return;
+
+    try {
+      const updatedCharacter = await saveCharacter({
+        ...currentCharacter,
+        fallbackModelId: modelId,
+      });
+      setCurrentCharacter(updatedCharacter);
+    } catch (error) {
+      console.error("Failed to change fallback model:", error);
     }
   };
 
@@ -669,6 +686,12 @@ function ChatSettingsContent({ character }: { character: Character }) {
     return currentModel.displayName + (!currentCharacter?.defaultModelId ? " (app default)" : "");
   };
 
+  const getFallbackModelDisplay = () => {
+    if (!selectedFallbackModelId) return "None";
+    const fallback = models.find((m) => m.id === selectedFallbackModelId);
+    return fallback?.displayName || fallback?.name || "Unknown model";
+  };
+
   const chatBackgroundStyle = useMemo<CSSProperties | undefined>(() => {
     if (!backgroundImageData) return undefined;
     return {
@@ -853,7 +876,19 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 icon={<Cpu className="h-4 w-4" />}
                 label="Model"
                 value={getModelDisplay()}
-                onClick={() => setShowModelSelector(true)}
+                onClick={() => {
+                  setModelSelectorTarget("primary");
+                  setShowModelSelector(true);
+                }}
+              />
+              <QuickChip
+                icon={<TriangleAlert className="h-4 w-4" />}
+                label="Fallback Model"
+                value={getFallbackModelDisplay()}
+                onClick={() => {
+                  setModelSelectorTarget("fallback");
+                  setShowModelSelector(true);
+                }}
               />
             </div>
           </section>
@@ -1030,7 +1065,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
           setShowModelSelector(false);
           setModelSearchQuery("");
         }}
-        title="Select Model"
+        title={modelSelectorTarget === "fallback" ? "Select Fallback Model" : "Select Model"}
         includeExitIcon={false}
         location="bottom"
       >
@@ -1060,20 +1095,30 @@ function ChatSettingsContent({ character }: { character: Character }) {
           <div className="space-y-2 max-h-[50vh] overflow-y-auto">
             <button
               onClick={() => {
-                void handleChangeModel(null);
+                if (modelSelectorTarget === "fallback") {
+                  void handleChangeFallbackModel(null);
+                } else {
+                  void handleChangeModel(null);
+                }
                 setShowModelSelector(false);
                 setModelSearchQuery("");
               }}
               className={cn(
                 "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
-                !selectedModelId
+                (modelSelectorTarget === "fallback" ? !selectedFallbackModelId : !selectedModelId)
                   ? "border-emerald-400/40 bg-emerald-400/10"
                   : "border-white/10 bg-white/5 hover:bg-white/10",
               )}
             >
               <Cpu className="h-5 w-5 text-white/40" />
-              <span className="text-sm text-white">Use global default model</span>
-              {!selectedModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
+              <span className="text-sm text-white">
+                {modelSelectorTarget === "fallback"
+                  ? "No fallback model"
+                  : "Use global default model"}
+              </span>
+              {modelSelectorTarget === "fallback"
+                ? !selectedFallbackModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />
+                : !selectedModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
             </button>
             {models
               .filter((model) => {
@@ -1088,13 +1133,21 @@ function ChatSettingsContent({ character }: { character: Character }) {
                 <button
                   key={model.id}
                   onClick={() => {
-                    void handleChangeModel(model.id);
+                    if (modelSelectorTarget === "fallback") {
+                      void handleChangeFallbackModel(model.id);
+                    } else {
+                      void handleChangeModel(model.id);
+                    }
                     setShowModelSelector(false);
                     setModelSearchQuery("");
                   }}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
-                    selectedModelId === model.id
+                    (
+                      modelSelectorTarget === "fallback"
+                        ? selectedFallbackModelId === model.id
+                        : selectedModelId === model.id
+                    )
                       ? "border-emerald-400/40 bg-emerald-400/10"
                       : "border-white/10 bg-white/5 hover:bg-white/10",
                   )}
@@ -1106,7 +1159,9 @@ function ChatSettingsContent({ character }: { character: Character }) {
                     </span>
                     <span className="block truncate text-xs text-white/40">{model.name}</span>
                   </div>
-                  {selectedModelId === model.id && (
+                  {(modelSelectorTarget === "fallback"
+                    ? selectedFallbackModelId === model.id
+                    : selectedModelId === model.id) && (
                     <Check className="h-4 w-4 shrink-0 text-emerald-400" />
                   )}
                 </button>

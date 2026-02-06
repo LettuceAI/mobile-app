@@ -9,6 +9,7 @@ import {
   Brain,
   GitBranch,
   Users,
+  TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
 import { BottomMenu } from "../../../components/BottomMenu";
@@ -129,10 +130,7 @@ export function MessageActionsBottomSheet({
   }, []);
 
   useEffect(() => {
-    const messageModelId =
-      messageAction && "modelId" in messageAction.message
-        ? (messageAction.message as { modelId?: string | null }).modelId
-        : null;
+    const messageModelId = messageAction?.message.modelId ?? null;
     const resolvedModelId =
       messageModelId ?? characterDefaultModelId ?? settings?.defaultModelId ?? null;
 
@@ -145,6 +143,7 @@ export function MessageActionsBottomSheet({
   }, [messageAction, settings, characterDefaultModelId]);
 
   const modelLabel = modelName ?? (settings ? "Unknown model" : "Loading model...");
+  const usedFallback = Boolean(messageAction?.message.fallbackFromModelId);
 
   const handleCopy = async () => {
     if (!messageAction) return;
@@ -176,7 +175,16 @@ export function MessageActionsBottomSheet({
                 </span>
               </div>
               <div className="flex-1">
-                <span className="text-white/60">{modelLabel}</span>
+                <span className="inline-flex items-center gap-1 text-white/60">
+                  {usedFallback && (
+                    <TriangleAlert
+                      size={12}
+                      className="text-amber-300"
+                      title="Fallback model used"
+                    />
+                  )}
+                  <span>{modelLabel}</span>
+                </span>
               </div>
               <div className="tabular-nums">
                 {(messageAction.message.usage.totalTokens ?? 0).toLocaleString()}{" "}

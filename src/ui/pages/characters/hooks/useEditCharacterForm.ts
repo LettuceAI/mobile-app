@@ -41,6 +41,7 @@ type EditCharacterState = {
   newSceneContent: string;
   newSceneDirection: string;
   selectedModelId: string | null;
+  selectedFallbackModelId: string | null;
   systemPromptTemplateId: string | null;
   voiceConfig: CharacterVoiceConfig | null;
   voiceAutoplay: boolean;
@@ -85,6 +86,7 @@ const initialState: EditCharacterState = {
   newSceneContent: "",
   newSceneDirection: "",
   selectedModelId: null,
+  selectedFallbackModelId: null,
   systemPromptTemplateId: null,
   voiceConfig: null,
   voiceAutoplay: false,
@@ -139,6 +141,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
     scenes: string;
     defaultSceneId: string | null;
     selectedModelId: string | null;
+    selectedFallbackModelId: string | null;
     systemPromptTemplateId: string | null;
     disableAvatarGradient: boolean;
     customGradientEnabled: boolean;
@@ -242,6 +245,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: character.scenes || [],
         defaultSceneId: character.defaultSceneId || null,
         selectedModelId: character.defaultModelId || null,
+        selectedFallbackModelId: character.fallbackModelId || null,
         systemPromptTemplateId: character.promptTemplateId || null,
         voiceConfig: character.voiceConfig ?? null,
         voiceAutoplay: character.voiceAutoplay ?? false,
@@ -266,6 +270,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: JSON.stringify(character.scenes || []),
         defaultSceneId: character.defaultSceneId || null,
         selectedModelId: character.defaultModelId || null,
+        selectedFallbackModelId: character.fallbackModelId || null,
         systemPromptTemplateId: character.promptTemplateId || null,
         disableAvatarGradient: character.disableAvatarGradient || false,
         customGradientEnabled: character.customGradientEnabled || false,
@@ -373,6 +378,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId,
         defaultModelId: state.selectedModelId,
+        fallbackModelId: state.selectedFallbackModelId,
         promptTemplateId: state.systemPromptTemplateId,
         voiceConfig: state.voiceConfig ?? undefined,
         voiceAutoplay: state.voiceAutoplay,
@@ -405,6 +411,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
         scenes: JSON.stringify(state.scenes),
         defaultSceneId: state.defaultSceneId,
         selectedModelId: state.selectedModelId,
+        selectedFallbackModelId: state.selectedFallbackModelId,
         systemPromptTemplateId: state.systemPromptTemplateId,
         disableAvatarGradient: state.disableAvatarGradient,
         customGradientEnabled: state.customGradientEnabled,
@@ -587,6 +594,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
       scenes: JSON.parse(initial.scenes) as Scene[],
       defaultSceneId: initial.defaultSceneId,
       selectedModelId: initial.selectedModelId,
+      selectedFallbackModelId: initial.selectedFallbackModelId,
       systemPromptTemplateId: initial.systemPromptTemplateId,
       disableAvatarGradient: initial.disableAvatarGradient,
       customGradientEnabled: initial.customGradientEnabled,
@@ -640,6 +648,7 @@ export function useEditCharacterForm(characterId: string | undefined) {
           JSON.stringify(state.scenes) !== initial.scenes ||
           state.defaultSceneId !== initial.defaultSceneId ||
           state.selectedModelId !== initial.selectedModelId ||
+          state.selectedFallbackModelId !== initial.selectedFallbackModelId ||
           state.systemPromptTemplateId !== initial.systemPromptTemplateId ||
           state.disableAvatarGradient !== initial.disableAvatarGradient ||
           state.customGradientEnabled !== initial.customGradientEnabled ||

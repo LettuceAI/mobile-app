@@ -248,6 +248,7 @@ export async function saveCharacter(c: Partial<Character>): Promise<Character> {
     defaultSceneId: c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null),
     rules: defaultRules,
     defaultModelId: c.defaultModelId ?? null,
+    fallbackModelId: c.fallbackModelId ?? null,
     memoryType: c.memoryType ?? "manual",
     promptTemplateId: c.promptTemplateId ?? null,
     disableAvatarGradient: c.disableAvatarGradient ?? false,

@@ -9,15 +9,14 @@ use crate::api::{api_request, ApiRequest};
 use crate::chat_manager::storage::{get_base_prompt, PromptType};
 use crate::embedding_model;
 use crate::storage_manager::db::open_db;
-use crate::utils::{log_error, log_info, log_warn, now_millis};
+use crate::utils::{emit_toast, log_error, log_info, log_warn, now_millis};
 
 use super::dynamic_memory::{
-    apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled,
-    cosine_similarity, dynamic_cold_threshold, dynamic_decay_rate,
-    dynamic_hot_memory_token_budget, dynamic_max_entries, dynamic_min_similarity,
-    dynamic_window_size, enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id,
-    mark_memories_accessed, normalize_query_text, promote_cold_memories,
-    search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
+    apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled, cosine_similarity,
+    dynamic_cold_threshold, dynamic_decay_rate, dynamic_hot_memory_token_budget,
+    dynamic_max_entries, dynamic_min_similarity, dynamic_window_size, enforce_hot_memory_budget,
+    ensure_pinned_hot, generate_memory_id, mark_memories_accessed, normalize_query_text,
+    promote_cold_memories, search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
     trim_memories_to_max,
 };
 use super::prompt_engine;
@@ -35,10 +34,10 @@ use crate::usage::tracking::UsageOperationType;
 use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
-    ChatAddMessageAttachmentArgs, ChatCompletionArgs, ChatContinueArgs, ChatRegenerateArgs,
-    ChatTurnResult, ContinueResult, MemoryEmbedding, Model, PromptEntryPosition, PromptScope,
-    ProviderCredential, RegenerateResult, Session, Settings, StoredMessage, SystemPromptEntry,
-    SystemPromptTemplate,
+    Character, ChatAddMessageAttachmentArgs, ChatCompletionArgs, ChatContinueArgs,
+    ChatRegenerateArgs, ChatTurnResult, ContinueResult, MemoryEmbedding, Model,
+    PromptEntryPosition, PromptScope, ProviderCredential, RegenerateResult, Session, Settings,
+    StoredMessage, SystemPromptEntry, SystemPromptTemplate,
 };
 use crate::storage_manager::sessions::{
     messages_upsert_batch, session_conversation_count, session_upsert_meta,
@@ -322,6 +321,8 @@ fn fetch_conversation_messages_range(
                 is_pinned: is_pinned != 0,
                 attachments: Vec::new(),
                 reasoning: None,
+                model_id: None,
+                fallback_from_model_id: None,
             })
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -1239,8 +1240,6 @@ pub async fn chat_completion(
         }),
     );
 
-    let api_key = resolve_api_key(&app, provider_cred, "chat_completion")?;
-
     let now = now_millis()?;
 
     let user_msg_id = uuid::Uuid::new_v4().to_string();
@@ -1266,6 +1265,8 @@ pub async fn chat_completion(
         is_pinned: false,
         attachments: persisted_attachments,
         reasoning: None,
+        model_id: None,
+        fallback_from_model_id: None,
     };
     session.messages.push(user_msg.clone());
     session.updated_at = now;
@@ -1461,209 +1462,335 @@ pub async fn chat_completion(
         None
     };
 
-    let temperature = resolve_temperature(&session, &model, &settings);
-    let top_p = resolve_top_p(&session, &model, &settings);
-    let max_tokens = resolve_max_tokens(&session, &model, &settings);
-    let context_length = resolve_context_length(&session, &model, &settings);
-    let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
-    let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
-    let top_k = resolve_top_k(&session, &model, &settings);
-    let reasoning_enabled = resolve_reasoning_enabled(&session, &model, &settings);
-    let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
-    let reasoning_budget =
-        resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
-    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
-        build_llama_extra_fields(&session, &model, &settings)
-    } else if provider_cred.provider_id == "ollama" {
-        build_ollama_extra_fields(
-            &session,
-            &model,
-            &settings,
-            context_length,
-            max_tokens,
-            temperature,
-            top_p,
-            top_k,
-            frequency_penalty,
-            presence_penalty,
-        )
-    } else {
-        None
-    };
+    let explicit_fallback_candidate = character
+        .fallback_model_id
+        .as_ref()
+        .filter(|fallback_id| *fallback_id != &model.id)
+        .and_then(|fallback_id| find_model_and_credential(settings, fallback_id));
 
-    log_info(
-        &app,
-        "chat_completion",
-        format!(
-            "reasoning settings: enabled={} effort={:?} budget={:?} model_adv={:?}",
-            reasoning_enabled,
-            reasoning_effort,
-            reasoning_budget,
-            model
-                .advanced_model_settings
-                .as_ref()
-                .map(|a| a.reasoning_enabled)
-        ),
-    );
+    let app_default_fallback_candidate = settings
+        .default_model_id
+        .as_ref()
+        .filter(|default_id| *default_id != &model.id)
+        .and_then(|default_id| find_model_and_credential(settings, default_id));
 
-    let built = super::request_builder::build_chat_request(
-        provider_cred,
-        &api_key,
-        &model.name,
-        &messages_for_api,
-        None,
-        temperature,
-        top_p,
-        max_tokens,
-        context_length,
-        should_stream,
-        request_id.clone(),
-        frequency_penalty,
-        presence_penalty,
-        top_k,
-        None,
-        reasoning_enabled,
-        reasoning_effort,
-        reasoning_budget,
-        extra_body_fields,
-    );
-
-    log_info(
-        &app,
-        "chat_completion",
-        format!(
-            "request prepared endpoint={} stream={} request_id={:?}",
-            built.url.as_str(),
-            should_stream,
-            &request_id
-        ),
-    );
-
-    log_info(
-        &app,
-        "chat_completion",
-        format!(
-            "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
-            built.body.get("reasoning_effort"),
-            built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
-            built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
-            reasoning_enabled
-        ),
-    );
-
-    if let Some(reasoning_config) = built.body.get("reasoning") {
-        log_info(
+    let mut attempts: Vec<(&Model, &ProviderCredential, bool)> =
+        vec![(model, provider_cred, false)];
+    if let Some((fallback_model, fallback_cred)) = explicit_fallback_candidate {
+        attempts.push((fallback_model, fallback_cred, true));
+    } else if character
+        .fallback_model_id
+        .as_ref()
+        .is_some_and(|id| id != &model.id)
+    {
+        log_warn(
             &app,
             "chat_completion",
-            format!("reasoning config: {}", reasoning_config),
+            format!(
+                "configured character fallback model id {} could not be resolved",
+                character.fallback_model_id.as_deref().unwrap_or("")
+            ),
         );
-    }
-
-    emit_debug(
-        &app,
-        "sending_request",
-        json!({
-            "providerId": provider_cred.provider_id,
-            "model": model.name,
-            "stream": should_stream,
-            "requestId": request_id,
-            "endpoint": built.url,
-            "reasoning": built.body.get("reasoning"),
-            "reasoning_effort": built.body.get("reasoning_effort"),
-            "max_completion_tokens": built.body.get("max_completion_tokens"),
-        }),
-    );
-
-    let api_request_payload = ApiRequest {
-        url: built.url,
-        method: Some("POST".into()),
-        headers: Some(built.headers),
-        query: None,
-        body: Some(built.body),
-        timeout_ms: Some(900_000),
-        stream: Some(built.stream),
-        request_id: built.request_id.clone(),
-        provider_id: Some(provider_cred.provider_id.clone()),
-    };
-
-    let api_response = match api_request(app.clone(), api_request_payload).await {
-        Ok(resp) => resp,
-        Err(err) => {
-            log_error(
-                &app,
-                "chat_completion",
-                format!("api_request failed: {}", err),
-            );
-            return Err(err);
-        }
-    };
-
-    emit_debug(
-        &app,
-        "response",
-        json!({
-            "status": api_response.status,
-            "ok": api_response.ok,
-        }),
-    );
-
-    if !api_response.ok {
-        let fallback = format!("Provider returned status {}", api_response.status);
-        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
-
-        // Extract usage even from failed requests (some providers report tokens used before failure)
-        let failed_usage = extract_usage(api_response.data());
-        if let Some(ref usage) = failed_usage {
+        if let Some((fallback_model, fallback_cred)) = app_default_fallback_candidate {
             log_info(
                 &app,
                 "chat_completion",
-                format!("usage from failed request: prompt={:?} completion={:?} total={:?} reasoning={:?}",
-                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens, usage.reasoning_tokens),
+                format!(
+                    "using app default model {} as fallback candidate",
+                    fallback_model.name
+                ),
             );
-            emit_debug(
-                &app,
-                "failed_request_usage",
-                json!({
-                    "promptTokens": usage.prompt_tokens,
-                    "completionTokens": usage.completion_tokens,
-                    "totalTokens": usage.total_tokens,
-                    "reasoningTokens": usage.reasoning_tokens,
-                }),
-            );
-            record_failed_usage(
-                &app,
-                &failed_usage,
-                &session,
-                &character,
-                model,
-                provider_cred,
-                UsageOperationType::Chat,
-                &err_message,
-                "chat_completion",
-            );
+            attempts.push((fallback_model, fallback_cred, true));
         }
+    } else if let Some((fallback_model, fallback_cred)) = app_default_fallback_candidate {
+        log_info(
+            &app,
+            "chat_completion",
+            format!(
+                "using app default model {} as fallback candidate",
+                fallback_model.name
+            ),
+        );
+        attempts.push((fallback_model, fallback_cred, true));
+    }
+
+    let mut selected_model = model;
+    let mut selected_provider_cred = provider_cred;
+    let mut selected_api_key = String::new();
+    let mut fallback_from_model_id: Option<String> = None;
+    let mut successful_response = None;
+    let mut last_error = "request failed".to_string();
+    let mut fallback_toast_shown = false;
+
+    for (idx, (attempt_model, attempt_provider_cred, is_fallback_attempt)) in
+        attempts.iter().enumerate()
+    {
+        let has_next_attempt = idx + 1 < attempts.len();
+
+        let attempt_api_key = match resolve_api_key(&app, attempt_provider_cred, "chat_completion")
+        {
+            Ok(key) => key,
+            Err(err) => {
+                log_error(
+                    &app,
+                    "chat_completion",
+                    format!(
+                        "failed to resolve API key for model={} provider={}: {}",
+                        attempt_model.name, attempt_provider_cred.provider_id, err
+                    ),
+                );
+                last_error = err;
+                if has_next_attempt {
+                    emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                    continue;
+                }
+                return Err(last_error);
+            }
+        };
+
+        let temperature = resolve_temperature(&session, attempt_model, &settings);
+        let top_p = resolve_top_p(&session, attempt_model, &settings);
+        let max_tokens = resolve_max_tokens(&session, attempt_model, &settings);
+        let context_length = resolve_context_length(&session, attempt_model, &settings);
+        let frequency_penalty = resolve_frequency_penalty(&session, attempt_model, &settings);
+        let presence_penalty = resolve_presence_penalty(&session, attempt_model, &settings);
+        let top_k = resolve_top_k(&session, attempt_model, &settings);
+        let reasoning_enabled = resolve_reasoning_enabled(&session, attempt_model, &settings);
+        let reasoning_effort = resolve_reasoning_effort(&session, attempt_model, &settings);
+        let reasoning_budget = resolve_reasoning_budget(
+            &session,
+            attempt_model,
+            &settings,
+            reasoning_effort.as_deref(),
+        );
+        let extra_body_fields = if attempt_provider_cred.provider_id == "llamacpp" {
+            build_llama_extra_fields(&session, attempt_model, &settings)
+        } else if attempt_provider_cred.provider_id == "ollama" {
+            build_ollama_extra_fields(
+                &session,
+                attempt_model,
+                &settings,
+                context_length,
+                max_tokens,
+                temperature,
+                top_p,
+                top_k,
+                frequency_penalty,
+                presence_penalty,
+            )
+        } else {
+            None
+        };
+
+        log_info(
+            &app,
+            "chat_completion",
+            format!(
+                "reasoning settings: enabled={} effort={:?} budget={:?} model_adv={:?}",
+                reasoning_enabled,
+                reasoning_effort,
+                reasoning_budget,
+                attempt_model
+                    .advanced_model_settings
+                    .as_ref()
+                    .map(|a| a.reasoning_enabled)
+            ),
+        );
+
+        let built = super::request_builder::build_chat_request(
+            attempt_provider_cred,
+            &attempt_api_key,
+            &attempt_model.name,
+            &messages_for_api,
+            None,
+            temperature,
+            top_p,
+            max_tokens,
+            context_length,
+            should_stream,
+            request_id.clone(),
+            frequency_penalty,
+            presence_penalty,
+            top_k,
+            None,
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
+            extra_body_fields,
+        );
+
+        log_info(
+            &app,
+            "chat_completion",
+            format!(
+                "request prepared endpoint={} stream={} request_id={:?} model={} fallback_attempt={}",
+                built.url.as_str(),
+                should_stream,
+                &request_id,
+                attempt_model.name,
+                is_fallback_attempt
+            ),
+        );
+
+        log_info(
+            &app,
+            "chat_completion",
+            format!(
+                "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
+                built.body.get("reasoning_effort"),
+                built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
+                built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
+                reasoning_enabled
+            ),
+        );
 
         emit_debug(
             &app,
-            "provider_error",
+            "sending_request",
             json!({
-                "status": api_response.status,
-                "message": err_message,
-                "usage": failed_usage,
+                "providerId": attempt_provider_cred.provider_id,
+                "model": attempt_model.name,
+                "stream": should_stream,
+                "requestId": request_id,
+                "endpoint": built.url,
+                "reasoning": built.body.get("reasoning"),
+                "reasoning_effort": built.body.get("reasoning_effort"),
+                "max_completion_tokens": built.body.get("max_completion_tokens"),
+                "fallbackAttempt": is_fallback_attempt,
             }),
         );
-        let combined_error = if err_message == fallback {
-            err_message
-        } else {
-            format!("{} (status {})", err_message, api_response.status)
+
+        let api_request_payload = ApiRequest {
+            url: built.url,
+            method: Some("POST".into()),
+            headers: Some(built.headers),
+            query: None,
+            body: Some(built.body),
+            timeout_ms: Some(900_000),
+            stream: Some(built.stream),
+            request_id: built.request_id.clone(),
+            provider_id: Some(attempt_provider_cred.provider_id.clone()),
         };
-        log_error(
+
+        let api_response = match api_request(app.clone(), api_request_payload).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                log_error(
+                    &app,
+                    "chat_completion",
+                    format!(
+                        "api_request failed model={} provider={} err={}",
+                        attempt_model.name, attempt_provider_cred.provider_id, err
+                    ),
+                );
+                last_error = err;
+                if has_next_attempt {
+                    emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                    continue;
+                }
+                return Err(last_error);
+            }
+        };
+
+        emit_debug(
             &app,
-            "chat_completion",
-            format!("provider error: {}", &combined_error),
+            "response",
+            json!({
+                "status": api_response.status,
+                "ok": api_response.ok,
+                "model": attempt_model.name,
+            }),
         );
-        return Err(combined_error);
+
+        if !api_response.ok {
+            let fallback = format!("Provider returned status {}", api_response.status);
+            let err_message =
+                extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+
+            let failed_usage = extract_usage(api_response.data());
+            if let Some(ref usage) = failed_usage {
+                log_info(
+                    &app,
+                    "chat_completion",
+                    format!(
+                        "usage from failed request: prompt={:?} completion={:?} total={:?} reasoning={:?}",
+                        usage.prompt_tokens,
+                        usage.completion_tokens,
+                        usage.total_tokens,
+                        usage.reasoning_tokens
+                    ),
+                );
+                emit_debug(
+                    &app,
+                    "failed_request_usage",
+                    json!({
+                        "promptTokens": usage.prompt_tokens,
+                        "completionTokens": usage.completion_tokens,
+                        "totalTokens": usage.total_tokens,
+                        "reasoningTokens": usage.reasoning_tokens,
+                    }),
+                );
+                if !has_next_attempt {
+                    record_failed_usage(
+                        &app,
+                        &failed_usage,
+                        &session,
+                        &character,
+                        attempt_model,
+                        attempt_provider_cred,
+                        UsageOperationType::Chat,
+                        &err_message,
+                        "chat_completion",
+                    );
+                }
+            }
+
+            emit_debug(
+                &app,
+                "provider_error",
+                json!({
+                    "status": api_response.status,
+                    "message": err_message,
+                    "usage": failed_usage,
+                    "model": attempt_model.name,
+                }),
+            );
+
+            let combined_error = if err_message == fallback {
+                err_message
+            } else {
+                format!("{} (status {})", err_message, api_response.status)
+            };
+            log_error(
+                &app,
+                "chat_completion",
+                format!("provider error: {}", &combined_error),
+            );
+            last_error = combined_error;
+
+            if has_next_attempt {
+                emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                continue;
+            }
+            return Err(last_error);
+        }
+
+        selected_model = attempt_model;
+        selected_provider_cred = attempt_provider_cred;
+        selected_api_key = attempt_api_key;
+        fallback_from_model_id = if *is_fallback_attempt {
+            Some(model.id.clone())
+        } else {
+            None
+        };
+        successful_response = Some(api_response);
+        break;
     }
+
+    let api_response = match successful_response {
+        Some(resp) => resp,
+        None => return Err(last_error),
+    };
 
     // Extract assistant text and any image outputs.
     // Some multimodal models stream image data URLs via SSE; we must not treat those as text.
@@ -1674,9 +1801,10 @@ pub async fn chat_completion(
         _ => Vec::new(),
     };
 
-    let text = extract_text(api_response.data(), Some(&model.provider_id)).unwrap_or_default();
+    let text =
+        extract_text(api_response.data(), Some(&selected_model.provider_id)).unwrap_or_default();
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data(), Some(&model.provider_id));
+    let reasoning = extract_reasoning(api_response.data(), Some(&selected_model.provider_id));
 
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
@@ -1794,6 +1922,8 @@ pub async fn chat_completion(
         is_pinned: false,
         attachments: persisted_assistant_attachments,
         reasoning,
+        model_id: Some(selected_model.id.clone()),
+        fallback_from_model_id: fallback_from_model_id.clone(),
     };
 
     session.messages.push(assistant_message.clone());
@@ -1827,9 +1957,9 @@ pub async fn chat_completion(
         &usage,
         &session,
         &character,
-        model,
-        provider_cred,
-        &api_key,
+        selected_model,
+        selected_provider_cred,
+        &selected_api_key,
         assistant_created_at,
         UsageOperationType::Chat,
         "chat_completion",
@@ -1996,8 +2126,6 @@ pub async fn chat_regenerate(
         }),
     );
 
-    let api_key = resolve_api_key(&app, provider_cred, "chat_regenerate")?;
-
     let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
     let dynamic_window = dynamic_window_size(settings);
 
@@ -2157,6 +2285,23 @@ pub async fn chat_regenerate(
         None
     };
 
+    let attempts = build_model_attempts(
+        &app,
+        settings,
+        &character,
+        model,
+        provider_cred,
+        "chat_regenerate",
+    );
+
+    let mut selected_model = model;
+    let mut selected_provider_cred = provider_cred;
+    let mut selected_api_key = String::new();
+    let mut fallback_from_model_id: Option<String> = None;
+    let mut successful_response = None;
+    let mut last_error = "request failed".to_string();
+    let mut fallback_toast_shown = false;
+
     {
         let message = session
             .messages
@@ -2165,182 +2310,183 @@ pub async fn chat_regenerate(
         ensure_assistant_variant(message);
     }
 
-    let temperature = resolve_temperature(&session, &model, &settings);
-    let top_p = resolve_top_p(&session, &model, &settings);
-    let max_tokens = resolve_max_tokens(&session, &model, &settings);
-    let context_length = resolve_context_length(&session, &model, &settings);
-    let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
-    let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
-    let top_k = resolve_top_k(&session, &model, &settings);
-    let reasoning_enabled = resolve_reasoning_enabled(&session, &model, &settings);
-    let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
-    let reasoning_budget =
-        resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
-    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
-        build_llama_extra_fields(&session, &model, &settings)
-    } else if provider_cred.provider_id == "ollama" {
-        build_ollama_extra_fields(
+    for (idx, (attempt_model, attempt_provider_cred, is_fallback_attempt)) in
+        attempts.iter().enumerate()
+    {
+        let has_next_attempt = idx + 1 < attempts.len();
+
+        let attempt_api_key = match resolve_api_key(&app, attempt_provider_cred, "chat_regenerate")
+        {
+            Ok(key) => key,
+            Err(err) => {
+                last_error = err;
+                if has_next_attempt {
+                    emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                    continue;
+                }
+                return Err(last_error);
+            }
+        };
+
+        let temperature = resolve_temperature(&session, attempt_model, &settings);
+        let top_p = resolve_top_p(&session, attempt_model, &settings);
+        let max_tokens = resolve_max_tokens(&session, attempt_model, &settings);
+        let context_length = resolve_context_length(&session, attempt_model, &settings);
+        let frequency_penalty = resolve_frequency_penalty(&session, attempt_model, &settings);
+        let presence_penalty = resolve_presence_penalty(&session, attempt_model, &settings);
+        let top_k = resolve_top_k(&session, attempt_model, &settings);
+        let reasoning_enabled = resolve_reasoning_enabled(&session, attempt_model, &settings);
+        let reasoning_effort = resolve_reasoning_effort(&session, attempt_model, &settings);
+        let reasoning_budget = resolve_reasoning_budget(
             &session,
-            &model,
+            attempt_model,
             &settings,
-            context_length,
-            max_tokens,
+            reasoning_effort.as_deref(),
+        );
+        let extra_body_fields = if attempt_provider_cred.provider_id == "llamacpp" {
+            build_llama_extra_fields(&session, attempt_model, &settings)
+        } else if attempt_provider_cred.provider_id == "ollama" {
+            build_ollama_extra_fields(
+                &session,
+                attempt_model,
+                &settings,
+                context_length,
+                max_tokens,
+                temperature,
+                top_p,
+                top_k,
+                frequency_penalty,
+                presence_penalty,
+            )
+        } else {
+            None
+        };
+
+        let built = super::request_builder::build_chat_request(
+            attempt_provider_cred,
+            &attempt_api_key,
+            &attempt_model.name,
+            &messages_for_api,
+            None,
             temperature,
             top_p,
-            top_k,
+            max_tokens,
+            context_length,
+            should_stream,
+            request_id.clone(),
             frequency_penalty,
             presence_penalty,
-        )
-    } else {
-        None
-    };
-
-    let built = super::request_builder::build_chat_request(
-        provider_cred,
-        &api_key,
-        &model.name,
-        &messages_for_api,
-        None,
-        temperature,
-        top_p,
-        max_tokens,
-        context_length,
-        should_stream,
-        request_id.clone(),
-        frequency_penalty,
-        presence_penalty,
-        top_k,
-        None,
-        reasoning_enabled,
-        reasoning_effort,
-        reasoning_budget,
-        extra_body_fields,
-    );
-
-    emit_debug(
-        &app,
-        "regenerate_request",
-        json!({
-            "sessionId": session.id,
-            "messageId": message_id,
-            "requestId": request_id,
-            "endpoint": built.url,
-        }),
-    );
-
-    log_info(
-        &app,
-        "chat_regenerate",
-        format!(
-            "request prepared endpoint={} stream={} request_id={:?}",
-            built.url.as_str(),
-            should_stream,
-            &request_id
-        ),
-    );
-
-    log_info(
-        &app,
-        "chat_regenerate",
-        format!(
-            "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
-            built.body.get("reasoning_effort"),
-            built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
-            built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
-            reasoning_enabled
-        ),
-    );
-
-    if let Some(reasoning_config) = built.body.get("reasoning") {
-        log_info(
-            &app,
-            "chat_regenerate",
-            format!("reasoning config: {}", reasoning_config),
+            top_k,
+            None,
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
+            extra_body_fields,
         );
-    }
-
-    let api_request_payload = ApiRequest {
-        url: built.url,
-        method: Some("POST".into()),
-        headers: Some(built.headers),
-        query: None,
-        body: Some(built.body),
-        timeout_ms: Some(900_000),
-        stream: Some(built.stream),
-        request_id: built.request_id.clone(),
-        provider_id: Some(provider_cred.provider_id.clone()),
-    };
-
-    let api_response = match api_request(app.clone(), api_request_payload).await {
-        Ok(resp) => resp,
-        Err(err) => {
-            log_error(
-                &app,
-                "chat_regenerate",
-                format!("api_request failed: {}", err),
-            );
-            return Err(err);
-        }
-    };
-
-    emit_debug(
-        &app,
-        "regenerate_response",
-        json!({
-            "status": api_response.status,
-            "ok": api_response.ok,
-        }),
-    );
-
-    if !api_response.ok {
-        let fallback = format!("Provider returned status {}", api_response.status);
-        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
-
-        // Extract usage even from failed requests
-        let failed_usage = extract_usage(api_response.data());
-        if let Some(ref usage) = failed_usage {
-            emit_debug(
-                &app,
-                "failed_request_usage",
-                json!({
-                    "promptTokens": usage.prompt_tokens,
-                    "completionTokens": usage.completion_tokens,
-                    "totalTokens": usage.total_tokens,
-                    "reasoningTokens": usage.reasoning_tokens,
-                }),
-            );
-        }
 
         emit_debug(
             &app,
-            "regenerate_provider_error",
+            "regenerate_request",
             json!({
-                "status": api_response.status,
-                "message": err_message,
-                "usage": failed_usage,
+                "sessionId": session.id,
+                "messageId": message_id,
+                "requestId": request_id,
+                "endpoint": built.url,
+                "model": attempt_model.name,
+                "fallbackAttempt": is_fallback_attempt,
             }),
         );
-        record_failed_usage(
-            &app,
-            &failed_usage,
-            &session,
-            &character,
-            model,
-            provider_cred,
-            UsageOperationType::Regenerate,
-            &err_message,
-            "chat_regenerate",
-        );
-        return if err_message == fallback {
-            Err(err_message)
-        } else {
-            Err(crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                format!("{} (status {})", err_message, api_response.status),
-            ))
+
+        let api_request_payload = ApiRequest {
+            url: built.url,
+            method: Some("POST".into()),
+            headers: Some(built.headers),
+            query: None,
+            body: Some(built.body),
+            timeout_ms: Some(900_000),
+            stream: Some(built.stream),
+            request_id: built.request_id.clone(),
+            provider_id: Some(attempt_provider_cred.provider_id.clone()),
         };
+
+        let api_response = match api_request(app.clone(), api_request_payload).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                last_error = err;
+                if has_next_attempt {
+                    emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                    continue;
+                }
+                return Err(last_error);
+            }
+        };
+
+        emit_debug(
+            &app,
+            "regenerate_response",
+            json!({
+                "status": api_response.status,
+                "ok": api_response.ok,
+                "model": attempt_model.name,
+            }),
+        );
+
+        if !api_response.ok {
+            let fallback = format!("Provider returned status {}", api_response.status);
+            let err_message =
+                extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+            let failed_usage = extract_usage(api_response.data());
+            emit_debug(
+                &app,
+                "regenerate_provider_error",
+                json!({
+                    "status": api_response.status,
+                    "message": err_message,
+                    "usage": failed_usage,
+                    "model": attempt_model.name,
+                }),
+            );
+            if !has_next_attempt {
+                record_failed_usage(
+                    &app,
+                    &failed_usage,
+                    &session,
+                    &character,
+                    attempt_model,
+                    attempt_provider_cred,
+                    UsageOperationType::Regenerate,
+                    &err_message,
+                    "chat_regenerate",
+                );
+            }
+            last_error = if err_message == fallback {
+                err_message
+            } else {
+                format!("{} (status {})", err_message, api_response.status)
+            };
+            if has_next_attempt {
+                emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                continue;
+            }
+            return Err(last_error);
+        }
+
+        selected_model = attempt_model;
+        selected_provider_cred = attempt_provider_cred;
+        selected_api_key = attempt_api_key;
+        fallback_from_model_id = if *is_fallback_attempt {
+            Some(model.id.clone())
+        } else {
+            None
+        };
+        successful_response = Some(api_response);
+        break;
     }
+
+    let api_response = match successful_response {
+        Some(resp) => resp,
+        None => return Err(last_error),
+    };
 
     let images_from_sse = match api_response.data() {
         Value::String(s) if s.contains("data:") => {
@@ -2349,10 +2495,16 @@ pub async fn chat_regenerate(
         _ => Vec::new(),
     };
 
-    let text =
-        extract_text(api_response.data(), Some(&provider_cred.provider_id)).unwrap_or_default();
+    let text = extract_text(
+        api_response.data(),
+        Some(&selected_provider_cred.provider_id),
+    )
+    .unwrap_or_default();
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data(), Some(&provider_cred.provider_id));
+    let reasoning = extract_reasoning(
+        api_response.data(),
+        Some(&selected_provider_cred.provider_id),
+    );
 
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
@@ -2412,6 +2564,8 @@ pub async fn chat_regenerate(
         assistant_message.content = text.clone();
         assistant_message.usage = usage.clone();
         assistant_message.reasoning = reasoning.clone();
+        assistant_message.model_id = Some(selected_model.id.clone());
+        assistant_message.fallback_from_model_id = fallback_from_model_id.clone();
         assistant_message.variants.push(new_variant);
         if let Some(last) = assistant_message.variants.last() {
             assistant_message.selected_variant_id = Some(last.id.clone());
@@ -2468,9 +2622,9 @@ pub async fn chat_regenerate(
         &usage,
         &session,
         &character,
-        model,
-        provider_cred,
-        &api_key,
+        selected_model,
+        selected_provider_cred,
+        &selected_api_key,
         created_at,
         UsageOperationType::Regenerate,
         "chat_regenerate",
@@ -2584,8 +2738,6 @@ pub async fn chat_continue(
             "credentialId": provider_cred.id,
         }),
     );
-
-    let api_key = resolve_api_key(&app, provider_cred, "chat_continue")?;
 
     let dynamic_memory_enabled = is_dynamic_memory_active(settings, &character);
     let dynamic_window = dynamic_window_size(settings);
@@ -2720,192 +2872,199 @@ pub async fn chat_continue(
     } else {
         None
     };
+    let attempts = build_model_attempts(
+        &app,
+        settings,
+        &character,
+        model,
+        provider_cred,
+        "chat_continue",
+    );
 
-    let temperature = resolve_temperature(&session, &model, &settings);
-    let top_p = resolve_top_p(&session, &model, &settings);
-    let max_tokens = resolve_max_tokens(&session, &model, &settings);
-    let context_length = resolve_context_length(&session, &model, &settings);
-    let frequency_penalty = resolve_frequency_penalty(&session, &model, &settings);
-    let presence_penalty = resolve_presence_penalty(&session, &model, &settings);
-    let top_k = resolve_top_k(&session, &model, &settings);
-    let reasoning_enabled = resolve_reasoning_enabled(&session, &model, &settings);
-    let reasoning_effort = resolve_reasoning_effort(&session, &model, &settings);
-    let reasoning_budget =
-        resolve_reasoning_budget(&session, &model, &settings, reasoning_effort.as_deref());
-    let extra_body_fields = if provider_cred.provider_id == "llamacpp" {
-        build_llama_extra_fields(&session, &model, &settings)
-    } else if provider_cred.provider_id == "ollama" {
-        build_ollama_extra_fields(
+    let mut selected_model = model;
+    let mut selected_provider_cred = provider_cred;
+    let mut selected_api_key = String::new();
+    let mut fallback_from_model_id: Option<String> = None;
+    let mut successful_response = None;
+    let mut last_error = "request failed".to_string();
+    let mut fallback_toast_shown = false;
+
+    for (idx, (attempt_model, attempt_provider_cred, is_fallback_attempt)) in
+        attempts.iter().enumerate()
+    {
+        let has_next_attempt = idx + 1 < attempts.len();
+
+        let attempt_api_key = match resolve_api_key(&app, attempt_provider_cred, "chat_continue") {
+            Ok(key) => key,
+            Err(err) => {
+                last_error = err;
+                if has_next_attempt {
+                    emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                    continue;
+                }
+                return Err(last_error);
+            }
+        };
+
+        let temperature = resolve_temperature(&session, attempt_model, &settings);
+        let top_p = resolve_top_p(&session, attempt_model, &settings);
+        let max_tokens = resolve_max_tokens(&session, attempt_model, &settings);
+        let context_length = resolve_context_length(&session, attempt_model, &settings);
+        let frequency_penalty = resolve_frequency_penalty(&session, attempt_model, &settings);
+        let presence_penalty = resolve_presence_penalty(&session, attempt_model, &settings);
+        let top_k = resolve_top_k(&session, attempt_model, &settings);
+        let reasoning_enabled = resolve_reasoning_enabled(&session, attempt_model, &settings);
+        let reasoning_effort = resolve_reasoning_effort(&session, attempt_model, &settings);
+        let reasoning_budget = resolve_reasoning_budget(
             &session,
-            &model,
+            attempt_model,
             &settings,
-            context_length,
-            max_tokens,
+            reasoning_effort.as_deref(),
+        );
+        let extra_body_fields = if attempt_provider_cred.provider_id == "llamacpp" {
+            build_llama_extra_fields(&session, attempt_model, &settings)
+        } else if attempt_provider_cred.provider_id == "ollama" {
+            build_ollama_extra_fields(
+                &session,
+                attempt_model,
+                &settings,
+                context_length,
+                max_tokens,
+                temperature,
+                top_p,
+                top_k,
+                frequency_penalty,
+                presence_penalty,
+            )
+        } else {
+            None
+        };
+
+        let built = super::request_builder::build_chat_request(
+            attempt_provider_cred,
+            &attempt_api_key,
+            &attempt_model.name,
+            &messages_for_api,
+            None,
             temperature,
             top_p,
-            top_k,
+            max_tokens,
+            context_length,
+            should_stream,
+            request_id.clone(),
             frequency_penalty,
             presence_penalty,
-        )
-    } else {
-        None
-    };
-
-    let built = super::request_builder::build_chat_request(
-        provider_cred,
-        &api_key,
-        &model.name,
-        &messages_for_api,
-        None,
-        temperature,
-        top_p,
-        max_tokens,
-        context_length,
-        should_stream,
-        request_id.clone(),
-        frequency_penalty,
-        presence_penalty,
-        top_k,
-        None,
-        reasoning_enabled,
-        reasoning_effort,
-        reasoning_budget,
-        extra_body_fields,
-    );
-
-    emit_debug(
-        &app,
-        "continue_request",
-        json!({
-            "providerId": provider_cred.provider_id,
-            "model": model.name,
-            "stream": should_stream,
-            "requestId": request_id,
-            "endpoint": built.url,
-        }),
-    );
-
-    log_info(
-        &app,
-        "chat_continue",
-        format!(
-            "request prepared endpoint={} stream={} request_id={:?}",
-            built.url.as_str(),
-            should_stream,
-            &request_id
-        ),
-    );
-
-    log_info(
-        &app,
-        "chat_continue",
-        format!(
-            "request body: reasoning_effort={:?}, reasoning_budget={:?}, max_tokens={:?}, reasoning_enabled={}",
-            built.body.get("reasoning_effort"),
-            built.body.get("reasoning").and_then(|r| r.get("max_tokens")),
-            built.body.get("max_completion_tokens").or(built.body.get("max_tokens")),
-            reasoning_enabled
-        ),
-    );
-
-    if let Some(reasoning_config) = built.body.get("reasoning") {
-        log_info(
-            &app,
-            "chat_continue",
-            format!("reasoning config: {}", reasoning_config),
+            top_k,
+            None,
+            reasoning_enabled,
+            reasoning_effort,
+            reasoning_budget,
+            extra_body_fields,
         );
-    }
 
-    let api_request_payload = ApiRequest {
-        url: built.url,
-        method: Some("POST".into()),
-        headers: Some(built.headers),
-        query: None,
-        body: Some(built.body),
-        timeout_ms: Some(900_000),
-        stream: Some(built.stream),
-        request_id: built.request_id.clone(),
-        provider_id: Some(provider_cred.provider_id.clone()),
-    };
-
-    let api_response = match api_request(app.clone(), api_request_payload).await {
-        Ok(resp) => resp,
-        Err(err) => {
-            log_error(
-                &app,
-                "chat_continue",
-                format!("api_request failed: {}", err),
-            );
-            return Err(err);
-        }
-    };
-
-    emit_debug(
-        &app,
-        "continue_response",
-        json!({
-            "status": api_response.status,
-            "ok": api_response.ok,
-        }),
-    );
-
-    if !api_response.ok {
-        let fallback = format!("Provider returned status {}", api_response.status);
-        let err_message = extract_error_message(api_response.data()).unwrap_or(fallback.clone());
-
-        // Extract usage even from failed requests
-        let failed_usage = extract_usage(api_response.data());
-        if let Some(ref usage) = failed_usage {
-            emit_debug(
-                &app,
-                "failed_request_usage",
-                json!({
-                    "promptTokens": usage.prompt_tokens,
-                    "completionTokens": usage.completion_tokens,
-                    "totalTokens": usage.total_tokens,
-                    "reasoningTokens": usage.reasoning_tokens,
-                }),
-            );
-        }
-
-        log_error(
-            &app,
-            "chat_continue",
-            format!(
-                "provider returned error status={} message={}",
-                api_response.status, &err_message
-            ),
-        );
         emit_debug(
             &app,
-            "continue_provider_error",
+            "continue_request",
             json!({
-                "status": api_response.status,
-                "message": err_message,
-                "usage": failed_usage,
+                "providerId": attempt_provider_cred.provider_id,
+                "model": attempt_model.name,
+                "stream": should_stream,
+                "requestId": request_id,
+                "endpoint": built.url,
+                "fallbackAttempt": is_fallback_attempt,
             }),
         );
-        record_failed_usage(
-            &app,
-            &failed_usage,
-            &session,
-            &character,
-            model,
-            provider_cred,
-            UsageOperationType::Continue,
-            &err_message,
-            "chat_continue",
-        );
-        return if err_message == fallback {
-            Err(err_message)
-        } else {
-            Err(crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                format!("{} (status {})", err_message, api_response.status),
-            ))
+
+        let api_request_payload = ApiRequest {
+            url: built.url,
+            method: Some("POST".into()),
+            headers: Some(built.headers),
+            query: None,
+            body: Some(built.body),
+            timeout_ms: Some(900_000),
+            stream: Some(built.stream),
+            request_id: built.request_id.clone(),
+            provider_id: Some(attempt_provider_cred.provider_id.clone()),
         };
+
+        let api_response = match api_request(app.clone(), api_request_payload).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                last_error = err;
+                if has_next_attempt {
+                    emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                    continue;
+                }
+                return Err(last_error);
+            }
+        };
+
+        emit_debug(
+            &app,
+            "continue_response",
+            json!({
+                "status": api_response.status,
+                "ok": api_response.ok,
+                "model": attempt_model.name,
+            }),
+        );
+
+        if !api_response.ok {
+            let fallback = format!("Provider returned status {}", api_response.status);
+            let err_message =
+                extract_error_message(api_response.data()).unwrap_or(fallback.clone());
+            let failed_usage = extract_usage(api_response.data());
+            emit_debug(
+                &app,
+                "continue_provider_error",
+                json!({
+                    "status": api_response.status,
+                    "message": err_message,
+                    "usage": failed_usage,
+                    "model": attempt_model.name,
+                }),
+            );
+            if !has_next_attempt {
+                record_failed_usage(
+                    &app,
+                    &failed_usage,
+                    &session,
+                    &character,
+                    attempt_model,
+                    attempt_provider_cred,
+                    UsageOperationType::Continue,
+                    &err_message,
+                    "chat_continue",
+                );
+            }
+            last_error = if err_message == fallback {
+                err_message
+            } else {
+                format!("{} (status {})", err_message, api_response.status)
+            };
+            if has_next_attempt {
+                emit_fallback_retry_toast(&app, &mut fallback_toast_shown);
+                continue;
+            }
+            return Err(last_error);
+        }
+
+        selected_model = attempt_model;
+        selected_provider_cred = attempt_provider_cred;
+        selected_api_key = attempt_api_key;
+        fallback_from_model_id = if *is_fallback_attempt {
+            Some(model.id.clone())
+        } else {
+            None
+        };
+        successful_response = Some(api_response);
+        break;
     }
+
+    let api_response = match successful_response {
+        Some(resp) => resp,
+        None => return Err(last_error),
+    };
 
     let images_from_sse = match api_response.data() {
         Value::String(s) if s.contains("data:") => {
@@ -2914,10 +3073,16 @@ pub async fn chat_continue(
         _ => Vec::new(),
     };
 
-    let text =
-        extract_text(api_response.data(), Some(&provider_cred.provider_id)).unwrap_or_default();
+    let text = extract_text(
+        api_response.data(),
+        Some(&selected_provider_cred.provider_id),
+    )
+    .unwrap_or_default();
     let usage = extract_usage(api_response.data());
-    let reasoning = extract_reasoning(api_response.data(), Some(&provider_cred.provider_id));
+    let reasoning = extract_reasoning(
+        api_response.data(),
+        Some(&selected_provider_cred.provider_id),
+    );
 
     if text.trim().is_empty() && images_from_sse.is_empty() {
         let preview =
@@ -3012,6 +3177,8 @@ pub async fn chat_continue(
         is_pinned: false,
         attachments: persisted_assistant_attachments,
         reasoning,
+        model_id: Some(selected_model.id.clone()),
+        fallback_from_model_id: fallback_from_model_id.clone(),
     };
 
     session.messages.push(assistant_message.clone());
@@ -3045,9 +3212,9 @@ pub async fn chat_continue(
         &usage,
         &session,
         &character,
-        model,
-        provider_cred,
-        &api_key,
+        selected_model,
+        selected_provider_cred,
+        &selected_api_key,
         assistant_created_at,
         UsageOperationType::Continue,
         "chat_continue",
@@ -4003,7 +4170,11 @@ async fn run_memory_tool_update(
                                 && cosine_similarity(new_emb, &existing.embedding) > 0.85
                         });
                         if is_duplicate {
-                            log_info(app, "dynamic_memory", format!("Skipping duplicate memory (cosine > 0.85): {}", &text));
+                            log_info(
+                                app,
+                                "dynamic_memory",
+                                format!("Skipping duplicate memory (cosine > 0.85): {}", &text),
+                            );
                             actions_log.push(json!({
                                 "name": "create_memory",
                                 "arguments": call.arguments,
@@ -4021,7 +4192,11 @@ async fn run_memory_tool_update(
                         .get("important")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
-                    let category = call.arguments.get("category").and_then(|v| v.as_str()).map(String::from);
+                    let category = call
+                        .arguments
+                        .get("category")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
                     session.memory_embeddings.push(MemoryEmbedding {
                         id: mem_id.clone(),
                         text,
@@ -4061,14 +4236,22 @@ async fn run_memory_tool_update(
                                 .position(|m| m.text == text)
                         };
                     if let Some(idx) = target_idx {
-                        let confidence = call.arguments.get("confidence").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                        let confidence = call
+                            .arguments
+                            .get("confidence")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(1.0) as f32;
                         if confidence < 0.7 {
                             // Soft-delete: move to cold storage instead of removing
                             if idx < session.memory_embeddings.len() {
                                 let cold_threshold = dynamic_cold_threshold(settings);
                                 session.memory_embeddings[idx].is_cold = true;
                                 session.memory_embeddings[idx].importance_score = cold_threshold;
-                                log_info(app, "dynamic_memory", format!("Soft-deleted memory (confidence={:.2})", confidence));
+                                log_info(
+                                    app,
+                                    "dynamic_memory",
+                                    format!("Soft-deleted memory (confidence={:.2})", confidence),
+                                );
                             }
                             actions_log.push(json!({
                                 "name": "delete_memory",
@@ -4485,6 +4668,82 @@ fn find_model_and_credential<'a>(
                 .find(|cred| cred.provider_id == model.provider_id)
         })?;
     Some((model, provider_cred))
+}
+
+fn build_model_attempts<'a>(
+    app: &AppHandle,
+    settings: &'a Settings,
+    character: &Character,
+    primary_model: &'a Model,
+    primary_provider_cred: &'a ProviderCredential,
+    log_scope: &str,
+) -> Vec<(&'a Model, &'a ProviderCredential, bool)> {
+    let explicit_fallback_candidate = character
+        .fallback_model_id
+        .as_ref()
+        .filter(|fallback_id| *fallback_id != &primary_model.id)
+        .and_then(|fallback_id| find_model_and_credential(settings, fallback_id));
+
+    let app_default_fallback_candidate = settings
+        .default_model_id
+        .as_ref()
+        .filter(|default_id| *default_id != &primary_model.id)
+        .and_then(|default_id| find_model_and_credential(settings, default_id));
+
+    let mut attempts: Vec<(&Model, &ProviderCredential, bool)> =
+        vec![(primary_model, primary_provider_cred, false)];
+    if let Some((fallback_model, fallback_cred)) = explicit_fallback_candidate {
+        attempts.push((fallback_model, fallback_cred, true));
+    } else if character
+        .fallback_model_id
+        .as_ref()
+        .is_some_and(|id| id != &primary_model.id)
+    {
+        log_warn(
+            app,
+            log_scope,
+            format!(
+                "configured character fallback model id {} could not be resolved",
+                character.fallback_model_id.as_deref().unwrap_or("")
+            ),
+        );
+        if let Some((fallback_model, fallback_cred)) = app_default_fallback_candidate {
+            log_info(
+                app,
+                log_scope,
+                format!(
+                    "using app default model {} as fallback candidate",
+                    fallback_model.name
+                ),
+            );
+            attempts.push((fallback_model, fallback_cred, true));
+        }
+    } else if let Some((fallback_model, fallback_cred)) = app_default_fallback_candidate {
+        log_info(
+            app,
+            log_scope,
+            format!(
+                "using app default model {} as fallback candidate",
+                fallback_model.name
+            ),
+        );
+        attempts.push((fallback_model, fallback_cred, true));
+    }
+
+    attempts
+}
+
+fn emit_fallback_retry_toast(app: &AppHandle, shown: &mut bool) {
+    if *shown {
+        return;
+    }
+    emit_toast(
+        app,
+        "warning",
+        "Primary model failed",
+        Some("Retrying with fallback model.".to_string()),
+    );
+    *shown = true;
 }
 
 #[tauri::command]

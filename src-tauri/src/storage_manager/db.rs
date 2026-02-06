@@ -297,6 +297,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           definition TEXT,
           default_scene_id TEXT,
           default_model_id TEXT,
+          fallback_model_id TEXT,
           memory_type TEXT NOT NULL DEFAULT 'manual',
           prompt_template_id TEXT,
           system_prompt TEXT,
@@ -792,6 +793,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut has_custom_text_secondary = false;
     let mut has_voice_config = false;
     let mut has_voice_autoplay = false;
+    let mut has_fallback_model_id = false;
     let mut has_avatar_crop_x = false;
     let mut has_avatar_crop_y = false;
     let mut has_avatar_crop_scale = false;
@@ -812,6 +814,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             "custom_text_secondary" => has_custom_text_secondary = true,
             "voice_config" => has_voice_config = true,
             "voice_autoplay" => has_voice_autoplay = true,
+            "fallback_model_id" => has_fallback_model_id = true,
             "avatar_crop_x" => has_avatar_crop_x = true,
             "avatar_crop_y" => has_avatar_crop_y = true,
             "avatar_crop_scale" => has_avatar_crop_scale = true,
@@ -848,6 +851,12 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     if !has_voice_autoplay {
         let _ = conn.execute(
             "ALTER TABLE characters ADD COLUMN voice_autoplay INTEGER DEFAULT 0",
+            [],
+        );
+    }
+    if !has_fallback_model_id {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN fallback_model_id TEXT",
             [],
         );
     }

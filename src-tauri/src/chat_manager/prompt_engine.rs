@@ -1280,6 +1280,7 @@ mod tests {
             scenes: vec![],
             default_scene_id: None,
             default_model_id: None,
+            fallback_model_id: None,
             memory_type: "manual".into(),
             prompt_template_id: None,
             system_prompt: None,
