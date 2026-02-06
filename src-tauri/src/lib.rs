@@ -24,6 +24,8 @@ mod utils;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use std::sync::Arc;
+    use std::time::Duration;
     use tauri::Manager;
     use tauri_plugin_aptabase::EventTracker;
 
@@ -96,6 +98,8 @@ pub fn run() {
         .setup(move |app| {
             let abort_registry = abort_manager::AbortRegistry::new();
             app.manage(abort_registry);
+            let app_usage_service = Arc::new(usage::app_activity::AppActiveUsageService::new());
+            app.manage(app_usage_service.clone());
 
             let log_manager =
                 logger::LogManager::new(app.handle()).expect("Failed to initialize log manager");
@@ -114,6 +118,17 @@ pub fn run() {
                     app.manage(swappable);
                 }
                 Err(e) => panic!("Failed to initialize database pool: {}", e),
+            }
+            {
+                let app_handle = app.handle().clone();
+                let usage_service = app_usage_service.clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(30));
+                    loop {
+                        interval.tick().await;
+                        usage_service.flush(&app_handle);
+                    }
+                });
             }
 
             let analytics_enabled = aptabase_plugin_enabled && read_analytics_enabled(app.handle());
@@ -311,6 +326,7 @@ pub fn run() {
             usage::usage_clear_before,
             usage::usage_export_csv,
             usage::usage_save_csv,
+            usage::usage_get_app_active_usage,
             usage::usage_recalculate_costs,
             utils::accessibility_sound_base64,
             utils::get_app_version,
@@ -417,7 +433,35 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(move |handler, event| match event {
+            tauri::RunEvent::Resumed => {
+                if let Some(state) = handler
+                    .try_state::<std::sync::Arc<usage::app_activity::AppActiveUsageService>>()
+                {
+                    state.on_resumed();
+                }
+            }
+            tauri::RunEvent::WindowEvent { event, .. } => {
+                if let tauri::WindowEvent::Focused(focused) = event {
+                    if let Some(state) = handler
+                        .try_state::<std::sync::Arc<usage::app_activity::AppActiveUsageService>>()
+                    {
+                        state.on_window_focus_changed(focused);
+                    }
+                }
+            }
+            tauri::RunEvent::ExitRequested { .. } => {
+                if let Some(state) = handler
+                    .try_state::<std::sync::Arc<usage::app_activity::AppActiveUsageService>>()
+                {
+                    state.flush(&handler);
+                }
+            }
             tauri::RunEvent::Exit { .. } => {
+                if let Some(state) = handler
+                    .try_state::<std::sync::Arc<usage::app_activity::AppActiveUsageService>>()
+                {
+                    state.flush(&handler);
+                }
                 let analytics_enabled = handler.state::<AnalyticsState>().enabled;
                 if analytics_enabled {
                     if let Err(e) = handler.track_event("app_exited", None) {

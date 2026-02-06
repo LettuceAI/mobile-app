@@ -1,3 +1,4 @@
+use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -151,7 +152,9 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         "theme": "light",
         "tooltips": {},
         "pureModeEnabled": true,
-        "analyticsEnabled": true
+        "analyticsEnabled": true,
+        "appActiveUsageMs": 0,
+        "appActiveUsageByDayMs": {}
     }));
 
     let mut root = JsonMap::new();
@@ -402,6 +405,87 @@ fn ensure_settings_row(conn: &rusqlite::Connection) -> Result<(), String> {
     Ok(())
 }
 
+pub fn settings_increment_app_active_usage_ms(
+    app: &tauri::AppHandle,
+    delta_ms: u64,
+) -> Result<(), String> {
+    if delta_ms == 0 {
+        return Ok(());
+    }
+
+    let conn = open_db(app)?;
+    ensure_settings_row(&conn)?;
+
+    let app_state_json: String = conn
+        .query_row("SELECT app_state FROM settings WHERE id = 1", [], |r| {
+            r.get(0)
+        })
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let mut app_state: JsonValue = serde_json::from_str(&app_state_json).unwrap_or(JsonValue::Null);
+    let app_state_obj = if let Some(obj) = app_state.as_object_mut() {
+        obj
+    } else {
+        app_state = JsonValue::Object(JsonMap::new());
+        app_state
+            .as_object_mut()
+            .ok_or_else(|| "failed to initialize app_state object".to_string())?
+    };
+
+    let now = now_ms() as u64;
+    let current_total = app_state_obj
+        .get("appActiveUsageMs")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    app_state_obj.insert(
+        "appActiveUsageMs".into(),
+        JsonValue::from(current_total.saturating_add(delta_ms)),
+    );
+    let day_key = Local::now().format("%Y-%m-%d").to_string();
+    let day_obj = app_state_obj
+        .entry("appActiveUsageByDayMs")
+        .or_insert_with(|| JsonValue::Object(JsonMap::new()));
+    let day_map = if let Some(map) = day_obj.as_object_mut() {
+        map
+    } else {
+        *day_obj = JsonValue::Object(JsonMap::new());
+        day_obj
+            .as_object_mut()
+            .ok_or_else(|| "failed to initialize appActiveUsageByDayMs object".to_string())?
+    };
+    let current_day_total = day_map.get(&day_key).and_then(|v| v.as_u64()).unwrap_or(0);
+    day_map.insert(
+        day_key,
+        JsonValue::from(current_day_total.saturating_add(delta_ms)),
+    );
+
+    app_state_obj
+        .entry("appActiveUsageStartedAtMs")
+        .or_insert_with(|| JsonValue::from(now));
+    app_state_obj.insert("appActiveUsageLastUpdatedAtMs".into(), JsonValue::from(now));
+
+    let now_i64 = now as i64;
+    let next_app_state_json = serde_json::to_string(&app_state)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    conn.execute(
+        "UPDATE settings SET app_state = ?, updated_at = ? WHERE id = 1",
+        params![next_app_state_json, now_i64],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    crate::utils::log_info(
+        app,
+        "app_active_usage",
+        format!(
+            "Incremented active usage by {}ms, new total is {}ms",
+            delta_ms,
+            current_total.saturating_add(delta_ms)
+        ),
+    );
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn storage_read_settings(app: tauri::AppHandle) -> Result<Option<String>, String> {
     if let Some(v) = db_read_settings_json(&app)? {
@@ -504,10 +588,48 @@ pub fn settings_set_default_model(app: tauri::AppHandle, id: Option<String>) -> 
 pub fn settings_set_app_state(app: tauri::AppHandle, state_json: String) -> Result<(), String> {
     let conn = open_db(&app)?;
     ensure_settings_row(&conn)?;
+
+    let merged_state_json = {
+        let incoming = serde_json::from_str::<JsonValue>(&state_json).ok();
+        let existing_json: Option<String> = conn
+            .query_row("SELECT app_state FROM settings WHERE id = 1", [], |r| {
+                r.get(0)
+            })
+            .optional()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let existing = existing_json
+            .as_deref()
+            .and_then(|raw| serde_json::from_str::<JsonValue>(raw).ok());
+
+        match (incoming, existing) {
+            (Some(mut incoming_value), Some(existing_value)) => {
+                if let (Some(incoming_obj), Some(existing_obj)) =
+                    (incoming_value.as_object_mut(), existing_value.as_object())
+                {
+                    for key in [
+                        "appActiveUsageMs",
+                        "appActiveUsageByDayMs",
+                        "appActiveUsageStartedAtMs",
+                        "appActiveUsageLastUpdatedAtMs",
+                    ] {
+                        if !incoming_obj.contains_key(key) {
+                            if let Some(existing_value) = existing_obj.get(key) {
+                                incoming_obj.insert(key.into(), existing_value.clone());
+                            }
+                        }
+                    }
+                }
+                serde_json::to_string(&incoming_value)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+            }
+            _ => state_json,
+        }
+    };
+
     let now = now_ms() as i64;
     conn.execute(
         "UPDATE settings SET app_state = ?, updated_at = ? WHERE id = 1",
-        params![state_json, now],
+        params![merged_state_json, now],
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())

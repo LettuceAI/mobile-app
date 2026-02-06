@@ -11,6 +11,10 @@ function cloneAppState(state?: AppState): AppState {
     tooltips: { ...source.tooltips },
     pureModeEnabled: source.pureModeEnabled,
     analyticsEnabled: source.analyticsEnabled ?? true,
+    appActiveUsageMs: source.appActiveUsageMs ?? 0,
+    appActiveUsageByDayMs: { ...(source.appActiveUsageByDayMs ?? {}) },
+    appActiveUsageStartedAtMs: source.appActiveUsageStartedAtMs,
+    appActiveUsageLastUpdatedAtMs: source.appActiveUsageLastUpdatedAtMs,
   };
 }
 

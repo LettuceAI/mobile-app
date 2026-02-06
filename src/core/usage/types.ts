@@ -31,7 +31,7 @@ export interface RequestUsage {
   imageTokens?: number;
 
   // Token breakdown for prompt analysis
-  memoryTokens?: number;  // Tokens from memory embeddings
+  memoryTokens?: number; // Tokens from memory embeddings
   summaryTokens?: number; // Tokens from memory summary
 
   cost?: RequestCost;
@@ -88,4 +88,11 @@ export interface UsageStats {
   byProvider: Record<string, ProviderStats>;
   byModel: Record<string, ModelStats>;
   byCharacter: Record<string, CharacterStats>;
+}
+
+export interface AppActiveUsageSummary {
+  totalMs: number;
+  startedAtMs?: number;
+  lastUpdatedAtMs?: number;
+  byDayMs: Record<string, number>;
 }

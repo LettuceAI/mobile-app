@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { RequestUsage, UsageStats, UsageFilter } from './types';
+import { useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { RequestUsage, UsageStats, UsageFilter, AppActiveUsageSummary } from "./types";
 
 export interface UseUsageTrackingOptions {
   onError?: (error: string) => void;
@@ -15,7 +15,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
       setLoading(true);
       setError(null);
       try {
-        const records = await invoke<RequestUsage[]>('usage_query_records', {
+        const records = await invoke<RequestUsage[]>("usage_query_records", {
           filter,
         });
         return records;
@@ -28,7 +28,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
         setLoading(false);
       }
     },
-    [options]
+    [options],
   );
 
   const getStats = useCallback(
@@ -36,7 +36,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
       setLoading(true);
       setError(null);
       try {
-        const stats = await invoke<UsageStats>('usage_get_stats', { filter });
+        const stats = await invoke<UsageStats>("usage_get_stats", { filter });
         return stats;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -47,7 +47,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
         setLoading(false);
       }
     },
-    [options]
+    [options],
   );
 
   const exportCSV = useCallback(
@@ -55,7 +55,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
       setLoading(true);
       setError(null);
       try {
-        const csv = await invoke<string>('usage_export_csv', { filter });
+        const csv = await invoke<string>("usage_export_csv", { filter });
         return csv;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -66,7 +66,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
         setLoading(false);
       }
     },
-    [options]
+    [options],
   );
 
   const saveCSV = useCallback(
@@ -74,17 +74,20 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
       setLoading(true);
       setError(null);
       try {
-        console.log('[useUsageTracking] Calling usage_save_csv with:', { filename, dataLength: csvData.length });
-        const filePath = await invoke<string>('usage_save_csv', { 
-          csvData: csvData,
-          filename 
+        console.log("[useUsageTracking] Calling usage_save_csv with:", {
+          filename,
+          dataLength: csvData.length,
         });
-        console.log('[useUsageTracking] usage_save_csv returned:', filePath);
+        const filePath = await invoke<string>("usage_save_csv", {
+          csvData: csvData,
+          filename,
+        });
+        console.log("[useUsageTracking] usage_save_csv returned:", filePath);
         return filePath;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error('[useUsageTracking] saveCSV error:', err);
-        console.error('[useUsageTracking] error message:', message);
+        console.error("[useUsageTracking] saveCSV error:", err);
+        console.error("[useUsageTracking] error message:", message);
         setError(message);
         options?.onError?.(message);
         return null;
@@ -92,7 +95,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
         setLoading(false);
       }
     },
-    [options]
+    [options],
   );
 
   const clearBefore = useCallback(
@@ -100,7 +103,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
       setLoading(true);
       setError(null);
       try {
-        const deleted = await invoke<number>('usage_clear_before', { timestamp });
+        const deleted = await invoke<number>("usage_clear_before", { timestamp });
         return deleted;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -111,8 +114,24 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
         setLoading(false);
       }
     },
-    [options]
+    [options],
   );
+
+  const getAppActiveUsage = useCallback(async (): Promise<AppActiveUsageSummary | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const summary = await invoke<AppActiveUsageSummary>("usage_get_app_active_usage");
+      return summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      options?.onError?.(message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [options]);
 
   return {
     queryRecords,
@@ -120,6 +139,7 @@ export function useUsageTracking(options?: UseUsageTrackingOptions) {
     exportCSV,
     saveCSV,
     clearBefore,
+    getAppActiveUsage,
     loading,
     error,
   };

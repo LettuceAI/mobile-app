@@ -1,9 +1,24 @@
+use super::app_activity::AppActiveUsageService;
 use super::repository;
 use super::tracking::{RequestUsage, UsageFilter, UsageStats};
 use crate::models::{calculate_request_cost, get_model_pricing};
 use crate::storage_manager::db::open_db;
 use crate::utils::{log_error, log_info};
+use serde::Serialize;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tauri::AppHandle;
+use tauri::Manager;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppActiveUsageSummary {
+    pub total_ms: u64,
+    pub started_at_ms: Option<u64>,
+    pub last_updated_at_ms: Option<u64>,
+    pub by_day_ms: HashMap<String, u64>,
+}
 
 #[tauri::command]
 pub async fn usage_add_record(app: AppHandle, usage: RequestUsage) -> Result<(), String> {
@@ -40,6 +55,47 @@ pub async fn usage_save_csv(
     filename: String,
 ) -> Result<String, String> {
     repository::save_usage_csv(&app, &csv_data, &filename)
+}
+
+#[tauri::command]
+pub async fn usage_get_app_active_usage(app: AppHandle) -> Result<AppActiveUsageSummary, String> {
+    if let Some(state) = app.try_state::<Arc<AppActiveUsageService>>() {
+        state.flush(&app);
+    }
+
+    let settings_json = crate::storage_manager::settings::internal_read_settings(&app)?;
+    let parsed = settings_json
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .unwrap_or(Value::Null);
+    let app_state = parsed.get("appState").and_then(|v| v.as_object());
+
+    let total_ms = app_state
+        .and_then(|s| s.get("appActiveUsageMs"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let started_at_ms = app_state
+        .and_then(|s| s.get("appActiveUsageStartedAtMs"))
+        .and_then(|v| v.as_u64());
+    let last_updated_at_ms = app_state
+        .and_then(|s| s.get("appActiveUsageLastUpdatedAtMs"))
+        .and_then(|v| v.as_u64());
+    let by_day_ms = app_state
+        .and_then(|s| s.get("appActiveUsageByDayMs"))
+        .and_then(|v| v.as_object())
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_u64().map(|value| (k.clone(), value)))
+                .collect::<HashMap<String, u64>>()
+        })
+        .unwrap_or_default();
+
+    Ok(AppActiveUsageSummary {
+        total_ms,
+        started_at_ms,
+        last_updated_at_ms,
+        by_day_ms,
+    })
 }
 
 /// Recalculate costs for all usage records using current pricing

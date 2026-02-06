@@ -10,10 +10,13 @@ import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
 } from "recharts";
-import { useUsageTracking, RequestUsage, UsageFilter } from "../../../core/usage";
+import {
+  useUsageTracking,
+  RequestUsage,
+  UsageFilter,
+  AppActiveUsageSummary,
+} from "../../../core/usage";
 import {
   Download,
   TrendingUp,
@@ -26,8 +29,6 @@ import {
   X,
   ChevronRight,
   Calendar,
-  GitCompare,
-  ArrowRight,
 } from "lucide-react";
 import { BottomMenu } from "../../components";
 
@@ -94,12 +95,26 @@ function getOperationLabel(type: string): string {
   return labels[type.toLowerCase()] || type;
 }
 
-function formatDateShort(date: Date): string {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function formatDurationMs(durationMs: number): string {
+  if (durationMs <= 0) return "0s";
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  if (seconds > 0) return `${seconds}s`;
+  return `${minutes}m`;
 }
 
-function formatDateForInput(date: Date): string {
-  return date.toISOString().split("T")[0];
+function dayKeyFromDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, "0");
+  const d = `${date.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // ============================================================================
@@ -151,6 +166,23 @@ const ChartTooltip = ({ active, payload, label }: any) => {
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
           <span className="text-white/60">{p.name}:</span>
           <span className="text-white font-medium">{formatNumber(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const AppTimeTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="max-w-[70vw] rounded-lg border border-white/15 bg-[#0a0b0f]/70 backdrop-blur-md px-2.5 py-2 shadow-xl">
+      <p className="text-[10px] font-medium text-white/60 mb-1">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <div key={i} className="flex items-center gap-1.5 text-[11px]">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+          <span className="text-white/60">{p.name}:</span>
+          <span className="text-white font-medium">{formatDurationMs(p.value)}</span>
         </div>
       ))}
     </div>
@@ -259,67 +291,18 @@ function ActivityItem({ request }: { request: RequestUsage }) {
 }
 
 // ============================================================================
-// Comparison Stat
-// ============================================================================
-
-function ComparisonStat({
-  label,
-  period1Value,
-  period2Value,
-  formatter,
-  period1Label,
-  period2Label,
-}: {
-  label: string;
-  period1Value: number;
-  period2Value: number;
-  formatter: (v: number) => string;
-  period1Label: string;
-  period2Label: string;
-}) {
-  const diff = period2Value - period1Value;
-  const percentChange = period1Value > 0 ? (diff / period1Value) * 100 : period2Value > 0 ? 100 : 0;
-  const isIncrease = diff > 0;
-
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-[11px] font-medium text-white/50 uppercase tracking-wide mb-3">{label}</p>
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1">
-          <p className="text-[10px] text-white/40 mb-1">{period1Label}</p>
-          <p className="text-lg font-bold text-white">{formatter(period1Value)}</p>
-        </div>
-        <div className="flex flex-col items-center">
-          <ArrowRight className="h-4 w-4 text-white/20" />
-          {diff !== 0 && (
-            <span
-              className={`text-[10px] font-medium mt-1 ${
-                isIncrease ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {isIncrease ? "+" : ""}
-              {percentChange.toFixed(0)}%
-            </span>
-          )}
-        </div>
-        <div className="flex-1 text-right">
-          <p className="text-[10px] text-white/40 mb-1">{period2Label}</p>
-          <p className="text-lg font-bold text-white">{formatter(period2Value)}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // Main Component
 // ============================================================================
 
 export function UsagePage() {
-  const { queryRecords, exportCSV, saveCSV } = useUsageTracking();
+  const { queryRecords, exportCSV, saveCSV, getAppActiveUsage } = useUsageTracking();
+  const [appActiveUsage, setAppActiveUsage] = useState<AppActiveUsageSummary>({
+    totalMs: 0,
+    byDayMs: {},
+  });
 
   // View mode
-  const [viewMode, setViewMode] = useState<"dashboard" | "compare">("dashboard");
+  const [viewMode, setViewMode] = useState<"dashboard" | "appTime">("dashboard");
 
   // Dashboard state
   const [datePreset, setDatePreset] = useState<DatePreset>("month");
@@ -342,38 +325,13 @@ export function UsagePage() {
     return d;
   });
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [appTimePreset, setAppTimePreset] = useState<"today" | "week" | "month" | "all" | "custom">(
+    "week",
+  );
 
   // Filters
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
-
-  // Comparison state
-  const [period1Start, setPeriod1Start] = useState<Date>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 14);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
-  const [period1End, setPeriod1End] = useState<Date>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    d.setHours(23, 59, 59, 999);
-    return d;
-  });
-  const [period2Start, setPeriod2Start] = useState<Date>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
-  const [period2End, setPeriod2End] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(23, 59, 59, 999);
-    return d;
-  });
-  const [compareRecords1, setCompareRecords1] = useState<RequestUsage[]>([]);
-  const [compareRecords2, setCompareRecords2] = useState<RequestUsage[]>([]);
-  const [compareLoading, setCompareLoading] = useState(false);
 
   // Load dashboard data
   const loadDashboardData = async () => {
@@ -398,22 +356,10 @@ export function UsagePage() {
     setLoading(false);
   };
 
-  // Load comparison data
-  const loadComparisonData = async () => {
-    setCompareLoading(true);
-    const [r1, r2] = await Promise.all([
-      queryRecords({
-        startTimestamp: period1Start.getTime(),
-        endTimestamp: period1End.getTime(),
-      }),
-      queryRecords({
-        startTimestamp: period2Start.getTime(),
-        endTimestamp: period2End.getTime(),
-      }),
-    ]);
-    if (r1) setCompareRecords1(r1);
-    if (r2) setCompareRecords2(r2);
-    setCompareLoading(false);
+  const loadAppUsageInfo = async () => {
+    const summary = await getAppActiveUsage();
+    if (!summary) return;
+    setAppActiveUsage(summary);
   };
 
   useEffect(() => {
@@ -423,10 +369,17 @@ export function UsagePage() {
   }, [datePreset, viewMode, customStartDate, customEndDate]);
 
   useEffect(() => {
-    if (viewMode === "compare") {
-      loadComparisonData();
-    }
-  }, [viewMode, period1Start, period1End, period2Start, period2End]);
+    loadAppUsageInfo();
+  }, []);
+
+  useEffect(() => {
+    if (viewMode !== "appTime") return;
+    loadAppUsageInfo();
+    const interval = window.setInterval(() => {
+      loadAppUsageInfo();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [viewMode]);
 
   // Filtered records for dashboard
   const filteredRecords = useMemo(() => {
@@ -526,30 +479,112 @@ export function UsagePage() {
     };
   }, [filteredRecords]);
 
-  // Comparison stats
-  const compareStats1 = useMemo(() => {
-    return compareRecords1.reduce(
-      (acc, r) => {
-        acc.tokens += r.totalTokens || 0;
-        acc.cost += r.cost?.totalCost || 0;
-        acc.requests += 1;
-        return acc;
-      },
-      { tokens: 0, cost: 0, requests: 0 },
-    );
-  }, [compareRecords1]);
+  const appTimeStats = useMemo(() => {
+    const byDay = appActiveUsage.byDayMs ?? {};
+    const today = new Date();
+    const sumPreviousDays = (startOffsetDays: number, days: number) => {
+      let sum = 0;
+      for (let i = startOffsetDays; i < startOffsetDays + days; i += 1) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const key = dayKeyFromDate(d);
+        sum += byDay[key] ?? 0;
+      }
+      return sum;
+    };
+    const todayMs = sumPreviousDays(0, 1);
+    const yesterdayMs = sumPreviousDays(1, 1);
+    const avg3Ms = sumPreviousDays(1, 3) / 3;
+    const avg7Ms = sumPreviousDays(1, 7) / 7;
+    const avg30Ms = sumPreviousDays(1, 30) / 30;
 
-  const compareStats2 = useMemo(() => {
-    return compareRecords2.reduce(
-      (acc, r) => {
-        acc.tokens += r.totalTokens || 0;
-        acc.cost += r.cost?.totalCost || 0;
-        acc.requests += 1;
-        return acc;
-      },
-      { tokens: 0, cost: 0, requests: 0 },
-    );
-  }, [compareRecords2]);
+    const sumRangeFromDate = (start: Date, days: number) => {
+      let sum = 0;
+      const d = new Date(start);
+      d.setHours(0, 0, 0, 0);
+      for (let i = 0; i < days; i += 1) {
+        const key = dayKeyFromDate(d);
+        sum += byDay[key] ?? 0;
+        d.setDate(d.getDate() + 1);
+      }
+      return sum;
+    };
+
+    const customRangeKeys = (() => {
+      const keys: string[] = [];
+      const d = new Date(customStartDate);
+      d.setHours(0, 0, 0, 0);
+      const end = new Date(customEndDate);
+      end.setHours(0, 0, 0, 0);
+      while (d <= end) {
+        keys.push(dayKeyFromDate(d));
+        d.setDate(d.getDate() + 1);
+      }
+      return keys;
+    })();
+
+    const daysToShow =
+      appTimePreset === "today"
+        ? 1
+        : appTimePreset === "week"
+          ? 7
+          : appTimePreset === "month"
+            ? 30
+            : appTimePreset === "custom"
+              ? customRangeKeys.length
+              : undefined;
+    const allDayKeysSorted = Object.keys(byDay).sort();
+    const chartKeys =
+      daysToShow === undefined
+        ? allDayKeysSorted
+        : appTimePreset === "custom"
+          ? customRangeKeys
+          : Array.from({ length: daysToShow }, (_, idx) => {
+              const d = new Date(today);
+              d.setDate(today.getDate() - (daysToShow - 1 - idx));
+              return dayKeyFromDate(d);
+            });
+
+    const byDayChart = chartKeys.map((key) => {
+      const d = key.includes("-") ? new Date(`${key}T00:00:00`) : new Date();
+      return {
+        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        ms: byDay[key] ?? 0,
+      };
+    });
+    const rangeTotalMs = byDayChart.reduce((sum, item) => sum + item.ms, 0);
+    const selectedDays = Math.max(byDayChart.length, 1);
+    const dailyAvgInRangeMs = rangeTotalMs / selectedDays;
+    const prevRangeTotalMs =
+      daysToShow === undefined
+        ? 0
+        : appTimePreset === "custom"
+          ? (() => {
+              const prevStart = new Date(customStartDate);
+              prevStart.setHours(0, 0, 0, 0);
+              prevStart.setDate(prevStart.getDate() - selectedDays);
+              return sumRangeFromDate(prevStart, selectedDays);
+            })()
+          : sumPreviousDays(daysToShow, daysToShow);
+    const rangeDeltaMs = rangeTotalMs - prevRangeTotalMs;
+    const rangeDeltaPct =
+      prevRangeTotalMs > 0 ? (rangeDeltaMs / prevRangeTotalMs) * 100 : rangeTotalMs > 0 ? 100 : 0;
+
+    return {
+      todayMs,
+      yesterdayMs,
+      avg3Ms,
+      avg7Ms,
+      avg30Ms,
+      rangeTotalMs,
+      selectedDays,
+      dailyAvgInRangeMs,
+      prevRangeTotalMs,
+      rangeDeltaMs,
+      rangeDeltaPct,
+      byDayChart,
+    };
+  }, [appActiveUsage, appTimePreset, customStartDate, customEndDate]);
 
   // Export handler
   const handleExport = async () => {
@@ -574,9 +609,6 @@ export function UsagePage() {
 
   const COLORS = ["#34d399", "#60a5fa", "#a78bfa", "#f472b6", "#fbbf24"];
   const activeFilterCount = [selectedModel, selectedCharacter].filter(Boolean).length;
-
-  const period1Label = `${formatDateShort(period1Start)} - ${formatDateShort(period1End)}`;
-  const period2Label = `${formatDateShort(period2Start)} - ${formatDateShort(period2End)}`;
 
   return (
     <div className="min-h-screen bg-[#050505] pb-24">
@@ -717,7 +749,11 @@ export function UsagePage() {
             </button>
             <button
               onClick={() => {
-                setDatePreset("custom");
+                if (viewMode === "appTime") {
+                  setAppTimePreset("custom");
+                } else {
+                  setDatePreset("custom");
+                }
                 setShowCustomDatePicker(false);
               }}
               className="flex-1 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-sm font-medium hover:bg-emerald-500/30 transition"
@@ -744,15 +780,15 @@ export function UsagePage() {
               Dashboard
             </button>
             <button
-              onClick={() => setViewMode("compare")}
+              onClick={() => setViewMode("appTime")}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                viewMode === "compare"
+                viewMode === "appTime"
                   ? "bg-white/10 text-white"
                   : "text-white/50 hover:text-white/70"
               }`}
             >
-              <GitCompare className="h-3.5 w-3.5" />
-              Compare
+              <Clock className="h-3.5 w-3.5" />
+              App Time
             </button>
           </div>
         </div>
@@ -1103,263 +1139,136 @@ export function UsagePage() {
         )}
 
         {/* ================================================================== */}
-        {/* COMPARE VIEW */}
+        {/* APP TIME VIEW */}
         {/* ================================================================== */}
-        {viewMode === "compare" && (
+        {viewMode === "appTime" && (
           <div className="space-y-4">
-            {/* Period Selection */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Period 1 */}
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-3 w-3 rounded-full bg-blue-400" />
-                  <h3 className="text-sm font-semibold text-white">Period 1</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
-                      From
-                    </label>
-                    <input
-                      type="date"
-                      value={formatDateForInput(period1Start)}
-                      onChange={(e) => {
-                        const d = new Date(e.target.value);
-                        d.setHours(0, 0, 0, 0);
-                        setPeriod1Start(d);
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
-                      To
-                    </label>
-                    <input
-                      type="date"
-                      value={formatDateForInput(period1End)}
-                      onChange={(e) => {
-                        const d = new Date(e.target.value);
-                        d.setHours(23, 59, 59, 999);
-                        setPeriod1End(d);
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Period 2 */}
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-3 w-3 rounded-full bg-emerald-400" />
-                  <h3 className="text-sm font-semibold text-white">Period 2</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
-                      From
-                    </label>
-                    <input
-                      type="date"
-                      value={formatDateForInput(period2Start)}
-                      onChange={(e) => {
-                        const d = new Date(e.target.value);
-                        d.setHours(0, 0, 0, 0);
-                        setPeriod2Start(d);
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-white/50 uppercase tracking-wide block mb-1.5">
-                      To
-                    </label>
-                    <input
-                      type="date"
-                      value={formatDateForInput(period2End)}
-                      onChange={(e) => {
-                        const d = new Date(e.target.value);
-                        d.setHours(23, 59, 59, 999);
-                        setPeriod2End(d);
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-white/30"
-                    />
-                  </div>
-                </div>
-              </div>
+            <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+              {[
+                { key: "today", label: "Today" },
+                { key: "week", label: "7 Days" },
+                { key: "month", label: "30 Days" },
+                { key: "all", label: "All" },
+                { key: "custom", label: "Custom" },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    if (key === "custom") {
+                      setShowCustomDatePicker(true);
+                      return;
+                    }
+                    setAppTimePreset(key as typeof appTimePreset);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    appTimePreset === key
+                      ? "bg-white/10 text-white"
+                      : "text-white/50 hover:text-white/70"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
-            {compareLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-emerald-400" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                icon={Clock}
+                label="Period Total"
+                value={formatDurationMs(appTimeStats.rangeTotalMs)}
+                subValue={`${appTimeStats.selectedDays} day${appTimeStats.selectedDays === 1 ? "" : "s"}`}
+                trend={{
+                  value:
+                    appTimeStats.prevRangeTotalMs > 0
+                      ? Math.abs(
+                          ((appTimeStats.rangeTotalMs - appTimeStats.prevRangeTotalMs) /
+                            appTimeStats.prevRangeTotalMs) *
+                            100,
+                        )
+                      : appTimeStats.rangeTotalMs > 0
+                        ? 100
+                        : 0,
+                  isUp: appTimeStats.rangeTotalMs >= appTimeStats.prevRangeTotalMs,
+                }}
+                highlight
+              />
+              <StatCard
+                icon={Activity}
+                label="Daily Avg"
+                value={formatDurationMs(appTimeStats.dailyAvgInRangeMs)}
+                subValue="in selected period"
+              />
+              <StatCard
+                icon={Activity}
+                label="Today"
+                value={formatDurationMs(appTimeStats.todayMs)}
+                subValue={`Yesterday ${formatDurationMs(appTimeStats.yesterdayMs)}`}
+              />
+              <StatCard
+                icon={Activity}
+                label="30-Day Avg"
+                value={formatDurationMs(appTimeStats.avg30Ms)}
+              />
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-white/10 bg-white/5 p-4"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-white">App Time Trend</h3>
+                <div className="text-[11px] text-white/45">
+                  Total {formatDurationMs(appTimeStats.rangeTotalMs)}
+                  {appTimePreset !== "all" && (
+                    <span
+                      className={`ml-2 ${appTimeStats.rangeDeltaMs >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    >
+                      {appTimeStats.rangeDeltaMs >= 0 ? "+" : "-"}
+                      {formatDurationMs(Math.abs(appTimeStats.rangeDeltaMs))} (
+                      {appTimeStats.rangeDeltaMs >= 0 ? "+" : ""}
+                      {appTimeStats.rangeDeltaPct.toFixed(0)}%)
+                    </span>
+                  )}
+                </div>
               </div>
-            ) : (
-              <>
-                {/* Comparison Stats */}
-                <div className="space-y-3">
-                  <ComparisonStat
-                    label="Total Cost"
-                    period1Value={compareStats1.cost}
-                    period2Value={compareStats2.cost}
-                    formatter={formatCurrency}
-                    period1Label={period1Label}
-                    period2Label={period2Label}
-                  />
-                  <ComparisonStat
-                    label="Total Tokens"
-                    period1Value={compareStats1.tokens}
-                    period2Value={compareStats2.tokens}
-                    formatter={formatNumber}
-                    period1Label={period1Label}
-                    period2Label={period2Label}
-                  />
-                  <ComparisonStat
-                    label="Requests"
-                    period1Value={compareStats1.requests}
-                    period2Value={compareStats2.requests}
-                    formatter={(v) => v.toLocaleString()}
-                    period1Label={period1Label}
-                    period2Label={period2Label}
-                  />
-                </div>
-
-                {/* Comparison Bar Chart */}
-                {(compareStats1.tokens > 0 || compareStats2.tokens > 0) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4"
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={appTimeStats.byDayChart}
+                    margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
                   >
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-white">Visual Comparison</h3>
-                      <div className="flex items-center gap-3 text-[11px]">
-                        <div className="flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-blue-400" />
-                          <span className="text-white/50">{period1Label}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                          <span className="text-white/50">{period2Label}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="h-48">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={[
-                            {
-                              name: "Cost ($)",
-                              period1: compareStats1.cost,
-                              period2: compareStats2.cost,
-                            },
-                            {
-                              name: "Tokens (K)",
-                              period1: compareStats1.tokens / 1000,
-                              period2: compareStats2.tokens / 1000,
-                            },
-                            {
-                              name: "Requests",
-                              period1: compareStats1.requests,
-                              period2: compareStats2.requests,
-                            },
-                          ]}
-                          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-                        >
-                          <XAxis
-                            dataKey="name"
-                            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }}
-                            axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
-                            tickLine={false}
-                          />
-                          <YAxis
-                            tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <Tooltip content={<ChartTooltip />} />
-                          <Bar
-                            dataKey="period1"
-                            name={period1Label}
-                            fill="#60a5fa"
-                            radius={[4, 4, 0, 0]}
-                          />
-                          <Bar
-                            dataKey="period2"
-                            name={period2Label}
-                            fill="#34d399"
-                            radius={[4, 4, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Summary */}
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <h3 className="text-sm font-semibold text-white mb-3">Summary</h3>
-                  <div className="space-y-2 text-sm">
-                    {compareStats1.cost !== compareStats2.cost && (
-                      <p className="text-white/70">
-                        {compareStats2.cost > compareStats1.cost ? (
-                          <>
-                            Cost <span className="text-red-400">increased</span> by{" "}
-                            <span className="font-medium text-white">
-                              {formatCurrency(compareStats2.cost - compareStats1.cost)}
-                            </span>{" "}
-                            (
-                            {(
-                              ((compareStats2.cost - compareStats1.cost) /
-                                Math.max(compareStats1.cost, 0.01)) *
-                              100
-                            ).toFixed(0)}
-                            %)
-                          </>
-                        ) : (
-                          <>
-                            Cost <span className="text-emerald-400">decreased</span> by{" "}
-                            <span className="font-medium text-white">
-                              {formatCurrency(compareStats1.cost - compareStats2.cost)}
-                            </span>{" "}
-                            (
-                            {(
-                              ((compareStats1.cost - compareStats2.cost) /
-                                Math.max(compareStats1.cost, 0.01)) *
-                              100
-                            ).toFixed(0)}
-                            %)
-                          </>
-                        )}
-                      </p>
-                    )}
-                    {compareStats1.tokens !== compareStats2.tokens && (
-                      <p className="text-white/70">
-                        Token usage{" "}
-                        {compareStats2.tokens > compareStats1.tokens ? (
-                          <>
-                            <span className="text-amber-400">increased</span> by{" "}
-                            <span className="font-medium text-white">
-                              {formatNumber(compareStats2.tokens - compareStats1.tokens)}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-emerald-400">decreased</span> by{" "}
-                            <span className="font-medium text-white">
-                              {formatNumber(compareStats1.tokens - compareStats2.tokens)}
-                            </span>
-                          </>
-                        )}
-                      </p>
-                    )}
-                    {compareStats1.requests === 0 && compareStats2.requests === 0 && (
-                      <p className="text-white/50">No data available for the selected periods</p>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
+                    <defs>
+                      <linearGradient id="appTimeGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#34d399" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => formatDurationMs(v)}
+                    />
+                    <Tooltip content={<AppTimeTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="ms"
+                      name="Active Time"
+                      stroke="#34d399"
+                      fill="url(#appTimeGrad)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
           </div>
         )}
       </div>

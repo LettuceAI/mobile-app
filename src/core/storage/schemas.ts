@@ -1459,6 +1459,10 @@ export const AppStateSchema = z.object({
   tooltips: TooltipsStateSchema,
   pureModeEnabled: z.boolean().default(true),
   analyticsEnabled: z.boolean().default(true),
+  appActiveUsageMs: z.number().int().nonnegative().default(0),
+  appActiveUsageByDayMs: z.record(z.number().int().nonnegative()).default({}),
+  appActiveUsageStartedAtMs: z.number().int().nonnegative().optional(),
+  appActiveUsageLastUpdatedAtMs: z.number().int().nonnegative().optional(),
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
@@ -1494,6 +1498,8 @@ export function createDefaultAppState(): AppState {
     tooltips: {},
     pureModeEnabled: true,
     analyticsEnabled: true,
+    appActiveUsageMs: 0,
+    appActiveUsageByDayMs: {},
   };
 }
 
