@@ -177,11 +177,9 @@ export function MessageActionsBottomSheet({
               <div className="flex-1">
                 <span className="inline-flex items-center gap-1 text-white/60">
                   {usedFallback && (
-                    <TriangleAlert
-                      size={12}
-                      className="text-amber-300"
-                      title="Fallback model used"
-                    />
+                    <span title="Fallback model used" aria-label="Fallback model used">
+                      <TriangleAlert size={12} className="text-amber-300" />
+                    </span>
                   )}
                   <span>{modelLabel}</span>
                 </span>
