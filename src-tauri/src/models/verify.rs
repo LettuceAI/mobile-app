@@ -58,7 +58,8 @@ pub async fn verify_model_exists(
 
     let settings_json = match storage_manager::internal_read_settings(&app)? {
         None => Value::Null,
-        Some(txt) => serde_json::from_str::<Value>(&txt).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+        Some(txt) => serde_json::from_str::<Value>(&txt)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
     };
     let mut base_url: Option<String> = None;
     if let Some(creds) = settings_json
@@ -117,8 +118,13 @@ pub async fn verify_model_exists(
 
     let url = crate::providers::util::build_verify_url(&pid, &base);
 
-    let headers = crate::providers::util::build_headers(&pid, &api_key)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to build headers: {}", e)))?;
+    let headers = crate::providers::util::build_headers(&pid, &api_key).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to build headers: {}", e),
+        )
+    })?;
 
     let resp = match client.get(&url).headers(headers).send().await {
         Ok(r) => r,

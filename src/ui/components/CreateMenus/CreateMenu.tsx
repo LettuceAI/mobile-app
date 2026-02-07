@@ -1,15 +1,35 @@
-import { Brain, User, BookOpen, Loader2, Sparkles, Users } from "lucide-react";
+import { Brain, User, BookOpen, Loader2, Sparkles, Users, History, Plus } from "lucide-react";
 import { BottomMenu, MenuButton, MenuDivider, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { readSettings, saveLorebook } from "../../../core/storage/repo";
+import { invoke } from "@tauri-apps/api/core";
+
+type CreationGoal = "character" | "persona" | "lorebook";
+type CreationStatus = "active" | "previewShown" | "completed" | "cancelled";
+
+interface CreationSessionSummary {
+  id: string;
+  creationGoal: CreationGoal;
+  status: CreationStatus;
+  title: string;
+  preview: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"menu" | "lorebook-name" | "ai-helper">("menu");
+  const [mode, setMode] = useState<
+    "menu" | "lorebook-name" | "ai-helper" | "ai-helper-actions" | "ai-helper-history"
+  >("menu");
   const [lorebookName, setLorebookName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [smartToolSelection, setSmartToolSelection] = useState(true);
+  const [selectedGoal, setSelectedGoal] = useState<CreationGoal | null>(null);
+  const [goalSessions, setGoalSessions] = useState<CreationSessionSummary[]>([]);
+  const [loadingGoalSessions, setLoadingGoalSessions] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -30,6 +50,9 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       setMode("menu");
       setLorebookName("");
       setIsCreating(false);
+      setSelectedGoal(null);
+      setGoalSessions([]);
+      setLoadingGoalSessions(false);
     }, 300);
   };
 
@@ -47,12 +70,69 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     }
   };
 
+  const goalMeta: Record<CreationGoal, { label: string; color: string; icon: typeof Sparkles }> = {
+    character: { label: "Character", color: "from-rose-500 to-rose-600", icon: Sparkles },
+    persona: { label: "Persona", color: "from-purple-500 to-purple-600", icon: Brain },
+    lorebook: { label: "Lorebook", color: "from-amber-500 to-amber-600", icon: BookOpen },
+  };
+
+  const formatTimeAgo = (timestamp: number): string => {
+    const diff = Date.now() - timestamp;
+    if (diff < 60_000) return "just now";
+    if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+    return `${Math.floor(diff / 86_400_000)}d ago`;
+  };
+
+  const loadGoalSessions = async (goal: CreationGoal) => {
+    setLoadingGoalSessions(true);
+    try {
+      const sessions = await invoke<CreationSessionSummary[]>("creation_helper_list_sessions", {
+        creationGoal: goal,
+      });
+      setGoalSessions(sessions);
+    } catch (err) {
+      console.error("Failed to load Smart Creator sessions:", err);
+      setGoalSessions([]);
+    } finally {
+      setLoadingGoalSessions(false);
+    }
+  };
+
+  const openGoalActions = async (goal: CreationGoal) => {
+    setSelectedGoal(goal);
+    setMode("ai-helper-actions");
+    await loadGoalSessions(goal);
+  };
+
+  const navigateToNew = (goal: CreationGoal) => {
+    handleClose();
+    navigate(`/create/character/helper?goal=${goal}`);
+  };
+
+  const navigateToSession = (goal: CreationGoal, sessionId: string) => {
+    handleClose();
+    navigate(`/create/character/helper?goal=${goal}&sessionId=${encodeURIComponent(sessionId)}`);
+  };
+
+  const latestIncomplete = goalSessions.find((session) => session.status !== "completed") ?? null;
+  const selectedGoalLabel = selectedGoal ? goalMeta[selectedGoal].label : "Smart Creator";
+  const historyTitle = `${selectedGoalLabel} Conversations`;
+
   return (
     <BottomMenu
       isOpen={isOpen}
       onClose={handleClose}
       title={
-        mode === "menu" ? "Create New" : mode === "ai-helper" ? "Smart Creator" : "Name Lorebook"
+        mode === "menu"
+          ? "Create New"
+          : mode === "ai-helper"
+            ? "Smart Creator"
+            : mode === "ai-helper-actions"
+              ? `${selectedGoalLabel} Creator`
+              : mode === "ai-helper-history"
+                ? historyTitle
+                : "Name Lorebook"
       }
       includeExitIcon={false}
       location="bottom"
@@ -124,10 +204,7 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             title="Character"
             description="Build a character with guided creation"
             color="from-rose-500 to-rose-600"
-            onClick={() => {
-              onClose();
-              navigate("/create/character/helper?goal=character");
-            }}
+            onClick={() => void openGoalActions("character")}
           />
 
           <MenuButton
@@ -135,10 +212,7 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             title="Persona"
             description="Create a reusable voice or personality"
             color="from-purple-500 to-purple-600"
-            onClick={() => {
-              onClose();
-              navigate("/create/character/helper?goal=persona");
-            }}
+            onClick={() => void openGoalActions("persona")}
           />
 
           <MenuButton
@@ -146,11 +220,104 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             title="Lorebook"
             description="Build a structured world reference"
             color="from-amber-500 to-amber-600"
-            onClick={() => {
-              onClose();
-              navigate("/create/character/helper?goal=lorebook");
-            }}
+            onClick={() => void openGoalActions("lorebook")}
           />
+        </MenuSection>
+      ) : mode === "ai-helper-actions" ? (
+        <MenuSection>
+          {loadingGoalSessions ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-5 text-sm text-white/70">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading conversations...</span>
+            </div>
+          ) : (
+            <>
+              {selectedGoal && (
+                <MenuButton
+                  icon={Plus}
+                  title="Create new"
+                  description="Start a fresh guided creation chat"
+                  color={goalMeta[selectedGoal].color}
+                  onClick={() => navigateToNew(selectedGoal)}
+                />
+              )}
+
+              {latestIncomplete && selectedGoal && (
+                <MenuButton
+                  icon={History}
+                  title="Continue last conversation"
+                  description={`${latestIncomplete.title} • ${formatTimeAgo(latestIncomplete.updatedAt)}`}
+                  color="from-blue-500 to-cyan-600"
+                  onClick={() => navigateToSession(selectedGoal, latestIncomplete.id)}
+                />
+              )}
+
+              <MenuButton
+                icon={History}
+                title="See older conversations"
+                description="Open any previous Smart Creator conversation"
+                color="from-indigo-500 to-blue-600"
+                onClick={() => setMode("ai-helper-history")}
+              />
+            </>
+          )}
+        </MenuSection>
+      ) : mode === "ai-helper-history" ? (
+        <MenuSection>
+          {loadingGoalSessions ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-5 text-sm text-white/70">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading conversations...</span>
+            </div>
+          ) : goalSessions.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/65">
+              No conversations yet for this creator.
+            </div>
+          ) : (
+            <>
+              {goalSessions.map((session) => {
+                const statusLabel =
+                  session.status === "completed"
+                    ? "Completed"
+                    : session.status === "cancelled"
+                      ? "Cancelled"
+                      : "Draft";
+                const subtitleParts = [
+                  `${session.messageCount} messages`,
+                  formatTimeAgo(session.updatedAt),
+                  session.preview ? session.preview : "",
+                ].filter(Boolean);
+                return (
+                  <MenuButton
+                    key={session.id}
+                    icon={goalMeta[session.creationGoal].icon}
+                    title={session.title || "Untitled conversation"}
+                    description={subtitleParts.join(" • ")}
+                    color={goalMeta[session.creationGoal].color}
+                    onClick={() => selectedGoal && navigateToSession(selectedGoal, session.id)}
+                    rightElement={
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                          session.status === "completed"
+                            ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                            : "border-blue-400/30 bg-blue-500/10 text-blue-200"
+                        }`}
+                      >
+                        {statusLabel}
+                      </span>
+                    }
+                  />
+                );
+              })}
+            </>
+          )}
+          <MenuDivider />
+          <button
+            onClick={() => setMode("ai-helper-actions")}
+            className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
+          >
+            Back
+          </button>
         </MenuSection>
       ) : (
         <div className="space-y-4">

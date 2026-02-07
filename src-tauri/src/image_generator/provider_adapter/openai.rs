@@ -82,8 +82,14 @@ impl ImageProviderAdapter for OpenAIAdapter {
     }
 
     fn parse_response(&self, response: Value) -> Result<Vec<ImageResponseData>, String> {
-        let openai_response: OpenAIImageResponse = serde_json::from_value(response)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
+        let openai_response: OpenAIImageResponse =
+            serde_json::from_value(response).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to parse response: {}", e),
+                )
+            })?;
 
         Ok(openai_response
             .data

@@ -62,13 +62,16 @@ impl AppActiveUsageService {
                 state.pending_active_ms = state.pending_active_ms.saturating_add(elapsed);
                 state.active_since_ms = Some(now);
             }
-            
+
             crate::utils::log_info(
                 app,
                 "app_active_usage",
-                format!("Flushing active usage, pending={}ms", state.pending_active_ms),
+                format!(
+                    "Flushing active usage, pending={}ms",
+                    state.pending_active_ms
+                ),
             );
-            
+
             state.pending_active_ms
         };
 

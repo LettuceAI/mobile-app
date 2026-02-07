@@ -101,13 +101,18 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
         .optional()
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     if imported.is_none() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Legacy import not completed; refusing to remove files"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Legacy import not completed; refusing to remove files",
+        ));
     }
 
     let root = super::legacy::storage_root(&app)?;
     let ts = super::db::now_ms();
     let backup_dir = root.join(format!("backup_legacy_{}", ts));
-    fs::create_dir_all(&backup_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&backup_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut moved: Vec<String> = Vec::new();
     let mut skip_missing = |p: PathBuf, _name: &str| -> Result<(), String> {
@@ -116,7 +121,9 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
             fs::rename(&p, &target)
                 .or_else(|_| {
                     // fallback to copy if rename across devices fails
-                    fs::copy(&p, &target).map(|_| ()).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+                    fs::copy(&p, &target)
+                        .map(|_| ())
+                        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
                 })
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             moved.push(format!(
@@ -142,15 +149,21 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
             .or_else(|_| {
                 // copy recursively
                 fn copy_dir(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
-                    fs::create_dir_all(dst).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-                    for entry in fs::read_dir(src).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-                        let entry = entry.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                    fs::create_dir_all(dst)
+                        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                    for entry in fs::read_dir(src)
+                        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+                    {
+                        let entry = entry
+                            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                         let path = entry.path();
                         let dest = dst.join(entry.file_name());
                         if path.is_dir() {
                             copy_dir(&path, &dest)?;
                         } else {
-                            fs::copy(&path, &dest).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                            fs::copy(&path, &dest).map_err(|e| {
+                                crate::utils::err_to_string(module_path!(), line!(), e)
+                            })?;
                         }
                     }
                     Ok(())
@@ -173,10 +186,13 @@ pub fn legacy_backup_and_remove(app: tauri::AppHandle) -> Result<String, String>
 }
 
 fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), String> {
-    let data: JsonValue = serde_json::from_str(json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let data: JsonValue = serde_json::from_str(json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let arr = data.as_array().cloned().unwrap_or_default();
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for c in arr {
         let id = c
             .get("id")
@@ -304,14 +320,18 @@ fn import_characters(conn: &mut rusqlite::Connection, json: &str) -> Result<(), 
             }
         }
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 fn import_personas(conn: &mut rusqlite::Connection, json: &str) -> Result<(), String> {
-    let data: JsonValue = serde_json::from_str(json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let data: JsonValue = serde_json::from_str(json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let arr = data.as_array().cloned().unwrap_or_default();
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for p in arr {
         let id = p
             .get("id")
@@ -355,7 +375,8 @@ fn import_personas(conn: &mut rusqlite::Connection, json: &str) -> Result<(), St
             ],
         ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> Result<(), String> {
@@ -378,8 +399,11 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
     }
     if ids.is_empty() {
         // discover by scanning
-        for entry in fs::read_dir(&dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-            let entry = entry.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        for entry in fs::read_dir(&dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+        {
+            let entry =
+                entry.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let path = entry.path();
             if let Some(ext) = path.extension() {
                 if ext == "bin" {
@@ -392,14 +416,17 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
     }
 
     let now = now_ms() as i64;
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     for id in ids {
         let path = dir.join(format!("{}.bin", &id));
         if !path.exists() {
             continue;
         }
         if let Some(json) = read_encrypted_file(&path)? {
-            let s: JsonValue = serde_json::from_str(&json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let s: JsonValue = serde_json::from_str(&json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let character_id = s.get("characterId").and_then(|v| v.as_str()).unwrap_or("");
             let title = s.get("title").and_then(|v| v.as_str()).unwrap_or("");
             let system_prompt = s
@@ -506,5 +533,6 @@ fn import_sessions(app: &tauri::AppHandle, conn: &mut rusqlite::Connection) -> R
             }
         }
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }

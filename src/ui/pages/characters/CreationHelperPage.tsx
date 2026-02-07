@@ -255,6 +255,7 @@ export function CreationHelperPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const creationGoalParam = searchParams.get("goal");
+  const sessionIdParam = searchParams.get("sessionId");
   const creationGoal: CreationSession["creationGoal"] =
     creationGoalParam === "persona" || creationGoalParam === "lorebook"
       ? creationGoalParam
@@ -297,6 +298,7 @@ export function CreationHelperPage() {
   } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const initGuardRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
   const [imageGenerations, setImageGenerations] = useState<ImageGenerationEntry[]>([]);
 
   const resolveErrorMessage = useCallback((err: unknown, fallback: string) => {
@@ -356,17 +358,45 @@ export function CreationHelperPage() {
     sessionIdRef.current = session?.id ?? null;
   }, [session?.id]);
 
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
+
   // Initialize session
   useEffect(() => {
     const initSession = async () => {
-      if (initGuardRef.current === creationGoal) {
+      const initKey = `${creationGoal}:${sessionIdParam ?? ""}`;
+      if (initGuardRef.current === initKey) {
         return;
       }
-      initGuardRef.current = creationGoal;
+      initGuardRef.current = initKey;
       try {
         const settings = await readSettings();
         const smartSelection = settings.advancedSettings?.creationHelperSmartToolSelection ?? true;
         setSmartToolSelection(smartSelection);
+
+        let resumedSession: CreationSession | null = null;
+        const requestedSessionId = sessionIdParam?.trim() || null;
+
+        if (requestedSessionId) {
+          resumedSession = await invoke<CreationSession | null>("creation_helper_get_session", {
+            sessionId: requestedSessionId,
+          });
+        }
+
+        if (!resumedSession) {
+          resumedSession = await invoke<CreationSession | null>(
+            "creation_helper_get_latest_session",
+            {
+              creationGoal,
+            },
+          );
+        }
+
+        if (resumedSession) {
+          setSession(resumedSession);
+          return;
+        }
 
         const newSession = await invoke<CreationSession>("creation_helper_start", {
           creationGoal,
@@ -393,7 +423,7 @@ export function CreationHelperPage() {
     };
 
     initSession();
-  }, [creationGoal]);
+  }, [creationGoal, sessionIdParam]);
 
   useEffect(() => {
     setSession(null);
@@ -419,7 +449,7 @@ export function CreationHelperPage() {
       streamUnlistenRef.current();
       streamUnlistenRef.current = null;
     }
-  }, [creationGoal]);
+  }, [creationGoal, sessionIdParam]);
 
   useEffect(() => {
     if (activeTools.length === 0) return;
@@ -518,7 +548,7 @@ export function CreationHelperPage() {
         streamUnlistenRef.current = null;
       }
       const sessionId = sessionIdRef.current;
-      if (sessionId) {
+      if (sessionId && sendingRef.current) {
         invoke("creation_helper_cancel", { sessionId }).catch(console.error);
       }
     };
@@ -931,7 +961,7 @@ export function CreationHelperPage() {
       streamUnlistenRef.current();
       streamUnlistenRef.current = null;
     }
-    if (session) {
+    if (session && sending) {
       invoke("creation_helper_cancel", { sessionId: session.id }).catch(console.error);
     }
     setSending(false);

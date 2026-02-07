@@ -6,7 +6,8 @@ use super::db::open_db;
 #[tauri::command]
 pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result<String, String> {
     let conn = open_db(&app)?;
-    let cred: JsonValue = serde_json::from_str(&credential_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let cred: JsonValue = serde_json::from_str(&credential_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = cred
         .get("id")
         .and_then(|v| v.as_str())
@@ -86,7 +87,8 @@ pub fn provider_upsert(app: tauri::AppHandle, credential_json: String) -> Result
             out.insert("config".into(), v);
         }
     }
-    Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
+    Ok(serde_json::to_string(&JsonValue::Object(out))
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]

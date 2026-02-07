@@ -48,8 +48,9 @@ pub fn audio_provider_upsert(
     app: AppHandle,
     provider_json: String,
 ) -> Result<AudioProvider, String> {
-    let provider: AudioProvider =
-        serde_json::from_str(&provider_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid JSON: {}", e)))?;
+    let provider: AudioProvider = serde_json::from_str(&provider_json).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid JSON: {}", e))
+    })?;
 
     let conn = open_db(&app)?;
     let now = now_ms();
@@ -142,7 +143,13 @@ pub fn audio_provider_voices(
             params![provider_id],
             |row| row.get(0),
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Provider not found: {}", e),
+            )
+        })?;
 
     // For Gemini, return hardcoded voices
     if provider_type == "gemini_tts" {
@@ -208,7 +215,13 @@ pub async fn audio_provider_refresh_voices(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Provider not found: {}", e),
+            )
+        })?;
 
     // Gemini uses hardcoded voices
     if provider_type == "gemini_tts" {
@@ -287,8 +300,9 @@ pub fn user_voice_list(app: AppHandle) -> Result<Vec<UserVoice>, String> {
 /// Create or update a user voice configuration
 #[tauri::command]
 pub fn user_voice_upsert(app: AppHandle, voice_json: String) -> Result<UserVoice, String> {
-    let voice: UserVoice =
-        serde_json::from_str(&voice_json).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Invalid JSON: {}", e)))?;
+    let voice: UserVoice = serde_json::from_str(&voice_json).map_err(|e| {
+        crate::utils::err_msg(module_path!(), line!(), format!("Invalid JSON: {}", e))
+    })?;
 
     let conn = open_db(&app)?;
     let now = now_ms();
@@ -367,7 +381,13 @@ pub async fn tts_preview(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Provider not found: {}", e),
+            )
+        })?;
 
     let api_key = api_key.ok_or("API key not configured")?;
 
@@ -398,7 +418,11 @@ pub async fn tts_preview(
                     elevenlabs::generate_speech(&text, &voice_id, &model_id, &api_key).await?;
                 Ok((data, "audio/mpeg".to_string()))
             }
-            _ => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unknown provider type: {}", provider_type))),
+            _ => Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Unknown provider type: {}", provider_type),
+            )),
         }
     };
 
@@ -447,7 +471,11 @@ pub async fn audio_provider_verify(
             gemini::verify_api_key(&api_key, &project_id).await
         }
         "elevenlabs" => elevenlabs::verify_api_key(&api_key).await,
-        _ => Err(crate::utils::err_msg(module_path!(), line!(), format!("Unknown provider type: {}", provider_type))),
+        _ => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Unknown provider type: {}", provider_type),
+        )),
     }
 }
 
@@ -466,10 +494,20 @@ pub async fn audio_provider_search_voices(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Provider not found: {}", e),
+            )
+        })?;
 
     if provider_type != "elevenlabs" {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Voice search only available for ElevenLabs"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Voice search only available for ElevenLabs",
+        ));
     }
 
     let api_key = api_key.ok_or("API key not configured")?;
@@ -508,10 +546,20 @@ pub async fn voice_design_preview(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Provider not found: {}", e),
+            )
+        })?;
 
     if provider_type != "elevenlabs" {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Voice design only available for ElevenLabs"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Voice design only available for ElevenLabs",
+        ));
     }
 
     let api_key = api_key.ok_or("API key not configured")?;
@@ -552,10 +600,20 @@ pub async fn voice_design_create(
             params![provider_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Provider not found: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Provider not found: {}", e),
+            )
+        })?;
 
     if provider_type != "elevenlabs" {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Voice creation only available for ElevenLabs"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Voice creation only available for ElevenLabs",
+        ));
     }
 
     let api_key = api_key.ok_or("API key not configured")?;

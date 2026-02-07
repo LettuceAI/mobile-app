@@ -15,11 +15,16 @@ pub fn storage_write_image(
     } else {
         &base64_data
     };
-    let bytes = general_purpose::STANDARD
-        .decode(data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode base64: {}", e)))?;
+    let bytes = general_purpose::STANDARD.decode(data).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to decode base64: {}", e),
+        )
+    })?;
     let images_dir = storage_root(&app)?.join("images");
-    fs::create_dir_all(&images_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&images_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let extension = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         "jpg"
     } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
@@ -32,7 +37,8 @@ pub fn storage_write_image(
         "png"
     };
     let image_path = images_dir.join(format!("{}.{}", image_id, extension));
-    fs::write(&image_path, bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::write(&image_path, bytes)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(image_path.to_string_lossy().to_string())
 }
 
@@ -45,7 +51,11 @@ pub fn storage_get_image_path(app: tauri::AppHandle, image_id: String) -> Result
             return Ok(image_path.to_string_lossy().to_string());
         }
     }
-    Err(crate::utils::err_msg(module_path!(), line!(), format!("Image not found: {}", image_id)))
+    Err(crate::utils::err_msg(
+        module_path!(),
+        line!(),
+        format!("Image not found: {}", image_id),
+    ))
 }
 
 #[tauri::command]
@@ -54,7 +64,8 @@ pub fn storage_delete_image(app: tauri::AppHandle, image_id: String) -> Result<(
     for ext in &["jpg", "jpeg", "png", "gif", "webp", "img"] {
         let image_path = images_dir.join(format!("{}.{}", image_id, ext));
         if image_path.exists() {
-            fs::remove_file(&image_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            fs::remove_file(&image_path)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }
     Ok(())
@@ -66,7 +77,8 @@ pub fn storage_read_image(app: tauri::AppHandle, image_id: String) -> Result<Str
     for ext in &["jpg", "jpeg", "png", "gif", "webp"] {
         let image_path = images_dir.join(format!("{}.{}", image_id, ext));
         if image_path.exists() {
-            let bytes = fs::read(&image_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let bytes = fs::read(&image_path)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mime_type = match *ext {
                 "jpg" | "jpeg" => "image/jpeg",
                 "png" => "image/png",
@@ -78,7 +90,11 @@ pub fn storage_read_image(app: tauri::AppHandle, image_id: String) -> Result<Str
             return Ok(format!("data:{};base64,{}", mime_type, base64_data));
         }
     }
-    Err(crate::utils::err_msg(module_path!(), line!(), format!("Image not found: {}", image_id)))
+    Err(crate::utils::err_msg(
+        module_path!(),
+        line!(),
+        format!("Image not found: {}", image_id),
+    ))
 }
 
 #[tauri::command]
@@ -93,27 +109,39 @@ pub fn storage_save_avatar(
     } else {
         &base64_data
     };
-    let bytes = general_purpose::STANDARD
-        .decode(data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode base64: {}", e)))?;
+    let bytes = general_purpose::STANDARD.decode(data).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to decode base64: {}", e),
+        )
+    })?;
     let avatars_dir = storage_root(&app)?.join("avatars").join(&entity_id);
-    fs::create_dir_all(&avatars_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&avatars_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let base_webp_bytes = match image::load_from_memory(&bytes) {
         Ok(img) => {
             let mut webp_data: Vec<u8> = Vec::new();
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
-            img.write_with_encoder(encoder)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to encode WebP: {}", e)))?;
+            img.write_with_encoder(encoder).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to encode WebP: {}", e),
+                )
+            })?;
             webp_data
         }
         Err(_) => bytes,
     };
     let base_filename = "avatar_base.webp";
     let base_path = avatars_dir.join(base_filename);
-    fs::write(&base_path, &base_webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::write(&base_path, &base_webp_bytes)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let legacy_path = avatars_dir.join("avatar.webp");
-    fs::write(&legacy_path, &base_webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::write(&legacy_path, &base_webp_bytes)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let round_bytes = if let Some(round_data) = round_base64_data {
         let round_payload = if let Some(comma_idx) = round_data.find(',') {
@@ -123,7 +151,13 @@ pub fn storage_save_avatar(
         };
         general_purpose::STANDARD
             .decode(round_payload)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode round avatar base64: {}", e)))?
+            .map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to decode round avatar base64: {}", e),
+                )
+            })?
     } else {
         base_webp_bytes.clone()
     };
@@ -131,15 +165,21 @@ pub fn storage_save_avatar(
         Ok(img) => {
             let mut webp_data: Vec<u8> = Vec::new();
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
-            img.write_with_encoder(encoder)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to encode WebP: {}", e)))?;
+            img.write_with_encoder(encoder).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to encode WebP: {}", e),
+                )
+            })?;
             webp_data
         }
         Err(_) => round_bytes,
     };
     let round_filename = "avatar_round.webp";
     let round_path = avatars_dir.join(round_filename);
-    fs::write(&round_path, round_webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::write(&round_path, round_webp_bytes)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let gradient_cache_path = avatars_dir.join("gradient.json");
     if gradient_cache_path.exists() {
         let _ = fs::remove_file(&gradient_cache_path);
@@ -163,9 +203,14 @@ pub fn storage_load_avatar(
         .join(&entity_id)
         .join(&filename);
     if !avatar_path.exists() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Avatar not found: {}/{}", entity_id, filename)));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Avatar not found: {}/{}", entity_id, filename),
+        ));
     }
-    let bytes = fs::read(&avatar_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let bytes = fs::read(&avatar_path)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mime_type = if filename.ends_with(".webp") {
         "image/webp"
     } else if filename.ends_with(".png") {
@@ -192,7 +237,8 @@ pub fn storage_delete_avatar(
         .join(&entity_id)
         .join(&filename);
     if avatar_path.exists() {
-        fs::remove_file(&avatar_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_file(&avatar_path)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
     Ok(())
 }
@@ -229,7 +275,11 @@ pub fn generate_avatar_gradient(
     };
     let gradient_cache_path = avatars_dir.join("gradient.json");
     if !avatar_path.exists() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Avatar not found for {}", entity_id)));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Avatar not found for {}", entity_id),
+        ));
     }
     if gradient_cache_path.exists() {
         if let Ok(avatar_meta) = fs::metadata(&avatar_path) {
@@ -263,7 +313,13 @@ pub fn generate_avatar_gradient(
         "gradient",
         format!("Processing avatar for entity: {}", entity_id),
     );
-    let img = image::open(&avatar_path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to load image: {}", e)))?;
+    let img = image::open(&avatar_path).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to load image: {}", e),
+        )
+    })?;
     let rgb_img = img.to_rgb8();
     let (width, height) = rgb_img.dimensions();
     log_debug(
@@ -309,7 +365,11 @@ pub fn generate_avatar_gradient(
 
 fn find_dominant_colors(samples: &[(u8, u8, u8)], k: usize) -> Result<Vec<(u8, u8, u8)>, String> {
     if samples.is_empty() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "No samples provided"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "No samples provided",
+        ));
     }
     let mut centroids: Vec<(f64, f64, f64)> = Vec::new();
     let step = samples.len() / k.max(1);
@@ -512,15 +572,20 @@ pub fn storage_save_session_attachment(
         &base64_data
     };
 
-    let bytes = general_purpose::STANDARD
-        .decode(data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode base64: {}", e)))?;
+    let bytes = general_purpose::STANDARD.decode(data).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to decode base64: {}", e),
+        )
+    })?;
 
     let sessions_dir = storage_root(&app)?
         .join("sessions")
         .join(&character_id)
         .join(&session_id);
-    fs::create_dir_all(&sessions_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::create_dir_all(&sessions_dir)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let role_prefix = if role == "assistant" { "ai" } else { "user" };
 
@@ -528,8 +593,13 @@ pub fn storage_save_session_attachment(
         Ok(img) => {
             let mut webp_data: Vec<u8> = Vec::new();
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
-            img.write_with_encoder(encoder)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to encode WebP: {}", e)))?;
+            img.write_with_encoder(encoder).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to encode WebP: {}", e),
+                )
+            })?;
             webp_data
         }
         Err(_) => bytes,
@@ -538,7 +608,8 @@ pub fn storage_save_session_attachment(
     // Filename: <role>_<message_id>_<attachment_id>.webp
     let filename = format!("{}_{}_{}.webp", role_prefix, message_id, attachment_id);
     let image_path = sessions_dir.join(&filename);
-    fs::write(&image_path, webp_bytes).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    fs::write(&image_path, webp_bytes)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let relative_path = format!("sessions/{}/{}/{}", character_id, session_id, filename);
 
@@ -559,10 +630,15 @@ pub fn storage_load_session_attachment(
     let full_path = storage_root(&app)?.join(&storage_path);
 
     if !full_path.exists() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Attachment not found: {}", storage_path)));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Attachment not found: {}", storage_path),
+        ));
     }
 
-    let bytes = fs::read(&full_path).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let bytes = fs::read(&full_path)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Determine MIME type from extension
     let mime_type = if storage_path.ends_with(".webp") {
@@ -588,7 +664,11 @@ pub fn storage_get_session_attachment_path(
 ) -> Result<String, String> {
     let full_path = storage_root(&app)?.join(&storage_path);
     if !full_path.exists() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Attachment not found: {}", storage_path)));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Attachment not found: {}", storage_path),
+        ));
     }
     Ok(full_path.to_string_lossy().to_string())
 }
@@ -605,7 +685,8 @@ pub fn storage_delete_session_attachments(
         .join(&session_id);
 
     if sessions_dir.exists() {
-        fs::remove_dir_all(&sessions_dir).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        fs::remove_dir_all(&sessions_dir)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         log_info(
             &app,
             "session_attachment",

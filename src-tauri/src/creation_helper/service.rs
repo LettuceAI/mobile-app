@@ -32,7 +32,106 @@ lazy_static::lazy_static! {
     static ref LAST_GENERATED_IMAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
-pub fn start_session(creation_goal: CreationGoal) -> Result<CreationSession, String> {
+fn serialize_creation_goal(goal: &CreationGoal) -> &'static str {
+    match goal {
+        CreationGoal::Character => "character",
+        CreationGoal::Persona => "persona",
+        CreationGoal::Lorebook => "lorebook",
+    }
+}
+
+fn serialize_creation_status(status: &CreationStatus) -> &'static str {
+    match status {
+        CreationStatus::Active => "active",
+        CreationStatus::PreviewShown => "previewShown",
+        CreationStatus::Completed => "completed",
+        CreationStatus::Cancelled => "cancelled",
+    }
+}
+
+fn get_cached_images_map(session_id: &str) -> Result<HashMap<String, UploadedImage>, String> {
+    let images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    Ok(images.get(session_id).cloned().unwrap_or_default())
+}
+
+fn persist_session(app: &AppHandle, session: &CreationSession) -> Result<(), String> {
+    let conn = open_db(app)?;
+    let session_json = serde_json::to_string(session)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let images_json = serde_json::to_string(&get_cached_images_map(&session.id)?)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    conn.execute(
+        "INSERT INTO creation_helper_sessions
+           (id, creation_goal, status, session_json, uploaded_images_json, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET
+           creation_goal = excluded.creation_goal,
+           status = excluded.status,
+           session_json = excluded.session_json,
+           uploaded_images_json = excluded.uploaded_images_json,
+           updated_at = excluded.updated_at",
+        rusqlite::params![
+            session.id,
+            serialize_creation_goal(&session.creation_goal),
+            serialize_creation_status(&session.status),
+            session_json,
+            images_json,
+            session.created_at,
+            session.updated_at
+        ],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    Ok(())
+}
+
+fn hydrate_session_cache(
+    session: &CreationSession,
+    images: HashMap<String, UploadedImage>,
+) -> Result<(), String> {
+    let mut sessions = SESSIONS
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    sessions.insert(session.id.clone(), session.clone());
+    drop(sessions);
+
+    let mut cached_images = UPLOADED_IMAGES
+        .lock()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    cached_images.insert(session.id.clone(), images);
+    Ok(())
+}
+
+fn load_persisted_session(
+    app: &AppHandle,
+    session_id: &str,
+) -> Result<Option<(CreationSession, HashMap<String, UploadedImage>)>, String> {
+    let conn = open_db(app)?;
+    let row = conn.query_row(
+        "SELECT session_json, uploaded_images_json
+         FROM creation_helper_sessions
+         WHERE id = ?1",
+        [session_id],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+    );
+    match row {
+        Ok((session_json, images_json)) => {
+            let session: CreationSession = serde_json::from_str(&session_json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let images: HashMap<String, UploadedImage> = serde_json::from_str(&images_json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            Ok(Some((session, images)))
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(crate::utils::err_to_string(module_path!(), line!(), e)),
+    }
+}
+
+pub fn start_session(
+    app: &AppHandle,
+    creation_goal: CreationGoal,
+) -> Result<CreationSession, String> {
     let now = now_ms() as i64;
     let session_id = Uuid::new_v4().to_string();
 
@@ -47,24 +146,168 @@ pub fn start_session(creation_goal: CreationGoal) -> Result<CreationSession, Str
         updated_at: now,
     };
 
-    let mut sessions = SESSIONS
-        .lock()
-        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    sessions.insert(session_id.clone(), session.clone());
+    {
+        let mut sessions = SESSIONS
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        sessions.insert(session_id.clone(), session.clone());
+    }
 
-    let mut images = UPLOADED_IMAGES
-        .lock()
-        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    images.insert(session_id, HashMap::new());
+    {
+        let mut images = UPLOADED_IMAGES
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        images.insert(session_id, HashMap::new());
+    }
+
+    persist_session(app, &session)?;
 
     Ok(session)
 }
 
-pub fn get_session(session_id: &str) -> Result<Option<CreationSession>, String> {
-    let sessions = SESSIONS
-        .lock()
+pub fn get_session(app: &AppHandle, session_id: &str) -> Result<Option<CreationSession>, String> {
+    {
+        let sessions = SESSIONS
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        if let Some(session) = sessions.get(session_id) {
+            return Ok(Some(session.clone()));
+        }
+    }
+
+    if let Some((session, images)) = load_persisted_session(app, session_id)? {
+        hydrate_session_cache(&session, images)?;
+        return Ok(Some(session));
+    }
+
+    Ok(None)
+}
+
+pub fn get_latest_resumable_session(
+    app: &AppHandle,
+    creation_goal: Option<CreationGoal>,
+) -> Result<Option<CreationSession>, String> {
+    let conn = open_db(app)?;
+    let row = if let Some(goal) = creation_goal {
+        conn.query_row(
+            "SELECT session_json, uploaded_images_json
+             FROM creation_helper_sessions
+             WHERE creation_goal = ?1 AND status != 'completed'
+             ORDER BY updated_at DESC
+             LIMIT 1",
+            [serialize_creation_goal(&goal)],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+    } else {
+        conn.query_row(
+            "SELECT session_json, uploaded_images_json
+             FROM creation_helper_sessions
+             WHERE status != 'completed'
+             ORDER BY updated_at DESC
+             LIMIT 1",
+            [],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+    };
+
+    match row {
+        Ok((session_json, images_json)) => {
+            let session: CreationSession = serde_json::from_str(&session_json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let images: HashMap<String, UploadedImage> = serde_json::from_str(&images_json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            hydrate_session_cache(&session, images)?;
+            Ok(Some(session))
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(crate::utils::err_to_string(module_path!(), line!(), e)),
+    }
+}
+
+fn build_session_summary(session: &CreationSession) -> CreationSessionSummary {
+    let title = session
+        .draft
+        .name
+        .as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "Untitled conversation".to_string());
+
+    let preview = session
+        .messages
+        .iter()
+        .rev()
+        .find_map(|msg| {
+            let content = msg.content.trim();
+            if content.is_empty() {
+                None
+            } else {
+                Some(content.to_string())
+            }
+        })
+        .unwrap_or_default();
+
+    CreationSessionSummary {
+        id: session.id.clone(),
+        creation_goal: session.creation_goal.clone(),
+        status: session.status.clone(),
+        title,
+        preview,
+        message_count: session.messages.len(),
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+    }
+}
+
+pub fn list_sessions(
+    app: &AppHandle,
+    creation_goal: Option<CreationGoal>,
+) -> Result<Vec<CreationSessionSummary>, String> {
+    let conn = open_db(app)?;
+    let sql = if creation_goal.is_some() {
+        "SELECT session_json
+         FROM creation_helper_sessions
+         WHERE creation_goal = ?1
+         ORDER BY updated_at DESC"
+    } else {
+        "SELECT session_json
+         FROM creation_helper_sessions
+         ORDER BY updated_at DESC"
+    };
+
+    let mut stmt = conn
+        .prepare(sql)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    Ok(sessions.get(session_id).cloned())
+
+    let mut summaries = Vec::new();
+    if let Some(goal) = creation_goal {
+        let rows = stmt
+            .query_map([serialize_creation_goal(&goal)], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        for row in rows {
+            let session_json =
+                row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let session: CreationSession = serde_json::from_str(&session_json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            summaries.push(build_session_summary(&session));
+        }
+    } else {
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        for row in rows {
+            let session_json =
+                row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let session: CreationSession = serde_json::from_str(&session_json)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            summaries.push(build_session_summary(&session));
+        }
+    }
+
+    Ok(summaries)
 }
 
 pub fn save_uploaded_image(
@@ -980,15 +1223,8 @@ pub async fn send_message(
 ) -> Result<CreationSession, String> {
     let now = now_ms() as i64;
 
-    let mut session = {
-        let sessions = SESSIONS
-            .lock()
-            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        sessions
-            .get(&session_id)
-            .cloned()
-            .ok_or_else(|| "Session not found".to_string())?
-    };
+    let mut session =
+        get_session(&app, &session_id)?.ok_or_else(|| "Session not found".to_string())?;
 
     if let Some(images) = uploaded_images {
         for (id, data, mime_type) in images {
@@ -1020,15 +1256,8 @@ pub async fn regenerate_response(
     session_id: String,
     request_id: Option<String>,
 ) -> Result<CreationSession, String> {
-    let mut session = {
-        let sessions = SESSIONS
-            .lock()
-            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-        sessions
-            .get(&session_id)
-            .cloned()
-            .ok_or_else(|| "Session not found".to_string())?
-    };
+    let mut session =
+        get_session(&app, &session_id)?.ok_or_else(|| "Session not found".to_string())?;
 
     // Find last assistant message
     let last_assistant_idx = session
@@ -1575,6 +1804,8 @@ async fn process_assistant_turn(
         sessions.insert(session_id.clone(), session.clone());
     }
 
+    persist_session(&app, &session)?;
+
     let _ = app.emit(
         "creation-helper-update",
         json!({
@@ -1586,13 +1817,6 @@ async fn process_assistant_turn(
     );
 
     Ok(session)
-}
-
-pub fn get_draft(session_id: &str) -> Result<Option<DraftCharacter>, String> {
-    let sessions = SESSIONS
-        .lock()
-        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    Ok(sessions.get(session_id).map(|s| s.draft.clone()))
 }
 
 pub fn cancel_session(app: &AppHandle, session_id: &str) -> Result<(), String> {
@@ -1614,49 +1838,61 @@ pub fn cancel_session(app: &AppHandle, session_id: &str) -> Result<(), String> {
         ),
     }
 
-    // Then update the session status
-    let mut sessions = SESSIONS
-        .lock()
-        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    if let Some(session) = sessions.get_mut(session_id) {
-        session.status = CreationStatus::Cancelled;
+    // Keep session resumable; cancel only aborts in-flight generation.
+    if let Some(mut session) = get_session(app, session_id)? {
+        session.updated_at = now_ms() as i64;
+        {
+            let mut sessions = SESSIONS
+                .lock()
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            sessions.insert(session_id.to_string(), session.clone());
+        }
+        persist_session(app, &session)?;
     }
     Ok(())
 }
 
-pub fn complete_session(session_id: &str) -> Result<DraftCharacter, String> {
-    let mut sessions = SESSIONS
-        .lock()
-        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    if let Some(session) = sessions.get_mut(session_id) {
-        session.status = CreationStatus::Completed;
-        let mut draft = session.draft.clone();
+pub fn get_draft(app: &AppHandle, session_id: &str) -> Result<Option<DraftCharacter>, String> {
+    let session = get_session(app, session_id)?;
+    Ok(session.map(|s| s.draft))
+}
 
-        // Resolve avatar path if it's an ID (not data URI)
-        if let Some(ref path) = draft.avatar_path {
-            if !path.starts_with("data:") {
-                if let Ok(Some(img)) = get_uploaded_image(session_id, path) {
-                    draft.avatar_path = Some(img.data);
-                }
-            }
-        }
+pub fn complete_session(app: &AppHandle, session_id: &str) -> Result<DraftCharacter, String> {
+    let mut session = get_session(app, session_id)?
+        .ok_or_else(|| crate::utils::err_msg(module_path!(), line!(), "Session not found"))?;
 
-        // Resolve background path if it's an ID (not data URI)
-        if let Some(ref path) = draft.background_image_path {
-            if !path.starts_with("data:") {
-                if let Ok(Some(img)) = get_uploaded_image(session_id, path) {
-                    draft.background_image_path = Some(img.data);
-                }
-            }
-        }
+    session.status = CreationStatus::Completed;
+    session.updated_at = now_ms() as i64;
 
-        return Ok(draft);
+    {
+        let mut sessions = SESSIONS
+            .lock()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        sessions.insert(session_id.to_string(), session.clone());
     }
-    Err(crate::utils::err_msg(
-        module_path!(),
-        line!(),
-        "Session not found",
-    ))
+    persist_session(app, &session)?;
+
+    let mut draft = session.draft.clone();
+
+    // Resolve avatar path if it's an ID (not data URI)
+    if let Some(ref path) = draft.avatar_path {
+        if !path.starts_with("data:") {
+            if let Ok(Some(img)) = get_uploaded_image(session_id, path) {
+                draft.avatar_path = Some(img.data);
+            }
+        }
+    }
+
+    // Resolve background path if it's an ID (not data URI)
+    if let Some(ref path) = draft.background_image_path {
+        if !path.starts_with("data:") {
+            if let Ok(Some(img)) = get_uploaded_image(session_id, path) {
+                draft.background_image_path = Some(img.data);
+            }
+        }
+    }
+
+    Ok(draft)
 }
 
 #[allow(dead_code)]

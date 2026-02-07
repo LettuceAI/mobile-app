@@ -59,13 +59,15 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
         obj.insert("updatedAt".into(), JsonValue::from(updated_at));
         out.push(JsonValue::Object(obj));
     }
-    Ok(serde_json::to_string(&out).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
+    Ok(serde_json::to_string(&out)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
 pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<String, String> {
     let mut conn = open_db(&app)?;
-    let p: JsonValue = serde_json::from_str(&persona_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let p: JsonValue = serde_json::from_str(&persona_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = p
         .get("id")
         .and_then(|v| v.as_str())
@@ -93,7 +95,9 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
         .unwrap_or(false) as i64;
     let now = now_ms() as i64;
 
-    let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let existing_created: Option<i64> = tx
         .query_row(
             "SELECT created_at FROM personas WHERE id = ?",
@@ -137,7 +141,8 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
-    tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    tx.commit()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let mut obj = JsonMap::new();
     obj.insert("id".into(), JsonValue::String(id));
@@ -159,7 +164,8 @@ pub fn persona_upsert(app: tauri::AppHandle, persona_json: String) -> Result<Str
     obj.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
     obj.insert("createdAt".into(), JsonValue::from(created_at));
     obj.insert("updatedAt".into(), JsonValue::from(now));
-    Ok(serde_json::to_string(&JsonValue::Object(obj)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
+    Ok(serde_json::to_string(&JsonValue::Object(obj))
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
@@ -210,7 +216,8 @@ pub fn persona_default_get(app: tauri::AppHandle) -> Result<Option<String>, Stri
         obj.insert("createdAt".into(), JsonValue::from(created_at));
         obj.insert("updatedAt".into(), JsonValue::from(updated_at));
         Ok(Some(
-            serde_json::to_string(&JsonValue::Object(obj)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            serde_json::to_string(&JsonValue::Object(obj))
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         ))
     } else {
         Ok(None)

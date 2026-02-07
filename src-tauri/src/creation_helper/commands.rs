@@ -1,18 +1,40 @@
 use tauri::AppHandle;
 
 use super::service;
-use super::types::{CreationGoal, CreationSession, DraftCharacter, UploadedImage};
+use super::types::{
+    CreationGoal, CreationSession, CreationSessionSummary, DraftCharacter, UploadedImage,
+};
 
 #[tauri::command]
 pub fn creation_helper_start(
+    app: AppHandle,
     creation_goal: Option<CreationGoal>,
 ) -> Result<CreationSession, String> {
-    service::start_session(creation_goal.unwrap_or(CreationGoal::Character))
+    service::start_session(&app, creation_goal.unwrap_or(CreationGoal::Character))
 }
 
 #[tauri::command]
-pub fn creation_helper_get_session(session_id: String) -> Result<Option<CreationSession>, String> {
-    service::get_session(&session_id)
+pub fn creation_helper_get_session(
+    app: AppHandle,
+    session_id: String,
+) -> Result<Option<CreationSession>, String> {
+    service::get_session(&app, &session_id)
+}
+
+#[tauri::command]
+pub fn creation_helper_get_latest_session(
+    app: AppHandle,
+    creation_goal: Option<CreationGoal>,
+) -> Result<Option<CreationSession>, String> {
+    service::get_latest_resumable_session(&app, creation_goal)
+}
+
+#[tauri::command]
+pub fn creation_helper_list_sessions(
+    app: AppHandle,
+    creation_goal: Option<CreationGoal>,
+) -> Result<Vec<CreationSessionSummary>, String> {
+    service::list_sessions(&app, creation_goal)
 }
 
 #[tauri::command]
@@ -49,8 +71,11 @@ pub struct UploadedImageArg {
 }
 
 #[tauri::command]
-pub fn creation_helper_get_draft(session_id: String) -> Result<Option<DraftCharacter>, String> {
-    service::get_draft(&session_id)
+pub fn creation_helper_get_draft(
+    app: AppHandle,
+    session_id: String,
+) -> Result<Option<DraftCharacter>, String> {
+    service::get_draft(&app, &session_id)
 }
 
 #[tauri::command]
@@ -59,19 +84,28 @@ pub fn creation_helper_cancel(app: AppHandle, session_id: String) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn creation_helper_complete(session_id: String) -> Result<DraftCharacter, String> {
-    service::complete_session(&session_id)
+pub fn creation_helper_complete(
+    app: AppHandle,
+    session_id: String,
+) -> Result<DraftCharacter, String> {
+    service::complete_session(&app, &session_id)
 }
 
 #[tauri::command]
 pub fn creation_helper_get_uploaded_image(
+    app: AppHandle,
     session_id: String,
     image_id: String,
 ) -> Result<Option<UploadedImage>, String> {
+    let _ = service::get_session(&app, &session_id)?;
     service::get_uploaded_image(&session_id, &image_id)
 }
 
 #[tauri::command]
-pub fn creation_helper_get_images(session_id: String) -> Result<Vec<UploadedImage>, String> {
+pub fn creation_helper_get_images(
+    app: AppHandle,
+    session_id: String,
+) -> Result<Vec<UploadedImage>, String> {
+    let _ = service::get_session(&app, &session_id)?;
     service::get_all_uploaded_images(&session_id)
 }

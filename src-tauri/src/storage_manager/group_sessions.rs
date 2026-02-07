@@ -13,8 +13,13 @@ use crate::utils::{log_info, log_info_global};
 /// Internal function to get a group session without Tauri State
 pub fn group_session_get_internal(conn: &Connection, id: &str) -> Result<String, String> {
     match read_group_session(conn, id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -24,7 +29,8 @@ pub fn group_participation_stats_internal(
     session_id: &str,
 ) -> Result<String, String> {
     let stats = read_group_participation(conn, session_id)?;
-    serde_json::to_string(&stats).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&stats)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 /// Internal function to list messages without Tauri State
@@ -36,7 +42,8 @@ pub fn group_messages_list_internal(
     before_id: Option<&str>,
 ) -> Result<String, String> {
     let messages = read_group_messages(conn, session_id, limit, before_created_at, before_id)?;
-    serde_json::to_string(&messages).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&messages)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 // ============================================================================
@@ -193,10 +200,17 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let mut rows = stmt.query(params![id]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query(params![id])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    if let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let character_ids_json: String = row.get(2).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    if let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let character_ids_json: String = row
+            .get(2)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let character_ids: Vec<String> =
             serde_json::from_str(&character_ids_json).unwrap_or_default();
 
@@ -240,19 +254,33 @@ fn read_group_session(conn: &Connection, id: &str) -> Result<Option<GroupSession
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
             .unwrap_or_else(|| "conversation".to_string());
 
-        let starting_scene_json: Option<String> = row.get(13).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let starting_scene_json: Option<String> = row
+            .get(13)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let starting_scene: Option<serde_json::Value> =
             starting_scene_json.and_then(|s| serde_json::from_str(&s).ok());
 
-        let background_image_path: Option<String> = row.get(14).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let background_image_path: Option<String> = row
+            .get(14)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         Ok(Some(GroupSession {
-            id: row.get(0).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            name: row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            id: row
+                .get(0)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            name: row
+                .get(1)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             character_ids,
-            persona_id: row.get(3).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            created_at: row.get(4).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            updated_at: row.get(5).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            persona_id: row
+                .get(3)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            created_at: row
+                .get(4)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            updated_at: row
+                .get(5)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             archived,
             chat_type,
             starting_scene,
@@ -279,17 +307,34 @@ fn read_group_participation(
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let mut rows = stmt.query(params![session_id]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query(params![session_id])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut result = Vec::new();
 
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
         result.push(GroupParticipation {
-            id: row.get(0).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            session_id: row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            character_id: row.get(2).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            speak_count: row.get(3).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            last_spoke_turn: row.get(4).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            last_spoke_at: row.get(5).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            id: row
+                .get(0)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            session_id: row
+                .get(1)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            character_id: row
+                .get(2)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            speak_count: row
+                .get(3)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            last_spoke_turn: row
+                .get(4)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            last_spoke_at: row
+                .get(5)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         });
     }
 
@@ -367,17 +412,26 @@ fn read_group_messages(
         ),
     };
 
-    let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
     let mut rows = stmt
         .query(params_refs.as_slice())
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let message_id: String = row.get(0).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let message_id: String = row
+            .get(0)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let message_id_for_log = message_id.clone();
-        let attachments_json: String = row.get(12).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let attachments_json: String = row
+            .get(12)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let attachments: Vec<serde_json::Value> =
             serde_json::from_str(&attachments_json).unwrap_or_default();
 
@@ -401,25 +455,48 @@ fn read_group_messages(
 
         messages.push(GroupMessage {
             id: message_id,
-            session_id: row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            role: row.get(2).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            content: row.get(3).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            speaker_character_id: row.get(4).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            turn_number: row.get(5).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            created_at: row.get(6).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            session_id: row
+                .get(1)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            role: row
+                .get(2)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            content: row
+                .get(3)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            speaker_character_id: row
+                .get(4)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            turn_number: row
+                .get(5)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            created_at: row
+                .get(6)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             usage,
             variants: if variants.is_empty() {
                 None
             } else {
                 Some(variants)
             },
-            selected_variant_id: row.get(10).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            is_pinned: row.get::<_, i32>(11).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? != 0,
+            selected_variant_id: row
+                .get(10)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            is_pinned: row
+                .get::<_, i32>(11)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+                != 0,
             attachments,
-            reasoning: row.get(13).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            selection_reasoning: row.get(14).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            reasoning: row
+                .get(13)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            selection_reasoning: row
+                .get(14)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             model_id: {
-                let model_id_value: Option<String> = row.get(15).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                let model_id_value: Option<String> = row
+                    .get(15)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 log_info_global(
                     "group_sessions",
                     format!(
@@ -458,10 +535,15 @@ fn load_group_message_variants(
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let mut rows = stmt.query(params![message_id]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query(params![message_id])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut variants = Vec::new();
 
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
         let prompt_tokens: Option<i32> = row.get(4).ok();
         let completion_tokens: Option<i32> = row.get(5).ok();
         let total_tokens: Option<i32> = row.get(6).ok();
@@ -478,14 +560,28 @@ fn load_group_message_variants(
             };
 
         variants.push(GroupMessageVariant {
-            id: row.get(0).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            content: row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            speaker_character_id: row.get(2).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            created_at: row.get(3).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            id: row
+                .get(0)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            content: row
+                .get(1)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            speaker_character_id: row
+                .get(2)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            created_at: row
+                .get(3)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             usage,
-            reasoning: row.get(7).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            selection_reasoning: row.get(8).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            model_id: row.get(9).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            reasoning: row
+                .get(7)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            selection_reasoning: row
+                .get(8)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            model_id: row
+                .get(9)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         });
     }
 
@@ -525,27 +621,50 @@ pub fn group_sessions_list(pool: State<'_, SwappablePool>) -> Result<String, Str
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let mut rows = stmt.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut sessions = Vec::new();
 
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let character_ids_json: String = row.get(2).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let character_ids_json: String = row
+            .get(2)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let character_ids: Vec<String> =
             serde_json::from_str(&character_ids_json).unwrap_or_default();
 
         sessions.push(GroupSessionPreview {
-            id: row.get(0).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            name: row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            id: row
+                .get(0)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            name: row
+                .get(1)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             character_ids,
-            updated_at: row.get(3).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            last_message: row.get(4).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            message_count: row.get(5).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            archived: row.get::<_, i32>(6).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? != 0,
-            chat_type: row.get(7).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            updated_at: row
+                .get(3)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            last_message: row
+                .get(4)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            message_count: row
+                .get(5)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            archived: row
+                .get::<_, i32>(6)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+                != 0,
+            chat_type: row
+                .get(7)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         });
     }
 
-    serde_json::to_string(&sessions).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&sessions)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 /// List all group sessions including archived ones (for history view)
@@ -565,27 +684,50 @@ pub fn group_sessions_list_all(pool: State<'_, SwappablePool>) -> Result<String,
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    let mut rows = stmt.query([]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut sessions = Vec::new();
 
-    while let Some(row) = rows.next().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? {
-        let character_ids_json: String = row.get(2).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let character_ids_json: String = row
+            .get(2)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let character_ids: Vec<String> =
             serde_json::from_str(&character_ids_json).unwrap_or_default();
 
         sessions.push(GroupSessionPreview {
-            id: row.get(0).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            name: row.get(1).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            id: row
+                .get(0)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            name: row
+                .get(1)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
             character_ids,
-            updated_at: row.get(3).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            last_message: row.get(4).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            message_count: row.get(5).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-            archived: row.get::<_, i32>(6).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))? != 0,
-            chat_type: row.get(7).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            updated_at: row
+                .get(3)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            last_message: row
+                .get(4)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            message_count: row
+                .get(5)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            archived: row
+                .get::<_, i32>(6)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+                != 0,
+            chat_type: row
+                .get(7)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
         });
     }
 
-    serde_json::to_string(&sessions).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&sessions)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 /// Archive a group session
@@ -643,8 +785,8 @@ pub fn group_session_duplicate(
     let now = now_ms() as i64;
     let new_id = Uuid::new_v4().to_string();
     let name = new_name.unwrap_or_else(|| format!("{} (copy)", source.name));
-    let character_ids_json =
-        serde_json::to_string(&source.character_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let character_ids_json = serde_json::to_string(&source.character_ids)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Use source persona_id, or fallback to default persona if source had none
     let final_persona_id = if source.persona_id.is_none() {
@@ -704,7 +846,8 @@ pub fn group_session_duplicate(
     let new_session = read_group_session(&conn, &new_id)?
         .ok_or_else(|| "Failed to read newly created session".to_string())?;
 
-    serde_json::to_string(&new_session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&new_session)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -724,8 +867,8 @@ pub fn group_session_duplicate_with_messages(
     let now = now_ms() as i64;
     let new_id = Uuid::new_v4().to_string();
     let name = new_name.unwrap_or_else(|| format!("{} (copy)", source.name));
-    let character_ids_json =
-        serde_json::to_string(&source.character_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let character_ids_json = serde_json::to_string(&source.character_ids)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Use source persona_id, or fallback to default persona if source had none
     let final_persona_id = if source.persona_id.is_none() {
@@ -948,7 +1091,8 @@ pub fn group_session_duplicate_with_messages(
     let new_session = read_group_session(&conn, &new_id)?
         .ok_or_else(|| "Failed to read newly created session".to_string())?;
 
-    serde_json::to_string(&new_session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&new_session)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -967,7 +1111,11 @@ pub fn group_session_branch_to_character(
 
     // Verify character exists in the group
     if !source.character_ids.contains(&character_id) {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Character not found in group session"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Character not found in group session",
+        ));
     }
 
     // Get character info to build name and for placeholder replacement
@@ -1094,8 +1242,8 @@ pub fn group_session_create(
     let now = now_ms() as i64;
     let id = Uuid::new_v4().to_string();
 
-    let character_ids: Vec<String> =
-        serde_json::from_str(&character_ids_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let character_ids: Vec<String> = serde_json::from_str(&character_ids_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Use provided persona_id, or fallback to default persona
     let final_persona_id = if persona_id.is_none() {
@@ -1174,7 +1322,8 @@ pub fn group_session_create(
         memory_tool_events: Vec::new(),
     };
 
-    serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&session)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1182,7 +1331,8 @@ pub fn group_session_get(id: String, pool: State<'_, SwappablePool>) -> Result<S
     let conn = pool.get_connection()?;
 
     match read_group_session(&conn, &id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
         None => Ok("null".to_string()),
     }
 }
@@ -1198,8 +1348,8 @@ pub fn group_session_update(
     let conn = pool.get_connection()?;
     let now = now_ms() as i64;
 
-    let character_ids: Vec<String> =
-        serde_json::from_str(&character_ids_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let character_ids: Vec<String> = serde_json::from_str(&character_ids_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE group_sessions SET name = ?1, character_ids = ?2, persona_id = ?3, updated_at = ?4 WHERE id = ?5",
@@ -1211,8 +1361,13 @@ pub fn group_session_update(
     ensure_participation_records(&conn, &id, &character_ids)?;
 
     match read_group_session(&conn, &id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -1245,7 +1400,8 @@ pub fn group_session_add_character(
         character_ids.push(character_id.clone());
     }
 
-    let character_ids_json = serde_json::to_string(&character_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let character_ids_json = serde_json::to_string(&character_ids)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE group_sessions SET character_ids = ?1, updated_at = ?2 WHERE id = ?3",
@@ -1257,8 +1413,13 @@ pub fn group_session_add_character(
     ensure_participation_records(&conn, &session_id, &[character_id])?;
 
     match read_group_session(&conn, &session_id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -1281,7 +1442,8 @@ pub fn group_session_remove_character(
         .filter(|id| id != &character_id)
         .collect();
 
-    let character_ids_json = serde_json::to_string(&character_ids).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let character_ids_json = serde_json::to_string(&character_ids)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE group_sessions SET character_ids = ?1, updated_at = ?2 WHERE id = ?3",
@@ -1297,8 +1459,13 @@ pub fn group_session_remove_character(
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     match read_group_session(&conn, &session_id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -1318,8 +1485,13 @@ pub fn group_session_update_starting_scene(
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     match read_group_session(&conn, &session_id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -1339,8 +1511,13 @@ pub fn group_session_update_background_image(
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     match read_group_session(&conn, &session_id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -1355,7 +1532,11 @@ pub fn group_session_update_chat_type(
 
     // Validate chat_type
     if chat_type != "conversation" && chat_type != "roleplay" {
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Invalid chat_type. Must be 'conversation' or 'roleplay'"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Invalid chat_type. Must be 'conversation' or 'roleplay'",
+        ));
     }
 
     conn.execute(
@@ -1365,8 +1546,13 @@ pub fn group_session_update_chat_type(
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     match read_group_session(&conn, &session_id)? {
-        Some(session) => serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
-        None => Err(crate::utils::err_msg(module_path!(), line!(), "Session not found")),
+        Some(session) => serde_json::to_string(&session)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e)),
+        None => Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Session not found",
+        )),
     }
 }
 
@@ -1377,7 +1563,8 @@ pub fn group_participation_stats(
 ) -> Result<String, String> {
     let conn = pool.get_connection()?;
     let stats = read_group_participation(&conn, &session_id)?;
-    serde_json::to_string(&stats).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&stats)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1417,7 +1604,8 @@ pub fn group_messages_list(
         before_created_at,
         before_id.as_deref(),
     )?;
-    serde_json::to_string(&messages).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&messages)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1429,8 +1617,8 @@ pub fn group_message_upsert(
     let conn = pool.get_connection()?;
     let now = now_ms();
 
-    let mut message: GroupMessage =
-        serde_json::from_str(&message_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut message: GroupMessage = serde_json::from_str(&message_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Check if message exists
     let exists: bool = conn
@@ -1441,8 +1629,8 @@ pub fn group_message_upsert(
         )
         .unwrap_or(false);
 
-    let attachments_json =
-        serde_json::to_string(&message.attachments).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let attachments_json = serde_json::to_string(&message.attachments)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if exists {
         // Update
@@ -1506,7 +1694,8 @@ pub fn group_message_upsert(
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
-    serde_json::to_string(&message).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&message)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1584,8 +1773,8 @@ pub fn group_message_add_variant(
     let conn = pool.get_connection()?;
     let now = now_ms();
 
-    let mut variant: GroupMessageVariant =
-        serde_json::from_str(&variant_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut variant: GroupMessageVariant = serde_json::from_str(&variant_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     if variant.id.is_empty() {
         variant.id = Uuid::new_v4().to_string();
@@ -1623,7 +1812,8 @@ pub fn group_message_add_variant(
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
-    serde_json::to_string(&variant).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+    serde_json::to_string(&variant)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]
@@ -1732,11 +1922,12 @@ pub fn group_session_update_memories_internal(
     memory_tool_events: &[serde_json::Value],
 ) -> Result<(), String> {
     let now = now_ms();
-    let memories_json = serde_json::to_string(memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let memory_embeddings_json =
-        serde_json::to_string(memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let memory_tool_events_json =
-        serde_json::to_string(memory_tool_events).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let memories_json = serde_json::to_string(memories)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let memory_embeddings_json = serde_json::to_string(memory_embeddings)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let memory_tool_events_json = serde_json::to_string(memory_tool_events)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE group_sessions SET memories = ?1, memory_embeddings = ?2, memory_summary = ?3, memory_summary_token_count = ?4, memory_tool_events = ?5, updated_at = ?6 WHERE id = ?7",
@@ -1821,9 +2012,10 @@ pub async fn group_session_add_memory(
     });
 
     // Save back
-    let new_memories_json = serde_json::to_string(&memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_memories_json = serde_json::to_string(&memories)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_embeddings_json = serde_json::to_string(&memory_embeddings)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let now = now_ms();
 
     conn.execute(
@@ -1834,9 +2026,9 @@ pub async fn group_session_add_memory(
 
     // Return updated session
     if let Some(session) = read_group_session(&conn, &session_id)? {
-        return Ok(Some(
-            serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-        ));
+        return Ok(Some(serde_json::to_string(&session).map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
     }
     Ok(None)
 }
@@ -1875,9 +2067,10 @@ pub fn group_session_remove_memory(
     }
 
     // Save back
-    let new_memories_json = serde_json::to_string(&memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_memories_json = serde_json::to_string(&memories)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_embeddings_json = serde_json::to_string(&memory_embeddings)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let now = now_ms();
 
     conn.execute(
@@ -1888,9 +2081,9 @@ pub fn group_session_remove_memory(
 
     // Return updated session
     if let Some(session) = read_group_session(&conn, &session_id)? {
-        return Ok(Some(
-            serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-        ));
+        return Ok(Some(serde_json::to_string(&session).map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
     }
     Ok(None)
 }
@@ -1945,9 +2138,10 @@ pub async fn group_session_update_memory(
     }
 
     // Save back
-    let new_memories_json = serde_json::to_string(&memories).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_memories_json = serde_json::to_string(&memories)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_embeddings_json = serde_json::to_string(&memory_embeddings)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let now = now_ms();
 
     conn.execute(
@@ -1958,9 +2152,9 @@ pub async fn group_session_update_memory(
 
     // Return updated session
     if let Some(session) = read_group_session(&conn, &session_id)? {
-        return Ok(Some(
-            serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-        ));
+        return Ok(Some(serde_json::to_string(&session).map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
     }
     Ok(None)
 }
@@ -2002,8 +2196,8 @@ pub fn group_session_toggle_memory_pin(
     }
 
     // Save back
-    let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_embeddings_json = serde_json::to_string(&memory_embeddings)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
         "UPDATE group_sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
@@ -2013,9 +2207,9 @@ pub fn group_session_toggle_memory_pin(
 
     // Return updated session
     if let Some(session) = read_group_session(&conn, &session_id)? {
-        return Ok(Some(
-            serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-        ));
+        return Ok(Some(serde_json::to_string(&session).map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
     }
     Ok(None)
 }
@@ -2049,7 +2243,11 @@ pub fn group_session_set_memory_cold_state(
     // Set cold state at index if valid
     if memory_index < memory_embeddings.len() {
         if memory_embeddings[memory_index].is_pinned && is_cold {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Pinned memories cannot be moved to cold storage"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Pinned memories cannot be moved to cold storage",
+            ));
         }
         memory_embeddings[memory_index].is_cold = is_cold;
         if is_cold {
@@ -2061,8 +2259,8 @@ pub fn group_session_set_memory_cold_state(
     }
 
     // Save back
-    let new_embeddings_json =
-        serde_json::to_string(&memory_embeddings).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let new_embeddings_json = serde_json::to_string(&memory_embeddings)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     conn.execute(
         "UPDATE group_sessions SET memory_embeddings = ?, updated_at = ? WHERE id = ?",
         params![new_embeddings_json, now, &session_id],
@@ -2071,9 +2269,9 @@ pub fn group_session_set_memory_cold_state(
 
     // Return updated session
     if let Some(session) = read_group_session(&conn, &session_id)? {
-        return Ok(Some(
-            serde_json::to_string(&session).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
-        ));
+        return Ok(Some(serde_json::to_string(&session).map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
     }
     Ok(None)
 }

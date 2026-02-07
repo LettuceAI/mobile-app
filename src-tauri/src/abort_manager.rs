@@ -54,7 +54,11 @@ impl AbortRegistry {
                 ))
             }
         } else {
-            Err(crate::utils::err_msg(module_path!(), line!(), "Failed to acquire lock on abort registry"))
+            Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Failed to acquire lock on abort registry",
+            ))
         }
     }
 

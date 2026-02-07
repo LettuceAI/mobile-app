@@ -9,10 +9,13 @@ pub fn save_image(
     image_data: &str,
     session_id: Option<&str>,
 ) -> Result<String, String> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get app data dir: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to get app data dir: {}", e),
+        )
+    })?;
 
     let images_dir = if let Some(sid) = session_id {
         app_data_dir.join("generated_images").join(sid)
@@ -20,8 +23,13 @@ pub fn save_image(
         app_data_dir.join("generated_images").join("standalone")
     };
 
-    fs::create_dir_all(&images_dir)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create images directory: {}", e)))?;
+    fs::create_dir_all(&images_dir).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to create images directory: {}", e),
+        )
+    })?;
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -46,13 +54,22 @@ pub fn save_image(
 }
 
 fn download_image_from_url(url: &str, dest: &PathBuf) -> Result<(), String> {
-    let rt =
-        tokio::runtime::Runtime::new().map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create runtime: {}", e)))?;
+    let rt = tokio::runtime::Runtime::new().map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to create runtime: {}", e),
+        )
+    })?;
 
     rt.block_on(async {
-        let response = reqwest::get(url)
-            .await
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to download image: {}", e)))?;
+        let response = reqwest::get(url).await.map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to download image: {}", e),
+            )
+        })?;
 
         if !response.status().is_success() {
             return Err(format!(
@@ -61,12 +78,21 @@ fn download_image_from_url(url: &str, dest: &PathBuf) -> Result<(), String> {
             ));
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read image bytes: {}", e)))?;
+        let bytes = response.bytes().await.map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read image bytes: {}", e),
+            )
+        })?;
 
-        fs::write(dest, bytes).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write image file: {}", e)))?;
+        fs::write(dest, bytes).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to write image file: {}", e),
+            )
+        })?;
 
         Ok(())
     })
@@ -82,11 +108,21 @@ fn save_base64_image(data_url: &str, dest: &PathBuf) -> Result<(), String> {
 }
 
 fn save_raw_base64(base64_data: &str, dest: &PathBuf) -> Result<(), String> {
-    let bytes = general_purpose::STANDARD
-        .decode(base64_data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode base64: {}", e)))?;
+    let bytes = general_purpose::STANDARD.decode(base64_data).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to decode base64: {}", e),
+        )
+    })?;
 
-    fs::write(dest, bytes).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write image file: {}", e)))?;
+    fs::write(dest, bytes).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to write image file: {}", e),
+        )
+    })?;
 
     Ok(())
 }

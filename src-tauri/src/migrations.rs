@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 32;
+pub const CURRENT_MIGRATION_VERSION: u32 = 33;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -18,6 +18,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         migrate_v29_to_v30(app)?;
         migrate_v30_to_v31(app)?;
         migrate_v31_to_v32(app)?;
+        migrate_v32_to_v33(app)?;
         log_info(
             app,
             "migrations",
@@ -360,6 +361,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v31_to_v32(app)?;
         version = 32;
+    }
+
+    if version < 33 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v32 -> v33: Add Smart Creator session persistence table",
+        );
+        migrate_v32_to_v33(app)?;
+        version = 33;
     }
 
     // Update the stored version
@@ -1326,6 +1337,30 @@ fn migrate_v31_to_v32(app: &AppHandle) -> Result<(), String> {
     conn.execute(
         "UPDATE models SET prompt_template_id = NULL, system_prompt = NULL",
         [],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    Ok(())
+}
+
+fn migrate_v32_to_v33(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS creation_helper_sessions (
+          id TEXT PRIMARY KEY,
+          creation_goal TEXT NOT NULL,
+          status TEXT NOT NULL,
+          session_json TEXT NOT NULL,
+          uploaded_images_json TEXT NOT NULL DEFAULT '{}',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_creation_helper_sessions_goal_updated
+          ON creation_helper_sessions(creation_goal, updated_at DESC);
+        "#,
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())

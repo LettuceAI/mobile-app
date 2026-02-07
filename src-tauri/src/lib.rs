@@ -372,6 +372,8 @@ pub fn run() {
             tts_manager::audio_cache::tts_cache_stats,
             creation_helper::creation_helper_start,
             creation_helper::creation_helper_get_session,
+            creation_helper::creation_helper_get_latest_session,
+            creation_helper::creation_helper_list_sessions,
             creation_helper::creation_helper_send_message,
             creation_helper::creation_helper_get_draft,
             creation_helper::creation_helper_cancel,

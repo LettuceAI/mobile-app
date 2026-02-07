@@ -31,10 +31,13 @@ pub fn get_global_app_handle() -> Option<AppHandle> {
 
 impl LogManager {
     pub fn new(app_handle: &AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
-        let log_dir = app_handle
-            .path()
-            .app_log_dir()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get log directory: {}", e)))?;
+        let log_dir = app_handle.path().app_log_dir().map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to get log directory: {}", e),
+            )
+        })?;
 
         fs::create_dir_all(&log_dir)?;
 
@@ -52,7 +55,9 @@ impl LogManager {
 
     pub fn write_log(&self, entry: LogEntry) -> Result<(), String> {
         let log_path = self.get_current_log_file_path();
-        let mut file_lock = self.file.lock().map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Lock error: {}", e)))?;
+        let mut file_lock = self.file.lock().map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Lock error: {}", e))
+        })?;
 
         // Check if we need to rotate to a new file (date changed)
         let needs_new_file = file_lock.is_none() || {
@@ -69,7 +74,13 @@ impl LogManager {
                 .create(true)
                 .append(true)
                 .open(&log_path)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to open log file: {}", e)))?;
+                .map_err(|e| {
+                    crate::utils::err_msg(
+                        module_path!(),
+                        line!(),
+                        format!("Failed to open log file: {}", e),
+                    )
+                })?;
             *file_lock = Some(new_file);
         }
 
@@ -85,19 +96,34 @@ impl LogManager {
                 entry.timestamp, scope, entry.level, entry.message
             );
 
-            file.write_all(log_line.as_bytes())
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write log: {}", e)))?;
+            file.write_all(log_line.as_bytes()).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to write log: {}", e),
+                )
+            })?;
 
-            file.flush()
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to flush log: {}", e)))?;
+            file.flush().map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to flush log: {}", e),
+                )
+            })?;
         }
 
         Ok(())
     }
 
     pub fn list_log_files(&self) -> Result<Vec<String>, String> {
-        let entries = fs::read_dir(&self.log_dir)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read log directory: {}", e)))?;
+        let entries = fs::read_dir(&self.log_dir).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read log directory: {}", e),
+            )
+        })?;
 
         let mut log_files: Vec<String> = entries
             .filter_map(|entry| {
@@ -122,30 +148,61 @@ impl LogManager {
         let path = self.log_dir.join(filename);
 
         if !path.exists() || !path.is_file() {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Log file not found"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Log file not found",
+            ));
         }
 
-        fs::read_to_string(path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read log file: {}", e)))
+        fs::read_to_string(path).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read log file: {}", e),
+            )
+        })
     }
 
     pub fn delete_log_file(&self, filename: &str) -> Result<(), String> {
         let path = self.log_dir.join(filename);
 
         if !path.exists() || !path.is_file() {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "Log file not found"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "Log file not found",
+            ));
         }
 
-        fs::remove_file(path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete log file: {}", e)))
+        fs::remove_file(path).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to delete log file: {}", e),
+            )
+        })
     }
 
     pub fn clear_all_logs(&self) -> Result<(), String> {
-        let entries = fs::read_dir(&self.log_dir)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to read log directory: {}", e)))?;
+        let entries = fs::read_dir(&self.log_dir).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read log directory: {}", e),
+            )
+        })?;
 
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() && path.extension() == Some("txt".as_ref()) {
-                fs::remove_file(path).map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to delete log file: {}", e)))?;
+                fs::remove_file(path).map_err(|e| {
+                    crate::utils::err_msg(
+                        module_path!(),
+                        line!(),
+                        format!("Failed to delete log file: {}", e),
+                    )
+                })?;
             }
         }
 
@@ -223,14 +280,24 @@ pub async fn save_log_to_downloads(
         let download_dir = std::path::PathBuf::from("/storage/emulated/0/Download");
 
         if !download_dir.exists() {
-            std::fs::create_dir_all(&download_dir)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create downloads directory: {}", e)))?;
+            std::fs::create_dir_all(&download_dir).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to create downloads directory: {}", e),
+                )
+            })?;
         }
 
         let file_path = download_dir.join(&filename);
 
-        std::fs::write(&file_path, content.as_bytes())
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write file: {}", e)))?;
+        std::fs::write(&file_path, content.as_bytes()).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to write file: {}", e),
+            )
+        })?;
 
         let path_str = file_path.to_string_lossy().to_string();
 
@@ -239,20 +306,33 @@ pub async fn save_log_to_downloads(
 
     #[cfg(not(target_os = "android"))]
     {
-        let download_dir = app_handle
-            .path()
-            .download_dir()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get downloads directory: {}", e)))?;
+        let download_dir = app_handle.path().download_dir().map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to get downloads directory: {}", e),
+            )
+        })?;
 
         if !download_dir.exists() {
-            std::fs::create_dir_all(&download_dir)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create downloads directory: {}", e)))?;
+            std::fs::create_dir_all(&download_dir).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to create downloads directory: {}", e),
+                )
+            })?;
         }
 
         let file_path = download_dir.join(&filename);
 
-        std::fs::write(&file_path, content.as_bytes())
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write file: {}", e)))?;
+        std::fs::write(&file_path, content.as_bytes()).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to write file: {}", e),
+            )
+        })?;
 
         let path_str = file_path
             .to_str()

@@ -78,6 +78,19 @@ pub struct CreationSession {
     pub updated_at: i64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreationSessionSummary {
+    pub id: String,
+    pub creation_goal: CreationGoal,
+    pub status: CreationStatus,
+    pub title: String,
+    pub preview: String,
+    pub message_count: usize,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum CreationStatus {

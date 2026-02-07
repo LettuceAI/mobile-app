@@ -31,8 +31,8 @@ pub fn get_cached_pricing(
         let cache_age = current_time.saturating_sub(cached_at);
         if cache_age < (CACHE_TTL_HOURS * 3600) {
             if let Some(pricing_json) = pricing_json_opt {
-                let pricing: crate::models::ModelPricing =
-                    serde_json::from_str(&pricing_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                let pricing: crate::models::ModelPricing = serde_json::from_str(&pricing_json)
+                    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 return Ok(Some(pricing));
             } else {
                 return Ok(None);
@@ -51,7 +51,10 @@ pub fn cache_model_pricing(
     let conn = open_db(app)?;
     let now = now_secs();
     let pricing_json = match pricing {
-        Some(ref p) => Some(serde_json::to_string(p).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?),
+        Some(ref p) => Some(
+            serde_json::to_string(p)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+        ),
         None => None,
     };
     conn.execute(

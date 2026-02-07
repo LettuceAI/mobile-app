@@ -35,16 +35,29 @@ pub async fn get_openrouter_models(_app: AppHandle) -> Result<Vec<OpenRouterMode
         .get("https://openrouter.ai/api/v1/models")
         .send()
         .await
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to fetch OpenRouter models: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to fetch OpenRouter models: {}", e),
+            )
+        })?;
 
     if !response.status().is_success() {
-        return Err(crate::utils::err_msg(module_path!(), line!(), format!("OpenRouter API error: {}", response.status())));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("OpenRouter API error: {}", response.status()),
+        ));
     }
 
-    let api_response: OpenRouterApiResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse OpenRouter response: {}", e)))?;
+    let api_response: OpenRouterApiResponse = response.json().await.map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse OpenRouter response: {}", e),
+        )
+    })?;
 
     let models = api_response
         .data

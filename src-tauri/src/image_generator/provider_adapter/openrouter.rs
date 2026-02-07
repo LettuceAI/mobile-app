@@ -95,11 +95,20 @@ impl ImageProviderAdapter for OpenRouterAdapter {
     }
 
     fn parse_response(&self, response: Value) -> Result<Vec<ImageResponseData>, String> {
-        let or_response: OpenRouterResponse = serde_json::from_value(response)
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
+        let or_response: OpenRouterResponse = serde_json::from_value(response).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to parse response: {}", e),
+            )
+        })?;
 
         if or_response.choices.is_empty() {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "No choices in response"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "No choices in response",
+            ));
         }
 
         let mut results = Vec::new();
@@ -133,7 +142,11 @@ impl ImageProviderAdapter for OpenRouterAdapter {
         }
 
         if results.is_empty() {
-            return Err(crate::utils::err_msg(module_path!(), line!(), "No images or text generated in response"));
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                "No images or text generated in response",
+            ));
         }
 
         Ok(results)

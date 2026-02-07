@@ -164,7 +164,9 @@ pub async fn generate_speech(
         .json(&request)
         .send()
         .await
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -172,13 +174,20 @@ pub async fn generate_speech(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(crate::utils::err_msg(module_path!(), line!(), format!("Gemini TTS error ({}): {}", status, body)));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Gemini TTS error ({}): {}", status, body),
+        ));
     }
 
-    let response: GeminiResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to parse response: {}", e)))?;
+    let response: GeminiResponse = response.json().await.map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to parse response: {}", e),
+        )
+    })?;
 
     let audio_data = response
         .candidates
@@ -188,9 +197,13 @@ pub async fn generate_speech(
         .map(|d| &d.data)
         .ok_or_else(|| "No audio data in response".to_string())?;
 
-    STANDARD
-        .decode(audio_data)
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to decode audio: {}", e)))
+    STANDARD.decode(audio_data).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to decode audio: {}", e),
+        )
+    })
 }
 
 fn resolve_voice_name(voice_id: &str) -> String {
@@ -215,7 +228,9 @@ pub async fn verify_api_key(api_key: &str, project_id: &str) -> Result<bool, Str
         .header("x-goog-user-project", project_id)
         .send()
         .await
-        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e)))?;
+        .map_err(|e| {
+            crate::utils::err_msg(module_path!(), line!(), format!("Request failed: {}", e))
+        })?;
 
     Ok(response.status().is_success())
 }

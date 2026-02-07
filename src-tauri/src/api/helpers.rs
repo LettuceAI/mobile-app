@@ -229,7 +229,11 @@ pub(crate) async fn handle_streaming_response(
             status: None,
         };
         emit_normalized(app, &request_id, NormalizedEvent::Error { envelope });
-        return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Request aborted by user",
+        ));
     }
 
     let text = String::from_utf8_lossy(&collected).to_string();

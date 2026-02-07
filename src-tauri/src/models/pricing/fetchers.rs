@@ -62,7 +62,11 @@ pub async fn fetch_openrouter_model_pricing(
                         response.status
                     ),
                 );
-                return Err(crate::utils::err_msg(module_path!(), line!(), format!("OpenRouter API error: {}", response.status)));
+                return Err(crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("OpenRouter API error: {}", response.status),
+                ));
             }
 
             if let Ok(data) = serde_json::from_value::<serde_json::Value>(response.data.clone()) {

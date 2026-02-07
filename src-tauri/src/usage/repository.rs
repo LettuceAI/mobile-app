@@ -36,7 +36,9 @@ impl UsageRepository {
             ),
         );
 
-        let tx = conn.transaction().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         tx.execute(
             r#"INSERT OR REPLACE INTO usage_records (
                 id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label,
@@ -83,7 +85,8 @@ impl UsageRepository {
             )
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
-        tx.commit().map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+        tx.commit()
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
     }
 
     fn query_records(&self, filter: UsageFilter) -> Result<Vec<RequestUsage>, String> {
@@ -123,7 +126,9 @@ impl UsageRepository {
             "SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, finish_reason, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records {} ORDER BY timestamp ASC",
             if where_clauses.is_empty() { String::new() } else { format!("WHERE {}", where_clauses.join(" AND ")) }
         );
-        let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows = stmt
             .query_map(rusqlite::params_from_iter(params.iter()), |r| {
                 Ok((
@@ -231,7 +236,9 @@ impl UsageRepository {
                 "SELECT usage_id, key, value FROM usage_metadata WHERE usage_id IN ({})",
                 placeholders
             );
-            let mut stmt = conn.prepare(&sql).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+            let mut stmt = conn
+                .prepare(&sql)
+                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let rows = stmt
                 .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
                     Ok((
@@ -243,7 +250,8 @@ impl UsageRepository {
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
             let mut meta_map: HashMap<String, HashMap<String, String>> = HashMap::new();
             for row in rows {
-                let (uid, k, v) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+                let (uid, k, v) =
+                    row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
                 meta_map.entry(uid).or_default().insert(k, v);
             }
             for rec in &mut out {
@@ -336,21 +344,33 @@ impl UsageRepository {
         };
 
         #[cfg(not(target_os = "android"))]
-        let download_dir = self
-            .app
-            .path()
-            .download_dir()
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to get downloads directory: {}", e)))?;
+        let download_dir = self.app.path().download_dir().map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to get downloads directory: {}", e),
+            )
+        })?;
 
         if !download_dir.exists() {
-            fs::create_dir_all(&download_dir)
-                .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to create downloads directory: {}", e)))?;
+            fs::create_dir_all(&download_dir).map_err(|e| {
+                crate::utils::err_msg(
+                    module_path!(),
+                    line!(),
+                    format!("Failed to create downloads directory: {}", e),
+                )
+            })?;
         }
 
         let file_path = download_dir.join(filename);
 
-        fs::write(&file_path, csv_data.as_bytes())
-            .map_err(|e| crate::utils::err_msg(module_path!(), line!(), format!("Failed to write file: {}", e)))?;
+        fs::write(&file_path, csv_data.as_bytes()).map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to write file: {}", e),
+            )
+        })?;
 
         let path_str = file_path
             .to_str()

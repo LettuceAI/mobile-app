@@ -6,7 +6,8 @@ use super::db::{now_ms, open_db};
 #[tauri::command]
 pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String, String> {
     let conn = open_db(&app)?;
-    let model: JsonValue = serde_json::from_str(&model_json).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let model: JsonValue = serde_json::from_str(&model_json)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let id = model
         .get("id")
         .and_then(|v| v.as_str())
@@ -152,7 +153,8 @@ pub fn model_upsert(app: tauri::AppHandle, model_json: String) -> Result<String,
     {
         out.insert("systemPrompt".into(), v);
     }
-    Ok(serde_json::to_string(&JsonValue::Object(out)).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
+    Ok(serde_json::to_string(&JsonValue::Object(out))
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?)
 }
 
 #[tauri::command]
