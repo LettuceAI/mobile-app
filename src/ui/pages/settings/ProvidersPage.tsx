@@ -61,9 +61,18 @@ export function ProvidersPage() {
 
   const isLocalProvider =
     !!editorProvider && ["ollama", "lmstudio"].includes(editorProvider.providerId);
-  const showBaseUrl =
+  const isCustomProvider =
     !!editorProvider &&
-    (isLocalProvider || ["custom", "custom-anthropic"].includes(editorProvider.providerId));
+    (editorProvider.providerId === "custom" || editorProvider.providerId === "custom-anthropic");
+  const showBaseUrl = !!editorProvider && (isLocalProvider || isCustomProvider);
+  const customConfig = (editorProvider?.config ?? {}) as Record<string, any>;
+  const customFetchModelsEnabled = customConfig.fetchModelsEnabled === true;
+  const customAuthMode = (customConfig.authMode ?? "header") as
+    | "bearer"
+    | "header"
+    | "query"
+    | "none";
+  const showApiKeyInput = !(isCustomProvider && customAuthMode === "none");
 
   useEffect(() => {
     const handleAddProvider = () => {
@@ -219,6 +228,16 @@ export function ProvidersPage() {
                           providerId === "custom"
                             ? {
                                 chatEndpoint: "/v1/chat/completions",
+                                modelsEndpoint: "",
+                                fetchModelsEnabled: false,
+                                modelsListPath: "data",
+                                modelsIdPath: "id",
+                                modelsDisplayNamePath: "name",
+                                modelsDescriptionPath: "description",
+                                modelsContextLengthPath: "",
+                                authMode: "header",
+                                authHeaderName: "x-api-key",
+                                authQueryParamName: "api_key",
                                 systemRole: "system",
                                 userRole: "user",
                                 assistantRole: "assistant",
@@ -228,6 +247,16 @@ export function ProvidersPage() {
                             : providerId === "custom-anthropic"
                               ? {
                                   chatEndpoint: "/v1/messages",
+                                  modelsEndpoint: "",
+                                  fetchModelsEnabled: false,
+                                  modelsListPath: "data",
+                                  modelsIdPath: "id",
+                                  modelsDisplayNamePath: "name",
+                                  modelsDescriptionPath: "description",
+                                  modelsContextLengthPath: "",
+                                  authMode: "header",
+                                  authHeaderName: "x-api-key",
+                                  authQueryParamName: "api_key",
                                   systemRole: "system",
                                   userRole: "user",
                                   assistantRole: "assistant",
@@ -257,21 +286,23 @@ export function ProvidersPage() {
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-white/70">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      if (validationError) setValidationError(null);
-                    }}
-                    placeholder="Enter your API key"
-                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
-                  />
-                </div>
+                {showApiKeyInput && (
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-white/70">
+                      API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => {
+                        setApiKey(e.target.value);
+                        if (validationError) setValidationError(null);
+                      }}
+                      placeholder="Enter your API key"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                    />
+                  </div>
+                )}
                 {showBaseUrl && (
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-white/70">
@@ -291,42 +322,268 @@ export function ProvidersPage() {
                     />
                   </div>
                 )}
-                {(editorProvider.providerId === "custom" ||
-                  editorProvider.providerId === "custom-anthropic") && (
+                {isCustomProvider && (
                   <>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-white/70">
+                        Chat Endpoint
+                      </label>
+                      <input
+                        type="text"
+                        value={editorProvider.config?.chatEndpoint ?? "/v1/chat/completions"}
+                        onChange={(e) =>
+                          updateEditorProvider({
+                            config: { ...editorProvider.config, chatEndpoint: e.target.value },
+                          })
+                        }
+                        placeholder="/v1/chat/completions"
+                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                      />
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-white/80">Fetch Models</p>
+                          <p className="text-[11px] text-white/45">
+                            Enable model discovery for this custom endpoint
+                          </p>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            id="fetchModelsEnabled"
+                            type="checkbox"
+                            checked={customFetchModelsEnabled}
+                            onChange={(e) =>
+                              updateEditorProvider({
+                                config: {
+                                  ...editorProvider.config,
+                                  fetchModelsEnabled: e.target.checked,
+                                },
+                              })
+                            }
+                            className="peer sr-only"
+                          />
+                          <label
+                            htmlFor="fetchModelsEnabled"
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out ${
+                              customFetchModelsEnabled ? "bg-emerald-500" : "bg-white/20"
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                customFetchModelsEnabled ? "translate-x-5" : "translate-x-0"
+                              }`}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-white/70">
+                        Auth Mode
+                      </label>
+                      <select
+                        value={customAuthMode}
+                        onChange={(e) =>
+                          updateEditorProvider({
+                            config: {
+                              ...editorProvider.config,
+                              authMode: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+                      >
+                        <option value="bearer" className="bg-black">
+                          Bearer Token
+                        </option>
+                        <option value="header" className="bg-black">
+                          API Key Header
+                        </option>
+                        <option value="query" className="bg-black">
+                          Query Param
+                        </option>
+                        <option value="none" className="bg-black">
+                          None
+                        </option>
+                      </select>
+                    </div>
+                    {customAuthMode === "header" && (
                       <div>
                         <label className="mb-1 block text-[11px] font-medium text-white/70">
-                          Chat Endpoint
+                          Auth Header Name
                         </label>
                         <input
                           type="text"
-                          value={editorProvider.config?.chatEndpoint ?? "/v1/chat/completions"}
+                          value={editorProvider.config?.authHeaderName ?? "x-api-key"}
                           onChange={(e) =>
                             updateEditorProvider({
-                              config: { ...editorProvider.config, chatEndpoint: e.target.value },
+                              config: { ...editorProvider.config, authHeaderName: e.target.value },
                             })
                           }
-                          placeholder="/v1/chat/completions"
+                          placeholder="x-api-key"
                           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                         />
                       </div>
+                    )}
+                    {customAuthMode === "query" && (
                       <div>
                         <label className="mb-1 block text-[11px] font-medium text-white/70">
-                          System Role
+                          Auth Query Param Name
                         </label>
                         <input
                           type="text"
-                          value={editorProvider.config?.systemRole ?? "system"}
+                          value={editorProvider.config?.authQueryParamName ?? "api_key"}
                           onChange={(e) =>
                             updateEditorProvider({
-                              config: { ...editorProvider.config, systemRole: e.target.value },
+                              config: {
+                                ...editorProvider.config,
+                                authQueryParamName: e.target.value,
+                              },
                             })
                           }
-                          placeholder="system"
+                          placeholder="api_key"
                           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
                         />
                       </div>
+                    )}
+                    {customFetchModelsEnabled && (
+                      <>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-white/70">
+                            Models Endpoint
+                          </label>
+                          <input
+                            type="text"
+                            value={editorProvider.config?.modelsEndpoint ?? ""}
+                            onChange={(e) =>
+                              updateEditorProvider({
+                                config: {
+                                  ...editorProvider.config,
+                                  modelsEndpoint: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="/v1/models"
+                            className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="mb-1 block text-[11px] font-medium text-white/70">
+                              List Path
+                            </label>
+                            <input
+                              type="text"
+                              value={editorProvider.config?.modelsListPath ?? "data"}
+                              onChange={(e) =>
+                                updateEditorProvider({
+                                  config: {
+                                    ...editorProvider.config,
+                                    modelsListPath: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="data"
+                              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[11px] font-medium text-white/70">
+                              Model ID Path
+                            </label>
+                            <input
+                              type="text"
+                              value={editorProvider.config?.modelsIdPath ?? "id"}
+                              onChange={(e) =>
+                                updateEditorProvider({
+                                  config: {
+                                    ...editorProvider.config,
+                                    modelsIdPath: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="id"
+                              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="mb-1 block text-[11px] font-medium text-white/70">
+                              Display Name Path
+                            </label>
+                            <input
+                              type="text"
+                              value={editorProvider.config?.modelsDisplayNamePath ?? "name"}
+                              onChange={(e) =>
+                                updateEditorProvider({
+                                  config: {
+                                    ...editorProvider.config,
+                                    modelsDisplayNamePath: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="name"
+                              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[11px] font-medium text-white/70">
+                              Description Path
+                            </label>
+                            <input
+                              type="text"
+                              value={editorProvider.config?.modelsDescriptionPath ?? "description"}
+                              onChange={(e) =>
+                                updateEditorProvider({
+                                  config: {
+                                    ...editorProvider.config,
+                                    modelsDescriptionPath: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="description"
+                              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-white/70">
+                            Context Length Path (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={editorProvider.config?.modelsContextLengthPath ?? ""}
+                            onChange={(e) =>
+                              updateEditorProvider({
+                                config: {
+                                  ...editorProvider.config,
+                                  modelsContextLengthPath: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="context_length"
+                            className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                          />
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-white/70">
+                        System Role
+                      </label>
+                      <input
+                        type="text"
+                        value={editorProvider.config?.systemRole ?? "system"}
+                        onChange={(e) =>
+                          updateEditorProvider({
+                            config: { ...editorProvider.config, systemRole: e.target.value },
+                          })
+                        }
+                        placeholder="system"
+                        className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/30 focus:outline-none"
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>

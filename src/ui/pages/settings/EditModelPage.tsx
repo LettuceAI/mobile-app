@@ -125,6 +125,23 @@ export function EditModelPage() {
   } = useModelEditorController();
   const isLocalModel = editorModel?.providerId === "llamacpp";
   const isOllamaModel = editorModel?.providerId === "ollama";
+  const selectedProviderCredential =
+    editorModel &&
+    (providers.find(
+      (p) => p.providerId === editorModel.providerId && p.label === editorModel.providerLabel,
+    ) ||
+      providers.find((p) => p.providerId === editorModel.providerId));
+  const modelFetchEnabledForSelectedProvider = (() => {
+    if (!selectedProviderCredential) return false;
+    if (selectedProviderCredential.providerId === "llamacpp") return false;
+    if (
+      selectedProviderCredential.providerId === "custom" ||
+      selectedProviderCredential.providerId === "custom-anthropic"
+    ) {
+      return selectedProviderCredential.config?.fetchModelsEnabled === true;
+    }
+    return true;
+  })();
 
   // Switch to select mode automatically if models are fetched
   useEffect(() => {
@@ -135,11 +152,11 @@ export function EditModelPage() {
 
   // Auto-fetch models when provider changes or initial load
   useEffect(() => {
-    if (editorModel?.providerId && editorModel.providerId !== "llamacpp") {
+    if (editorModel?.providerId && modelFetchEnabledForSelectedProvider) {
       fetchModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorModel?.providerId, editorModel?.providerLabel]);
+  }, [editorModel?.providerId, editorModel?.providerLabel, modelFetchEnabledForSelectedProvider]);
 
   // Reset search when selector closes
   useEffect(() => {
@@ -405,16 +422,18 @@ export function EditModelPage() {
                   {modelIdLabel}
                 </label>
                 <div className="flex items-center gap-3">
-                  {!isLocalModel && fetchedModels.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsManualInput(!isManualInput)}
-                      className="text-[10px] uppercase font-bold tracking-wider text-white/40 hover:text-white/80 transition"
-                    >
-                      {isManualInput ? "Show List" : "Manual Input"}
-                    </button>
-                  )}
-                  {!isLocalModel && (
+                  {!isLocalModel &&
+                    fetchedModels.length > 0 &&
+                    modelFetchEnabledForSelectedProvider && (
+                      <button
+                        type="button"
+                        onClick={() => setIsManualInput(!isManualInput)}
+                        className="text-[10px] uppercase font-bold tracking-wider text-white/40 hover:text-white/80 transition"
+                      >
+                        {isManualInput ? "Show List" : "Manual Input"}
+                      </button>
+                    )}
+                  {!isLocalModel && modelFetchEnabledForSelectedProvider && (
                     <button
                       type="button"
                       onClick={fetchModels}
@@ -428,7 +447,10 @@ export function EditModelPage() {
                 </div>
               </div>
 
-              {!isLocalModel && !isManualInput && fetchedModels.length > 0 ? (
+              {!isLocalModel &&
+              modelFetchEnabledForSelectedProvider &&
+              !isManualInput &&
+              fetchedModels.length > 0 ? (
                 <>
                   <button
                     type="button"
@@ -502,6 +524,15 @@ export function EditModelPage() {
                       Use the full file path to a local GGUF model.
                     </p>
                   )}
+                  {!isLocalModel &&
+                    !modelFetchEnabledForSelectedProvider &&
+                    (selectedProviderCredential?.providerId === "custom" ||
+                      selectedProviderCredential?.providerId === "custom-anthropic") && (
+                      <p className="text-[11px] text-white/40">
+                        Model fetching is disabled for this custom endpoint. Enable it in Provider
+                        settings and set a Models Endpoint if you want model list discovery.
+                      </p>
+                    )}
                 </>
               )}
             </div>

@@ -165,6 +165,22 @@ export function useProvidersPageController(): ControllerReturn {
         return;
       }
 
+      const isCustomProvider =
+        editorProvider.providerId === "custom" || editorProvider.providerId === "custom-anthropic";
+      if (isCustomProvider) {
+        const cfg = (editorProvider.config ?? {}) as Record<string, unknown>;
+        const fetchModelsEnabled = cfg.fetchModelsEnabled === true;
+        const modelsEndpoint =
+          typeof cfg.modelsEndpoint === "string" ? cfg.modelsEndpoint.trim() : "";
+        if (fetchModelsEnabled && !modelsEndpoint) {
+          dispatch({
+            type: "set_validation_error",
+            payload: "Models endpoint is required when model fetching is enabled.",
+          });
+          return;
+        }
+      }
+
       if (requiresVerification) {
         if (!trimmedKey) {
           dispatch({

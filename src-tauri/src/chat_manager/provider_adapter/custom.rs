@@ -33,6 +33,31 @@ impl CustomGenericAdapter {
             .and_then(|v| v.as_bool())
             .unwrap_or(true)
     }
+
+    fn auth_mode(&self) -> String {
+        self.config_value("authMode")
+            .unwrap_or_else(|| "header".to_string())
+            .to_lowercase()
+    }
+
+    fn auth_header_name(&self) -> String {
+        self.config_value("authHeaderName")
+            .unwrap_or_else(|| "x-api-key".to_string())
+    }
+
+    fn auth_query_param_name(&self) -> String {
+        self.config_value("authQueryParamName")
+            .unwrap_or_else(|| "api_key".to_string())
+    }
+
+    fn append_query_auth(&self, url: String, api_key: &str) -> String {
+        if self.auth_mode() != "query" || api_key.trim().is_empty() {
+            return url;
+        }
+        let name = self.auth_query_param_name();
+        let separator = if url.contains('?') { '&' } else { '?' };
+        format!("{}{}{}={}", url, separator, name, api_key)
+    }
 }
 
 impl ProviderAdapter for CustomGenericAdapter {
@@ -47,6 +72,29 @@ impl ProviderAdapter for CustomGenericAdapter {
         self.config_value("systemRole")
             .map(|s| Cow::Owned(s))
             .unwrap_or(Cow::Borrowed("system"))
+    }
+
+    fn build_url(
+        &self,
+        base_url: &str,
+        _model_name: &str,
+        api_key: &str,
+        _should_stream: bool,
+    ) -> String {
+        self.append_query_auth(self.endpoint(base_url), api_key)
+    }
+
+    fn list_models_endpoint(&self, base_url: &str) -> String {
+        let endpoint = self
+            .config_value("modelsEndpoint")
+            .unwrap_or_else(|| "/v1/models".to_string());
+        if endpoint.starts_with("http://") || endpoint.starts_with("https://") {
+            endpoint
+        } else if endpoint.starts_with('/') {
+            format!("{}{}", base_url.trim_end_matches('/'), endpoint)
+        } else {
+            format!("{}/{}", base_url.trim_end_matches('/'), endpoint)
+        }
     }
 
     fn supports_stream(&self) -> bool {
@@ -73,8 +121,23 @@ impl ProviderAdapter for CustomGenericAdapter {
         extra: Option<&HashMap<String, String>>,
     ) -> HashMap<String, String> {
         let mut headers = HashMap::new();
-        headers.insert("Authorization".to_string(), format!("Bearer {}", api_key));
         headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        match self.auth_mode().as_str() {
+            "none" => {}
+            "header" => {
+                let key = self.auth_header_name();
+                if !api_key.trim().is_empty() {
+                    headers.insert(key, api_key.to_string());
+                }
+            }
+            "query" => {}
+            _ => {
+                if !api_key.trim().is_empty() {
+                    headers.insert("Authorization".to_string(), format!("Bearer {}", api_key));
+                }
+            }
+        }
 
         if let Some(extra_headers) = extra {
             for (k, v) in extra_headers {

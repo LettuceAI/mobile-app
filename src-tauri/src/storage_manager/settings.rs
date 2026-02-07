@@ -50,7 +50,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
 
     // Provider credentials
     let mut stmt = conn
-        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers FROM provider_credentials")
+        .prepare("SELECT id, provider_id, label, api_key, base_url, default_model, headers, config FROM provider_credentials")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let creds_iter = stmt
         .query_map([], |r| {
@@ -61,6 +61,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
             let base_url: Option<String> = r.get(4)?;
             let default_model: Option<String> = r.get(5)?;
             let headers: Option<String> = r.get(6)?;
+            let config: Option<String> = r.get(7)?;
             let mut obj = JsonMap::new();
             obj.insert("id".into(), JsonValue::String(id));
             obj.insert("providerId".into(), JsonValue::String(provider_id));
@@ -78,6 +79,13 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
                 if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
                     if !v.is_null() {
                         obj.insert("headers".into(), v);
+                    }
+                }
+            }
+            if let Some(s) = config {
+                if let Ok(v) = serde_json::from_str::<JsonValue>(&s) {
+                    if !v.is_null() {
+                        obj.insert("config".into(), v);
                     }
                 }
             }
@@ -296,9 +304,12 @@ fn db_write_settings_json(app: &tauri::AppHandle, data: String) -> Result<(), St
             let headers = c
                 .get("headers")
                 .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
+            let config = c
+                .get("config")
+                .map(|v| serde_json::to_string(v).unwrap_or("null".into()));
             tx.execute(
-                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                params![id, provider_id, label, api_key, base_url, default_model, headers],
+                "INSERT INTO provider_credentials (id, provider_id, label, api_key, base_url, default_model, headers, config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                params![id, provider_id, label, api_key, base_url, default_model, headers, config],
             ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         }
     }

@@ -896,6 +896,18 @@ export function useModelEditorController(): ControllerReturn {
       return;
     }
 
+    if (
+      (providerCred.providerId === "custom" || providerCred.providerId === "custom-anthropic") &&
+      providerCred.config?.fetchModelsEnabled !== true
+    ) {
+      dispatch({
+        type: "set_error",
+        payload: "Model fetching is disabled for this custom provider.",
+      });
+      dispatch({ type: "set_fetched_models", payload: [] });
+      return;
+    }
+
     dispatch({ type: "set_fetching_models", payload: true });
     dispatch({ type: "set_error", payload: null });
 
