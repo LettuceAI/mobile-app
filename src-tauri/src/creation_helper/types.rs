@@ -73,6 +73,12 @@ pub struct CreationSession {
     #[serde(default)]
     pub draft_history: Vec<DraftCharacter>,
     pub creation_goal: CreationGoal,
+    #[serde(default)]
+    pub creation_mode: CreationMode,
+    #[serde(default)]
+    pub target_type: Option<CreationGoal>,
+    #[serde(default)]
+    pub target_id: Option<String>,
     pub status: CreationStatus,
     pub created_at: i64,
     pub updated_at: i64,
@@ -83,12 +89,23 @@ pub struct CreationSession {
 pub struct CreationSessionSummary {
     pub id: String,
     pub creation_goal: CreationGoal,
+    pub creation_mode: CreationMode,
+    pub target_type: Option<CreationGoal>,
+    pub target_id: Option<String>,
     pub status: CreationStatus,
     pub title: String,
     pub preview: String,
     pub message_count: usize,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CreationMode {
+    #[default]
+    Create,
+    Edit,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

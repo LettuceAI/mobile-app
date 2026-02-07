@@ -94,9 +94,18 @@ interface CreationSession {
   draft: DraftCharacter;
   draftHistory: DraftCharacter[];
   creationGoal: "character" | "persona" | "lorebook";
+  creationMode: "create" | "edit";
+  targetType?: "character" | "persona" | "lorebook" | null;
+  targetId?: string | null;
   status: "active" | "previewShown" | "completed" | "cancelled";
   createdAt: number;
   updatedAt: number;
+}
+
+interface CreationSessionSummary {
+  id: string;
+  creationMode: "create" | "edit";
+  status: "active" | "previewShown" | "completed" | "cancelled";
 }
 
 interface ImageAttachment {
@@ -256,10 +265,21 @@ export function CreationHelperPage() {
   const [searchParams] = useSearchParams();
   const creationGoalParam = searchParams.get("goal");
   const sessionIdParam = searchParams.get("sessionId");
+  const modeParam = searchParams.get("mode");
+  const targetTypeParam = searchParams.get("targetType");
+  const targetIdParam = searchParams.get("targetId");
   const creationGoal: CreationSession["creationGoal"] =
     creationGoalParam === "persona" || creationGoalParam === "lorebook"
       ? creationGoalParam
       : "character";
+  const creationMode: CreationSession["creationMode"] = modeParam === "edit" ? "edit" : "create";
+  const targetType: CreationSession["targetType"] =
+    targetTypeParam === "character" ||
+    targetTypeParam === "persona" ||
+    targetTypeParam === "lorebook"
+      ? targetTypeParam
+      : null;
+  const targetId = targetIdParam?.trim() || null;
   const [session, setSession] = useState<CreationSession | null>(null);
   const [smartToolSelection, setSmartToolSelection] = useState(true);
   const [inputValue, setInputValue] = useState("");
@@ -365,7 +385,7 @@ export function CreationHelperPage() {
   // Initialize session
   useEffect(() => {
     const initSession = async () => {
-      const initKey = `${creationGoal}:${sessionIdParam ?? ""}`;
+      const initKey = `${creationGoal}:${sessionIdParam ?? ""}:${creationMode}:${targetType ?? ""}:${targetId ?? ""}`;
       if (initGuardRef.current === initKey) {
         return;
       }
@@ -384,13 +404,21 @@ export function CreationHelperPage() {
           });
         }
 
-        if (!resumedSession) {
-          resumedSession = await invoke<CreationSession | null>(
-            "creation_helper_get_latest_session",
+        if (!resumedSession && creationMode !== "edit") {
+          const summaries = await invoke<CreationSessionSummary[]>(
+            "creation_helper_list_sessions",
             {
               creationGoal,
             },
           );
+          const latestCreate = summaries.find(
+            (s) => s.creationMode === "create" && s.status !== "completed",
+          );
+          if (latestCreate) {
+            resumedSession = await invoke<CreationSession | null>("creation_helper_get_session", {
+              sessionId: latestCreate.id,
+            });
+          }
         }
 
         if (resumedSession) {
@@ -400,19 +428,27 @@ export function CreationHelperPage() {
 
         const newSession = await invoke<CreationSession>("creation_helper_start", {
           creationGoal,
+          creationMode,
+          targetType,
+          targetId,
         });
         setSession(newSession);
 
         // Send initial greeting
         const greetingSession = await invoke<CreationSession>("creation_helper_send_message", {
           sessionId: newSession.id,
-          message: smartSelection
-            ? creationGoal === "persona"
-              ? "Hi! I want to create a new persona."
-              : creationGoal === "lorebook"
-                ? "Hi! I want to create a new lorebook."
-                : "Hi! I want to create a new character."
-            : "Hi! I want to create something new.",
+          message:
+            creationMode === "edit"
+              ? smartSelection
+                ? `Hi! I want to edit this ${targetType ?? creationGoal} (id: ${targetId ?? "unknown"}).`
+                : "Hi! I want to edit an existing item."
+              : smartSelection
+                ? creationGoal === "persona"
+                  ? "Hi! I want to create a new persona."
+                  : creationGoal === "lorebook"
+                    ? "Hi! I want to create a new lorebook."
+                    : "Hi! I want to create a new character."
+                : "Hi! I want to create something new.",
           uploadedImages: null,
         });
         setSession(greetingSession);
@@ -423,7 +459,7 @@ export function CreationHelperPage() {
     };
 
     initSession();
-  }, [creationGoal, sessionIdParam]);
+  }, [creationGoal, sessionIdParam, creationMode, targetType, targetId]);
 
   useEffect(() => {
     setSession(null);
@@ -449,7 +485,7 @@ export function CreationHelperPage() {
       streamUnlistenRef.current();
       streamUnlistenRef.current = null;
     }
-  }, [creationGoal, sessionIdParam]);
+  }, [creationGoal, sessionIdParam, creationMode, targetType, targetId]);
 
   useEffect(() => {
     if (activeTools.length === 0) return;
@@ -921,10 +957,18 @@ export function CreationHelperPage() {
         sessionId: session.id,
       });
 
-      // Navigate to create character page with pre-filled data
-      navigate("/create/character", {
-        state: { draftCharacter: draft },
-      });
+      if (
+        session.creationMode === "edit" &&
+        session.targetType === "character" &&
+        session.targetId
+      ) {
+        navigate(`/settings/characters/${session.targetId}/edit`);
+      } else {
+        // Navigate to create character page with pre-filled data
+        navigate("/create/character", {
+          state: { draftCharacter: draft },
+        });
+      }
     } catch (err: any) {
       console.error("Failed to complete character:", err);
       setError(resolveErrorMessage(err, "Failed to save character."));
@@ -1581,8 +1625,16 @@ export function CreationHelperPage() {
             <MenuSection>
               <MenuButton
                 icon={Check}
-                title="Use This Character"
-                description="Save and start chatting"
+                title={
+                  session.creationMode === "edit" && session.targetType === "character"
+                    ? "Save Character Changes"
+                    : "Use This Character"
+                }
+                description={
+                  session.creationMode === "edit" && session.targetType === "character"
+                    ? "Apply updates to existing character"
+                    : "Save and start chatting"
+                }
                 color="from-emerald-500 to-teal-600"
                 onClick={handleUseCharacter}
               />

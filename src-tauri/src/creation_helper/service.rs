@@ -16,6 +16,7 @@ use crate::chat_manager::sse::accumulate_tool_calls_from_sse;
 use crate::chat_manager::tooling::{parse_tool_calls, ToolConfig};
 use crate::image_generator::commands::generate_image;
 use crate::image_generator::types::ImageGenerationRequest;
+use crate::storage_manager::characters as characters_storage;
 use crate::storage_manager::db::{now_ms, open_db};
 use crate::storage_manager::lorebook as lorebook_storage;
 use crate::storage_manager::personas as personas_storage;
@@ -131,16 +132,40 @@ fn load_persisted_session(
 pub fn start_session(
     app: &AppHandle,
     creation_goal: CreationGoal,
+    creation_mode: CreationMode,
+    target_type: Option<CreationGoal>,
+    target_id: Option<String>,
 ) -> Result<CreationSession, String> {
     let now = now_ms() as i64;
     let session_id = Uuid::new_v4().to_string();
+    let resolved_target_type = target_type.or_else(|| {
+        if creation_mode == CreationMode::Edit {
+            Some(creation_goal.clone())
+        } else {
+            None
+        }
+    });
+
+    let mut initial_draft = DraftCharacter::default();
+    if creation_mode == CreationMode::Edit {
+        let tid = target_id
+            .as_deref()
+            .ok_or_else(|| "Missing target_id for edit mode".to_string())?;
+        let ttype = resolved_target_type
+            .clone()
+            .ok_or_else(|| "Missing target_type for edit mode".to_string())?;
+        initial_draft = load_target_draft(app, &ttype, tid)?;
+    }
 
     let session = CreationSession {
         id: session_id.clone(),
         messages: vec![],
-        draft: DraftCharacter::default(),
+        draft: initial_draft,
         draft_history: vec![],
         creation_goal,
+        creation_mode,
+        target_type: resolved_target_type,
+        target_id,
         status: CreationStatus::Active,
         created_at: now,
         updated_at: now,
@@ -251,6 +276,9 @@ fn build_session_summary(session: &CreationSession) -> CreationSessionSummary {
     CreationSessionSummary {
         id: session.id.clone(),
         creation_goal: session.creation_goal.clone(),
+        creation_mode: session.creation_mode.clone(),
+        target_type: session.target_type.clone(),
+        target_id: session.target_id.clone(),
         status: session.status.clone(),
         title,
         preview,
@@ -258,6 +286,150 @@ fn build_session_summary(session: &CreationSession) -> CreationSessionSummary {
         created_at: session.created_at,
         updated_at: session.updated_at,
     }
+}
+
+fn load_target_draft(
+    app: &AppHandle,
+    target_type: &CreationGoal,
+    target_id: &str,
+) -> Result<DraftCharacter, String> {
+    match target_type {
+        CreationGoal::Character => load_character_draft(app, target_id),
+        CreationGoal::Persona => load_persona_draft(app, target_id),
+        CreationGoal::Lorebook => load_lorebook_draft(app, target_id),
+    }
+}
+
+fn load_character_draft(app: &AppHandle, target_id: &str) -> Result<DraftCharacter, String> {
+    let raw = characters_storage::characters_list(app.clone())?;
+    let characters: Vec<Value> = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target = characters
+        .into_iter()
+        .find(|c| c.get("id").and_then(|v| v.as_str()) == Some(target_id))
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    let scenes: Vec<DraftScene> = target
+        .get("scenes")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|scene| {
+                    Some(DraftScene {
+                        id: scene.get("id")?.as_str()?.to_string(),
+                        content: scene
+                            .get("content")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        direction: scene
+                            .get("direction")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(DraftCharacter {
+        name: target
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        definition: target
+            .get("definition")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        description: target
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        scenes,
+        default_scene_id: target
+            .get("defaultSceneId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        avatar_path: target
+            .get("avatarPath")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        background_image_path: target
+            .get("backgroundImagePath")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        disable_avatar_gradient: target
+            .get("disableAvatarGradient")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        default_model_id: target
+            .get("defaultModelId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        prompt_template_id: target
+            .get("promptTemplateId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+    })
+}
+
+fn load_persona_draft(app: &AppHandle, target_id: &str) -> Result<DraftCharacter, String> {
+    let raw = personas_storage::personas_list(app.clone())?;
+    let personas: Vec<Value> = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target = personas
+        .into_iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(target_id))
+        .ok_or_else(|| "Persona not found".to_string())?;
+
+    Ok(DraftCharacter {
+        name: target
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        definition: None,
+        description: target
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        scenes: Vec::new(),
+        default_scene_id: None,
+        avatar_path: target
+            .get("avatarPath")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        background_image_path: None,
+        disable_avatar_gradient: false,
+        default_model_id: None,
+        prompt_template_id: None,
+    })
+}
+
+fn load_lorebook_draft(app: &AppHandle, target_id: &str) -> Result<DraftCharacter, String> {
+    let raw = lorebook_storage::lorebooks_list(app.clone())?;
+    let lorebooks: Vec<Value> = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target = lorebooks
+        .into_iter()
+        .find(|lb| lb.get("id").and_then(|v| v.as_str()) == Some(target_id))
+        .ok_or_else(|| "Lorebook not found".to_string())?;
+
+    Ok(DraftCharacter {
+        name: target
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        definition: None,
+        description: None,
+        scenes: Vec::new(),
+        default_scene_id: None,
+        avatar_path: None,
+        background_image_path: None,
+        disable_avatar_gradient: false,
+        default_model_id: None,
+        prompt_template_id: None,
+    })
 }
 
 pub fn list_sessions(
@@ -1369,7 +1541,13 @@ async fn process_assistant_turn(
 
     let mut api_messages = vec![json!({
         "role": "system",
-        "content": get_creation_helper_system_prompt(&session.creation_goal, smart_tool_selection)
+        "content": get_creation_helper_system_prompt(
+            &session.creation_goal,
+            &session.creation_mode,
+            session.target_type.as_ref(),
+            session.target_id.as_deref(),
+            smart_tool_selection
+        )
     })];
 
     for msg in &session.messages {
@@ -1892,7 +2070,71 @@ pub fn complete_session(app: &AppHandle, session_id: &str) -> Result<DraftCharac
         }
     }
 
+    if session.creation_mode == CreationMode::Edit
+        && session.target_type == Some(CreationGoal::Character)
+        && session.target_id.is_some()
+    {
+        let target_id = session.target_id.as_deref().unwrap_or_default();
+        apply_character_edit(app, target_id, &draft)?;
+    }
+
     Ok(draft)
+}
+
+fn apply_character_edit(
+    app: &AppHandle,
+    target_id: &str,
+    draft: &DraftCharacter,
+) -> Result<(), String> {
+    let raw = characters_storage::characters_list(app.clone())?;
+    let mut characters: Vec<Value> = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut target = characters
+        .drain(..)
+        .find(|c| c.get("id").and_then(|v| v.as_str()) == Some(target_id))
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    target["id"] = json!(target_id);
+    target["name"] = json!(draft
+        .name
+        .clone()
+        .or_else(|| {
+            target
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "Unnamed Character".to_string()));
+
+    if draft.definition.is_some() {
+        target["definition"] = json!(draft.definition);
+    }
+    if draft.description.is_some() {
+        target["description"] = json!(draft.description);
+    }
+
+    target["scenes"] = json!(draft
+        .scenes
+        .iter()
+        .map(|scene| {
+            json!({
+                "id": scene.id,
+                "content": scene.content,
+                "direction": scene.direction
+            })
+        })
+        .collect::<Vec<Value>>());
+    target["defaultSceneId"] = json!(draft.default_scene_id);
+    target["avatarPath"] = json!(draft.avatar_path);
+    target["backgroundImagePath"] = json!(draft.background_image_path);
+    target["disableAvatarGradient"] = json!(draft.disable_avatar_gradient);
+    target["defaultModelId"] = json!(draft.default_model_id);
+    target["promptTemplateId"] = json!(draft.prompt_template_id);
+
+    let payload = serde_json::to_string(&target)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let _ = characters_storage::character_upsert(app.clone(), payload)?;
+    Ok(())
 }
 
 #[allow(dead_code)]

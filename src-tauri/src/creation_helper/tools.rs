@@ -2,7 +2,7 @@
 //
 // These tools are provided to the LLM to build the character progressively.
 
-use super::types::CreationGoal;
+use super::types::{CreationGoal, CreationMode};
 use crate::chat_manager::tooling::ToolDefinition;
 use serde_json::json;
 use std::collections::HashSet;
@@ -268,7 +268,13 @@ fn character_tools() -> Vec<ToolDefinition> {
 }
 
 /// Get the system prompt for the creation helper
-pub fn get_creation_helper_system_prompt(goal: &CreationGoal, smart_selection: bool) -> String {
+pub fn get_creation_helper_system_prompt(
+    goal: &CreationGoal,
+    mode: &CreationMode,
+    target_type: Option<&CreationGoal>,
+    target_id: Option<&str>,
+    smart_selection: bool,
+) -> String {
     if !smart_selection {
         return r#"You are a creation assistant for a roleplay app. You can help create characters, personas, or lorebooks based on the user's request.
 
@@ -291,7 +297,7 @@ Remember: You are helping the user create something useful for roleplay. Make th
             .to_string();
     }
 
-    match goal {
+    let mut base = match goal {
         CreationGoal::Character => r#"You are a character creation assistant for a roleplay app. Your goal is to help the user create a compelling character through conversation.
 
 ## Your Approach
@@ -381,7 +387,27 @@ Remember: Personas define how the user wants to show up in chats. Make the proce
 
 Remember: Lorebooks should be clear, scannable, and useful in roleplay. Make the process fun and collaborative!"#
             .to_string(),
+    };
+
+    if *mode == CreationMode::Edit {
+        let target_type_text = target_type
+            .map(|t| match t {
+                CreationGoal::Character => "character",
+                CreationGoal::Persona => "persona",
+                CreationGoal::Lorebook => "lorebook",
+            })
+            .unwrap_or("entity");
+        let target_id_text = target_id.unwrap_or("unknown");
+        base.push_str(
+            format!(
+                "\n\n## Edit Mode\nYou are editing an existing {} with ID `{}`.\nDo not create a new entity unless the user explicitly asks for a duplicate.\nPrefer update operations for this target and preserve existing intent/style.",
+                target_type_text, target_id_text
+            )
+            .as_str(),
+        );
     }
+
+    base
 }
 
 fn all_tools() -> Vec<ToolDefinition> {

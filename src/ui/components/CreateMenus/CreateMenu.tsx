@@ -2,8 +2,16 @@ import { Brain, User, BookOpen, Loader2, Sparkles, Users, History, Plus } from "
 import { BottomMenu, MenuButton, MenuDivider, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { readSettings, saveLorebook } from "../../../core/storage/repo";
+import {
+  listCharacters,
+  listLorebooks,
+  listPersonas,
+  readSettings,
+  saveLorebook,
+} from "../../../core/storage/repo";
 import { invoke } from "@tauri-apps/api/core";
+import { AvatarImage } from "../AvatarImage";
+import { useAvatar } from "../../hooks/useAvatar";
 
 type CreationGoal = "character" | "persona" | "lorebook";
 type CreationStatus = "active" | "previewShown" | "completed" | "cancelled";
@@ -19,10 +27,48 @@ interface CreationSessionSummary {
   updatedAt: number;
 }
 
+interface EditTarget {
+  id: string;
+  title: string;
+  avatarPath?: string;
+  avatarCrop?: { x: number; y: number; scale: number } | null;
+}
+
+function EditTargetAvatar({ goal, target }: { goal: CreationGoal; target: EditTarget }) {
+  const avatarType = goal === "character" || goal === "persona" ? goal : null;
+  const avatarUrl = useAvatar(
+    (avatarType as "character" | "persona") || "character",
+    avatarType ? target.id : undefined,
+    avatarType ? target.avatarPath : undefined,
+    "round",
+  );
+
+  if (avatarType && (avatarUrl || target.title)) {
+    return (
+      <div className="h-[18px] w-[18px] overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/10 to-white/5 flex items-center justify-center">
+        {avatarUrl ? (
+          <AvatarImage src={avatarUrl} alt={target.title} crop={target.avatarCrop} applyCrop />
+        ) : (
+          <span className="text-[9px] font-semibold text-white/70">
+            {target.title.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return <BookOpen size={18} />;
+}
+
 export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<
-    "menu" | "lorebook-name" | "ai-helper" | "ai-helper-actions" | "ai-helper-history"
+    | "menu"
+    | "lorebook-name"
+    | "ai-helper"
+    | "ai-helper-actions"
+    | "ai-helper-history"
+    | "ai-helper-edit-select"
   >("menu");
   const [lorebookName, setLorebookName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -30,6 +76,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   const [selectedGoal, setSelectedGoal] = useState<CreationGoal | null>(null);
   const [goalSessions, setGoalSessions] = useState<CreationSessionSummary[]>([]);
   const [loadingGoalSessions, setLoadingGoalSessions] = useState(false);
+  const [editTargets, setEditTargets] = useState<EditTarget[]>([]);
+  const [loadingEditTargets, setLoadingEditTargets] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -53,6 +101,8 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       setSelectedGoal(null);
       setGoalSessions([]);
       setLoadingGoalSessions(false);
+      setEditTargets([]);
+      setLoadingEditTargets(false);
     }, 300);
   };
 
@@ -115,6 +165,54 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     navigate(`/create/character/helper?goal=${goal}&sessionId=${encodeURIComponent(sessionId)}`);
   };
 
+  const loadEditTargets = async (goal: CreationGoal) => {
+    setLoadingEditTargets(true);
+    try {
+      if (goal === "character") {
+        const items = await listCharacters();
+        setEditTargets(
+          items.map((c) => ({
+            id: c.id,
+            title: c.name || "Unnamed character",
+            avatarPath: c.avatarPath,
+            avatarCrop: c.avatarCrop ?? null,
+          })),
+        );
+      } else if (goal === "persona") {
+        const items = await listPersonas();
+        setEditTargets(
+          items.map((p) => ({
+            id: p.id,
+            title: p.title || "Untitled persona",
+            avatarPath: p.avatarPath,
+            avatarCrop: p.avatarCrop ?? null,
+          })),
+        );
+      } else {
+        const items = await listLorebooks();
+        setEditTargets(items.map((l) => ({ id: l.id, title: l.name || "Untitled lorebook" })));
+      }
+    } catch (err) {
+      console.error("Failed to load edit targets:", err);
+      setEditTargets([]);
+    } finally {
+      setLoadingEditTargets(false);
+    }
+  };
+
+  const openEditTargetSelector = async () => {
+    if (!selectedGoal) return;
+    setMode("ai-helper-edit-select");
+    await loadEditTargets(selectedGoal);
+  };
+
+  const navigateToEditTarget = (goal: CreationGoal, targetId: string) => {
+    handleClose();
+    navigate(
+      `/create/character/helper?goal=${goal}&mode=edit&targetType=${goal}&targetId=${encodeURIComponent(targetId)}`,
+    );
+  };
+
   const latestIncomplete = goalSessions.find((session) => session.status !== "completed") ?? null;
   const selectedGoalLabel = selectedGoal ? goalMeta[selectedGoal].label : "Smart Creator";
   const historyTitle = `${selectedGoalLabel} Conversations`;
@@ -132,7 +230,9 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
               ? `${selectedGoalLabel} Creator`
               : mode === "ai-helper-history"
                 ? historyTitle
-                : "Name Lorebook"
+                : mode === "ai-helper-edit-select"
+                  ? `Edit ${selectedGoalLabel}`
+                  : "Name Lorebook"
       }
       includeExitIcon={false}
       location="bottom"
@@ -242,6 +342,16 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                 />
               )}
 
+              {selectedGoal && (
+                <MenuButton
+                  icon={Sparkles}
+                  title="Edit existing"
+                  description={`Pick a ${selectedGoal} and edit it with Smart Creator`}
+                  color="from-rose-500 to-rose-600"
+                  onClick={() => void openEditTargetSelector()}
+                />
+              )}
+
               {latestIncomplete && selectedGoal && (
                 <MenuButton
                   icon={History}
@@ -309,6 +419,39 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                   />
                 );
               })}
+            </>
+          )}
+          <MenuDivider />
+          <button
+            onClick={() => setMode("ai-helper-actions")}
+            className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
+          >
+            Back
+          </button>
+        </MenuSection>
+      ) : mode === "ai-helper-edit-select" ? (
+        <MenuSection>
+          {loadingEditTargets ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-5 text-sm text-white/70">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading {selectedGoalLabel.toLowerCase()}s...</span>
+            </div>
+          ) : editTargets.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/65">
+              No {selectedGoalLabel.toLowerCase()}s found.
+            </div>
+          ) : (
+            <>
+              {editTargets.map((target) => (
+                <MenuButton
+                  key={target.id}
+                  icon={<EditTargetAvatar goal={selectedGoal as CreationGoal} target={target} />}
+                  title={target.title}
+                  description={target.id}
+                  color={goalMeta[selectedGoal as CreationGoal].color}
+                  onClick={() => selectedGoal && navigateToEditTarget(selectedGoal, target.id)}
+                />
+              ))}
             </>
           )}
           <MenuDivider />

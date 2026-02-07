@@ -2,15 +2,25 @@ use tauri::AppHandle;
 
 use super::service;
 use super::types::{
-    CreationGoal, CreationSession, CreationSessionSummary, DraftCharacter, UploadedImage,
+    CreationGoal, CreationMode, CreationSession, CreationSessionSummary, DraftCharacter,
+    UploadedImage,
 };
 
 #[tauri::command]
 pub fn creation_helper_start(
     app: AppHandle,
     creation_goal: Option<CreationGoal>,
+    creation_mode: Option<CreationMode>,
+    target_type: Option<CreationGoal>,
+    target_id: Option<String>,
 ) -> Result<CreationSession, String> {
-    service::start_session(&app, creation_goal.unwrap_or(CreationGoal::Character))
+    service::start_session(
+        &app,
+        creation_goal.unwrap_or(CreationGoal::Character),
+        creation_mode.unwrap_or(CreationMode::Create),
+        target_type,
+        target_id,
+    )
 }
 
 #[tauri::command]
