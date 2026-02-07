@@ -45,11 +45,18 @@ function EditTargetAvatar({ goal, target }: { goal: CreationGoal; target: EditTa
 
   if (avatarType && (avatarUrl || target.title)) {
     return (
-      <div className="h-[18px] w-[18px] overflow-hidden rounded-full border border-white/10 bg-linear-to-br from-white/10 to-white/5 flex items-center justify-center">
+      <div className="h-full w-full overflow-hidden rounded-[inherit] bg-linear-to-br from-white/10 to-white/5 flex items-center justify-center">
         {avatarUrl ? (
-          <AvatarImage src={avatarUrl} alt={target.title} crop={target.avatarCrop} applyCrop />
+          <AvatarImage
+            src={avatarUrl}
+            alt={target.title}
+            crop={target.avatarCrop}
+            applyCrop
+            className="h-full w-full"
+            imgClassName="h-full w-full object-cover"
+          />
         ) : (
-          <span className="text-[9px] font-semibold text-white/70">
+          <span className="text-xs font-semibold text-white/70">
             {target.title.slice(0, 2).toUpperCase()}
           </span>
         )}

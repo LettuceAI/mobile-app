@@ -1180,6 +1180,10 @@ export function CreationHelperPage() {
       data.persona ||
       (session?.draft?.name || session?.draft?.description || session?.draft?.avatarPath
         ? {
+            id:
+              session?.creationMode === "edit" && session?.targetType === "persona"
+                ? (session.targetId ?? undefined)
+                : undefined,
             title: session?.draft?.name ?? undefined,
             description: session?.draft?.description ?? session?.draft?.definition ?? undefined,
             avatarPath: session?.draft?.avatarPath ?? undefined,
@@ -1213,10 +1217,35 @@ export function CreationHelperPage() {
         ? "Lorebook Preview"
         : "Character Preview";
 
-  const handleOpenPersona = useCallback(() => {
-    if (!previewPersona?.id) return;
-    navigate(`/settings/personas/${previewPersona.id}/edit`);
-  }, [previewPersona?.id, navigate]);
+  const handleOpenPersona = useCallback(async () => {
+    const personaId =
+      session?.creationMode === "edit" && session?.targetType === "persona"
+        ? session.targetId
+        : previewPersona?.id;
+    if (!personaId) return;
+
+    if (session?.creationMode === "edit" && session?.targetType === "persona") {
+      try {
+        await invoke("creation_helper_complete", {
+          sessionId: session.id,
+        });
+      } catch (err) {
+        console.error("Failed to save persona edit:", err);
+        setError(resolveErrorMessage(err, "Failed to save persona changes."));
+        return;
+      }
+    }
+
+    navigate(`/settings/personas/${personaId}/edit`);
+  }, [
+    navigate,
+    previewPersona?.id,
+    session?.creationMode,
+    session?.id,
+    session?.targetId,
+    session?.targetType,
+    resolveErrorMessage,
+  ]);
 
   const handleOpenLorebook = useCallback(() => {
     if (!previewLorebook?.id) return;
@@ -1666,13 +1695,25 @@ export function CreationHelperPage() {
             <MenuSection>
               <MenuButton
                 icon={User}
-                title="Open Persona"
+                title={
+                  session?.creationMode === "edit" && session?.targetType === "persona"
+                    ? "Save Persona Changes"
+                    : "Open Persona"
+                }
                 description={
-                  previewPersona?.id ? "Review and edit your persona" : "Create a persona first"
+                  session?.creationMode === "edit" && session?.targetType === "persona"
+                    ? "Apply updates to existing persona"
+                    : previewPersona?.id
+                      ? "Review and edit your persona"
+                      : "Create a persona first"
                 }
                 color="from-emerald-500 to-teal-600"
                 onClick={handleOpenPersona}
-                disabled={!previewPersona?.id}
+                disabled={
+                  session?.creationMode === "edit" && session?.targetType === "persona"
+                    ? !session?.targetId
+                    : !previewPersona?.id
+                }
               />
               <MenuButton
                 icon={RefreshCw}

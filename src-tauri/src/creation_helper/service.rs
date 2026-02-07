@@ -2076,6 +2076,12 @@ pub fn complete_session(app: &AppHandle, session_id: &str) -> Result<DraftCharac
     {
         let target_id = session.target_id.as_deref().unwrap_or_default();
         apply_character_edit(app, target_id, &draft)?;
+    } else if session.creation_mode == CreationMode::Edit
+        && session.target_type == Some(CreationGoal::Persona)
+        && session.target_id.is_some()
+    {
+        let target_id = session.target_id.as_deref().unwrap_or_default();
+        apply_persona_edit(app, target_id, &draft)?;
     }
 
     Ok(draft)
@@ -2134,6 +2140,52 @@ fn apply_character_edit(
     let payload = serde_json::to_string(&target)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let _ = characters_storage::character_upsert(app.clone(), payload)?;
+    Ok(())
+}
+
+fn apply_persona_edit(
+    app: &AppHandle,
+    target_id: &str,
+    draft: &DraftCharacter,
+) -> Result<(), String> {
+    let raw = personas_storage::personas_list(app.clone())?;
+    let personas: Vec<Value> = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target = personas
+        .into_iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(target_id))
+        .ok_or_else(|| "Persona not found".to_string())?;
+
+    let existing_title = target
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Untitled Persona");
+    let existing_desc = target
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let is_default = target
+        .get("isDefault")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let payload = json!({
+        "id": target_id,
+        "title": draft.name.as_deref().unwrap_or(existing_title),
+        "description": draft
+            .description
+            .as_deref()
+            .or(draft.definition.as_deref())
+            .unwrap_or(existing_desc),
+        "avatarPath": draft.avatar_path,
+        "isDefault": is_default,
+    });
+
+    let _ = personas_storage::persona_upsert(
+        app.clone(),
+        serde_json::to_string(&payload)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+    )?;
     Ok(())
 }
 
