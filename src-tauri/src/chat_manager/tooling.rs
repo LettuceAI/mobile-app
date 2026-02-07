@@ -252,23 +252,36 @@ pub fn parse_tool_calls(provider_id: &str, payload: &Value) -> Vec<ToolCall> {
         }
     }
 
-    // 3) Gemini function_call parts
+    // 3) Gemini function call parts
     if provider_id.starts_with("google") || provider_id.contains("gemini") || calls.is_empty() {
         if let Some(candidates) = payload.get("candidates").and_then(|v| v.as_array()) {
             for candidate in candidates {
                 if let Some(content) = candidate.get("content").and_then(|v| v.as_object()) {
                     if let Some(parts) = content.get("parts").and_then(|v| v.as_array()) {
                         for part in parts {
-                            if let Some(function_call) = part.get("function_call") {
+                            if let Some(function_call) = part
+                                .get("function_call")
+                                .or_else(|| part.get("functionCall"))
+                            {
                                 if let Some(name) =
                                     function_call.get("name").and_then(|v| v.as_str())
                                 {
                                     let args = function_call
                                         .get("args")
+                                        .or_else(|| function_call.get("arguments"))
                                         .cloned()
                                         .unwrap_or_else(|| Value::Object(Default::default()));
+                                    let call_id = function_call
+                                        .get("id")
+                                        .or_else(|| function_call.get("call_id"))
+                                        .or_else(|| function_call.get("callId"))
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string())
+                                        .unwrap_or_else(|| {
+                                            format!("func_call_{}", calls.len() + 1)
+                                        });
                                     calls.push(ToolCall {
-                                        id: format!("func_call_{}", calls.len() + 1),
+                                        id: call_id,
                                         name: name.to_string(),
                                         arguments: args,
                                         raw_arguments: None,

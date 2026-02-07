@@ -1386,6 +1386,116 @@ fn build_image_request(
     ))
 }
 
+fn should_force_post_tool_summary(initial_content: &str, final_content: &str) -> bool {
+    let final_trim = final_content.trim();
+    if final_trim.is_empty() {
+        return true;
+    }
+    if final_trim.len() < 80 {
+        return true;
+    }
+    let initial_trim = initial_content.trim();
+    if !initial_trim.is_empty() && final_trim == initial_trim {
+        return true;
+    }
+    false
+}
+
+fn extract_provider_semantic_error(provider_id: &str, data: &Value) -> Option<String> {
+    if data.get("error").is_some() {
+        return chat_request::extract_error_message(data);
+    }
+
+    let is_gemini = provider_id.eq_ignore_ascii_case("gemini") || provider_id.starts_with("google");
+    if !is_gemini {
+        return None;
+    }
+
+    if data
+        .get("promptFeedback")
+        .and_then(|v| v.get("blockReason"))
+        .and_then(|v| v.as_str())
+        .is_some()
+    {
+        return chat_request::extract_error_message(data);
+    }
+
+    let has_bad_finish_reason = data
+        .get("candidates")
+        .and_then(|v| v.as_array())
+        .map(|candidates| {
+            candidates.iter().any(|candidate| {
+                matches!(
+                    candidate.get("finishReason").and_then(|v| v.as_str()),
+                    Some(reason)
+                        if !matches!(
+                            reason,
+                            "STOP" | "MAX_TOKENS" | "FINISH_REASON_UNSPECIFIED"
+                        )
+                )
+            })
+        })
+        .unwrap_or(false);
+
+    if has_bad_finish_reason {
+        return chat_request::extract_error_message(data)
+            .or_else(|| Some("Gemini returned a blocked/invalid finish reason".to_string()));
+    }
+
+    None
+}
+
+fn extract_latest_gemini_function_call_content(data: &Value) -> Option<Value> {
+    let mut latest: Option<Value> = None;
+
+    let mut inspect_payload = |payload: &Value| {
+        let Some(candidates) = payload.get("candidates").and_then(|v| v.as_array()) else {
+            return;
+        };
+        for candidate in candidates {
+            let Some(content) = candidate.get("content").and_then(|v| v.as_object()) else {
+                continue;
+            };
+            let Some(parts) = content.get("parts").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            let has_function_call = parts.iter().any(|part| {
+                part.get("functionCall").is_some() || part.get("function_call").is_some()
+            });
+            if has_function_call {
+                latest = Some(json!({
+                    "role": content
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("model"),
+                    "parts": parts
+                }));
+            }
+        }
+    };
+
+    if let Some(raw) = data.as_str() {
+        for line in raw.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("data:") {
+                continue;
+            }
+            let payload = trimmed[5..].trim();
+            if payload.is_empty() || payload == "[DONE]" {
+                continue;
+            }
+            let Ok(v) = serde_json::from_str::<Value>(payload) else {
+                continue;
+            };
+            inspect_payload(&v);
+        }
+        return latest;
+    }
+
+    inspect_payload(data);
+    latest
+}
+
 pub async fn send_message(
     app: AppHandle,
     session_id: String,
@@ -1735,6 +1845,22 @@ async fn process_assistant_turn(
     }
 
     let response_data = api_response.data();
+    let initial_content =
+        chat_request::extract_text(response_data, Some(provider_id)).unwrap_or_default();
+    let mut tool_calls = if response_data.is_string() {
+        accumulate_tool_calls_from_sse(response_data.as_str().unwrap(), provider_id)
+    } else {
+        parse_tool_calls(provider_id, response_data)
+    };
+    let mut latest_gemini_function_call_content =
+        if provider_id.eq_ignore_ascii_case("gemini") || provider_id.starts_with("google") {
+            extract_latest_gemini_function_call_content(response_data)
+        } else {
+            None
+        };
+    let initial_provider_error = extract_provider_semantic_error(provider_id, response_data);
+    let initial_has_meaningful = (!initial_content.trim().is_empty() || !tool_calls.is_empty())
+        && initial_provider_error.is_none();
     record_creation_usage(
         &app,
         response_data,
@@ -1744,16 +1870,35 @@ async fn process_assistant_turn(
         provider_id,
         provider_label,
         session.draft.name.as_deref().unwrap_or(""),
-        true,
-        None,
+        initial_has_meaningful,
+        if let Some(err) = &initial_provider_error {
+            Some(err.clone())
+        } else if initial_has_meaningful {
+            None
+        } else {
+            Some("Model returned empty response".to_string())
+        },
     );
-
-    let mut content =
-        chat_request::extract_text(response_data, Some(provider_id)).unwrap_or_default();
-    let mut tool_calls = if response_data.is_string() {
-        accumulate_tool_calls_from_sse(response_data.as_str().unwrap(), provider_id)
+    log_info(
+        &app,
+        "creation_helper",
+        format!(
+            "Parsed initial response: text_len={}, tool_calls={}",
+            initial_content.len(),
+            tool_calls.len()
+        ),
+    );
+    if !initial_has_meaningful {
+        return Err(
+            initial_provider_error.unwrap_or_else(|| "Model returned empty response".to_string())
+        );
+    }
+    let initial_content_for_summary = initial_content.clone();
+    let mut current_step_content = initial_content;
+    let mut final_content = if tool_calls.is_empty() {
+        current_step_content.clone()
     } else {
-        parse_tool_calls(provider_id, response_data)
+        String::new()
     };
 
     let mut all_tool_calls = Vec::new();
@@ -1800,11 +1945,21 @@ async fn process_assistant_turn(
             })
             .collect();
 
-        api_messages.push(json!({
-            "role": "assistant",
-            "content": if content.is_empty() { Value::Null } else { json!(content) },
-            "tool_calls": tool_calls_json
-        }));
+        if (provider_id.eq_ignore_ascii_case("gemini") || provider_id.starts_with("google"))
+            && latest_gemini_function_call_content.is_some()
+        {
+            api_messages.push(json!({
+                "role": "assistant",
+                "content": if current_step_content.is_empty() { Value::Null } else { json!(current_step_content) },
+                "gemini_content": latest_gemini_function_call_content.clone().unwrap_or(Value::Null)
+            }));
+        } else {
+            api_messages.push(json!({
+                "role": "assistant",
+                "content": if current_step_content.is_empty() { Value::Null } else { json!(current_step_content) },
+                "tool_calls": tool_calls_json
+            }));
+        }
 
         for result in &all_tool_results[all_tool_results.len() - tool_calls.len()..] {
             api_messages.push(json!({
@@ -1919,6 +2074,23 @@ async fn process_assistant_turn(
         }
 
         let followup_data = followup_response.data();
+        current_step_content =
+            chat_request::extract_text(followup_data, Some(provider_id)).unwrap_or_default();
+        let parsed_followup_tool_calls = if followup_data.is_string() {
+            accumulate_tool_calls_from_sse(followup_data.as_str().unwrap(), provider_id)
+        } else {
+            parse_tool_calls(provider_id, followup_data)
+        };
+        let followup_provider_error = extract_provider_semantic_error(provider_id, followup_data);
+        latest_gemini_function_call_content =
+            if provider_id.eq_ignore_ascii_case("gemini") || provider_id.starts_with("google") {
+                extract_latest_gemini_function_call_content(followup_data)
+            } else {
+                None
+            };
+        let followup_has_meaningful = (!current_step_content.trim().is_empty()
+            || !parsed_followup_tool_calls.is_empty())
+            && followup_provider_error.is_none();
         record_creation_usage(
             &app,
             followup_data,
@@ -1928,14 +2100,30 @@ async fn process_assistant_turn(
             provider_id,
             provider_label,
             session.draft.name.as_deref().unwrap_or(""),
-            true,
-            None,
+            followup_has_meaningful,
+            if let Some(err) = &followup_provider_error {
+                Some(err.clone())
+            } else if followup_has_meaningful {
+                None
+            } else {
+                Some("Model returned empty follow-up response".to_string())
+            },
         );
-
-        let new_content =
-            chat_request::extract_text(followup_data, Some(provider_id)).unwrap_or_default();
-        if !new_content.is_empty() {
-            if !content.is_empty() {
+        log_info(
+            &app,
+            "creation_helper",
+            format!(
+                "Parsed follow-up response (iteration {}): text_len={}, tool_calls={}",
+                iteration,
+                current_step_content.len(),
+                parsed_followup_tool_calls.len()
+            ),
+        );
+        if let Some(err) = followup_provider_error {
+            return Err(err);
+        }
+        if !current_step_content.is_empty() {
+            if !final_content.is_empty() {
                 if streaming_enabled {
                     crate::transport::emit_normalized(
                         &app,
@@ -1945,15 +2133,11 @@ async fn process_assistant_turn(
                         },
                     );
                 }
-                content.push_str("\n\n");
+                final_content.push_str("\n\n");
             }
-            content.push_str(&new_content);
+            final_content.push_str(&current_step_content);
         }
-        tool_calls = if followup_data.is_string() {
-            accumulate_tool_calls_from_sse(followup_data.as_str().unwrap(), provider_id)
-        } else {
-            parse_tool_calls(provider_id, followup_data)
-        };
+        tool_calls = parsed_followup_tool_calls;
     }
 
     if iteration >= MAX_TOOL_ITERATIONS {
@@ -1964,10 +2148,146 @@ async fn process_assistant_turn(
         );
     }
 
+    if !all_tool_calls.is_empty()
+        && should_force_post_tool_summary(&initial_content_for_summary, &final_content)
+    {
+        log_info(
+            &app,
+            "creation_helper",
+            "Running finalization pass without tools to get user-facing response".to_string(),
+        );
+
+        let mut finalize_messages = api_messages.clone();
+        finalize_messages.push(json!({
+            "role": "user",
+            "content": "Using only the tool outputs above, answer the user's latest request directly with concrete details. Do not call tools."
+        }));
+
+        let finalize_built = build_chat_request(
+            &cred,
+            api_key,
+            model_name,
+            &finalize_messages,
+            None,
+            0.7,
+            1.0,
+            20480,
+            None,
+            streaming_enabled,
+            if streaming_enabled {
+                Some(stream_request_id.clone())
+            } else {
+                None
+            },
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+        );
+
+        let finalize_request = ApiRequest {
+            url: finalize_built.url,
+            method: Some("POST".into()),
+            headers: Some(finalize_built.headers),
+            query: None,
+            body: Some(finalize_built.body),
+            timeout_ms: Some(120_000),
+            stream: Some(streaming_enabled),
+            request_id: if streaming_enabled {
+                Some(stream_request_id.clone())
+            } else {
+                None
+            },
+            provider_id: Some(provider_id.to_string()),
+        };
+
+        let mut abort_rx = {
+            let registry = app.state::<AbortRegistry>();
+            registry.register(session_id.clone())
+        };
+
+        let finalize_response = tokio::select! {
+            _ = &mut abort_rx => {
+                log_warn(
+                    &app,
+                    "creation_helper",
+                    format!("[creation_helper] finalization request aborted by user for session {}", session_id),
+                );
+                return Err(crate::utils::err_msg(module_path!(), line!(), "Request aborted by user"));
+            }
+            res = api_request(app.clone(), finalize_request) => res?
+        };
+
+        {
+            let registry = app.state::<AbortRegistry>();
+            registry.unregister(&session_id);
+        }
+
+        if !finalize_response.ok {
+            let full_error =
+                serde_json::to_string_pretty(finalize_response.data()).unwrap_or_default();
+            log_error(
+                &app,
+                "creation_helper",
+                format!("Finalization API error: {}", full_error),
+            );
+        } else {
+            let finalize_data = finalize_response.data();
+            let finalize_provider_error =
+                extract_provider_semantic_error(provider_id, finalize_data);
+            record_creation_usage(
+                &app,
+                finalize_data,
+                &session_id,
+                model_id,
+                model_name,
+                provider_id,
+                provider_label,
+                session.draft.name.as_deref().unwrap_or(""),
+                finalize_provider_error.is_none(),
+                finalize_provider_error.clone(),
+            );
+            let finalize_content =
+                chat_request::extract_text(finalize_data, Some(provider_id)).unwrap_or_default();
+            let finalize_tool_calls = if finalize_data.is_string() {
+                accumulate_tool_calls_from_sse(finalize_data.as_str().unwrap(), provider_id)
+            } else {
+                parse_tool_calls(provider_id, finalize_data)
+            };
+            log_info(
+                &app,
+                "creation_helper",
+                format!(
+                    "Parsed finalization response: text_len={}, tool_calls={}",
+                    finalize_content.len(),
+                    finalize_tool_calls.len()
+                ),
+            );
+            if let Some(err) = finalize_provider_error {
+                log_warn(
+                    &app,
+                    "creation_helper",
+                    format!("Finalization returned provider error: {}", err),
+                );
+            }
+            if !finalize_content.trim().is_empty() {
+                final_content = finalize_content;
+            }
+        }
+    }
+
+    if final_content.trim().is_empty() {
+        return Err("Model returned empty response".to_string());
+    }
+
     let assistant_msg = CreationMessage {
         id: Uuid::new_v4().to_string(),
         role: CreationMessageRole::Assistant,
-        content,
+        content: final_content,
         tool_calls: all_tool_calls,
         tool_results: all_tool_results,
         created_at: now_ms() as i64,
@@ -2082,6 +2402,12 @@ pub fn complete_session(app: &AppHandle, session_id: &str) -> Result<DraftCharac
     {
         let target_id = session.target_id.as_deref().unwrap_or_default();
         apply_persona_edit(app, target_id, &draft)?;
+    } else if session.creation_mode == CreationMode::Edit
+        && session.target_type == Some(CreationGoal::Lorebook)
+        && session.target_id.is_some()
+    {
+        let target_id = session.target_id.as_deref().unwrap_or_default();
+        apply_lorebook_edit(app, target_id, &draft)?;
     }
 
     Ok(draft)
@@ -2182,6 +2508,37 @@ fn apply_persona_edit(
     });
 
     let _ = personas_storage::persona_upsert(
+        app.clone(),
+        serde_json::to_string(&payload)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+    )?;
+    Ok(())
+}
+
+fn apply_lorebook_edit(
+    app: &AppHandle,
+    target_id: &str,
+    draft: &DraftCharacter,
+) -> Result<(), String> {
+    let raw = lorebook_storage::lorebooks_list(app.clone())?;
+    let lorebooks: Vec<Value> = serde_json::from_str(&raw)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let target = lorebooks
+        .into_iter()
+        .find(|lb| lb.get("id").and_then(|v| v.as_str()) == Some(target_id))
+        .ok_or_else(|| "Lorebook not found".to_string())?;
+
+    let existing_name = target
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Untitled Lorebook");
+
+    let payload = json!({
+        "id": target_id,
+        "name": draft.name.as_deref().unwrap_or(existing_name),
+    });
+
+    let _ = lorebook_storage::lorebook_upsert(
         app.clone(),
         serde_json::to_string(&payload)
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,

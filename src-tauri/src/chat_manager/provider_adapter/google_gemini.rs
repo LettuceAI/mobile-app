@@ -1,28 +1,12 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 use super::ProviderAdapter;
 use crate::chat_manager::tooling::{gemini_tool_config, gemini_tools, ToolConfig};
 
 pub struct GoogleGeminiAdapter;
-
-#[derive(Serialize)]
-struct GeminiPart {
-    text: String,
-}
-
-#[derive(Serialize)]
-struct GeminiContent {
-    role: String,
-    parts: Vec<GeminiPart>,
-}
-
-#[derive(Serialize)]
-struct GeminiSystemInstruction {
-    parts: Vec<GeminiPart>,
-}
 
 #[derive(Serialize)]
 struct GeminiThinkingConfig {
@@ -45,19 +29,6 @@ struct GeminiGenerationConfig {
     top_k: Option<u32>,
     #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
     thinking_config: Option<GeminiThinkingConfig>,
-}
-
-#[derive(Serialize)]
-struct GeminiChatRequest {
-    contents: Vec<GeminiContent>,
-    #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
-    system_instruction: Option<GeminiSystemInstruction>,
-    #[serde(rename = "generationConfig")]
-    generation_config: GeminiGenerationConfig,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_config: Option<Value>,
 }
 
 impl ProviderAdapter for GoogleGeminiAdapter {
@@ -140,36 +111,125 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         _reasoning_effort: Option<String>,
         reasoning_budget: Option<u32>,
     ) -> Value {
-        let mut contents: Vec<GeminiContent> = Vec::new();
+        let mut contents: Vec<Value> = Vec::new();
+        let mut tool_call_name_by_id: HashMap<String, String> = HashMap::new();
 
         for msg in messages_for_api {
+            if let Some(raw_content) = msg.get("gemini_content") {
+                if let Some(parts) = raw_content.get("parts").and_then(|v| v.as_array()) {
+                    if !parts.is_empty() {
+                        contents.push(json!({
+                            "role": raw_content
+                                .get("role")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("model"),
+                            "parts": parts
+                        }));
+                        continue;
+                    }
+                }
+            }
+
             let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+            if role == "system" || role == "developer" {
+                continue;
+            }
+
+            if role == "assistant" {
+                if let Some(tool_calls) = msg.get("tool_calls").and_then(|v| v.as_array()) {
+                    let mut parts: Vec<Value> = Vec::new();
+
+                    if let Some(content) = extract_text_content(msg.get("content")) {
+                        if !content.trim().is_empty() {
+                            parts.push(json!({ "text": content }));
+                        }
+                    }
+
+                    for tool_call in tool_calls {
+                        let id = tool_call
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let function = tool_call.get("function").unwrap_or(tool_call);
+                        let name = function
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("tool_call")
+                            .to_string();
+                        let args = function
+                            .get("arguments")
+                            .map(parse_jsonish_value)
+                            .unwrap_or_else(|| Value::Object(Map::new()));
+
+                        if !id.is_empty() {
+                            tool_call_name_by_id.insert(id, name.clone());
+                        }
+
+                        parts.push(json!({
+                            "functionCall": {
+                                "name": name,
+                                "args": args
+                            }
+                        }));
+                    }
+
+                    if !parts.is_empty() {
+                        contents.push(json!({
+                            "role": "model",
+                            "parts": parts
+                        }));
+                    }
+                    continue;
+                }
+            }
+
+            if role == "tool" {
+                let tool_call_id = msg
+                    .get("tool_call_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let tool_name = tool_call_name_by_id
+                    .get(tool_call_id)
+                    .cloned()
+                    .unwrap_or_else(|| "tool_call".to_string());
+
+                let content_value = msg
+                    .get("content")
+                    .map(parse_jsonish_value)
+                    .unwrap_or_else(|| Value::Object(Map::new()));
+                let response = match content_value {
+                    Value::Object(_) => content_value,
+                    other => json!({ "result": other }),
+                };
+
+                contents.push(json!({
+                    "role": "user",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": tool_name,
+                            "response": response
+                        }
+                    }]
+                }));
+                continue;
+            }
+
+            let text = extract_text_content(msg.get("content")).unwrap_or_default();
+            if text.trim().is_empty() {
+                continue;
+            }
 
             let gem_role = match role {
                 "assistant" | "model" => "model",
                 _ => "user",
-            }
-            .to_string();
+            };
 
-            let text = msg
-                .get("content")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| {
-                    msg.get("content")
-                        .map(|v| v.to_string())
-                        .unwrap_or_default()
-                });
-
-            contents.push(GeminiContent {
-                role: gem_role,
-                parts: vec![GeminiPart { text }],
-            });
+            contents.push(json!({
+                "role": gem_role,
+                "parts": [{ "text": text }]
+            }));
         }
-
-        let system_instruction = system_prompt.map(|sp| GeminiSystemInstruction {
-            parts: vec![GeminiPart { text: sp }],
-        });
 
         let thinking_config = if reasoning_enabled {
             let thinking_level = _reasoning_effort.as_ref().map(|s| s.to_uppercase());
@@ -197,31 +257,37 @@ impl ProviderAdapter for GoogleGeminiAdapter {
         };
 
         let tools = tool_config.and_then(gemini_tools);
-        let tool_config = if tools.is_some() {
+        let gemini_tool_config = if tools.is_some() {
             tool_config.and_then(|cfg| gemini_tool_config(cfg.choice.as_ref()))
         } else {
             None
         };
 
-        let body = GeminiChatRequest {
-            contents,
-            system_instruction,
-            generation_config,
-            tools,
-            tool_config,
-        };
+        let mut body = json!({
+            "contents": contents,
+            "generationConfig": serde_json::to_value(generation_config).unwrap_or_else(|_| json!({}))
+        });
 
-        let json_body = serde_json::to_value(&body).unwrap_or_else(|_| json!({}));
+        if let Some(system) = system_prompt.filter(|s| !s.trim().is_empty()) {
+            body["systemInstruction"] = json!({
+                "parts": [{ "text": system }]
+            });
+        }
+        if let Some(tools) = tools {
+            body["tools"] = Value::Array(tools);
+        }
+        if let Some(cfg) = gemini_tool_config {
+            body["tool_config"] = cfg;
+        }
 
-        // Log the Gemini request body for debugging
-        if let Some(gen_config) = json_body.get("generationConfig") {
+        if let Some(gen_config) = body.get("generationConfig") {
             crate::utils::log_debug_global(
                 "gemini_request",
                 format!("Gemini generationConfig: {:?}", gen_config),
             );
         }
 
-        json_body
+        body
     }
 
     fn list_models_endpoint(&self, base_url: &str) -> String {
@@ -256,5 +322,22 @@ impl ProviderAdapter for GoogleGeminiAdapter {
             }
         }
         models
+    }
+}
+
+fn parse_jsonish_value(value: &Value) -> Value {
+    match value {
+        Value::String(raw) => {
+            serde_json::from_str::<Value>(raw).unwrap_or_else(|_| Value::String(raw.clone()))
+        }
+        other => other.clone(),
+    }
+}
+
+fn extract_text_content(value: Option<&Value>) -> Option<String> {
+    match value {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => Some(s.to_string()),
+        Some(other) => Some(other.to_string()),
     }
 }

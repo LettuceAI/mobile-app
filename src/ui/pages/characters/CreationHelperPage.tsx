@@ -1194,6 +1194,10 @@ export function CreationHelperPage() {
       data.lorebook ||
       (session?.draft?.name
         ? {
+            id:
+              session?.creationMode === "edit" && session?.targetType === "lorebook"
+                ? (session.targetId ?? undefined)
+                : undefined,
             name: session.draft.name,
           }
         : null);
@@ -1247,10 +1251,35 @@ export function CreationHelperPage() {
     resolveErrorMessage,
   ]);
 
-  const handleOpenLorebook = useCallback(() => {
-    if (!previewLorebook?.id) return;
-    navigate(`/library/lorebooks/${previewLorebook.id}`);
-  }, [previewLorebook?.id, navigate]);
+  const handleOpenLorebook = useCallback(async () => {
+    const lorebookId =
+      session?.creationMode === "edit" && session?.targetType === "lorebook"
+        ? session.targetId
+        : previewLorebook?.id;
+    if (!lorebookId) return;
+
+    if (session?.creationMode === "edit" && session?.targetType === "lorebook") {
+      try {
+        await invoke("creation_helper_complete", {
+          sessionId: session.id,
+        });
+      } catch (err) {
+        console.error("Failed to save lorebook edit:", err);
+        setError(resolveErrorMessage(err, "Failed to save lorebook changes."));
+        return;
+      }
+    }
+
+    navigate(`/library/lorebooks/${lorebookId}`);
+  }, [
+    navigate,
+    previewLorebook?.id,
+    session?.creationMode,
+    session?.id,
+    session?.targetId,
+    session?.targetType,
+    resolveErrorMessage,
+  ]);
 
   return (
     <div className="flex h-screen flex-col bg-[#050505]">
@@ -1736,13 +1765,25 @@ export function CreationHelperPage() {
             <MenuSection>
               <MenuButton
                 icon={BookOpen}
-                title="Open Lorebook"
+                title={
+                  session?.creationMode === "edit" && session?.targetType === "lorebook"
+                    ? "Save Lorebook Changes"
+                    : "Open Lorebook"
+                }
                 description={
-                  previewLorebook?.id ? "Review entries in the library" : "Create a lorebook first"
+                  session?.creationMode === "edit" && session?.targetType === "lorebook"
+                    ? "Apply updates to existing lorebook"
+                    : previewLorebook?.id
+                      ? "Review entries in the library"
+                      : "Create a lorebook first"
                 }
                 color="from-emerald-500 to-teal-600"
                 onClick={handleOpenLorebook}
-                disabled={!previewLorebook?.id}
+                disabled={
+                  session?.creationMode === "edit" && session?.targetType === "lorebook"
+                    ? !session?.targetId
+                    : !previewLorebook?.id
+                }
               />
               <MenuButton
                 icon={RefreshCw}

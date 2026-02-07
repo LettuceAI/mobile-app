@@ -221,6 +221,15 @@ fn collect_text_fragments(value: &Value, acc: &mut String) {
             }
         }
         Value::Object(map) => {
+            // Do not treat tool call / tool response metadata as user-visible text.
+            if map.contains_key("function_call")
+                || map.contains_key("functionCall")
+                || map.contains_key("function_response")
+                || map.contains_key("functionResponse")
+            {
+                return;
+            }
+
             let mut handled = false;
             for key in ["text", "content", "value", "message", "parts"] {
                 if let Some(inner) = map.get(key) {
