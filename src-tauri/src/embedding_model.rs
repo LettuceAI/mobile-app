@@ -2,6 +2,7 @@ use futures_util::StreamExt;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::io::AsyncWriteExt;
@@ -74,6 +75,18 @@ lazy_static::lazy_static! {
         cancel_requested: false,
         is_downloading: false,
     }));
+}
+
+static ORT_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+fn panic_payload_to_string(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(msg) = payload.downcast_ref::<&str>() {
+        (*msg).to_string()
+    } else if let Some(msg) = payload.downcast_ref::<String>() {
+        msg.clone()
+    } else {
+        "unknown panic payload".to_string()
+    }
 }
 
 pub fn embedding_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -651,6 +664,25 @@ fn compute_embedding_with_session(
 }
 
 async fn ensure_ort_init(app: &AppHandle) -> Result<(), String> {
+    if ORT_INITIALIZED.load(Ordering::Acquire) {
+        return Ok(());
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // Force a direct library load on Android so failures include linker diagnostics.
+        if let Err(err) = ort::util::preload_dylib("libonnxruntime.so") {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!(
+                    "Failed to preload Android ONNX Runtime (libonnxruntime.so): {}",
+                    err
+                ),
+            ));
+        }
+    }
+
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let dylib_path = resolve_or_download_onnxruntime(app).await?;
@@ -664,16 +696,31 @@ async fn ensure_ort_init(app: &AppHandle) -> Result<(), String> {
         }
     }
 
-    let init_result =
-        std::panic::catch_unwind(|| ort::init().with_name("lettuce-embedding").commit()).map_err(
-            |_| {
-                crate::utils::err_msg(
-                    module_path!(),
-                    line!(),
-                    "ONNX Runtime initialization panicked (likely incompatible DLL).".to_string(),
-                )
-            },
-        )?;
+    let init_result = std::panic::catch_unwind(|| {
+        #[cfg(target_os = "android")]
+        {
+            ort::init_from("libonnxruntime.so")
+                .with_name("lettuce-embedding")
+                .commit()
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            ort::init().with_name("lettuce-embedding").commit()
+        }
+    })
+    .map_err(|panic_payload| {
+        let panic_msg = panic_payload_to_string(&*panic_payload);
+        crate::utils::log_error(
+            app,
+            "embedding_debug",
+            format!("ONNX Runtime init panic detail: {}", panic_msg),
+        );
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("ONNX Runtime initialization panicked: {}", panic_msg),
+        )
+    })?;
 
     let init_ok = init_result.into_init_result().map_err(|err| {
         crate::utils::err_msg(
@@ -684,12 +731,14 @@ async fn ensure_ort_init(app: &AppHandle) -> Result<(), String> {
     })?;
 
     if !init_ok {
-        return Err(crate::utils::err_msg(
-            module_path!(),
-            line!(),
-            "Failed to initialize ONNX Runtime".to_string(),
-        ));
+        log_info(
+            app,
+            "embedding_debug",
+            "ONNX Runtime already initialized; continuing",
+        );
     }
+
+    ORT_INITIALIZED.store(true, Ordering::Release);
     Ok(())
 }
 
