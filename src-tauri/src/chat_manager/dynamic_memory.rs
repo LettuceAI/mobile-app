@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::types::{DynamicMemorySettings, Settings};
+use super::types::{DynamicMemorySettings, MemoryRetrievalStrategy, Settings};
 
 // ============================================================================
 // Shared Memory Entry Trait
@@ -126,6 +126,7 @@ pub const FALLBACK_DYNAMIC_WINDOW: u32 = 20;
 pub const FALLBACK_DYNAMIC_MAX_ENTRIES: u32 = 50;
 pub const FALLBACK_MIN_SIMILARITY: f32 = 0.35;
 pub const FALLBACK_RETRIEVAL_LIMIT: u32 = 5;
+pub const FALLBACK_RETRIEVAL_STRATEGY: MemoryRetrievalStrategy = MemoryRetrievalStrategy::Smart;
 pub const FALLBACK_HOT_MEMORY_TOKEN_BUDGET: u32 = 2000;
 pub const FALLBACK_DECAY_RATE: f32 = 0.08;
 pub const FALLBACK_COLD_THRESHOLD: f32 = 0.3;
@@ -196,6 +197,16 @@ pub fn dynamic_retrieval_limit(settings: &Settings) -> usize {
         .unwrap_or(FALLBACK_RETRIEVAL_LIMIT) as usize
 }
 
+/// Get memory retrieval strategy
+pub fn dynamic_retrieval_strategy(settings: &Settings) -> MemoryRetrievalStrategy {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.retrieval_strategy.clone())
+        .unwrap_or_else(|| FALLBACK_RETRIEVAL_STRATEGY.clone())
+}
+
 /// Get the decay rate for memory importance scores
 pub fn dynamic_decay_rate(settings: &Settings) -> f32 {
     settings
@@ -249,6 +260,7 @@ pub fn effective_dynamic_memory_settings(
         max_entries: FALLBACK_DYNAMIC_MAX_ENTRIES,
         min_similarity_threshold: FALLBACK_MIN_SIMILARITY,
         retrieval_limit: FALLBACK_RETRIEVAL_LIMIT,
+        retrieval_strategy: FALLBACK_RETRIEVAL_STRATEGY,
         hot_memory_token_budget: FALLBACK_HOT_MEMORY_TOKEN_BUDGET,
         decay_rate: FALLBACK_DECAY_RATE,
         cold_threshold: FALLBACK_COLD_THRESHOLD,
@@ -493,6 +505,29 @@ pub fn select_relevant_memory_indices<E: MemoryEntry>(
     }
 
     result
+}
+
+/// Select memories by pure cosine score, without category diversity bias.
+pub fn select_top_cosine_memory_indices<E: MemoryEntry>(
+    query_embedding: &[f32],
+    memories: &[E],
+    limit: usize,
+    min_similarity: f32,
+) -> Vec<(usize, f32)> {
+    let mut scored: Vec<(f32, usize)> = memories
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| !m.embedding().is_empty() && (!m.is_cold() || m.is_pinned()))
+        .map(|(i, m)| (cosine_similarity(query_embedding, m.embedding()), i))
+        .filter(|(score, _)| *score >= min_similarity)
+        .collect();
+
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored
+        .into_iter()
+        .take(limit)
+        .map(|(score, idx)| (idx, score))
+        .collect()
 }
 
 /// Keyword search over cold memories. Returns indices.

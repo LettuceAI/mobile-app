@@ -189,6 +189,13 @@ pub struct AccessibilitySoundSettings {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub enum MemoryRetrievalStrategy {
+    Smart,
+    Cosine,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DynamicMemorySettings {
     pub enabled: bool,
     #[serde(default)]
@@ -199,6 +206,8 @@ pub struct DynamicMemorySettings {
     pub min_similarity_threshold: f32,
     #[serde(default = "default_retrieval_limit")]
     pub retrieval_limit: u32,
+    #[serde(default = "default_retrieval_strategy")]
+    pub retrieval_strategy: MemoryRetrievalStrategy,
     #[serde(default = "default_hot_memory_token_budget")]
     pub hot_memory_token_budget: u32,
     /// Score reduction per memory cycle (0.05-0.15 recommended)
@@ -222,6 +231,10 @@ fn default_hot_memory_token_budget() -> u32 {
 
 fn default_retrieval_limit() -> u32 {
     5 // Default max memories retrieved per turn
+}
+
+fn default_retrieval_strategy() -> MemoryRetrievalStrategy {
+    MemoryRetrievalStrategy::Smart
 }
 
 fn default_decay_rate() -> f32 {

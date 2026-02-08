@@ -19,6 +19,7 @@ export interface AdvancedSettings {
     maxEntries: number;
     minSimilarityThreshold: number;
     retrievalLimit: number;
+    retrievalStrategy: "smart" | "cosine";
     hotMemoryTokenBudget: number;
     decayRate: number;
     coldThreshold: number;
@@ -30,6 +31,7 @@ export interface AdvancedSettings {
     maxEntries: number;
     minSimilarityThreshold: number;
     retrievalLimit: number;
+    retrievalStrategy: "smart" | "cosine";
     hotMemoryTokenBudget: number;
     decayRate: number;
     coldThreshold: number;

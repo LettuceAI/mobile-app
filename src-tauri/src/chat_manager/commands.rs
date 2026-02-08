@@ -14,10 +14,11 @@ use crate::utils::{emit_toast, log_error, log_info, log_warn, now_millis};
 use super::dynamic_memory::{
     apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled, cosine_similarity,
     dynamic_cold_threshold, dynamic_decay_rate, dynamic_hot_memory_token_budget,
-    dynamic_max_entries, dynamic_min_similarity, dynamic_retrieval_limit, dynamic_window_size,
-    enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id, mark_memories_accessed,
-    normalize_query_text, promote_cold_memories, search_cold_memory_indices_by_keyword,
-    select_relevant_memory_indices, trim_memories_to_max,
+    dynamic_max_entries, dynamic_min_similarity, dynamic_retrieval_limit,
+    dynamic_retrieval_strategy, dynamic_window_size, enforce_hot_memory_budget, ensure_pinned_hot,
+    generate_memory_id, mark_memories_accessed, normalize_query_text, promote_cold_memories,
+    search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
+    select_top_cosine_memory_indices, trim_memories_to_max,
 };
 use super::prompt_engine;
 use super::prompts;
@@ -35,9 +36,9 @@ use super::storage::{default_character_rules, recent_messages, save_session};
 use super::tooling::{parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition};
 use super::types::{
     Character, ChatAddMessageAttachmentArgs, ChatCompletionArgs, ChatContinueArgs,
-    ChatRegenerateArgs, ChatTurnResult, ContinueResult, MemoryEmbedding, Model, Persona,
-    PromptEntryPosition, PromptScope, ProviderCredential, RegenerateResult, Session, Settings,
-    StoredMessage, SystemPromptEntry, SystemPromptTemplate,
+    ChatRegenerateArgs, ChatTurnResult, ContinueResult, MemoryEmbedding, MemoryRetrievalStrategy,
+    Model, Persona, PromptEntryPosition, PromptScope, ProviderCredential, RegenerateResult,
+    Session, Settings, StoredMessage, SystemPromptEntry, SystemPromptTemplate,
 };
 use crate::storage_manager::sessions::{
     messages_upsert_batch, session_conversation_count, session_upsert_meta,
@@ -929,6 +930,7 @@ async fn select_relevant_memories(
     query: &str,
     limit: usize,
     min_similarity: f32,
+    strategy: MemoryRetrievalStrategy,
 ) -> Vec<MemoryEmbedding> {
     if query.is_empty() || session.memory_embeddings.is_empty() {
         return Vec::new();
@@ -947,7 +949,29 @@ async fn select_relevant_memories(
             }
         };
 
-    // 1. Get top (limit-2) by cosine similarity (min 1)
+    if matches!(strategy, MemoryRetrievalStrategy::Cosine) {
+        let cosine_indices = select_top_cosine_memory_indices(
+            &query_embedding,
+            &session.memory_embeddings,
+            limit,
+            min_similarity,
+        );
+        if cosine_indices.is_empty() {
+            return Vec::new();
+        }
+        return cosine_indices
+            .into_iter()
+            .filter_map(|(idx, score)| {
+                session.memory_embeddings.get(idx).map(|mem| {
+                    let mut cloned = mem.clone();
+                    cloned.match_score = Some(score);
+                    cloned
+                })
+            })
+            .collect();
+    }
+
+    // Smart mode: blend semantic match + recency/frequency + fallback fill.
     let cosine_limit = (limit.saturating_sub(2)).max(1);
     let cosine_indices = select_relevant_memory_indices(
         &query_embedding,
@@ -1398,6 +1422,7 @@ pub async fn chat_completion(
             &search_query,
             dynamic_retrieval_limit(settings),
             dynamic_min_similarity(settings),
+            dynamic_retrieval_strategy(settings),
         )
         .await
     } else {
@@ -2247,6 +2272,7 @@ pub async fn chat_regenerate(
             &search_query,
             dynamic_retrieval_limit(&context.settings),
             dynamic_min_similarity(&context.settings),
+            dynamic_retrieval_strategy(&context.settings),
         )
         .await
     } else {
@@ -2894,6 +2920,7 @@ pub async fn chat_continue(
             &search_query,
             dynamic_retrieval_limit(&context.settings),
             dynamic_min_similarity(&context.settings),
+            dynamic_retrieval_strategy(&context.settings),
         )
         .await
     } else {

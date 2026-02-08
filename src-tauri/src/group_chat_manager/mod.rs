@@ -27,7 +27,8 @@ use crate::chat_manager::dynamic_memory::{
     apply_memory_decay, calculate_hot_memory_tokens, cosine_similarity,
     effective_group_dynamic_memory_settings, enforce_hot_memory_budget, ensure_pinned_hot,
     generate_memory_id, mark_memories_accessed, normalize_query_text, promote_cold_memories,
-    search_cold_memory_indices_by_keyword, select_relevant_memory_indices, trim_memories_to_max,
+    search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
+    select_top_cosine_memory_indices, trim_memories_to_max,
 };
 use crate::chat_manager::prompts::{
     self, APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID,
@@ -41,8 +42,8 @@ use crate::chat_manager::tooling::{
     parse_tool_calls, ToolCall, ToolChoice, ToolConfig, ToolDefinition,
 };
 use crate::chat_manager::types::{
-    Character, DynamicMemorySettings, Model, Persona, PromptEntryPosition, PromptEntryRole,
-    ProviderCredential, Settings, SystemPromptEntry,
+    Character, DynamicMemorySettings, MemoryRetrievalStrategy, Model, Persona, PromptEntryPosition,
+    PromptEntryRole, ProviderCredential, Settings, SystemPromptEntry,
 };
 use crate::embedding_model;
 use crate::models::calculate_request_cost;
@@ -775,6 +776,7 @@ async fn select_relevant_memories(
     query: &str,
     limit: usize,
     min_similarity: f32,
+    strategy: &MemoryRetrievalStrategy,
 ) -> Vec<MemoryEmbedding> {
     if query.is_empty() || session.memory_embeddings.is_empty() {
         return Vec::new();
@@ -793,7 +795,23 @@ async fn select_relevant_memories(
             }
         };
 
-    // 1. Get top (limit-2) by cosine similarity (min 1)
+    if matches!(strategy, MemoryRetrievalStrategy::Cosine) {
+        let cosine_indices = select_top_cosine_memory_indices(
+            &query_embedding,
+            &session.memory_embeddings,
+            limit,
+            min_similarity,
+        );
+        if cosine_indices.is_empty() {
+            return Vec::new();
+        }
+        return cosine_indices
+            .into_iter()
+            .filter_map(|(idx, _score)| session.memory_embeddings.get(idx).cloned())
+            .collect();
+    }
+
+    // Smart mode: blend semantic match + recency/frequency + fallback fill.
     let cosine_limit = (limit.saturating_sub(2)).max(1);
     let cosine_indices = select_relevant_memory_indices(
         &query_embedding,
@@ -2948,6 +2966,7 @@ async fn generate_character_response(
             &search_query,
             dynamic_settings.retrieval_limit.max(1) as usize,
             min_similarity,
+            &dynamic_settings.retrieval_strategy,
         )
         .await
     } else {

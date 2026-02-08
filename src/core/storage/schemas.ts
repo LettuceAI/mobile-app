@@ -1265,6 +1265,7 @@ export const DynamicMemorySettingsSchema = z.object({
   maxEntries: z.number().min(10).max(200).default(50),
   minSimilarityThreshold: z.number().min(0).max(1).default(0.35),
   retrievalLimit: z.number().min(1).max(20).default(5),
+  retrievalStrategy: z.enum(["smart", "cosine"]).default("smart"),
   hotMemoryTokenBudget: z.number().min(500).max(10000).default(2000),
   decayRate: z.number().min(0.01).max(0.3).default(0.08),
   coldThreshold: z.number().min(0.1).max(0.5).default(0.3),

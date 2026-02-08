@@ -35,6 +35,7 @@ const DEFAULT_DYNAMIC_MEMORY_SETTINGS: DynamicMemorySettings = {
   maxEntries: 50,
   minSimilarityThreshold: 0.35,
   retrievalLimit: 5,
+  retrievalStrategy: "smart",
   hotMemoryTokenBudget: 2000,
   decayRate: 0.08,
   coldThreshold: 0.3,
@@ -52,6 +53,7 @@ const PRESETS: Record<
     maxEntries: 25,
     minSimilarityThreshold: 0.5,
     retrievalLimit: 3,
+    retrievalStrategy: "smart",
     hotMemoryTokenBudget: 1000,
     decayRate: 0.15,
     coldThreshold: 0.4,
@@ -61,6 +63,7 @@ const PRESETS: Record<
     maxEntries: 50,
     minSimilarityThreshold: 0.35,
     retrievalLimit: 5,
+    retrievalStrategy: "smart",
     hotMemoryTokenBudget: 2000,
     decayRate: 0.08,
     coldThreshold: 0.3,
@@ -70,6 +73,7 @@ const PRESETS: Record<
     maxEntries: 100,
     minSimilarityThreshold: 0.25,
     retrievalLimit: 8,
+    retrievalStrategy: "smart",
     hotMemoryTokenBudget: 4000,
     decayRate: 0.05,
     coldThreshold: 0.2,
@@ -133,6 +137,7 @@ function detectPreset(settings: DynamicMemorySettings): MemoryPreset {
       settings.maxEntries === preset.maxEntries &&
       settings.minSimilarityThreshold === preset.minSimilarityThreshold &&
       settings.retrievalLimit === preset.retrievalLimit &&
+      settings.retrievalStrategy === preset.retrievalStrategy &&
       settings.hotMemoryTokenBudget === preset.hotMemoryTokenBudget &&
       settings.decayRate === preset.decayRate &&
       settings.coldThreshold === preset.coldThreshold
@@ -688,6 +693,53 @@ export function DynamicMemoryPage() {
                             }
                           }}
                         />
+
+                        {/* Retrieval Limit */}
+                        <div className="space-y-2">
+                          <div className="text-[11px] font-medium text-white/90">
+                            Retrieval Mode
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => {
+                                if (activeTab === "direct") {
+                                  handleDirectSettingChange("retrievalStrategy", "smart");
+                                } else {
+                                  handleGroupSettingChange("retrievalStrategy", "smart");
+                                }
+                              }}
+                              className={cn(
+                                "rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                                currentSettings.retrievalStrategy === "smart"
+                                  ? "border-blue-400/50 bg-blue-500/20 text-blue-100"
+                                  : "border-white/10 bg-white/5 text-white/60 hover:border-white/20",
+                              )}
+                            >
+                              Smart
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (activeTab === "direct") {
+                                  handleDirectSettingChange("retrievalStrategy", "cosine");
+                                } else {
+                                  handleGroupSettingChange("retrievalStrategy", "cosine");
+                                }
+                              }}
+                              className={cn(
+                                "rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                                currentSettings.retrievalStrategy === "cosine"
+                                  ? "border-blue-400/50 bg-blue-500/20 text-blue-100"
+                                  : "border-white/10 bg-white/5 text-white/60 hover:border-white/20",
+                              )}
+                            >
+                              Cosine
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-white/45">
+                            Smart blends relevance with recency/frequency. Cosine uses pure top
+                            similarity.
+                          </p>
+                        </div>
 
                         {/* Retrieval Limit */}
                         <SettingRow
