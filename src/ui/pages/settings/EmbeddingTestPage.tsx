@@ -15,7 +15,6 @@ import {
 import { storageBridge } from "../../../core/storage/files";
 import { cn, interactive } from "../../design-tokens";
 import { listen } from "@tauri-apps/api/event";
-import { getEmbeddingModelDisplayName } from "../../embeddingModelLabels";
 
 type TestStatus = "idle" | "testing" | "passed" | "failed";
 
@@ -575,8 +574,7 @@ export function EmbeddingTestPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-blue-100">Developer Benchmark</h3>
                   <p className="mt-1 text-xs text-blue-200/70">
-                    Compare local {getEmbeddingModelDisplayName("v2")} and{" "}
-                    {getEmbeddingModelDisplayName("v3")} for speed and similarity outputs.
+                    Compare local v2 and v3 models for speed and similarity outputs.
                   </p>
                 </div>
                 <button
@@ -597,8 +595,7 @@ export function EmbeddingTestPage() {
                   ) : (
                     <>
                       <Cpu className="h-3.5 w-3.5" />
-                      Run {getEmbeddingModelDisplayName("v2")} vs{" "}
-                      {getEmbeddingModelDisplayName("v3")}
+                      Run v2 vs v3
                     </>
                   )}
                 </button>
@@ -614,9 +611,7 @@ export function EmbeddingTestPage() {
                 <div className="mt-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-white/40">
-                        {getEmbeddingModelDisplayName("v2")}
-                      </div>
+                      <div className="text-[10px] uppercase tracking-wider text-white/40">v2</div>
                       <div className="mt-1 text-xs text-white/80">
                         avg {benchmarkResults.v2.averageMs.toFixed(2)} ms
                       </div>
@@ -625,9 +620,7 @@ export function EmbeddingTestPage() {
                       </div>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-white/40">
-                        {getEmbeddingModelDisplayName("v3")}
-                      </div>
+                      <div className="text-[10px] uppercase tracking-wider text-white/40">v3</div>
                       <div className="mt-1 text-xs text-white/80">
                         avg {benchmarkResults.v3.averageMs.toFixed(2)} ms
                       </div>
@@ -638,8 +631,7 @@ export function EmbeddingTestPage() {
                   </div>
 
                   <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white/70">
-                    Speedup ({getEmbeddingModelDisplayName("v3")} vs{" "}
-                    {getEmbeddingModelDisplayName("v2")}):{" "}
+                    Speedup (v3 vs v2):{" "}
                     <span className="font-semibold text-white">
                       {benchmarkResults.averageSpeedupV3VsV2.toFixed(2)}x
                     </span>{" "}
@@ -654,8 +646,7 @@ export function EmbeddingTestPage() {
                       >
                         <div className="text-xs font-medium text-white/85">{pair.pairName}</div>
                         <div className="mt-1 text-[11px] text-white/60">
-                          {getEmbeddingModelDisplayName("v2")} {pair.v2Similarity.toFixed(4)} |{" "}
-                          {getEmbeddingModelDisplayName("v3")} {pair.v3Similarity.toFixed(4)} |
+                          v2 {pair.v2Similarity.toFixed(4)} | v3 {pair.v3Similarity.toFixed(4)} |
                           delta {pair.delta >= 0 ? "+" : ""}
                           {pair.delta.toFixed(4)}
                         </div>

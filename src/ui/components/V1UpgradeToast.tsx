@@ -3,11 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getEmbeddingModelInfo } from "../../core/storage/repo";
-import { getEmbeddingModelDisplayName } from "../embeddingModelLabels";
 
 /**
  * A toast that appears once on app launch if v1 embedding model is detected.
- * Prompts user to upgrade to Nova (v3).
+ * Prompts user to upgrade to v3.
  */
 export function V1UpgradeToast() {
   const navigate = useNavigate();
@@ -64,11 +63,10 @@ export function V1UpgradeToast() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h3 className="font-semibold text-amber-200 text-sm">
-                      {getEmbeddingModelDisplayName("v3")} Available
+                      Memory Model v3 Available
                     </h3>
                     <p className="mt-1 text-xs text-amber-200/70">
-                      Upgrade for better memory quality and long-context support with{" "}
-                      {getEmbeddingModelDisplayName("v3")}.
+                      Upgrade for better memory quality and long-context support.
                     </p>
                   </div>
                   <button

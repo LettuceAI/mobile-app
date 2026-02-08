@@ -5,7 +5,6 @@ import { storageBridge } from "../../../core/storage/files";
 import { updateAdvancedSetting } from "../../../core/storage/advanced";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
-import { getEmbeddingModelDisplayName } from "../../embeddingModelLabels";
 
 type Capacity = 1024 | 2048 | 4096;
 
@@ -22,7 +21,7 @@ export function EmbeddingDownloadPage() {
   const isUpgrade = searchParams.get("upgrade") === "true";
   const requestedVersion = searchParams.get("version");
   const downloadVersion = requestedVersion === "v2" ? "v2" : "v3";
-  const downloadVersionLabel = getEmbeddingModelDisplayName(downloadVersion);
+  const downloadVersionLabel = downloadVersion.toUpperCase();
   const downloadApproxSize = downloadVersion === "v2" ? "~132 MB" : "~86 MB";
 
   // Capacity selection state

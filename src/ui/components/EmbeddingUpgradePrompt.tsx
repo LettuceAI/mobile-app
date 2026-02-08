@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { Sparkles, ArrowRight, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getEmbeddingModelDisplayName } from "../embeddingModelLabels";
 
 interface EmbeddingUpgradePromptProps {
   onDismiss: () => void;
@@ -11,7 +10,7 @@ interface EmbeddingUpgradePromptProps {
 
 /**
  * A prompt shown to users with an older embedding model installed,
- * encouraging them to upgrade to Nova (v3).
+ * encouraging them to upgrade to v3.
  */
 export function EmbeddingUpgradePrompt({
   onDismiss,
@@ -29,11 +28,11 @@ export function EmbeddingUpgradePrompt({
     navigate(`/settings/embedding-download?${params.toString()}`);
   };
 
-  const title = `${getEmbeddingModelDisplayName("v3")} Available`;
+  const title = "Embedding Model v3 Available";
   const body =
     currentVersion === "v1"
-      ? `You're using ${getEmbeddingModelDisplayName("v1")} with 512 tokens. Upgrade to ${getEmbeddingModelDisplayName("v3")} for better memory quality and long-context support.`
-      : `You're using ${getEmbeddingModelDisplayName("v2")}. Upgrade to ${getEmbeddingModelDisplayName("v3")} for better memory quality with the latest embedding model.`;
+      ? "You're using v1 with 512 tokens. Upgrade to v3 for better memory quality and long-context support."
+      : "You're using legacy v2. Upgrade to v3 for better memory quality with the latest embedding model.";
 
   return (
     <motion.div
@@ -65,7 +64,7 @@ export function EmbeddingUpgradePrompt({
               onClick={handleUpgrade}
               className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-amber-400 shadow-lg shadow-amber-500/20"
             >
-              Upgrade to {getEmbeddingModelDisplayName("v3")}
+              Upgrade to v3
               <ArrowRight className="h-4 w-4" />
             </button>
             <button

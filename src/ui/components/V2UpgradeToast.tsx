@@ -3,11 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUpRight, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getEmbeddingModelInfo } from "../../core/storage/repo";
-import { getEmbeddingModelDisplayName } from "../embeddingModelLabels";
 
 /**
- * A toast that appears once on app launch if Atlas (v2) embedding model is detected.
- * Prompts user to upgrade to Nova (v3).
+ * A toast that appears once on app launch if legacy v2 embedding model is detected.
+ * Prompts user to upgrade to v3.
  */
 export function V2UpgradeToast() {
   const navigate = useNavigate();
@@ -64,13 +63,11 @@ export function V2UpgradeToast() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-baseline gap-2">
-                      <h3 className="text-[15px] font-medium text-white">
-                        {getEmbeddingModelDisplayName("v3")}
-                      </h3>
+                      <h3 className="text-[15px] font-medium text-white">Memory Model v3</h3>
                       <span className="text-xs font-medium text-white/40">Available</span>
                     </div>
                     <p className="mt-1 text-[13px] leading-relaxed text-white/60">
-                      Improved embedding quality over {getEmbeddingModelDisplayName("v2")}
+                      Improved embedding quality over v2
                     </p>
                   </div>
 

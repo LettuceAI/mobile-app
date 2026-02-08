@@ -28,10 +28,6 @@ import { EmbeddingUpgradePrompt } from "../../components/EmbeddingUpgradePrompt"
 import { BottomMenu } from "../../components/BottomMenu";
 import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
-import {
-  getEmbeddingModelCodename,
-  getEmbeddingModelDisplayName,
-} from "../../embeddingModelLabels";
 
 const DEFAULT_DYNAMIC_MEMORY_SETTINGS: DynamicMemorySettings = {
   enabled: false,
@@ -341,10 +337,9 @@ export function DynamicMemoryPage() {
 
   const handleDeleteSelectedEmbeddingModel = async () => {
     const version = selectedEmbeddingVersion === "v2" ? "v2" : "v3";
-    const modelLabel = getEmbeddingModelDisplayName(version);
     const confirmed = await confirmBottomMenu({
-      title: `Delete ${modelLabel}?`,
-      message: `Are you sure you want to delete ${modelLabel}? You can download it again later.`,
+      title: `Delete ${version.toUpperCase()} model?`,
+      message: `Are you sure you want to delete ${version.toUpperCase()}? You can download it again later.`,
       confirmLabel: "Delete",
       destructive: true,
     });
@@ -834,7 +829,7 @@ export function DynamicMemoryPage() {
                                   : "border border-white/10 bg-white/5 text-white/70 hover:border-white/20",
                               )}
                             >
-                              {getEmbeddingModelCodename(version)}
+                              {version}
                             </button>
                           ))}
                       </div>
@@ -880,9 +875,8 @@ export function DynamicMemoryPage() {
                   {/* Model info */}
                   {modelVersion && (
                     <div className="text-xs text-white/40 px-1">
-                      Installed model:{" "}
-                      {getEmbeddingModelDisplayName(modelSourceVersion ?? modelVersion)} (
-                      {embeddingMaxTokens} max tokens)
+                      Installed model: {modelSourceVersion ?? modelVersion} ({embeddingMaxTokens}{" "}
+                      max tokens)
                     </div>
                   )}
                 </div>
@@ -973,7 +967,7 @@ export function DynamicMemoryPage() {
                 <Boxes className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-medium">{getEmbeddingModelDisplayName("v2")}</div>
+                <div className="text-sm font-medium">Download v2</div>
                 <div className="text-[11px] text-white/45">
                   Optimized for accuracy and long-context recall
                 </div>
@@ -1004,7 +998,7 @@ export function DynamicMemoryPage() {
                 <Rocket className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-medium">{getEmbeddingModelDisplayName("v3")}</div>
+                <div className="text-sm font-medium">Download v3</div>
                 <div className="text-[11px] text-white/45">Latest embedding quality</div>
               </div>
             </div>
