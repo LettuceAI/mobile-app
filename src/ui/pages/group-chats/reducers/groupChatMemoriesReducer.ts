@@ -18,6 +18,8 @@ export type UiState = {
   memoryTempBusy: number | null;
   pendingRefresh: boolean;
   memoryStatus: MemoryStatus;
+  selectedMemoryId: string | null;
+  memoryActionMode: "actions" | "edit" | null;
 };
 
 export type UiAction =
@@ -39,7 +41,10 @@ export type UiAction =
   | { type: "SHIFT_EXPANDED_AFTER_DELETE"; index: number }
   | { type: "SET_MEMORY_TEMP_BUSY"; value: number | null }
   | { type: "SET_PENDING_REFRESH"; value: boolean }
-  | { type: "SET_MEMORY_STATUS"; value: MemoryStatus };
+  | { type: "SET_MEMORY_STATUS"; value: MemoryStatus }
+  | { type: "OPEN_MEMORY_ACTIONS"; id: string }
+  | { type: "SET_MEMORY_ACTION_MODE"; mode: "actions" | "edit" }
+  | { type: "CLOSE_MEMORY_ACTIONS" };
 
 export function initUi(): UiState {
   return {
@@ -58,6 +63,8 @@ export function initUi(): UiState {
     memoryTempBusy: null,
     pendingRefresh: false,
     memoryStatus: "idle",
+    selectedMemoryId: null,
+    memoryActionMode: null,
   };
 }
 
@@ -113,6 +120,12 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return { ...state, pendingRefresh: action.value };
     case "SET_MEMORY_STATUS":
       return { ...state, memoryStatus: action.value };
+    case "OPEN_MEMORY_ACTIONS":
+      return { ...state, selectedMemoryId: action.id, memoryActionMode: "actions" };
+    case "SET_MEMORY_ACTION_MODE":
+      return { ...state, memoryActionMode: action.mode };
+    case "CLOSE_MEMORY_ACTIONS":
+      return { ...state, selectedMemoryId: null, memoryActionMode: null, editingIndex: null, editingValue: "" };
     default:
       return state;
   }

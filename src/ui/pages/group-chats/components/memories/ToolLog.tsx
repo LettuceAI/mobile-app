@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { ComponentType } from "react";
+import { motion } from "framer-motion";
 import {
   Plus,
   Trash2,
   Pin,
   Check,
   Cpu,
+  Clock,
   ChevronDown,
   AlertTriangle,
 } from "lucide-react";
@@ -121,7 +123,7 @@ function ActionCard({
             {style.label}
           </span>
           {category && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/8">
               {category.replace(/_/g, " ")}
             </span>
           )}
@@ -323,12 +325,20 @@ function CycleCard({
 export function ToolLog({ events }: { events: MemoryToolEvent[] }) {
   if (!events.length) {
     return (
-      <div className={cn(components.card.base, "px-6 py-8 text-center")}>
-        <p className={cn(typography.bodySmall.size, colors.text.tertiary)}>
-          No tool calls captured yet. Tool calls appear when AI manages memories
-          in dynamic mode.
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="flex flex-col items-center justify-center py-16"
+      >
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5 mb-4">
+          <Clock className="h-7 w-7 text-white/20" />
+        </div>
+        <h3 className="mb-1 text-base font-semibold text-white">No activity yet</h3>
+        <p className={cn("text-center text-sm max-w-[240px]", colors.text.tertiary)}>
+          Tool calls appear when AI manages memories in dynamic mode
         </p>
-      </div>
+      </motion.div>
     );
   }
 
