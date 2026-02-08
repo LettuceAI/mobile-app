@@ -14,10 +14,10 @@ use crate::utils::{emit_toast, log_error, log_info, log_warn, now_millis};
 use super::dynamic_memory::{
     apply_memory_decay, calculate_hot_memory_tokens, context_enrichment_enabled, cosine_similarity,
     dynamic_cold_threshold, dynamic_decay_rate, dynamic_hot_memory_token_budget,
-    dynamic_max_entries, dynamic_min_similarity, dynamic_window_size, enforce_hot_memory_budget,
-    ensure_pinned_hot, generate_memory_id, mark_memories_accessed, normalize_query_text,
-    promote_cold_memories, search_cold_memory_indices_by_keyword, select_relevant_memory_indices,
-    trim_memories_to_max,
+    dynamic_max_entries, dynamic_min_similarity, dynamic_retrieval_limit, dynamic_window_size,
+    enforce_hot_memory_budget, ensure_pinned_hot, generate_memory_id, mark_memories_accessed,
+    normalize_query_text, promote_cold_memories, search_cold_memory_indices_by_keyword,
+    select_relevant_memory_indices, trim_memories_to_max,
 };
 use super::prompt_engine;
 use super::prompts;
@@ -1396,7 +1396,7 @@ pub async fn chat_completion(
             &app,
             &session,
             &search_query,
-            5,
+            dynamic_retrieval_limit(settings),
             dynamic_min_similarity(settings),
         )
         .await
@@ -2245,7 +2245,7 @@ pub async fn chat_regenerate(
             &app,
             &session,
             &search_query,
-            5,
+            dynamic_retrieval_limit(&context.settings),
             dynamic_min_similarity(&context.settings),
         )
         .await
@@ -2892,7 +2892,7 @@ pub async fn chat_continue(
             &app,
             &session,
             &search_query,
-            5,
+            dynamic_retrieval_limit(&context.settings),
             dynamic_min_similarity(&context.settings),
         )
         .await

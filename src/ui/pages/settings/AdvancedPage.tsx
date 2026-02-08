@@ -415,6 +415,7 @@ export function AdvancedPage() {
           summaryMessageInterval: 20,
           maxEntries: 50,
           minSimilarityThreshold: 0.35,
+          retrievalLimit: 5,
           hotMemoryTokenBudget: 2000,
           decayRate: 0.08,
           coldThreshold: 0.3,

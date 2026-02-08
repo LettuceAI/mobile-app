@@ -2946,7 +2946,7 @@ async fn generate_character_response(
             app,
             &context.session,
             &search_query,
-            5, // limit
+            dynamic_settings.retrieval_limit.max(1) as usize,
             min_similarity,
         )
         .await

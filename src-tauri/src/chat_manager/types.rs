@@ -197,6 +197,8 @@ pub struct DynamicMemorySettings {
     pub max_entries: u32,
     #[serde(default = "default_min_similarity")]
     pub min_similarity_threshold: f32,
+    #[serde(default = "default_retrieval_limit")]
+    pub retrieval_limit: u32,
     #[serde(default = "default_hot_memory_token_budget")]
     pub hot_memory_token_budget: u32,
     /// Score reduction per memory cycle (0.05-0.15 recommended)
@@ -216,6 +218,10 @@ fn default_min_similarity() -> f32 {
 
 fn default_hot_memory_token_budget() -> u32 {
     2048 // Default token budget for hot memories
+}
+
+fn default_retrieval_limit() -> u32 {
+    5 // Default max memories retrieved per turn
 }
 
 fn default_decay_rate() -> f32 {

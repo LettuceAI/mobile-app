@@ -125,6 +125,7 @@ impl MemoryEntry for crate::storage_manager::group_sessions::MemoryEmbedding {
 pub const FALLBACK_DYNAMIC_WINDOW: u32 = 20;
 pub const FALLBACK_DYNAMIC_MAX_ENTRIES: u32 = 50;
 pub const FALLBACK_MIN_SIMILARITY: f32 = 0.35;
+pub const FALLBACK_RETRIEVAL_LIMIT: u32 = 5;
 pub const FALLBACK_HOT_MEMORY_TOKEN_BUDGET: u32 = 2000;
 pub const FALLBACK_DECAY_RATE: f32 = 0.08;
 pub const FALLBACK_COLD_THRESHOLD: f32 = 0.3;
@@ -185,6 +186,16 @@ pub fn dynamic_hot_memory_token_budget(settings: &Settings) -> u32 {
         .unwrap_or(FALLBACK_HOT_MEMORY_TOKEN_BUDGET)
 }
 
+/// Get the max number of memories to retrieve per turn
+pub fn dynamic_retrieval_limit(settings: &Settings) -> usize {
+    settings
+        .advanced_settings
+        .as_ref()
+        .and_then(|a| a.dynamic_memory.as_ref())
+        .map(|dm| dm.retrieval_limit.max(1))
+        .unwrap_or(FALLBACK_RETRIEVAL_LIMIT) as usize
+}
+
 /// Get the decay rate for memory importance scores
 pub fn dynamic_decay_rate(settings: &Settings) -> f32 {
     settings
@@ -237,6 +248,7 @@ pub fn effective_dynamic_memory_settings(
         summary_message_interval: FALLBACK_DYNAMIC_WINDOW,
         max_entries: FALLBACK_DYNAMIC_MAX_ENTRIES,
         min_similarity_threshold: FALLBACK_MIN_SIMILARITY,
+        retrieval_limit: FALLBACK_RETRIEVAL_LIMIT,
         hot_memory_token_budget: FALLBACK_HOT_MEMORY_TOKEN_BUDGET,
         decay_rate: FALLBACK_DECAY_RATE,
         cold_threshold: FALLBACK_COLD_THRESHOLD,

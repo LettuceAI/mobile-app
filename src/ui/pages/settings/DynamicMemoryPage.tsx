@@ -34,6 +34,7 @@ const DEFAULT_DYNAMIC_MEMORY_SETTINGS: DynamicMemorySettings = {
   summaryMessageInterval: 20,
   maxEntries: 50,
   minSimilarityThreshold: 0.35,
+  retrievalLimit: 5,
   hotMemoryTokenBudget: 2000,
   decayRate: 0.08,
   coldThreshold: 0.3,
@@ -50,6 +51,7 @@ const PRESETS: Record<
     summaryMessageInterval: 30,
     maxEntries: 25,
     minSimilarityThreshold: 0.5,
+    retrievalLimit: 3,
     hotMemoryTokenBudget: 1000,
     decayRate: 0.15,
     coldThreshold: 0.4,
@@ -58,6 +60,7 @@ const PRESETS: Record<
     summaryMessageInterval: 20,
     maxEntries: 50,
     minSimilarityThreshold: 0.35,
+    retrievalLimit: 5,
     hotMemoryTokenBudget: 2000,
     decayRate: 0.08,
     coldThreshold: 0.3,
@@ -66,6 +69,7 @@ const PRESETS: Record<
     summaryMessageInterval: 15,
     maxEntries: 100,
     minSimilarityThreshold: 0.25,
+    retrievalLimit: 8,
     hotMemoryTokenBudget: 4000,
     decayRate: 0.05,
     coldThreshold: 0.2,
@@ -128,6 +132,7 @@ function detectPreset(settings: DynamicMemorySettings): MemoryPreset {
       settings.summaryMessageInterval === preset.summaryMessageInterval &&
       settings.maxEntries === preset.maxEntries &&
       settings.minSimilarityThreshold === preset.minSimilarityThreshold &&
+      settings.retrievalLimit === preset.retrievalLimit &&
       settings.hotMemoryTokenBudget === preset.hotMemoryTokenBudget &&
       settings.decayRate === preset.decayRate &&
       settings.coldThreshold === preset.coldThreshold
@@ -680,6 +685,24 @@ export function DynamicMemoryPage() {
                               handleDirectSettingChange("minSimilarityThreshold", val);
                             } else {
                               handleGroupSettingChange("minSimilarityThreshold", val);
+                            }
+                          }}
+                        />
+
+                        {/* Retrieval Limit */}
+                        <SettingRow
+                          label="Retrieval Limit"
+                          description="Max memories selected per turn"
+                          value={currentSettings.retrievalLimit}
+                          unit="items"
+                          min={1}
+                          max={20}
+                          step={1}
+                          onChange={(val) => {
+                            if (activeTab === "direct") {
+                              handleDirectSettingChange("retrievalLimit", val);
+                            } else {
+                              handleGroupSettingChange("retrievalLimit", val);
                             }
                           }}
                         />
