@@ -165,6 +165,7 @@ export function DynamicMemoryPage() {
   const [summarisationModelId, setSummarisationModelId] = useState<string | null>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [embeddingMaxTokens, setEmbeddingMaxTokens] = useState<number>(2048);
+  const [embeddingKeepModelLoaded, setEmbeddingKeepModelLoaded] = useState(false);
   const [modelVersion, setModelVersion] = useState<string | null>(null);
   const [modelSourceVersion, setModelSourceVersion] = useState<string | null>(null);
   const [availableEmbeddingVersions, setAvailableEmbeddingVersions] = useState<string[]>([]);
@@ -206,6 +207,7 @@ export function DynamicMemoryPage() {
             : summarisationModelValue,
         );
         setEmbeddingMaxTokens(settings.advancedSettings?.embeddingMaxTokens ?? 2048);
+        setEmbeddingKeepModelLoaded(settings.advancedSettings?.embeddingKeepModelLoaded ?? false);
         setModels(settings.models);
 
         if (modelInfo.installed) {
@@ -333,6 +335,19 @@ export function DynamicMemoryPage() {
     await updateAdvancedSettings((advanced) => {
       advanced.embeddingModelVersion = version;
     }, "Failed to save embedding model version:");
+    try {
+      await storageBridge.clearEmbeddingRuntimeCache();
+      await storageBridge.initializeEmbeddingModel();
+    } catch (err) {
+      console.error("Failed to reinitialize embedding runtime after version switch:", err);
+    }
+  };
+
+  const handleEmbeddingKeepModelLoadedChange = async (enabled: boolean) => {
+    setEmbeddingKeepModelLoaded(enabled);
+    await updateAdvancedSettings((advanced) => {
+      advanced.embeddingKeepModelLoaded = enabled;
+    }, "Failed to save keep-model-loaded setting:");
   };
 
   const handleDeleteSelectedEmbeddingModel = async () => {
@@ -868,6 +883,35 @@ export function DynamicMemoryPage() {
                             {val / 1024}K
                           </button>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {supportsExtendedTokenCapacity && (
+                    <div className={cn("rounded-xl border border-white/10 bg-white/5 px-4 py-3")}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-white">
+                              Keep Model Loaded
+                            </span>
+                            <span className="rounded-md border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">
+                              Experimental
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-white/45 leading-relaxed">
+                            Keeps embedding model + tokenizer in memory to avoid reload overhead
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={embeddingKeepModelLoaded}
+                            onChange={(e) => handleEmbeddingKeepModelLoadedChange(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-white/10 rounded-full peer peer-checked:bg-blue-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                        </label>
                       </div>
                     </div>
                   )}

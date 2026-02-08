@@ -107,6 +107,7 @@ export const storageBridge = {
   cancelEmbeddingDownload: () => invoke("cancel_embedding_download") as Promise<void>,
   computeEmbedding: (text: string) => invoke<number[]>("compute_embedding", { text }),
   initializeEmbeddingModel: () => invoke("initialize_embedding_model") as Promise<void>,
+  clearEmbeddingRuntimeCache: () => invoke("clear_embedding_runtime_cache") as Promise<void>,
   runEmbeddingTest: () =>
     invoke<{
       success: boolean;

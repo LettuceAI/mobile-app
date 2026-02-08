@@ -4,6 +4,7 @@ use tauri::AppHandle;
 pub(crate) struct EmbeddingPreferences {
     pub(crate) preferred_source_version: Option<String>,
     pub(crate) max_tokens: Option<usize>,
+    pub(crate) keep_model_loaded: bool,
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
@@ -11,6 +12,7 @@ pub(crate) struct EmbeddingPreferences {
 struct AdvancedSettingsSnapshot {
     embedding_model_version: Option<String>,
     embedding_max_tokens: Option<u64>,
+    embedding_keep_model_loaded: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
@@ -30,5 +32,6 @@ pub(crate) fn read_embedding_preferences(app: &AppHandle) -> EmbeddingPreference
     EmbeddingPreferences {
         preferred_source_version: advanced.embedding_model_version,
         max_tokens: advanced.embedding_max_tokens.map(|v| v as usize),
+        keep_model_loaded: advanced.embedding_keep_model_loaded.unwrap_or(false),
     }
 }

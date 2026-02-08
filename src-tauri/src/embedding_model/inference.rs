@@ -9,6 +9,24 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tokenizers::Tokenizer;
 
+struct LoadedEmbeddingRuntime {
+    model_path: PathBuf,
+    tokenizer_path: PathBuf,
+    max_seq_length: usize,
+    session: Session,
+    tokenizer: Tokenizer,
+}
+
+lazy_static::lazy_static! {
+    static ref LOADED_EMBEDDING_RUNTIME: Arc<TokioMutex<Option<LoadedEmbeddingRuntime>>> =
+        Arc::new(TokioMutex::new(None));
+}
+
+pub async fn clear_loaded_runtime_cache() {
+    let mut cache = LOADED_EMBEDDING_RUNTIME.lock().await;
+    *cache = None;
+}
+
 fn describe_path(path: &Path) -> String {
     match fs::metadata(path) {
         Ok(meta) => format!(
@@ -180,9 +198,9 @@ pub(super) fn compute_embedding_with_session(
                         module_path!(),
                         line!(),
                         format!(
-                            "Inference failed after token_type_ids fallback: {} (initial error: {})",
-                            fallback_err, err
-                        ),
+                        "Inference failed after token_type_ids fallback: {} (initial error: {})",
+                        fallback_err, err
+                    ),
                     )
                 })?
             }
@@ -202,6 +220,44 @@ pub(super) fn compute_embedding_with_session(
     }
 }
 
+fn create_runtime(
+    model_path: &Path,
+    tokenizer_path: &Path,
+) -> Result<(Session, Tokenizer), String> {
+    let session = Session::builder()
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to create session builder: {}", e),
+            )
+        })?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to set optimization level: {}", e),
+            )
+        })?
+        .commit_from_file(model_path)
+        .map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to load model: {}", e),
+            )
+        })?;
+    let tokenizer = Tokenizer::from_file(tokenizer_path).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e),
+        )
+    })?;
+    Ok((session, tokenizer))
+}
+
 pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>, String> {
     let text_len = text.len();
     crate::utils::log_info(
@@ -217,7 +273,11 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     log_info(
         &app,
         "embedding_debug",
-        format!("model_dir={} {}", model_dir.display(), describe_path(&model_dir)),
+        format!(
+            "model_dir={} {}",
+            model_dir.display(),
+            describe_path(&model_dir)
+        ),
     );
 
     let (selected_source, model_path, tokenizer_path, max_seq_length, version_label) =
@@ -252,47 +312,75 @@ pub async fn compute_embedding(app: AppHandle, text: String) -> Result<Vec<f32>,
     super::ort_runtime::ensure_ort_init(&app).await?;
     log_info(&app, "embedding_debug", "ort initialized");
 
-    let mut session = Session::builder()
-        .map_err(|e| {
+    let keep_model_loaded = settings::read_embedding_preferences(&app).keep_model_loaded;
+    let embedding_vec = if keep_model_loaded {
+        let mut cache = LOADED_EMBEDDING_RUNTIME.lock().await;
+        let reuse = cache.as_ref().is_some_and(|loaded| {
+            loaded.model_path == model_path
+                && loaded.tokenizer_path == tokenizer_path
+                && loaded.max_seq_length == max_seq_length
+        });
+
+        if !reuse {
+            let (session, tokenizer) = create_runtime(&model_path, &tokenizer_path)?;
+            *cache = Some(LoadedEmbeddingRuntime {
+                model_path: model_path.clone(),
+                tokenizer_path: tokenizer_path.clone(),
+                max_seq_length,
+                session,
+                tokenizer,
+            });
+            log_info(
+                &app,
+                "embedding_debug",
+                format!(
+                    "created persistent embedding runtime model={}",
+                    model_path.display()
+                ),
+            );
+        }
+
+        let loaded = cache.as_mut().ok_or_else(|| {
             crate::utils::err_msg(
                 module_path!(),
                 line!(),
-                format!("Failed to create session builder: {}", e),
-            )
-        })?
-        .with_optimization_level(GraphOptimizationLevel::Level3)
-        .map_err(|e| {
-            crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                format!("Failed to set optimization level: {}", e),
-            )
-        })?
-        .commit_from_file(&model_path)
-        .map_err(|e| {
-            crate::utils::err_msg(
-                module_path!(),
-                line!(),
-                format!("Failed to load model: {}", e),
+                "Embedding runtime cache unavailable",
             )
         })?;
-    log_info(
-        &app,
-        "embedding_debug",
-        format!("onnx session ready model_path={}", model_path.display()),
-    );
+        log_info(
+            &app,
+            "embedding_debug",
+            "running embedding inference (persistent runtime)",
+        );
+        compute_embedding_with_session(
+            &mut loaded.session,
+            &loaded.tokenizer,
+            &text,
+            loaded.max_seq_length,
+        )?
+    } else {
+        {
+            let mut cache = LOADED_EMBEDDING_RUNTIME.lock().await;
+            if cache.is_some() {
+                *cache = None;
+                log_info(
+                    &app,
+                    "embedding_debug",
+                    "cleared persistent embedding runtime cache",
+                );
+            }
+        }
 
-    let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-        crate::utils::err_msg(
-            module_path!(),
-            line!(),
-            format!("Failed to load tokenizer from {:?}: {}", tokenizer_path, e),
-        )
-    })?;
-    log_info(&app, "embedding_debug", "tokenizer loaded");
-
-    log_info(&app, "embedding_debug", "running embedding inference");
-    let embedding_vec = compute_embedding_with_session(&mut session, &tokenizer, &text, max_seq_length)?;
+        let (mut session, tokenizer) = create_runtime(&model_path, &tokenizer_path)?;
+        log_info(
+            &app,
+            "embedding_debug",
+            format!("onnx session ready model_path={}", model_path.display()),
+        );
+        log_info(&app, "embedding_debug", "tokenizer loaded");
+        log_info(&app, "embedding_debug", "running embedding inference");
+        compute_embedding_with_session(&mut session, &tokenizer, &text, max_seq_length)?
+    };
     log_info(
         &app,
         "embedding_debug",
@@ -317,7 +405,8 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
         ));
     }
 
-    let (_, model_path, tokenizer_path, _max_seq_length, version_label) = resolve_runtime_model(&app)?;
+    let (_, model_path, tokenizer_path, max_seq_length, version_label) =
+        resolve_runtime_model(&app)?;
 
     if !model_path.exists() {
         return Err(crate::utils::err_msg(
@@ -327,7 +416,10 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
         ));
     }
     if !tokenizer_path.exists() {
-        return Err(format!("Tokenizer file missing: {}", tokenizer_path.display()));
+        return Err(format!(
+            "Tokenizer file missing: {}",
+            tokenizer_path.display()
+        ));
     }
 
     let model_size = fs::metadata(&model_path).map(|m| m.len()).unwrap_or(0);
@@ -341,6 +433,34 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
 
     super::ort_runtime::ensure_ort_init(&app).await?;
     log_info(&app, "embedding_init", "ort initialized");
+
+    let keep_model_loaded = settings::read_embedding_preferences(&app).keep_model_loaded;
+    if keep_model_loaded {
+        let mut cache = LOADED_EMBEDDING_RUNTIME.lock().await;
+        let reuse = cache.as_ref().is_some_and(|loaded| {
+            loaded.model_path == model_path && loaded.tokenizer_path == tokenizer_path
+        });
+        if !reuse {
+            let (session, tokenizer) = create_runtime(&model_path, &tokenizer_path)?;
+            *cache = Some(LoadedEmbeddingRuntime {
+                model_path: model_path.clone(),
+                tokenizer_path: tokenizer_path.clone(),
+                max_seq_length,
+                session,
+                tokenizer,
+            });
+            log_info(
+                &app,
+                "embedding_init",
+                format!(
+                    "persistent embedding runtime primed model={} tokenizer={}",
+                    model_path.display(),
+                    tokenizer_path.display()
+                ),
+            );
+        }
+        return Ok(());
+    }
 
     let _session = Session::builder()
         .map_err(|e| {

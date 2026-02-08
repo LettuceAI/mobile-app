@@ -242,6 +242,8 @@ pub async fn start_embedding_download(
     app: AppHandle,
     version: Option<String>,
 ) -> Result<(), String> {
+    super::inference::clear_loaded_runtime_cache().await;
+
     let source_spec = download_source_spec(version.as_deref());
     let target_version = source_spec.target_version;
     let source_label = source_spec.source_label;
@@ -390,6 +392,8 @@ pub async fn get_embedding_download_progress() -> Result<DownloadProgress, Strin
 }
 
 pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
+    super::inference::clear_loaded_runtime_cache().await;
+
     {
         let mut state = DOWNLOAD_STATE.lock().await;
         if !state.is_downloading {
@@ -423,6 +427,7 @@ pub async fn cancel_embedding_download(app: AppHandle) -> Result<(), String> {
 }
 
 pub async fn delete_embedding_model(app: AppHandle) -> Result<(), String> {
+    super::inference::clear_loaded_runtime_cache().await;
     reset_download_state().await;
 
     let model_dir = embedding_model_dir(&app)?;
@@ -437,6 +442,7 @@ pub async fn delete_embedding_model(app: AppHandle) -> Result<(), String> {
 }
 
 pub async fn delete_embedding_model_version(app: AppHandle, version: String) -> Result<(), String> {
+    super::inference::clear_loaded_runtime_cache().await;
     reset_download_state().await;
 
     let model_dir = embedding_model_dir(&app)?;

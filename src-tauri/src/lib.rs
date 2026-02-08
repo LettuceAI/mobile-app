@@ -337,6 +337,7 @@ pub fn run() {
             embedding_model::cancel_embedding_download,
             embedding_model::compute_embedding,
             embedding_model::initialize_embedding_model,
+            embedding_model::clear_embedding_runtime_cache,
             embedding_model::run_embedding_test,
             embedding_model::run_embedding_dev_benchmark,
             embedding_model::compare_custom_texts,

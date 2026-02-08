@@ -332,6 +332,12 @@ pub async fn initialize_embedding_model(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn clear_embedding_runtime_cache() -> Result<(), String> {
+    inference::clear_loaded_runtime_cache().await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn run_embedding_dev_benchmark(
     app: AppHandle,
 ) -> Result<benchmark::DevBenchmarkResult, String> {
