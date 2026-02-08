@@ -624,8 +624,12 @@ export async function setMemoryColdState(
 }
 
 // Helper for memory updates
-export async function addMemory(sessionId: string, memory: string): Promise<Session | null> {
-  const updated = await storageBridge.sessionAddMemory(sessionId, memory);
+export async function addMemory(
+  sessionId: string,
+  memory: string,
+  memoryCategory?: string,
+): Promise<Session | null> {
+  const updated = await storageBridge.sessionAddMemory(sessionId, memory, memoryCategory);
   broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }
@@ -643,8 +647,14 @@ export async function updateMemory(
   sessionId: string,
   memoryIndex: number,
   newMemory: string,
+  newCategory?: string,
 ): Promise<Session | null> {
-  const updated = await storageBridge.sessionUpdateMemory(sessionId, memoryIndex, newMemory);
+  const updated = await storageBridge.sessionUpdateMemory(
+    sessionId,
+    memoryIndex,
+    newMemory,
+    newCategory,
+  );
   broadcastSessionUpdated();
   return updated ? SessionSchema.parse(updated) : null;
 }

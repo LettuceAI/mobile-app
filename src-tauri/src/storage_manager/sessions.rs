@@ -8,6 +8,37 @@ use super::db::{now_ms, open_db};
 use crate::embedding_model;
 use crate::utils::{log_error, log_info, log_warn};
 
+const ALLOWED_MEMORY_CATEGORIES: &[&str] = &[
+    "character_trait",
+    "relationship",
+    "plot_event",
+    "world_detail",
+    "preference",
+    "other",
+];
+
+fn normalize_memory_category(category: Option<String>) -> Result<Option<String>, String> {
+    let normalized = category
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty());
+
+    match normalized {
+        Some(value) if !ALLOWED_MEMORY_CATEGORIES.contains(&value.as_str()) => {
+            Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!(
+                    "Invalid memory category '{}'. Allowed values: {}",
+                    value,
+                    ALLOWED_MEMORY_CATEGORIES.join(", ")
+                ),
+            ))
+        }
+        Some(value) => Ok(Some(value)),
+        None => Ok(None),
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionPreview {
@@ -1600,6 +1631,7 @@ pub async fn session_add_memory(
     app: tauri::AppHandle,
     session_id: String,
     memory: String,
+    memory_category: Option<String>,
 ) -> Result<Option<String>, String> {
     log_info(
         &app,
@@ -1642,6 +1674,7 @@ pub async fn session_add_memory(
 
     // Count tokens (best-effort)
     let token_count = crate::tokenizer::count_tokens(&app, &memory).unwrap_or(0);
+    let normalized_category = normalize_memory_category(memory_category)?;
 
     memory_embeddings.push(serde_json::json!({
         "id": uuid::Uuid::new_v4().to_string(),
@@ -1649,6 +1682,7 @@ pub async fn session_add_memory(
         "embedding": embedding,
         "createdAt": now_ms() as i64,
         "tokenCount": token_count,
+        "category": normalized_category,
     }));
 
     // Save back
@@ -1732,6 +1766,7 @@ pub async fn session_update_memory(
     session_id: String,
     memory_index: usize,
     new_memory: String,
+    new_category: Option<String>,
 ) -> Result<Option<String>, String> {
     let conn = open_db(&app)?;
 
@@ -1754,6 +1789,7 @@ pub async fn session_update_memory(
     // Update memory at index
     if memory_index < memories.len() {
         memories[memory_index] = new_memory.clone();
+        let normalized_category = normalize_memory_category(new_category)?;
 
         // Recompute embedding
         let embedding =
@@ -1782,13 +1818,22 @@ pub async fn session_update_memory(
                     "embedding".into(),
                     JsonValue::Array(embedding.iter().map(|f| JsonValue::from(*f)).collect()),
                 );
+                match normalized_category.as_ref() {
+                    Some(category) => {
+                        obj.insert("category".into(), JsonValue::String(category.clone()));
+                    }
+                    None => {
+                        obj.remove("category");
+                    }
+                }
             }
         } else {
             memory_embeddings.push(serde_json::json!({
                 "id": uuid::Uuid::new_v4().to_string(),
                 "text": memories[memory_index].clone(),
                 "embedding": embedding,
-                "createdAt": now_ms() as i64
+                "createdAt": now_ms() as i64,
+                "category": normalized_category,
             }));
         }
 

@@ -1237,7 +1237,7 @@ export const GroupMemoryEmbeddingSchema = z.object({
   lastAccessedAt: z.number().int().default(0),
   accessCount: z.number().int().default(0),
   isPinned: z.boolean().default(false),
-  category: z.string().optional(),
+  category: z.string().nullable().optional(),
 });
 export type GroupMemoryEmbedding = z.infer<typeof GroupMemoryEmbeddingSchema>;
 
@@ -1656,7 +1656,7 @@ export const SessionSchema = z.object({
         importanceScore: z.number().default(1.0),
         lastAccessedAt: z.number().int().default(0),
         isPinned: z.boolean().default(false),
-        category: z.string().optional(),
+        category: z.string().nullable().optional(),
       }),
     )
     .default([])

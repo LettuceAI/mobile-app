@@ -249,18 +249,28 @@ export const storageBridge = {
     invoke("session_update_title", { id, title }) as Promise<void>,
   messageTogglePin: (sessionId: string, messageId: string) =>
     invoke<boolean | null>("message_toggle_pin_state", { sessionId, messageId }),
-  sessionAddMemory: (sessionId: string, memory: string) =>
-    invoke<string | null>("session_add_memory", { sessionId, memory }).then((s) =>
-      typeof s === "string" ? JSON.parse(s) : null,
-    ),
+  sessionAddMemory: (sessionId: string, memory: string, memoryCategory?: string) =>
+    invoke<string | null>("session_add_memory", {
+      sessionId,
+      memory,
+      memoryCategory: memoryCategory ?? null,
+    }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
   sessionRemoveMemory: (sessionId: string, memoryIndex: number) =>
     invoke<string | null>("session_remove_memory", { sessionId, memoryIndex }).then((s) =>
       typeof s === "string" ? JSON.parse(s) : null,
     ),
-  sessionUpdateMemory: (sessionId: string, memoryIndex: number, newMemory: string) =>
-    invoke<string | null>("session_update_memory", { sessionId, memoryIndex, newMemory }).then(
-      (s) => (typeof s === "string" ? JSON.parse(s) : null),
-    ),
+  sessionUpdateMemory: (
+    sessionId: string,
+    memoryIndex: number,
+    newMemory: string,
+    newCategory?: string,
+  ) =>
+    invoke<string | null>("session_update_memory", {
+      sessionId,
+      memoryIndex,
+      newMemory,
+      newCategory: newCategory ?? null,
+    }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
   sessionToggleMemoryPin: (sessionId: string, memoryIndex: number) =>
     invoke<string | null>("session_toggle_memory_pin", { sessionId, memoryIndex }).then((s) =>
       typeof s === "string" ? JSON.parse(s) : null,

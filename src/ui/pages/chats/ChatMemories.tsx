@@ -2,12 +2,12 @@ import { useEffect, useMemo, useReducer, useState, useCallback } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useParams, useSearchParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Sparkles,
   Clock,
   ChevronDown,
-  ChevronUp,
   Search,
   Bot,
   User,
@@ -23,6 +23,8 @@ import {
   Snowflake,
   Flame,
   Cpu,
+  EllipsisVertical,
+  PinOff,
 } from "lucide-react";
 import type { Character, Session, StoredMessage, Model } from "../../../core/storage/schemas";
 import {
@@ -55,6 +57,17 @@ import { Routes, useNavigationManager } from "../../navigation";
 import { BottomMenu, MenuSection } from "../../components/BottomMenu";
 
 type MemoryToolEvent = NonNullable<Session["memoryToolEvents"]>[number];
+const MEMORY_CATEGORY_OPTIONS = [
+  "character_trait",
+  "relationship",
+  "plot_event",
+  "world_detail",
+  "preference",
+  "other",
+] as const;
+const isValidMemoryCategory = (value: string): value is (typeof MEMORY_CATEGORY_OPTIONS)[number] =>
+  (MEMORY_CATEGORY_OPTIONS as readonly string[]).includes(value);
+const formatMemoryCategoryLabel = (category: string) => category.replace(/_/g, " ");
 
 type MemoriesTab = "memories" | "tools" | "pinned";
 type RetryStatus = "idle" | "retrying" | "success";
@@ -65,7 +78,9 @@ type UiState = {
   searchTerm: string;
   editingIndex: number | null;
   editingValue: string;
+  editingCategory: string;
   newMemory: string;
+  newMemoryCategory: string;
   isAdding: boolean;
   summaryDraft: string;
   summaryDirty: boolean;
@@ -76,16 +91,20 @@ type UiState = {
   expandedMemories: Set<number>;
   memoryTempBusy: number | null;
   selectedCategory: string | null;
+  selectedMemoryId: string | null;
+  memoryActionMode: "actions" | "edit" | null;
 };
 
 type UiAction =
   | { type: "SET_TAB"; tab: MemoriesTab }
   | { type: "SET_SEARCH"; value: string }
   | { type: "CLEAR_SEARCH" }
-  | { type: "START_EDIT"; index: number; text: string }
+  | { type: "START_EDIT"; index: number; text: string; category?: string | null }
   | { type: "SET_EDIT_VALUE"; value: string }
+  | { type: "SET_EDIT_CATEGORY"; value: string }
   | { type: "CANCEL_EDIT" }
   | { type: "SET_NEW_MEMORY"; value: string }
+  | { type: "SET_NEW_MEMORY_CATEGORY"; value: string }
   | { type: "SET_IS_ADDING"; value: boolean }
   | { type: "SET_SUMMARY_DRAFT"; value: string }
   | { type: "SYNC_SUMMARY_FROM_SESSION"; value: string }
@@ -97,8 +116,10 @@ type UiAction =
   | { type: "TOGGLE_EXPANDED"; index: number }
   | { type: "SHIFT_EXPANDED_AFTER_DELETE"; index: number }
   | { type: "SET_MEMORY_TEMP_BUSY"; value: number | null }
-
-  | { type: "SET_CATEGORY"; value: string | null };
+  | { type: "SET_CATEGORY"; value: string | null }
+  | { type: "OPEN_MEMORY_ACTIONS"; id: string }
+  | { type: "SET_MEMORY_ACTION_MODE"; mode: "actions" | "edit" }
+  | { type: "CLOSE_MEMORY_ACTIONS" };
 
 function initUi(errorParam: string | null): UiState {
   return {
@@ -106,7 +127,9 @@ function initUi(errorParam: string | null): UiState {
     searchTerm: "",
     editingIndex: null,
     editingValue: "",
+    editingCategory: "",
     newMemory: "",
+    newMemoryCategory: "",
     isAdding: false,
     summaryDraft: "",
     summaryDirty: false,
@@ -117,6 +140,8 @@ function initUi(errorParam: string | null): UiState {
     expandedMemories: new Set<number>(),
     memoryTempBusy: null,
     selectedCategory: null,
+    selectedMemoryId: null,
+    memoryActionMode: null,
   };
 }
 
@@ -129,13 +154,24 @@ function uiReducer(state: UiState, action: UiAction): UiState {
     case "CLEAR_SEARCH":
       return { ...state, searchTerm: "" };
     case "START_EDIT":
-      return { ...state, editingIndex: action.index, editingValue: action.text };
+      const category =
+        action.category && isValidMemoryCategory(action.category) ? action.category : "";
+      return {
+        ...state,
+        editingIndex: action.index,
+        editingValue: action.text,
+        editingCategory: category,
+      };
     case "SET_EDIT_VALUE":
       return { ...state, editingValue: action.value };
+    case "SET_EDIT_CATEGORY":
+      return { ...state, editingCategory: action.value };
     case "CANCEL_EDIT":
-      return { ...state, editingIndex: null, editingValue: "" };
+      return { ...state, editingIndex: null, editingValue: "", editingCategory: "" };
     case "SET_NEW_MEMORY":
       return { ...state, newMemory: action.value };
+    case "SET_NEW_MEMORY_CATEGORY":
+      return { ...state, newMemoryCategory: action.value };
     case "SET_IS_ADDING":
       return { ...state, isAdding: action.value };
     case "SET_SUMMARY_DRAFT":
@@ -173,6 +209,12 @@ function uiReducer(state: UiState, action: UiAction): UiState {
 
     case "SET_CATEGORY":
       return { ...state, selectedCategory: action.value };
+    case "OPEN_MEMORY_ACTIONS":
+      return { ...state, selectedMemoryId: action.id, memoryActionMode: "actions" };
+    case "SET_MEMORY_ACTION_MODE":
+      return { ...state, memoryActionMode: action.mode };
+    case "CLOSE_MEMORY_ACTIONS":
+      return { ...state, selectedMemoryId: null, memoryActionMode: null, editingIndex: null, editingValue: "", editingCategory: "" };
     default:
       return state;
   }
@@ -213,6 +255,52 @@ function SectionHeader({
       </div>
       {right ? <div className="shrink-0">{right}</div> : null}
     </div>
+  );
+}
+
+function MemoryActionRow({
+  icon: Icon,
+  label,
+  onClick,
+  disabled = false,
+  variant = "default",
+  iconBg,
+}: {
+  icon: ComponentType<any>;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "default" | "danger";
+  iconBg?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex w-full items-center gap-3 px-1 py-2.5 transition-all rounded-lg",
+        "hover:bg-white/5 active:bg-white/10",
+        "disabled:opacity-40 disabled:pointer-events-none",
+        variant === "danger" && "hover:bg-red-500/10",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center justify-center w-8 h-8 rounded-lg",
+          iconBg || "bg-white/10",
+        )}
+      >
+        <Icon size={16} className={cn(variant === "danger" ? "text-red-400" : "text-white")} />
+      </div>
+      <span
+        className={cn(
+          "text-[15px] text-left",
+          variant === "danger" ? "text-red-400" : "text-white/90",
+        )}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -287,11 +375,11 @@ function useSessionData(characterId?: string, requestedSessionId?: string | null
 
 function useMemoryActions(session: Session | null, setSession: (s: Session) => void) {
   const handleAdd = useCallback(
-    async (memory: string) => {
+    async (memory: string, category?: string) => {
       if (!session) return;
 
       try {
-        const updated = await addMemory(session.id, memory);
+        const updated = await addMemory(session.id, memory, category);
         if (updated) setSession(updated);
       } catch (err: any) {
         throw err;
@@ -315,11 +403,11 @@ function useMemoryActions(session: Session | null, setSession: (s: Session) => v
   );
 
   const handleUpdate = useCallback(
-    async (index: number, memory: string) => {
+    async (index: number, memory: string, category?: string) => {
       if (!session) return;
 
       try {
-        const updated = await updateMemory(session.id, index, memory);
+        const updated = await updateMemory(session.id, index, memory, category);
         if (updated) setSession(updated);
       } catch (err: any) {
         throw err;
@@ -375,12 +463,51 @@ function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
-const ACTION_STYLES: Record<string, { icon: ComponentType<{ size?: string | number; className?: string }>; color: string; label: string; bg: string; border: string }> = {
-  create_memory: { icon: Plus, color: "text-emerald-300", label: "Created", bg: "bg-emerald-400/10", border: "border-emerald-400/20" },
-  delete_memory: { icon: Trash2, color: "text-red-300", label: "Deleted", bg: "bg-red-400/10", border: "border-red-400/20" },
-  pin_memory:    { icon: Pin, color: "text-amber-300", label: "Pinned", bg: "bg-amber-400/10", border: "border-amber-400/20" },
-  unpin_memory:  { icon: Pin, color: "text-amber-300/60", label: "Unpinned", bg: "bg-amber-400/10", border: "border-amber-400/20" },
-  done:          { icon: Check, color: "text-blue-300", label: "Done", bg: "bg-blue-400/10", border: "border-blue-400/20" },
+const ACTION_STYLES: Record<
+  string,
+  {
+    icon: ComponentType<{ size?: string | number; className?: string }>;
+    color: string;
+    label: string;
+    bg: string;
+    border: string;
+  }
+> = {
+  create_memory: {
+    icon: Plus,
+    color: "text-emerald-300",
+    label: "Created",
+    bg: "bg-emerald-400/10",
+    border: "border-emerald-400/20",
+  },
+  delete_memory: {
+    icon: Trash2,
+    color: "text-red-300",
+    label: "Deleted",
+    bg: "bg-red-400/10",
+    border: "border-red-400/20",
+  },
+  pin_memory: {
+    icon: Pin,
+    color: "text-amber-300",
+    label: "Pinned",
+    bg: "bg-amber-400/10",
+    border: "border-amber-400/20",
+  },
+  unpin_memory: {
+    icon: Pin,
+    color: "text-amber-300/60",
+    label: "Unpinned",
+    bg: "bg-amber-400/10",
+    border: "border-amber-400/20",
+  },
+  done: {
+    icon: Check,
+    color: "text-blue-300",
+    label: "Done",
+    bg: "bg-blue-400/10",
+    border: "border-blue-400/20",
+  },
 };
 
 function ActionCard({ action }: { action: MemoryToolEvent["actions"][number] }) {
@@ -400,13 +527,20 @@ function ActionCard({ action }: { action: MemoryToolEvent["actions"][number] }) 
   const id = args?.id as string | undefined;
 
   return (
-    <div className={cn(radius.md, "border px-3 py-2.5 flex items-start gap-2.5", style.bg, style.border)}>
+    <div
+      className={cn(
+        radius.md,
+        "border px-3 py-2.5 flex items-start gap-2.5",
+        style.bg,
+        style.border,
+      )}
+    >
       <Icon size={14} className={cn(style.color, "mt-0.5 shrink-0")} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={cn("text-[11px] font-semibold", style.color)}>{style.label}</span>
           {category && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/8">
               {category.replace(/_/g, " ")}
             </span>
           )}
@@ -416,21 +550,27 @@ function ActionCard({ action }: { action: MemoryToolEvent["actions"][number] }) 
             </span>
           )}
           {confidence != null && (
-            <span className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded-full border",
-              confidence < 0.7
-                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                : "bg-red-500/20 text-red-300 border-red-500/30",
-            )}>
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-full border",
+                confidence < 0.7
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                  : "bg-red-500/20 text-red-300 border-red-500/30",
+              )}
+            >
               {confidence < 0.7 ? "soft-delete" : `${Math.round(confidence * 100)}%`}
             </span>
           )}
         </div>
         {memoryText && (
-          <p className={cn(typography.caption.size, colors.text.secondary, "mt-1 leading-relaxed")}>{memoryText}</p>
+          <p className={cn(typography.caption.size, colors.text.secondary, "mt-1 leading-relaxed")}>
+            {memoryText}
+          </p>
         )}
         {id && !memoryText && (
-          <p className={cn(typography.caption.size, colors.text.tertiary, "mt-1 font-mono")}>#{id}</p>
+          <p className={cn(typography.caption.size, colors.text.tertiary, "mt-1 font-mono")}>
+            #{id}
+          </p>
         )}
       </div>
     </div>
@@ -454,11 +594,7 @@ function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen
   const actionSummary = event.actions?.length ? summarizeActions(event.actions) : null;
 
   return (
-    <div className={cn(
-      components.card.base,
-      "overflow-hidden",
-      hasError && "border-red-400/20",
-    )}>
+    <div className={cn(components.card.base, "overflow-hidden", hasError && "border-red-400/20")}>
       {/* Collapsed header */}
       <button
         type="button"
@@ -469,10 +605,12 @@ function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen
         )}
       >
         {/* Timeline dot */}
-        <div className={cn(
-          "h-2 w-2 rounded-full shrink-0",
-          hasError ? "bg-red-400" : "bg-emerald-400",
-        )} />
+        <div
+          className={cn(
+            "h-2 w-2 rounded-full shrink-0",
+            hasError ? "bg-red-400" : "bg-emerald-400",
+          )}
+        />
 
         <div className="flex-1 min-w-0">
           {/* Top line: relative time + action counts */}
@@ -485,17 +623,12 @@ function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen
                 — {actionSummary}
               </span>
             )}
-            {hasError && (
-              <AlertTriangle size={12} className="text-red-400 shrink-0" />
-            )}
+            {hasError && <AlertTriangle size={12} className="text-red-400 shrink-0" />}
           </div>
 
           {/* Truncated summary */}
           {event.summary && !isOpen && (
-            <p className={cn(
-              "text-[11px] mt-0.5 truncate",
-              colors.text.tertiary,
-            )}>
+            <p className={cn("text-[11px] mt-0.5 truncate", colors.text.tertiary)}>
               {event.summary}
             </p>
           )}
@@ -526,9 +659,7 @@ function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen
             <div className={cn(radius.md, "border border-red-400/20 bg-red-400/10 px-3 py-2.5")}>
               <p className={cn("text-[12px] text-red-200/90")}>{event.error}</p>
               {event.stage && (
-                <p className={cn("text-[11px] mt-1 text-red-200/60")}>
-                  Failed at: {event.stage}
-                </p>
+                <p className={cn("text-[11px] mt-1 text-red-200/60")}>Failed at: {event.stage}</p>
               )}
             </div>
           )}
@@ -545,8 +676,16 @@ function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen
           )}
 
           {/* Footer meta */}
-          <div className={cn("flex items-center gap-3 pt-1", typography.caption.size, colors.text.disabled)}>
-            <span>Window {event.windowStart}–{event.windowEnd}</span>
+          <div
+            className={cn(
+              "flex items-center gap-3 pt-1",
+              typography.caption.size,
+              colors.text.disabled,
+            )}
+          >
+            <span>
+              Window {event.windowStart}–{event.windowEnd}
+            </span>
             <span>{new Date(event.createdAt || 0).toLocaleString()}</span>
           </div>
         </div>
@@ -558,11 +697,20 @@ function CycleCard({ event, defaultOpen }: { event: MemoryToolEvent; defaultOpen
 function ToolLog({ events }: { events: MemoryToolEvent[] }) {
   if (!events.length) {
     return (
-      <div className={cn(components.card.base, "px-6 py-8 text-center")}>
-        <p className={cn(typography.bodySmall.size, colors.text.tertiary)}>
-          No tool calls captured yet. Tool calls appear when AI manages memories in dynamic mode.
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="flex flex-col items-center justify-center py-16"
+      >
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5 mb-4">
+          <Clock className="h-7 w-7 text-white/20" />
+        </div>
+        <h3 className="mb-1 text-base font-semibold text-white">No activity yet</h3>
+        <p className={cn("text-center text-sm max-w-[240px]", colors.text.tertiary)}>
+          Tool calls appear when AI manages memories in dynamic mode
         </p>
-      </div>
+      </motion.div>
     );
   }
 
@@ -719,7 +867,7 @@ export function ChatMemoriesPage() {
             lastAccessedAt: emb.lastAccessedAt ?? 0,
             isPinned: emb.isPinned ?? false,
             cycle,
-            category: (emb as Record<string, unknown>).category as string | null ?? null,
+            category: ((emb as Record<string, unknown>).category as string | null) ?? null,
           };
         })
         .sort((a, b) => {
@@ -771,9 +919,7 @@ export function ChatMemoriesPage() {
   const filteredMemories = useMemo(() => {
     let items = memoryItems;
     if (ui.searchTerm.trim()) {
-      items = items.filter((item) =>
-        item.text.toLowerCase().includes(ui.searchTerm.toLowerCase()),
-      );
+      items = items.filter((item) => item.text.toLowerCase().includes(ui.searchTerm.toLowerCase()));
     }
     if (ui.selectedCategory) {
       items = items.filter((item) => item.category === ui.selectedCategory);
@@ -820,14 +966,17 @@ export function ChatMemoriesPage() {
     [go, characterId, session?.id],
   );
 
-  const handleAddNew = useCallback(async () => {
+  const handleAddNew = useCallback(async (categoryOverride?: string) => {
     const trimmed = ui.newMemory.trim();
     if (!trimmed) return;
+    const category = (categoryOverride ?? ui.newMemoryCategory).trim();
+    const normalizedCategory = isValidMemoryCategory(category) ? category : undefined;
 
     dispatch({ type: "SET_IS_ADDING", value: true });
     try {
-      await handleAdd(trimmed);
+      await handleAdd(trimmed, normalizedCategory);
       dispatch({ type: "SET_NEW_MEMORY", value: "" });
+      dispatch({ type: "SET_NEW_MEMORY_CATEGORY", value: "" });
       dispatch({ type: "SET_ACTION_ERROR", value: null });
     } catch (err: any) {
       console.error("Failed to add memory:", err);
@@ -835,25 +984,23 @@ export function ChatMemoriesPage() {
     } finally {
       dispatch({ type: "SET_IS_ADDING", value: false });
     }
-  }, [handleAdd, ui.newMemory]);
-
-  const startEdit = useCallback((index: number, text: string) => {
-    dispatch({ type: "START_EDIT", index, text });
-  }, []);
-
-  const cancelEdit = useCallback(() => {
-    dispatch({ type: "CANCEL_EDIT" });
-  }, []);
+  }, [handleAdd, ui.newMemory, ui.newMemoryCategory]);
 
   const saveEdit = useCallback(
     async (index: number) => {
       const trimmed = ui.editingValue.trim();
-      if (!trimmed || trimmed === memoryItems[index]?.text) {
+      const category = ui.editingCategory.trim();
+      const normalizedCategory = isValidMemoryCategory(category) ? category : "";
+      const previousCategory = (memoryItems[index]?.category ?? "").trim();
+      if (
+        !trimmed ||
+        (trimmed === memoryItems[index]?.text && normalizedCategory === previousCategory)
+      ) {
         dispatch({ type: "CANCEL_EDIT" });
         return;
       }
       try {
-        await handleUpdate(index, trimmed);
+        await handleUpdate(index, trimmed, normalizedCategory || undefined);
         dispatch({ type: "CANCEL_EDIT" });
         dispatch({ type: "SET_ACTION_ERROR", value: null });
       } catch (err: any) {
@@ -861,7 +1008,7 @@ export function ChatMemoriesPage() {
         dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to update memory" });
       }
     },
-    [handleUpdate, memoryItems, ui.editingValue],
+    [handleUpdate, memoryItems, ui.editingCategory, ui.editingValue],
   );
 
   const handleSaveSummaryClick = useCallback(async () => {
@@ -876,6 +1023,10 @@ export function ChatMemoriesPage() {
       dispatch({ type: "SET_IS_SAVING_SUMMARY", value: false });
     }
   }, [handleSaveSummary, session?.memorySummary, ui.summaryDraft]);
+
+  // Add memory category picker
+  const [showAddCategoryMenu, setShowAddCategoryMenu] = useState(false);
+  const [showSummaryEditor, setShowSummaryEditor] = useState(false);
 
   // Model selection for retry
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -1009,7 +1160,7 @@ export function ChatMemoriesPage() {
       <header
         className={cn(
           "sticky top-0 z-20 border-b border-white/10 px-4",
-          "pt-[calc(env(safe-area-inset-top)+12px)] pb-3",
+          "pt-[calc(env(safe-area-inset-top)+24px)] pb-3",
           colors.glass.strong,
         )}
       >
@@ -1031,13 +1182,13 @@ export function ChatMemoriesPage() {
             >
               <ArrowLeft size={14} strokeWidth={2.5} />
             </button>
-            <div className="min-w-0 flex-1 text-left">
-              <p className={cn("truncate", typography.h1.size, typography.h1.weight, colors.text.primary)}>
+            <div className="min-w-0 flex-1 flex items-baseline gap-2 text-left">
+              <span className={cn("shrink-0", typography.h1.size, typography.h1.weight, colors.text.primary)}>
                 Memories
-              </p>
-              <p className={cn("mt-0.5 truncate", typography.bodySmall.size, colors.text.tertiary)}>
+              </span>
+              <span className={cn("truncate text-sm font-medium", colors.text.tertiary)}>
                 {character.name}
-              </p>
+              </span>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 ml-auto">
@@ -1058,9 +1209,36 @@ export function ChatMemoriesPage() {
             )}
           </div>
         </div>
+
+        {/* Segmented Tab Control */}
+        {isDynamic && (
+          <div className="mt-3 flex bg-white/5 border border-white/8 rounded-xl p-1">
+            {tabs.map(({ id, icon: Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => dispatch({ type: "SET_TAB", tab: id })}
+                className={cn(
+                  "relative flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors",
+                  ui.activeTab === id ? "text-white" : "text-white/40 hover:text-white/60",
+                )}
+                aria-label={label}
+              >
+                {ui.activeTab === id && (
+                  <motion.div
+                    layoutId="memoryTabIndicator"
+                    className="absolute inset-0 rounded-lg bg-white/10 border border-white/10"
+                    transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                  />
+                )}
+                <Icon size={14} className="relative z-10" />
+                <span className="relative z-10">{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+96px)]">
+      <main className="flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+16px)]">
         {/* Error Banner */}
         {(ui.actionError ||
           (isDynamic &&
@@ -1133,14 +1311,30 @@ export function ChatMemoriesPage() {
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         onClick={handleRetry}
-                        className={cn("flex items-center gap-1.5 px-2.5 py-1.5", radius.md, typography.bodySmall.size, "font-semibold bg-red-500/20 text-red-200", interactive.transition.fast, "hover:bg-red-500/30", interactive.active.scale)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1.5",
+                          radius.md,
+                          typography.bodySmall.size,
+                          "font-semibold bg-red-500/20 text-red-200",
+                          interactive.transition.fast,
+                          "hover:bg-red-500/30",
+                          interactive.active.scale,
+                        )}
                       >
                         <RefreshCw size={12} />
                         Try Again
                       </button>
                       <button
                         onClick={() => setShowModelSelector(true)}
-                        className={cn("flex items-center gap-1.5 px-2.5 py-1.5", radius.md, typography.bodySmall.size, "font-semibold bg-blue-500/20 text-blue-200", interactive.transition.fast, "hover:bg-blue-500/30", interactive.active.scale)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1.5",
+                          radius.md,
+                          typography.bodySmall.size,
+                          "font-semibold bg-blue-500/20 text-blue-200",
+                          interactive.transition.fast,
+                          "hover:bg-blue-500/30",
+                          interactive.active.scale,
+                        )}
                       >
                         <Cpu size={12} />
                         Try Different Model
@@ -1159,118 +1353,65 @@ export function ChatMemoriesPage() {
           </div>
         )}
 
-
+        <AnimatePresence mode="wait">
         {ui.activeTab === "memories" ? (
-          <div className={cn("px-3 py-4", "space-y-5")}>
+          <motion.div
+            key="memories"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className={cn("px-3 py-4", "space-y-5")}
+          >
             {/* Context Summary */}
             {isDynamic && (
-              <div>
-                <SectionHeader
-                  icon={Sparkles}
-                  title="Context Summary"
-                  subtitle="Short recap used to keep context consistent"
-                  right={
-                    <div className="flex items-center gap-2">
-                      {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 ? (
-                        <span
-                          className={cn(
-                            typography.caption.size,
-                            "inline-flex items-center gap-1 px-2 py-0.5",
-                            radius.full,
-                            "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
-                          )}
-                        >
-                          {session.memorySummaryTokenCount.toLocaleString()} tokens
-                        </span>
-                      ) : null}
-                      {ui.summaryDraft !== session?.memorySummary ? (
-                        <button
-                          onClick={handleSaveSummaryClick}
-                          disabled={ui.isSavingSummary}
-                          className={cn(
-                            typography.caption.size,
-                            "font-semibold px-3 py-1",
-                            radius.full,
-                            "border border-emerald-400/30 bg-emerald-400/15 text-emerald-200",
-                            "disabled:opacity-50",
-                            interactive.transition.fast,
-                            interactive.active.scale,
-                          )}
-                        >
-                          {ui.isSavingSummary ? "Saving..." : "Save"}
-                        </button>
-                      ) : null}
-                    </div>
-                  }
-                />
-                <div
+              <button
+                type="button"
+                onClick={() => setShowSummaryEditor(true)}
+                className={cn(
+                  "w-full rounded-xl border border-emerald-400/15 bg-emerald-400/3 px-4 py-3 text-left",
+                  "transition-all hover:border-emerald-400/25 hover:bg-emerald-400/5 active:scale-[0.99]",
+                )}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Sparkles size={13} className="text-emerald-400/70 shrink-0" />
+                  <span className="text-[11px] font-semibold text-emerald-300/80 uppercase tracking-wider">
+                    Context Summary
+                  </span>
+                  {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 ? (
+                    <span className="text-[10px] text-white/30 ml-auto">
+                      {session.memorySummaryTokenCount.toLocaleString()} tokens
+                    </span>
+                  ) : null}
+                </div>
+                <p
                   className={cn(
-                    components.card.base,
-                    "border-emerald-400/20 bg-emerald-400/5",
-                    "w-full p-4 text-left",
+                    typography.bodySmall.size,
+                    "leading-relaxed line-clamp-4 min-h-[3.5rem]",
+                    ui.summaryDraft
+                      ? "text-emerald-50/70"
+                      : "text-emerald-200/25 italic",
                   )}
                 >
-                  <textarea
-                    value={ui.summaryDraft}
-                    onChange={(e) => dispatch({ type: "SET_SUMMARY_DRAFT", value: e.target.value })}
-                    rows={4}
-                    className={cn(
-                      "w-full resize-none bg-transparent focus:outline-none",
-                      typography.bodySmall.size,
-                      "text-emerald-50/90",
-                      "placeholder-emerald-200/30 leading-relaxed",
-                    )}
-                    placeholder="AI will generate a summary of the conversation context here..."
-                  />
-                </div>
-              </div>
+                  {ui.summaryDraft || "Tap to add a context summary..."}
+                </p>
+              </button>
             )}
 
             {/* Memories Section */}
             <div>
-              <SectionHeader
-                icon={Bot}
-                title={
-                  ui.searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"
-                }
-                subtitle={
-                  ui.searchTerm.trim()
-                    ? "Filtered by your search"
-                    : "Create, search, edit, and delete memories"
-                }
-                right={
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        typography.caption.size,
-                        "inline-flex items-center gap-1 px-2 py-0.5",
-                        radius.full,
-                        "border bg-white/5",
-                        colors.border.subtle,
-                        colors.text.secondary,
-                      )}
-                    >
-                      AI {stats.ai}
-                    </span>
-                    <span
-                      className={cn(
-                        typography.caption.size,
-                        "inline-flex items-center gap-1 px-2 py-0.5",
-                        radius.full,
-                        "border bg-white/5",
-                        colors.border.subtle,
-                        colors.text.secondary,
-                      )}
-                    >
-                      You {stats.user}
-                    </span>
-                  </div>
-                }
-              />
+              <div className="flex items-center gap-2 mb-2">
+                <span className={cn("text-[12px] font-semibold uppercase tracking-wider text-white/50")}>
+                  {ui.searchTerm.trim() ? `Results (${filteredMemories.length})` : "Saved Memories"}
+                </span>
+                <span className={cn("text-[10px] text-white/30 ml-auto")}>
+                  {stats.ai} AI · {stats.user} You
+                </span>
+              </div>
 
-              {/* Search Bar */}
-              {memoryItems.length > 0 && (
-                <div className="relative mb-3">
+              {/* Search + Add row */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="relative flex-1 min-w-0">
                   <Search
                     className={cn(
                       "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4",
@@ -1305,7 +1446,21 @@ export function ChatMemoriesPage() {
                     </button>
                   )}
                 </div>
-              )}
+                <button
+                  onClick={() => setShowAddCategoryMenu(true)}
+                  className={cn(
+                    "flex items-center justify-center shrink-0",
+                    "h-[42px] w-[42px] rounded-lg",
+                    "border border-white/10 bg-white/5",
+                    "text-white/50",
+                    "hover:bg-white/8 hover:text-white/70",
+                    "transition-all active:scale-95",
+                  )}
+                  aria-label="Add memory"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
 
               {/* Category Filter Chips */}
               {isDynamic && categories.length > 0 && (
@@ -1316,8 +1471,8 @@ export function ChatMemoriesPage() {
                     className={cn(
                       "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
                       !ui.selectedCategory
-                        ? "bg-purple-500/20 text-purple-200 border-purple-500/40"
-                        : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10",
+                        ? "bg-white/12 text-white/80 border-white/20"
+                        : "bg-white/4 text-white/35 border-white/8 hover:bg-white/8",
                     )}
                   >
                     All
@@ -1335,8 +1490,8 @@ export function ChatMemoriesPage() {
                       className={cn(
                         "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
                         ui.selectedCategory === cat
-                          ? "bg-purple-500/20 text-purple-200 border-purple-500/40"
-                          : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10",
+                          ? "bg-white/12 text-white/80 border-white/20"
+                          : "bg-white/4 text-white/35 border-white/8 hover:bg-white/8",
                       )}
                     >
                       {cat.replace(/_/g, " ")}
@@ -1345,362 +1500,150 @@ export function ChatMemoriesPage() {
                 </div>
               )}
 
-              {/* Add New Memory */}
-              <div
-                className={cn(
-                  components.card.base,
-                  "w-full p-4 text-left",
-                  interactive.transition.default,
-                  "mb-4",
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <textarea
-                      value={ui.newMemory}
-                      onChange={(e) => dispatch({ type: "SET_NEW_MEMORY", value: e.target.value })}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleAddNew();
-                        }
-                      }}
-                      placeholder="Add a new memory..."
-                      rows={2}
-                      className={cn(
-                        "w-full resize-none bg-transparent focus:outline-none",
-                        typography.bodySmall.size,
-                        colors.text.primary,
-                        "placeholder-white/40 leading-relaxed",
-                      )}
-                    />
-                  </div>
-                  <button
-                    onClick={handleAddNew}
-                    disabled={!ui.newMemory.trim() || ui.isAdding}
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center shrink-0",
-                      radius.md,
-                      "border border-emerald-400/40 bg-emerald-500/20 text-emerald-100",
-                      "hover:bg-emerald-500/30 disabled:opacity-30 disabled:pointer-events-none",
-                      interactive.transition.default,
-                      interactive.active.scale,
-                    )}
-                    aria-label="Add memory"
-                  >
-                    {ui.isAdding ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400" />
-                    ) : (
-                      <Plus size={16} />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="h-3" aria-hidden />
-
               {/* Memory List */}
               {filteredMemories.length === 0 ? (
-                <div className="flex h-64 flex-col items-center justify-center">
-                  {ui.searchTerm ? (
-                    <Search className="mb-3 h-12 w-12 text-white/20" />
-                  ) : (
-                    <Bot className="mb-3 h-12 w-12 text-white/20" />
-                  )}
-                  <h3 className="mb-1 text-lg font-medium text-white">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="flex flex-col items-center justify-center py-16"
+                >
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5 mb-4">
+                    {ui.searchTerm ? (
+                      <Search className="h-7 w-7 text-white/20" />
+                    ) : (
+                      <Bot className="h-7 w-7 text-white/20" />
+                    )}
+                  </div>
+                  <h3 className="mb-1 text-base font-semibold text-white">
                     {ui.searchTerm ? "No matching memories" : "No memories yet"}
                   </h3>
-                  {!ui.searchTerm && (
-                    <p className="text-center text-sm text-white/50">Add your first memory above</p>
-                  )}
-                </div>
+                  <p className="text-center text-sm text-white/40 max-w-[240px]">
+                    {ui.searchTerm
+                      ? "Try a different search term"
+                      : "Tap the Add button above to create one"}
+                  </p>
+                </motion.div>
               ) : (
-                <div className="space-y-3">
+                <motion.div
+                  className="space-y-3"
+                  initial="hidden"
+                  animate="visible"
+                  variants={{ visible: { transition: { staggerChildren: 0.03 } } }}
+                >
+                  <AnimatePresence>
                   {filteredMemories.map((item) => {
                     const expanded = ui.expandedMemories.has(item.index);
-                    const isEditing = ui.editingIndex === item.index;
 
                     return (
-                      <div
-                        key={item.index}
+                      <motion.div
+                        key={item.id}
+                        layout
+                        variants={{
+                          hidden: { opacity: 0, y: 12 },
+                          visible: { opacity: 1, y: 0 },
+                        }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
                         className={cn(
                           "group relative overflow-hidden rounded-xl",
-                          "border transition-all duration-200",
-                          isEditing
-                            ? "border-white/20 bg-white/3"
-                            : expanded
-                              ? "border-white/10 bg-white/2"
-                              : "border-white/6 bg-white/2 hover:border-white/10 hover:bg-white/3",
+                          "border",
+                          expanded
+                            ? "border-white/10 bg-white/2"
+                            : "border-white/6 bg-white/2 hover:border-white/10 hover:bg-white/3",
                         )}
                       >
                         <div
-                          className={cn(
-                            "absolute left-0 top-0 bottom-0 w-0.75",
-                            item.isAi ? "bg-blue-400/60" : "bg-emerald-400/60",
-                          )}
-                        />
-
-                        <div
-                          className={cn("pl-5 pr-4 py-4", !isEditing && "cursor-pointer")}
-                          onClick={() => {
-                            if (isEditing) return;
-                            dispatch({ type: "TOGGLE_EXPANDED", index: item.index });
-                          }}
-                          role={isEditing ? undefined : "button"}
-                          tabIndex={isEditing ? undefined : 0}
+                          className={cn("px-4 py-3 cursor-pointer")}
+                          onClick={() => dispatch({ type: "TOGGLE_EXPANDED", index: item.index })}
+                          role="button"
+                          tabIndex={0}
                           onKeyDown={(e) => {
-                            if (isEditing) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               dispatch({ type: "TOGGLE_EXPANDED", index: item.index });
                             }
                           }}
                         >
-                          {isEditing ? (
-                            /* Edit Mode */
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-2">
-                                {item.isAi ? (
-                                  <Bot className="h-4 w-4 text-blue-400" />
-                                ) : (
-                                  <User className="h-4 w-4 text-emerald-400" />
-                                )}
-                                <span
-                                  className={cn(
-                                    "text-xs font-semibold uppercase tracking-wider",
-                                    item.isAi ? "text-blue-400" : "text-emerald-400",
-                                  )}
-                                >
-                                  Editing {item.isAi ? "AI Memory" : "Your Note"}
-                                </span>
-                              </div>
-                              <textarea
-                                value={ui.editingValue}
-                                onChange={(e) =>
-                                  dispatch({ type: "SET_EDIT_VALUE", value: e.target.value })
-                                }
-                                rows={4}
-                                className={cn(
-                                  "w-full p-3",
-                                  radius.lg,
-                                  "border border-white/10 bg-black/30",
-                                  "text-sm text-white/90 resize-none leading-relaxed",
-                                  "focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10",
-                                  "placeholder:text-white/30",
-                                )}
-                                placeholder="Enter memory content..."
-                                autoFocus
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={cancelEdit}
-                                  className={cn(
-                                    "flex-1 px-4 py-2.5",
-                                    radius.lg,
-                                    "border border-white/10 bg-white/5",
-                                    "text-sm font-medium text-white/60",
-                                    "transition-all hover:border-white/15 hover:bg-white/8 hover:text-white/80",
-                                    "active:scale-[0.98]",
-                                  )}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => saveEdit(item.index)}
-                                  className={cn(
-                                    "flex-1 px-4 py-2.5 flex items-center justify-center gap-2",
-                                    radius.lg,
-                                    "border border-emerald-400/30 bg-emerald-500/15",
-                                    "text-sm font-semibold text-emerald-200",
-                                    "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25",
-                                    "active:scale-[0.98]",
-                                  )}
-                                >
-                                  <Check size={14} />
-                                  Save Changes
-                                </button>
-                              </div>
+                          {/* Top row: source icon + text + overflow */}
+                          <div className="flex items-start gap-2">
+                            <div className="shrink-0 mt-0.5">
+                              {item.isAi ? (
+                                <Bot size={14} className="text-blue-400" />
+                              ) : (
+                                <User size={14} className="text-emerald-400" />
+                              )}
                             </div>
-                          ) : (
-                            /* View Mode */
-                            <div className="space-y-3">
-                              {/* Header Row */}
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {item.isAi ? (
-                                    <Bot className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                                  ) : (
-                                    <User className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                                  )}
-                                  <span
-                                    className={cn(
-                                      typography.caption.size,
-                                      typography.caption.weight,
-                                      "uppercase tracking-wider",
-                                      item.isAi ? "text-blue-400/90" : "text-emerald-400/90",
-                                    )}
-                                  >
-                                    {item.isAi ? "AI Memory" : "Your Note"}
-                                  </span>
-
-                                  {/* Status badges */}
-                                  {isDynamic &&
-                                    (item.isCold ? (
-                                      <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-blue-500/10 text-blue-300/80 border border-blue-500/20")}>
-                                        Cold
-                                      </span>
-                                    ) : (
-                                      <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-amber-500/10 text-amber-300/80 border border-amber-500/20")}>
-                                        Hot {item.importanceScore.toFixed(1)}
-                                      </span>
-                                    ))}
-                                  {item.isPinned && (
-                                    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-pink-500/10 text-pink-300/80 border border-pink-500/20")}>
-                                      <Pin size={8} />
-                                      Pinned
-                                    </span>
-                                  )}
-                                  {item.category && (
-                                    <span className={cn("inline-flex items-center px-1.5 py-0.5", radius.md, typography.overline.size, "font-medium bg-purple-500/10 text-purple-300/80 border border-purple-500/20")}>
-                                      {item.category.replace(/_/g, " ")}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Action Buttons */}
-                                <div
-                                  className={cn(
-                                    "flex items-center gap-1.5 shrink-0",
-                                    "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
-                                  )}
-                                >
-                                  {isDynamic && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void handleSetColdState(item.index, !item.isCold);
-                                      }}
-                                      disabled={ui.memoryTempBusy === item.index}
-                                      className={cn(
-                                        "flex items-center justify-center",
-                                        radius.lg,
-                                        item.isCold
-                                          ? "bg-blue-500/15 text-blue-300/90"
-                                          : "bg-amber-500/15 text-amber-300/90",
-                                        "transition-all hover:bg-white/10 hover:text-white/80",
-                                        "disabled:opacity-60 disabled:pointer-events-none",
-                                        "active:scale-95",
-                                      )}
-                                      aria-label={
-                                        item.isCold ? "Mark memory as hot" : "Mark memory as cold"
-                                      }
-                                      title={item.isCold ? "Set hot" : "Set cold"}
-                                    >
-                                      {ui.memoryTempBusy === item.index ? (
-                                        <RefreshCw size={13} className="animate-spin" />
-                                      ) : item.isCold ? (
-                                        <Flame size={13} />
-                                      ) : (
-                                        <Snowflake size={13} />
-                                      )}
-                                    </button>
-                                  )}
-                                  {isDynamic && (
-                                    <button
-                                      type="button"
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        try {
-                                          await handleTogglePin(item.index);
-                                          dispatch({ type: "SET_ACTION_ERROR", value: null });
-                                        } catch (err: any) {
-                                          console.error("Failed to toggle pin:", err);
-                                          dispatch({
-                                            type: "SET_ACTION_ERROR",
-                                            value: err?.message || "Failed to toggle pin",
-                                          });
-                                        }
-                                      }}
-                                      className={cn(
-                                        "flex items-center justify-center",
-                                        radius.lg,
-                                        item.isPinned
-                                          ? "bg-pink-500/20 text-pink-400"
-                                          : "bg-white/5 text-white/50",
-                                        "transition-all hover:bg-pink-500/20 hover:text-pink-400",
-                                        "active:scale-95",
-                                      )}
-                                      aria-label={item.isPinned ? "Unpin memory" : "Pin memory"}
-                                    >
-                                      <Pin size={13} />
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startEdit(item.index, item.text);
-                                    }}
-                                    className={cn(
-                                      "flex items-center justify-center",
-                                      radius.lg,
-                                      "bg-white/5 text-white/50",
-                                      "transition-all hover:bg-white/10 hover:text-white/80",
-                                      "active:scale-95",
-                                    )}
-                                    aria-label="Edit memory"
-                                  >
-                                    <Edit2 size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        await handleRemove(item.index);
-                                        dispatch({ type: "SET_ACTION_ERROR", value: null });
-                                        dispatch({
-                                          type: "SHIFT_EXPANDED_AFTER_DELETE",
-                                          index: item.index,
-                                        });
-                                      } catch (err: any) {
-                                        console.error("Failed to remove memory:", err);
-                                        dispatch({
-                                          type: "SET_ACTION_ERROR",
-                                          value: err?.message || "Failed to remove memory",
-                                        });
-                                      }
-                                    }}
-                                    className={cn(
-                                      "flex items-center justify-center",
-                                      radius.lg,
-                                      "bg-red-500/10 text-red-400/70",
-                                      "transition-all hover:bg-red-500/20 hover:text-red-400",
-                                      "active:scale-95",
-                                    )}
-                                    aria-label="Delete memory"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Memory Content */}
+                            <motion.div className="flex-1 min-w-0" layout>
                               <p
                                 className={cn(
                                   typography.bodySmall.size,
                                   colors.text.secondary,
                                   "leading-relaxed",
-                                  expanded ? "whitespace-pre-wrap" : "line-clamp-2",
+                                  expanded ? "whitespace-pre-wrap" : "line-clamp-3",
                                 )}
                               >
                                 {item.text}
                               </p>
+                            </motion.div>
+                            {/* Overflow Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dispatch({ type: "OPEN_MEMORY_ACTIONS", id: item.id });
+                              }}
+                              className={cn(
+                                "flex items-center justify-center shrink-0 p-2.5 -m-2 -mr-1",
+                                "rounded-lg text-white/30",
+                                "transition-all hover:bg-white/5 hover:text-white/60",
+                                "active:scale-95",
+                              )}
+                              aria-label="Memory actions"
+                            >
+                              <EllipsisVertical size={16} />
+                            </button>
+                          </div>
 
-                              {/* Footer / Meta */}
-                              <div className="flex items-center justify-between pt-1">
-                                <div className={cn("flex items-center gap-3", typography.overline.size, colors.text.disabled)}>
+                          {/* Bottom row: category + pin */}
+                          {(item.category || item.isPinned) && (
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-1.5">
+                                {item.category && (
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center px-1.5 py-0.5",
+                                      radius.md,
+                                      "text-[10px] font-medium",
+                                      "bg-white/5 text-white/40 border border-white/8",
+                                    )}
+                                  >
+                                    {item.category.replace(/_/g, " ")}
+                                  </span>
+                                )}
+                              </div>
+                              {item.isPinned && (
+                                <Pin size={12} className="text-amber-400/60" />
+                              )}
+                            </div>
+                          )}
+
+                          {/* Expanded metadata */}
+                          <AnimatePresence>
+                            {expanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="overflow-hidden"
+                              >
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-3 mt-2 pt-2 border-t border-white/5",
+                                    "text-[10px] text-white/30",
+                                  )}
+                                >
                                   {item.tokenCount > 0 && (
                                     <span>{item.tokenCount.toLocaleString()} tokens</span>
                                   )}
@@ -1710,84 +1653,70 @@ export function ChatMemoriesPage() {
                                       Accessed {new Date(item.lastAccessedAt).toLocaleDateString()}
                                     </span>
                                   )}
-                                </div>
-
-                                {/* Expand hint */}
-                                <div
-                                  className={cn(
-                                    "flex items-center gap-1",
-                                    typography.overline.size,
-                                    colors.text.disabled,
-                                    interactive.transition.fast,
-                                    "group-hover:text-white/40",
-                                  )}
-                                >
-                                  {expanded ? (
-                                    <>
-                                      <ChevronUp size={12} />
-                                      <span>Collapse</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ChevronDown size={12} />
-                                      <span>Expand</span>
-                                    </>
+                                  {isDynamic && (
+                                    <span className={item.isCold ? "text-blue-400/50" : "text-amber-400/50"}>
+                                      {item.isCold ? "Cold" : `Hot ${item.importanceScore.toFixed(1)}`}
+                                    </span>
                                   )}
                                 </div>
-                              </div>
-                            </div>
-                          )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
-                </div>
+                  </AnimatePresence>
+                </motion.div>
               )}
             </div>
-          </div>
+          </motion.div>
         ) : isDynamic && ui.activeTab === "tools" ? (
-          <div className={cn("px-3 py-4", "space-y-5")}>
-            <SectionHeader
-              icon={Clock}
-              title="Activity"
-              subtitle="History of AI memory operations"
-              right={
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleTriggerManual}
-                    disabled={session?.memoryStatus === "processing"}
-                    className={cn(
-                      radius.md,
-                      "border px-2 py-1 flex items-center gap-1.5 transition-all active:scale-95",
-                      "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50",
-                      typography.caption.size,
-                    )}
-                  >
-                    <Cpu
-                      size={12}
-                      className={cn(session?.memoryStatus === "processing" && "animate-pulse")}
-                    />
-                    Run Process
-                  </button>
-                  <span
-                    className={cn(
-                      typography.caption.size,
-                      "inline-flex items-center gap-1 px-2 py-0.5",
-                      radius.full,
-                      "border bg-white/5",
-                      colors.border.subtle,
-                      colors.text.secondary,
-                    )}
-                  >
-                    {(session.memoryToolEvents?.length ?? 0).toLocaleString()}
-                  </span>
-                </div>
-              }
-            />
+          <motion.div
+            key="tools"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className={cn("px-3 py-4", "space-y-5")}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[12px] font-semibold uppercase tracking-wider text-white/50">
+                Activity Log
+              </span>
+              <span className="text-[10px] text-white/20 ml-auto">
+                {(session.memoryToolEvents?.length ?? 0).toLocaleString()} events
+              </span>
+              <button
+                onClick={handleTriggerManual}
+                disabled={session?.memoryStatus === "processing"}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg",
+                  "border border-white/10 bg-white/5",
+                  "text-[11px] font-semibold text-white/50",
+                  "hover:bg-white/8 hover:text-white/70",
+                  "disabled:opacity-40 disabled:pointer-events-none",
+                  "transition-all active:scale-95",
+                )}
+              >
+                <Cpu
+                  size={12}
+                  className={cn(session?.memoryStatus === "processing" && "animate-pulse")}
+                />
+                Run
+              </button>
+            </div>
             <ToolLog events={(session.memoryToolEvents as MemoryToolEvent[]) || []} />
-          </div>
+          </motion.div>
         ) : isDynamic && ui.activeTab === "pinned" ? (
-          <div className={cn("px-3 py-4", "space-y-5")}>
+          <motion.div
+            key="pinned"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className={cn("px-3 py-4", "space-y-5")}
+          >
             <SectionHeader
               icon={Pin}
               title="Pinned Messages"
@@ -1808,13 +1737,20 @@ export function ChatMemoriesPage() {
               }
             />
             {pinnedMessages.length === 0 ? (
-              <div className={cn(components.card.base, "px-6 py-8 text-center")}>
-                <Pin className="mx-auto mb-3 h-12 w-12 text-white/20" />
-                <h3 className="mb-1 text-lg font-medium text-white">No pinned messages</h3>
-                <p className="text-center text-sm text-white/50">
-                  Pin important messages from the chat to always include them in the AI's context
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex flex-col items-center justify-center py-16"
+              >
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5 mb-4">
+                  <Pin className="h-7 w-7 text-white/20" />
+                </div>
+                <h3 className="mb-1 text-base font-semibold text-white">No pinned messages</h3>
+                <p className="text-center text-sm text-white/40 max-w-[240px]">
+                  Pin important messages from the chat to always include them in context
                 </p>
-              </div>
+              </motion.div>
             ) : (
               <div className={cn(spacing.field)}>
                 {pinnedMessages.map((msg) => {
@@ -1919,42 +1855,332 @@ export function ChatMemoriesPage() {
                 })}
               </div>
             )}
-          </div>
+          </motion.div>
         ) : null}
+        </AnimatePresence>
       </main>
 
-      {/* Bottom Tab Bar */}
-      <div
-        className={cn(
-          "fixed bottom-0 left-0 right-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3",
-          colors.glass.strong,
-        )}
+      {/* Summary Editor BottomMenu */}
+      <BottomMenu
+        isOpen={showSummaryEditor}
+        onClose={() => setShowSummaryEditor(false)}
+        title="Context Summary"
       >
-        <div
-          className={cn(radius.lg, "grid gap-2 p-1", colors.surface.elevated)}
-          style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
-        >
-          {tabs.map(({ id, icon: Icon, label }) => (
+        <div className="space-y-4 text-white">
+          <textarea
+            value={ui.summaryDraft}
+            onChange={(e) => dispatch({ type: "SET_SUMMARY_DRAFT", value: e.target.value })}
+            rows={6}
+            className={cn(
+              "w-full p-3",
+              radius.lg,
+              "border border-white/10 bg-black/30",
+              "text-sm text-white/90 resize-none leading-relaxed",
+              "focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10",
+              "placeholder:text-white/30",
+            )}
+            placeholder="Short recap used to keep context consistent across messages..."
+            autoFocus
+          />
+          {session?.memorySummaryTokenCount && session.memorySummaryTokenCount > 0 ? (
+            <p className="text-[10px] text-white/30">
+              {session.memorySummaryTokenCount.toLocaleString()} tokens
+            </p>
+          ) : null}
+          <div className="flex gap-2">
             <button
-              key={id}
-              onClick={() => dispatch({ type: "SET_TAB", tab: id })}
+              onClick={() => {
+                dispatch({ type: "SYNC_SUMMARY_FROM_SESSION", value: session?.memorySummary ?? "" });
+                setShowSummaryEditor(false);
+              }}
               className={cn(
-                radius.md,
-                typography.body.size,
-                "font-semibold flex items-center justify-center gap-2 px-3 py-2.5",
-                interactive.transition.fast,
-                interactive.active.scale,
-                ui.activeTab === id
-                  ? "bg-white/10 text-white"
-                  : cn(colors.text.tertiary, "hover:text-white"),
+                "flex-1 px-4 py-2.5",
+                radius.lg,
+                "border border-white/10 bg-white/5",
+                "text-sm font-medium text-white/60",
+                "transition-all hover:border-white/15 hover:bg-white/8 hover:text-white/80",
+                "active:scale-[0.98]",
               )}
             >
-              <Icon size={16} />
-              {label}
+              Cancel
             </button>
-          ))}
+            <button
+              onClick={async () => {
+                await handleSaveSummaryClick();
+                setShowSummaryEditor(false);
+              }}
+              disabled={ui.isSavingSummary || ui.summaryDraft === session?.memorySummary}
+              className={cn(
+                "flex-1 px-4 py-2.5 flex items-center justify-center gap-2",
+                radius.lg,
+                "border border-emerald-400/30 bg-emerald-500/15",
+                "text-sm font-semibold text-emerald-200",
+                "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25",
+                "active:scale-[0.98]",
+                "disabled:opacity-40 disabled:pointer-events-none",
+              )}
+            >
+              {ui.isSavingSummary ? "Saving..." : "Save"}
+            </button>
+          </div>
         </div>
-      </div>
+      </BottomMenu>
+
+      {/* Add Memory BottomMenu */}
+      <BottomMenu
+        isOpen={showAddCategoryMenu}
+        onClose={() => setShowAddCategoryMenu(false)}
+        title="Add Memory"
+      >
+        <div className="space-y-4 text-white">
+          <textarea
+            value={ui.newMemory}
+            onChange={(e) => dispatch({ type: "SET_NEW_MEMORY", value: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && ui.newMemory.trim()) {
+                e.preventDefault();
+                setShowAddCategoryMenu(false);
+                void handleAddNew(ui.newMemoryCategory || undefined);
+              }
+            }}
+            rows={3}
+            className={cn(
+              "w-full p-3",
+              radius.lg,
+              "border border-white/10 bg-black/30",
+              "text-sm text-white/90 resize-none leading-relaxed",
+              "focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10",
+              "placeholder:text-white/30",
+            )}
+            placeholder="What should be remembered?"
+            autoFocus
+          />
+          {isDynamic && (
+            <div>
+              <p className="text-[11px] font-medium text-white/30 uppercase tracking-wider mb-2">Category</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_NEW_MEMORY_CATEGORY", value: "" })}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                    !ui.newMemoryCategory
+                      ? "bg-white/12 text-white/80 border-white/20"
+                      : "bg-white/4 text-white/35 border-white/8 hover:bg-white/8",
+                  )}
+                >
+                  None
+                </button>
+                {MEMORY_CATEGORY_OPTIONS.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => dispatch({ type: "SET_NEW_MEMORY_CATEGORY", value: category })}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                      ui.newMemoryCategory === category
+                        ? "bg-white/12 text-white/80 border-white/20"
+                        : "bg-white/4 text-white/35 border-white/8 hover:bg-white/8",
+                    )}
+                  >
+                    {formatMemoryCategoryLabel(category)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setShowAddCategoryMenu(false);
+              void handleAddNew(ui.newMemoryCategory || undefined);
+            }}
+            disabled={!ui.newMemory.trim() || ui.isAdding}
+            className={cn(
+              "w-full px-4 py-2.5 flex items-center justify-center gap-2",
+              radius.lg,
+              "border border-emerald-400/30 bg-emerald-500/15",
+              "text-sm font-semibold text-emerald-200",
+              "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25",
+              "active:scale-[0.98]",
+              "disabled:opacity-40 disabled:pointer-events-none",
+            )}
+          >
+            {ui.isAdding ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400" />
+            ) : (
+              <>
+                <Plus size={14} />
+                Save Memory
+              </>
+            )}
+          </button>
+        </div>
+      </BottomMenu>
+
+      {/* Memory Actions BottomMenu */}
+      <BottomMenu
+        isOpen={ui.selectedMemoryId !== null}
+        onClose={() => dispatch({ type: "CLOSE_MEMORY_ACTIONS" })}
+        title={
+          ui.memoryActionMode === "edit"
+            ? "Edit Memory"
+            : (() => {
+                const mem = memoryItems.find((m) => m.id === ui.selectedMemoryId);
+                const preview = mem?.text ?? "";
+                return preview.length > 60 ? preview.slice(0, 60) + "..." : preview || "Memory";
+              })()
+        }
+      >
+        {(() => {
+          const selectedItem = memoryItems.find((m) => m.id === ui.selectedMemoryId);
+          if (!selectedItem) return null;
+
+          if (ui.memoryActionMode === "edit") {
+            return (
+              <div className="space-y-4 text-white">
+                <textarea
+                  value={ui.editingValue}
+                  onChange={(e) => dispatch({ type: "SET_EDIT_VALUE", value: e.target.value })}
+                  rows={4}
+                  className={cn(
+                    "w-full p-3",
+                    radius.lg,
+                    "border border-white/10 bg-black/30",
+                    "text-sm text-white/90 resize-none leading-relaxed",
+                    "focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10",
+                    "placeholder:text-white/30",
+                  )}
+                  placeholder="Enter memory content..."
+                  autoFocus
+                />
+                {isDynamic && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => dispatch({ type: "SET_EDIT_CATEGORY", value: "" })}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                        !ui.editingCategory
+                          ? "bg-white/12 text-white/80 border-white/20"
+                          : "bg-white/4 text-white/35 border-white/8 hover:bg-white/8",
+                      )}
+                    >
+                      No tag
+                    </button>
+                    {MEMORY_CATEGORY_OPTIONS.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => dispatch({ type: "SET_EDIT_CATEGORY", value: category })}
+                        className={cn(
+                          "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                          ui.editingCategory === category
+                            ? "bg-white/12 text-white/80 border-white/20"
+                            : "bg-white/4 text-white/35 border-white/8 hover:bg-white/8",
+                        )}
+                      >
+                        {formatMemoryCategoryLabel(category)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => dispatch({ type: "SET_MEMORY_ACTION_MODE", mode: "actions" })}
+                    className={cn(
+                      "flex-1 px-4 py-2.5",
+                      radius.lg,
+                      "border border-white/10 bg-white/5",
+                      "text-sm font-medium text-white/60",
+                      "transition-all hover:border-white/15 hover:bg-white/8 hover:text-white/80",
+                      "active:scale-[0.98]",
+                    )}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await saveEdit(selectedItem.index);
+                      dispatch({ type: "CLOSE_MEMORY_ACTIONS" });
+                    }}
+                    className={cn(
+                      "flex-1 px-4 py-2.5 flex items-center justify-center gap-2",
+                      radius.lg,
+                      "border border-emerald-400/30 bg-emerald-500/15",
+                      "text-sm font-semibold text-emerald-200",
+                      "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25",
+                      "active:scale-[0.98]",
+                    )}
+                  >
+                    <Check size={14} />
+                    Save
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-1 text-white">
+              <MemoryActionRow
+                icon={Edit2}
+                label="Edit"
+                iconBg="bg-blue-500/20"
+                onClick={() => {
+                  dispatch({ type: "START_EDIT", index: selectedItem.index, text: selectedItem.text, category: selectedItem.category });
+                  dispatch({ type: "SET_MEMORY_ACTION_MODE", mode: "edit" });
+                }}
+              />
+              {isDynamic && (
+                <MemoryActionRow
+                  icon={selectedItem.isPinned ? PinOff : Pin}
+                  label={selectedItem.isPinned ? "Unpin" : "Pin"}
+                  iconBg="bg-amber-500/20"
+                  onClick={async () => {
+                    try {
+                      await handleTogglePin(selectedItem.index);
+                      dispatch({ type: "SET_ACTION_ERROR", value: null });
+                    } catch (err: any) {
+                      dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to toggle pin" });
+                    }
+                    dispatch({ type: "CLOSE_MEMORY_ACTIONS" });
+                  }}
+                />
+              )}
+              {isDynamic && (
+                <MemoryActionRow
+                  icon={selectedItem.isCold ? Flame : Snowflake}
+                  label={selectedItem.isCold ? "Set Hot" : "Set Cold"}
+                  iconBg={selectedItem.isCold ? "bg-amber-500/20" : "bg-blue-500/20"}
+                  disabled={ui.memoryTempBusy === selectedItem.index}
+                  onClick={async () => {
+                    await handleSetColdState(selectedItem.index, !selectedItem.isCold);
+                    dispatch({ type: "CLOSE_MEMORY_ACTIONS" });
+                  }}
+                />
+              )}
+
+              <div className="h-px bg-white/5 my-2" />
+
+              <MemoryActionRow
+                icon={Trash2}
+                label="Delete"
+                variant="danger"
+                onClick={async () => {
+                  try {
+                    await handleRemove(selectedItem.index);
+                    dispatch({ type: "SET_ACTION_ERROR", value: null });
+                    dispatch({ type: "SHIFT_EXPANDED_AFTER_DELETE", index: selectedItem.index });
+                  } catch (err: any) {
+                    dispatch({ type: "SET_ACTION_ERROR", value: err?.message || "Failed to remove memory" });
+                  }
+                  dispatch({ type: "CLOSE_MEMORY_ACTIONS" });
+                }}
+              />
+            </div>
+          );
+        })()}
+      </BottomMenu>
 
       {/* Model Selection BottomMenu */}
       <BottomMenu
