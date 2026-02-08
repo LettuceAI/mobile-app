@@ -67,6 +67,7 @@ import {
 
 import { CreateMenu, Tooltip, useFirstTimeTooltip } from "./ui/components";
 import { V1UpgradeToast } from "./ui/components/V1UpgradeToast";
+import { V2UpgradeToast } from "./ui/components/V2UpgradeToast";
 import { ConfirmBottomMenuHost } from "./ui/components/ConfirmBottomMenu";
 import { isOnboardingCompleted } from "./core/storage/appState";
 import { TopNav, BottomNav } from "./ui/components/App";
@@ -678,6 +679,8 @@ function AppContent() {
 
       {/* V1 Embedding Model Upgrade Toast */}
       <V1UpgradeToast />
+      {/* V2 Embedding Model Upgrade Toast */}
+      <V2UpgradeToast />
     </div>
   );
 }

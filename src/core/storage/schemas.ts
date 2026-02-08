@@ -1530,6 +1530,7 @@ export const SettingsSchema = z.object({
       helpMeReplyStyle: z.enum(["conversational", "roleplay"]).optional(),
       manualModeContextWindow: z.number().optional(),
       embeddingMaxTokens: z.number().optional(), // 1024, 2048, or 4096
+      embeddingModelVersion: z.enum(["v2", "v3"]).optional(),
       dynamicMemory: DynamicMemorySettingsSchema.optional(),
       groupDynamicMemory: DynamicMemorySettingsSchema.optional(),
       accessibility: AccessibilitySettingsSchema.optional(),

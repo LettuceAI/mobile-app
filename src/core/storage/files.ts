@@ -67,9 +67,14 @@ export const storageBridge = {
   // Embedding model download
   checkEmbeddingModel: () => invoke<boolean>("check_embedding_model"),
   getEmbeddingModelInfo: () =>
-    invoke<{ installed: boolean; version: string | null; maxTokens: number }>(
-      "get_embedding_model_info",
-    ),
+    invoke<{
+      installed: boolean;
+      version: string | null;
+      sourceVersion?: string | null;
+      selectedSourceVersion?: string | null;
+      availableVersions?: string[];
+      maxTokens: number;
+    }>("get_embedding_model_info"),
   startEmbeddingDownload: (version?: string) =>
     invoke("start_embedding_download", { version: version ?? null }) as Promise<void>,
   getEmbeddingDownloadProgress: () =>
@@ -121,9 +126,38 @@ export const storageBridge = {
         embeddingDimensions: number;
       };
     }>("run_embedding_test"),
+  runEmbeddingDevBenchmark: () =>
+    invoke<{
+      maxTokensUsed: number;
+      v2: {
+        version: string;
+        sampleCount: number;
+        averageMs: number;
+        p95Ms: number;
+        minMs: number;
+        maxMs: number;
+      };
+      v3: {
+        version: string;
+        sampleCount: number;
+        averageMs: number;
+        p95Ms: number;
+        minMs: number;
+        maxMs: number;
+      };
+      pairDeltas: Array<{
+        pairName: string;
+        v2Similarity: number;
+        v3Similarity: number;
+        delta: number;
+      }>;
+      averageSpeedupV3VsV2: number;
+    }>("run_embedding_dev_benchmark"),
   compareCustomTexts: (textA: string, textB: string) =>
     invoke<number>("compare_custom_texts", { textA, textB }),
   deleteEmbeddingModel: () => invoke("delete_embedding_model") as Promise<void>,
+  deleteEmbeddingModelVersion: (version: "v1" | "v2" | "v3") =>
+    invoke("delete_embedding_model_version", { version }) as Promise<void>,
 
   providerUpsert: (cred: unknown) =>
     invoke<string>("provider_upsert", { credentialJson: JSON.stringify(cred) }).then((s) =>

@@ -755,6 +755,9 @@ export async function checkEmbeddingModel(): Promise<boolean> {
 export async function getEmbeddingModelInfo(): Promise<{
   installed: boolean;
   version: string | null;
+  sourceVersion?: string | null;
+  selectedSourceVersion?: string | null;
+  availableVersions?: string[];
   maxTokens: number;
 }> {
   return storageBridge.getEmbeddingModelInfo();

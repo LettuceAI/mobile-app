@@ -5,6 +5,7 @@ import { storageBridge } from "../../../core/storage/files";
 import { updateAdvancedSetting } from "../../../core/storage/advanced";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
+import { getEmbeddingModelDisplayName } from "../../embeddingModelLabels";
 
 type Capacity = 1024 | 2048 | 4096;
 
@@ -19,6 +20,10 @@ export function EmbeddingDownloadPage() {
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo");
   const isUpgrade = searchParams.get("upgrade") === "true";
+  const requestedVersion = searchParams.get("version");
+  const downloadVersion = requestedVersion === "v2" ? "v2" : "v3";
+  const downloadVersionLabel = getEmbeddingModelDisplayName(downloadVersion);
+  const downloadApproxSize = downloadVersion === "v2" ? "~132 MB" : "~86 MB";
 
   // Capacity selection state
   const [showCapacitySelection, setShowCapacitySelection] = useState(true);
@@ -65,16 +70,6 @@ export function EmbeddingDownloadPage() {
     const setupListener = async () => {
       try {
         const currentProgress = await storageBridge.getEmbeddingDownloadProgress();
-
-        // If already completed, redirect
-        if (currentProgress.status === "completed") {
-          if (returnTo) {
-            navigate(returnTo, { replace: true });
-          } else {
-            navigate("/settings/advanced/memory", { replace: true });
-          }
-          return;
-        }
 
         // Setup listener for progress updates
         unsubscribe = await storageBridge.listenToEmbeddingDownloadProgress((progressData) => {
@@ -135,8 +130,7 @@ export function EmbeddingDownloadPage() {
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 300));
-      // Always download v2 model (the backend defaults to v2)
-      await storageBridge.startEmbeddingDownload("v2");
+      await storageBridge.startEmbeddingDownload(downloadVersion);
 
       // Save the selected capacity to settings
       await updateAdvancedSetting("embeddingMaxTokens", selectedCapacity);
@@ -289,12 +283,14 @@ export function EmbeddingDownloadPage() {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-white">
               {showCapacitySelection &&
-                (isUpgrade ? "Upgrade Embedding Model" : "Setup Embedding Model")}
+                (isUpgrade
+                  ? `Upgrade to ${downloadVersionLabel} Embedding Model`
+                  : `Setup ${downloadVersionLabel} Embedding Model`)}
               {!showCapacitySelection &&
                 testStatus === "idle" &&
                 (preStepStatus === "preparing"
                   ? "Preparing Download"
-                  : "Downloading Embedding Model")}
+                  : `Downloading ${downloadVersionLabel} Embedding Model`)}
               {!showCapacitySelection && testStatus === "testing" && "Testing Model"}
               {!showCapacitySelection && testStatus === "passed" && "Test Passed!"}
               {!showCapacitySelection && testStatus === "failed" && "Test Failed"}
@@ -372,7 +368,7 @@ export function EmbeddingDownloadPage() {
                   className="w-full mt-4 py-3 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   <Download className="h-5 w-5" />
-                  Download v2 Model (~86 MB)
+                  Download {downloadVersionLabel} Model ({downloadApproxSize})
                 </button>
 
                 <button
@@ -468,7 +464,7 @@ export function EmbeddingDownloadPage() {
                   {testStatus === "idle" &&
                     preStepStatus !== "preparing" &&
                     progress.status === "downloading" &&
-                    "Downloading..."}
+                    `Downloading ${downloadVersionLabel} files...`}
                   {testStatus === "idle" &&
                     progress.status === "completed" &&
                     "Download completed!"}

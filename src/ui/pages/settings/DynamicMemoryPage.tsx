@@ -12,6 +12,8 @@ import {
   Zap,
   Scale,
   Brain,
+  Boxes,
+  Rocket,
 } from "lucide-react";
 import {
   readSettings,
@@ -26,6 +28,10 @@ import { EmbeddingUpgradePrompt } from "../../components/EmbeddingUpgradePrompt"
 import { BottomMenu } from "../../components/BottomMenu";
 import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { getProviderIcon } from "../../../core/utils/providerIcons";
+import {
+  getEmbeddingModelCodename,
+  getEmbeddingModelDisplayName,
+} from "../../embeddingModelLabels";
 
 const DEFAULT_DYNAMIC_MEMORY_SETTINGS: DynamicMemorySettings = {
   enabled: false,
@@ -164,6 +170,10 @@ export function DynamicMemoryPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [embeddingMaxTokens, setEmbeddingMaxTokens] = useState<number>(2048);
   const [modelVersion, setModelVersion] = useState<string | null>(null);
+  const [modelSourceVersion, setModelSourceVersion] = useState<string | null>(null);
+  const [availableEmbeddingVersions, setAvailableEmbeddingVersions] = useState<string[]>([]);
+  const [selectedEmbeddingVersion, setSelectedEmbeddingVersion] = useState<string | null>(null);
+  const [showDownloadModelMenu, setShowDownloadModelMenu] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -202,11 +212,17 @@ export function DynamicMemoryPage() {
         setEmbeddingMaxTokens(settings.advancedSettings?.embeddingMaxTokens ?? 2048);
         setModels(settings.models);
 
-        if (modelInfo.installed && modelInfo.version === "v1") {
+        if (modelInfo.installed) {
           setModelVersion(modelInfo.version);
-          setShowUpgradePrompt(true);
-        } else if (modelInfo.installed) {
-          setModelVersion(modelInfo.version);
+          const sourceVersion =
+            modelInfo.selectedSourceVersion ?? modelInfo.sourceVersion ?? modelInfo.version;
+          setModelSourceVersion(sourceVersion);
+          setSelectedEmbeddingVersion(sourceVersion);
+          const available = modelInfo.availableVersions ?? [];
+          setAvailableEmbeddingVersions(available);
+          if ((sourceVersion === "v1" || sourceVersion === "v2") && !available.includes("v3")) {
+            setShowUpgradePrompt(true);
+          }
         }
 
         setIsLoading(false);
@@ -315,6 +331,40 @@ export function DynamicMemoryPage() {
     }, "Failed to save embedding max tokens:");
   };
 
+  const handleEmbeddingModelVersionChange = async (version: "v2" | "v3") => {
+    setSelectedEmbeddingVersion(version);
+    setModelSourceVersion(version);
+    await updateAdvancedSettings((advanced) => {
+      advanced.embeddingModelVersion = version;
+    }, "Failed to save embedding model version:");
+  };
+
+  const handleDeleteSelectedEmbeddingModel = async () => {
+    const version = selectedEmbeddingVersion === "v2" ? "v2" : "v3";
+    const modelLabel = getEmbeddingModelDisplayName(version);
+    const confirmed = await confirmBottomMenu({
+      title: `Delete ${modelLabel}?`,
+      message: `Are you sure you want to delete ${modelLabel}? You can download it again later.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await storageBridge.deleteEmbeddingModelVersion(version);
+      const modelInfo = await getEmbeddingModelInfo();
+      const sourceVersion =
+        modelInfo.selectedSourceVersion ?? modelInfo.sourceVersion ?? modelInfo.version;
+      const available = modelInfo.availableVersions ?? [];
+      setModelVersion(modelInfo.version);
+      setModelSourceVersion(sourceVersion);
+      setAvailableEmbeddingVersions(available);
+      setSelectedEmbeddingVersion(sourceVersion);
+    } catch (err) {
+      console.error("Failed to delete model version:", err);
+    }
+  };
+
   if (isLoading) {
     return null;
   }
@@ -328,6 +378,13 @@ export function DynamicMemoryPage() {
   const selectedSummarisationModel = summarisationModelId
     ? models.find((model) => model.id === summarisationModelId)
     : null;
+  const hasV2Installed = availableEmbeddingVersions.includes("v2");
+  const hasV3Installed = availableEmbeddingVersions.includes("v3");
+  const hasBothMajorEmbeddingVersionsInstalled = hasV2Installed && hasV3Installed;
+  const effectiveEmbeddingVersion =
+    selectedEmbeddingVersion ?? modelSourceVersion ?? modelVersion ?? null;
+  const supportsExtendedTokenCapacity =
+    effectiveEmbeddingVersion === "v2" || effectiveEmbeddingVersion === "v3";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -349,6 +406,7 @@ export function DynamicMemoryPage() {
               <EmbeddingUpgradePrompt
                 onDismiss={() => setShowUpgradePrompt(false)}
                 returnTo="/settings/advanced/dynamic-memory"
+                currentVersion={modelSourceVersion === "v1" ? "v1" : "v2"}
               />
             )}
           </AnimatePresence>
@@ -482,8 +540,8 @@ export function DynamicMemoryPage() {
                 )}
               </div>
 
-              {/* Context Enrichment (v2 only) */}
-              {modelVersion === "v2" && currentEnabled && (
+              {/* Context Enrichment (v2/v3) */}
+              {supportsExtendedTokenCapacity && currentEnabled && (
                 <div className={cn("rounded-xl border border-white/10 bg-white/5 px-4 py-3")}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -705,11 +763,85 @@ export function DynamicMemoryPage() {
                     </div>
                   )}
                   <p className="text-xs text-white/50">Used for conversation summarization</p>
+
+                  {/* Desktop: Model Management under Summarisation to avoid large left-column gap */}
+                  <div className="hidden lg:block space-y-3 pt-4">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
+                      Model Management
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => navigate("/settings/embedding-test")}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-xl",
+                          "border border-white/10 bg-white/5 px-4 py-3",
+                          "text-sm font-medium text-white",
+                          interactive.transition.fast,
+                          "hover:bg-white/10",
+                        )}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Test Model
+                      </button>
+                      {!hasBothMajorEmbeddingVersionsInstalled && (
+                        <button
+                          onClick={() => setShowDownloadModelMenu(true)}
+                          className={cn(
+                            "flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium",
+                            "border-blue-400/25 bg-blue-500/10 text-blue-100",
+                            interactive.transition.fast,
+                            "hover:bg-blue-500/20",
+                          )}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          Download Model
+                        </button>
+                      )}
+                      <button
+                        onClick={handleDeleteSelectedEmbeddingModel}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-xl",
+                          "border border-red-500/20 bg-red-500/10 px-4 py-3",
+                          "text-sm font-medium text-red-200",
+                          interactive.transition.fast,
+                          "hover:bg-red-500/20",
+                        )}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Right: Token Capacity (v2 only) or Model Info */}
+                {/* Right: Token Capacity (v2/v3) or Model Info */}
                 <div className="space-y-3">
-                  {modelVersion === "v2" && (
+                  {availableEmbeddingVersions.filter((v) => v === "v2" || v === "v3").length >
+                    1 && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="mb-2 text-sm font-medium text-white">Embedding Model</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["v2", "v3"] as const)
+                          .filter((version) => availableEmbeddingVersions.includes(version))
+                          .map((version) => (
+                            <button
+                              key={version}
+                              onClick={() => handleEmbeddingModelVersionChange(version)}
+                              className={cn(
+                                "px-3 py-2.5 rounded-lg text-sm font-medium transition-all uppercase",
+                                selectedEmbeddingVersion === version
+                                  ? "bg-blue-500 text-white"
+                                  : "border border-white/10 bg-white/5 text-white/70 hover:border-white/20",
+                              )}
+                            >
+                              {getEmbeddingModelCodename(version)}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {supportsExtendedTokenCapacity && (
                     <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-sm font-medium text-white">Token Capacity</span>
@@ -748,8 +880,9 @@ export function DynamicMemoryPage() {
                   {/* Model info */}
                   {modelVersion && (
                     <div className="text-xs text-white/40 px-1">
-                      Installed model: {modelVersion === "v2" ? "v2" : "v1"} ({embeddingMaxTokens}{" "}
-                      max tokens)
+                      Installed model:{" "}
+                      {getEmbeddingModelDisplayName(modelSourceVersion ?? modelVersion)} (
+                      {embeddingMaxTokens} max tokens)
                     </div>
                   )}
                 </div>
@@ -759,7 +892,7 @@ export function DynamicMemoryPage() {
 
           {/* Model Management */}
           {isAnyEnabled && (
-            <div className="space-y-3 pt-2">
+            <div className="space-y-3 pt-2 lg:hidden">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35 px-1">
                 Model Management
               </h3>
@@ -778,24 +911,23 @@ export function DynamicMemoryPage() {
                   <RefreshCw className="h-4 w-4" />
                   Test Model
                 </button>
+                {!hasBothMajorEmbeddingVersionsInstalled && (
+                  <button
+                    onClick={() => setShowDownloadModelMenu(true)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium",
+                      "border-blue-400/25 bg-blue-500/10 text-blue-100",
+                      interactive.transition.fast,
+                      "hover:bg-blue-500/20",
+                    )}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Download Model
+                  </button>
+                )}
 
                 <button
-                  onClick={async () => {
-                    const confirmed = await confirmBottomMenu({
-                      title: "Reinstall model?",
-                      message:
-                        "Are you sure you want to reinstall the model? This will delete existing model files and require a re-download.",
-                      confirmLabel: "Reinstall",
-                      destructive: true,
-                    });
-                    if (!confirmed) return;
-                    try {
-                      await storageBridge.deleteEmbeddingModel();
-                      navigate("/settings/embedding-download");
-                    } catch (err) {
-                      console.error("Failed to delete model:", err);
-                    }
-                  }}
+                  onClick={handleDeleteSelectedEmbeddingModel}
                   className={cn(
                     "flex items-center justify-center gap-2 rounded-xl",
                     "border border-red-500/20 bg-red-500/10 px-4 py-3",
@@ -805,13 +937,86 @@ export function DynamicMemoryPage() {
                   )}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Reinstall
+                  Delete
                 </button>
               </div>
             </div>
           )}
         </div>
       </main>
+
+      {/* Download Model BottomMenu */}
+      <BottomMenu
+        isOpen={showDownloadModelMenu}
+        onClose={() => setShowDownloadModelMenu(false)}
+        title="Download Embedding Model"
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-white/55">
+            Choose which version to download. Installed versions are disabled.
+          </p>
+          <button
+            onClick={() => {
+              setShowDownloadModelMenu(false);
+              navigate("/settings/embedding-download?version=v2");
+            }}
+            disabled={hasV2Installed}
+            className={cn(
+              "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition",
+              hasV2Installed
+                ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                : "border-white/10 bg-white/5 text-white hover:bg-white/10",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <div className="rounded-md border border-white/10 bg-white/5 p-1.5">
+                <Boxes className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">{getEmbeddingModelDisplayName("v2")}</div>
+                <div className="text-[11px] text-white/45">
+                  Optimized for accuracy and long-context recall
+                </div>
+              </div>
+            </div>
+            {hasV2Installed && (
+              <span className="flex items-center gap-1 text-xs text-white/45">
+                <Check className="h-3.5 w-3.5" />
+                Installed
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setShowDownloadModelMenu(false);
+              navigate("/settings/embedding-download?version=v3");
+            }}
+            disabled={hasV3Installed}
+            className={cn(
+              "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition",
+              hasV3Installed
+                ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                : "border-white/10 bg-white/5 text-white hover:bg-white/10",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <div className="rounded-md border border-white/10 bg-white/5 p-1.5">
+                <Rocket className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">{getEmbeddingModelDisplayName("v3")}</div>
+                <div className="text-[11px] text-white/45">Latest embedding quality</div>
+              </div>
+            </div>
+            {hasV3Installed && (
+              <span className="flex items-center gap-1 text-xs text-white/45">
+                <Check className="h-3.5 w-3.5" />
+                Installed
+              </span>
+            )}
+          </button>
+        </div>
+      </BottomMenu>
 
       {/* Model Selection BottomMenu */}
       <BottomMenu

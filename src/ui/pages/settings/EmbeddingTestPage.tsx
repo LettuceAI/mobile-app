@@ -15,6 +15,7 @@ import {
 import { storageBridge } from "../../../core/storage/files";
 import { cn, interactive } from "../../design-tokens";
 import { listen } from "@tauri-apps/api/event";
+import { getEmbeddingModelDisplayName } from "../../embeddingModelLabels";
 
 type TestStatus = "idle" | "testing" | "passed" | "failed";
 
@@ -39,6 +40,33 @@ interface TestResults {
   message: string;
   scores: ScoreResult[];
   modelInfo: ModelInfo;
+}
+
+interface DevBenchmarkResults {
+  maxTokensUsed: number;
+  v2: {
+    version: string;
+    sampleCount: number;
+    averageMs: number;
+    p95Ms: number;
+    minMs: number;
+    maxMs: number;
+  };
+  v3: {
+    version: string;
+    sampleCount: number;
+    averageMs: number;
+    p95Ms: number;
+    minMs: number;
+    maxMs: number;
+  };
+  pairDeltas: Array<{
+    pairName: string;
+    v2Similarity: number;
+    v3Similarity: number;
+    delta: number;
+  }>;
+  averageSpeedupV3VsV2: number;
 }
 
 const CATEGORY_INFO: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
@@ -217,6 +245,12 @@ export function EmbeddingTestPage() {
   const [customScore, setCustomScore] = useState<number | null>(null);
   const [comparingCustom, setComparingCustom] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+  const [benchmarkStatus, setBenchmarkStatus] = useState<"idle" | "running" | "done" | "failed">(
+    "idle",
+  );
+  const [benchmarkResults, setBenchmarkResults] = useState<DevBenchmarkResults | null>(null);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const isDevBuild = import.meta.env.DEV;
 
   const runTest = async () => {
     setTestStatus("testing");
@@ -260,6 +294,20 @@ export function EmbeddingTestPage() {
       setCustomError(err instanceof Error ? err.message : String(err));
     } finally {
       setComparingCustom(false);
+    }
+  };
+
+  const runDevBenchmark = async () => {
+    setBenchmarkStatus("running");
+    setBenchmarkError(null);
+    setBenchmarkResults(null);
+    try {
+      const results = await storageBridge.runEmbeddingDevBenchmark();
+      setBenchmarkResults(results);
+      setBenchmarkStatus("done");
+    } catch (err) {
+      setBenchmarkError(err instanceof Error ? err.message : String(err));
+      setBenchmarkStatus("failed");
     }
   };
 
@@ -512,6 +560,110 @@ export function EmbeddingTestPage() {
                   </div>
                 );
               })}
+            </motion.div>
+          )}
+
+          {/* Developer Benchmark */}
+          {isDevBuild && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.24 }}
+              className="rounded-xl border border-blue-400/25 bg-blue-500/5 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-100">Developer Benchmark</h3>
+                  <p className="mt-1 text-xs text-blue-200/70">
+                    Compare local {getEmbeddingModelDisplayName("v2")} and{" "}
+                    {getEmbeddingModelDisplayName("v3")} for speed and similarity outputs.
+                  </p>
+                </div>
+                <button
+                  onClick={runDevBenchmark}
+                  disabled={benchmarkStatus === "running"}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    benchmarkStatus === "running"
+                      ? "cursor-not-allowed border-blue-300/20 bg-blue-500/10 text-blue-100/60"
+                      : "border-blue-300/40 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30",
+                  )}
+                >
+                  {benchmarkStatus === "running" ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <Cpu className="h-3.5 w-3.5" />
+                      Run {getEmbeddingModelDisplayName("v2")} vs{" "}
+                      {getEmbeddingModelDisplayName("v3")}
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {benchmarkError && (
+                <div className="mt-3 rounded-lg border border-red-500/35 bg-red-500/10 p-3 text-xs text-red-200/80">
+                  {benchmarkError}
+                </div>
+              )}
+
+              {benchmarkResults && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-white/40">
+                        {getEmbeddingModelDisplayName("v2")}
+                      </div>
+                      <div className="mt-1 text-xs text-white/80">
+                        avg {benchmarkResults.v2.averageMs.toFixed(2)} ms
+                      </div>
+                      <div className="text-xs text-white/60">
+                        p95 {benchmarkResults.v2.p95Ms.toFixed(2)} ms
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-white/40">
+                        {getEmbeddingModelDisplayName("v3")}
+                      </div>
+                      <div className="mt-1 text-xs text-white/80">
+                        avg {benchmarkResults.v3.averageMs.toFixed(2)} ms
+                      </div>
+                      <div className="text-xs text-white/60">
+                        p95 {benchmarkResults.v3.p95Ms.toFixed(2)} ms
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white/70">
+                    Speedup ({getEmbeddingModelDisplayName("v3")} vs{" "}
+                    {getEmbeddingModelDisplayName("v2")}):{" "}
+                    <span className="font-semibold text-white">
+                      {benchmarkResults.averageSpeedupV3VsV2.toFixed(2)}x
+                    </span>{" "}
+                    at {benchmarkResults.maxTokensUsed} tokens max
+                  </div>
+
+                  <div className="space-y-2">
+                    {benchmarkResults.pairDeltas.map((pair) => (
+                      <div
+                        key={pair.pairName}
+                        className="rounded-lg border border-white/10 bg-black/25 p-3"
+                      >
+                        <div className="text-xs font-medium text-white/85">{pair.pairName}</div>
+                        <div className="mt-1 text-[11px] text-white/60">
+                          {getEmbeddingModelDisplayName("v2")} {pair.v2Similarity.toFixed(4)} |{" "}
+                          {getEmbeddingModelDisplayName("v3")} {pair.v3Similarity.toFixed(4)} |
+                          delta {pair.delta >= 0 ? "+" : ""}
+                          {pair.delta.toFixed(4)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 

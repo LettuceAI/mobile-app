@@ -161,6 +161,7 @@ export function LogsPage() {
       lines.push("Embedding Model");
       lines.push(`- Installed: ${embeddingInfo.installed ? "yes" : "no"}`);
       lines.push(`- Version: ${embeddingInfo.version ?? "unknown"}`);
+      lines.push(`- Source version: ${embeddingInfo.sourceVersion ?? "unknown"}`);
       lines.push(`- Max tokens: ${embeddingInfo.maxTokens ?? "unknown"}`);
       lines.push("");
       lines.push("Embedding Test");
