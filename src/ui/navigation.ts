@@ -132,15 +132,19 @@ export const BACK_MAPPINGS: BackMapping[] = [
 
 // Chat-specific helpers for back navigation from nested paths.
 export function resolveChatBackTarget(path: string): string | null {
-  if (path.startsWith("/chat/") && path.includes("/settings")) {
-    const parts = path.split("/").filter(Boolean);
+  const [pathname, search = ""] = path.split("?");
+  const params = new URLSearchParams(search);
+  const sessionId = params.get("sessionId");
+
+  if (pathname.startsWith("/chat/") && pathname.includes("/settings")) {
+    const parts = pathname.split("/").filter(Boolean);
     const charId = parts[1];
-    if (charId) return `/chat/${charId}`;
+    if (charId) return Routes.chatSession(charId, sessionId);
   }
-  if (path.startsWith("/chat/") && path.includes("/history")) {
-    const parts = path.split("/").filter(Boolean);
+  if (pathname.startsWith("/chat/") && pathname.includes("/history")) {
+    const parts = pathname.split("/").filter(Boolean);
     const charId = parts[1];
-    if (charId) return `/chat/${charId}/settings`;
+    if (charId) return Routes.chatSettingsSession(charId, sessionId);
   }
   return null;
 }
