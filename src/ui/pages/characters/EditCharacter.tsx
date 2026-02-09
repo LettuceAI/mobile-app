@@ -61,6 +61,8 @@ export function EditCharacterPage() {
   const [activeTab, setActiveTab] = React.useState<"character" | "settings">("character");
   const [showModelMenu, setShowModelMenu] = React.useState(false);
   const [modelSearchQuery, setModelSearchQuery] = React.useState("");
+  const [showFallbackModelMenu, setShowFallbackModelMenu] = React.useState(false);
+  const [fallbackModelSearchQuery, setFallbackModelSearchQuery] = React.useState("");
   const [showVoiceMenu, setShowVoiceMenu] = React.useState(false);
   const [voiceSearchQuery, setVoiceSearchQuery] = React.useState("");
   const [exportMenuOpen, setExportMenuOpen] = React.useState(false);
@@ -86,6 +88,7 @@ export function EditCharacterPage() {
     newSceneContent,
     newSceneDirection,
     selectedModelId,
+    selectedFallbackModelId,
 
     disableAvatarGradient,
     customGradientEnabled,
@@ -911,6 +914,52 @@ export function EditCharacterPage() {
                 </p>
               </div>
 
+              {/* Fallback Model Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg border border-indigo-400/30 bg-indigo-400/10 p-1.5">
+                    <Cpu className="h-4 w-4 text-indigo-300" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Fallback Model</h3>
+                  <span className="ml-auto text-xs text-white/40">(Optional)</span>
+                </div>
+
+                {loadingModels ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                    <span className="text-sm text-white/50">Loading models...</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowFallbackModelMenu(true)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-left transition hover:bg-black/30 focus:border-white/25 focus:outline-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      {selectedFallbackModelId ? (
+                        getProviderIcon(
+                          models.find((m) => m.id === selectedFallbackModelId)?.providerId || "",
+                        )
+                      ) : (
+                        <Cpu className="h-5 w-5 text-white/40" />
+                      )}
+                      <span
+                        className={`text-sm ${selectedFallbackModelId ? "text-white" : "text-white/50"}`}
+                      >
+                        {selectedFallbackModelId
+                          ? models.find((m) => m.id === selectedFallbackModelId)?.displayName ||
+                            "Selected Fallback Model"
+                          : "Off (no fallback)"}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-white/40" />
+                  </button>
+                )}
+                <p className="text-xs text-white/50">
+                  Retry with this model only when the primary model fails
+                </p>
+              </div>
+
               {/* System Prompt Template Section */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -1401,7 +1450,11 @@ export function EditCharacterPage() {
                 <button
                   key={model.id}
                   onClick={() => {
-                    setFields({ selectedModelId: model.id });
+                    setFields({
+                      selectedModelId: model.id,
+                      selectedFallbackModelId:
+                        selectedFallbackModelId === model.id ? null : selectedFallbackModelId,
+                    });
                     setShowModelMenu(false);
                     setModelSearchQuery("");
                   }}
@@ -1420,6 +1473,96 @@ export function EditCharacterPage() {
                     <span className="block truncate text-xs text-white/40">{model.name}</span>
                   </div>
                   {selectedModelId === model.id && (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                  )}
+                </button>
+              ))}
+          </div>
+        </div>
+      </BottomMenu>
+
+      {/* Fallback Model Selection BottomMenu */}
+      <BottomMenu
+        isOpen={showFallbackModelMenu}
+        onClose={() => {
+          setShowFallbackModelMenu(false);
+          setFallbackModelSearchQuery("");
+        }}
+        title="Select Fallback Model"
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={fallbackModelSearchQuery}
+              onChange={(e) => setFallbackModelSearchQuery(e.target.value)}
+              placeholder="Search models..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+            />
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            <button
+              onClick={() => {
+                setFields({ selectedFallbackModelId: null });
+                setShowFallbackModelMenu(false);
+                setFallbackModelSearchQuery("");
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                !selectedFallbackModelId
+                  ? "border-emerald-400/40 bg-emerald-400/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10",
+              )}
+            >
+              <Cpu className="h-5 w-5 text-white/40" />
+              <span className="text-sm text-white">Off (no fallback)</span>
+              {!selectedFallbackModelId && <Check className="h-4 w-4 ml-auto text-emerald-400" />}
+            </button>
+            {models
+              .filter((m) => m.id !== selectedModelId)
+              .filter((m) => {
+                if (!fallbackModelSearchQuery) return true;
+                const q = fallbackModelSearchQuery.toLowerCase();
+                return (
+                  m.displayName?.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q)
+                );
+              })
+              .map((model) => (
+                <button
+                  key={model.id}
+                  onClick={() => {
+                    setFields({ selectedFallbackModelId: model.id });
+                    setShowFallbackModelMenu(false);
+                    setFallbackModelSearchQuery("");
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                    selectedFallbackModelId === model.id
+                      ? "border-emerald-400/40 bg-emerald-400/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10",
+                  )}
+                >
+                  {getProviderIcon(model.providerId)}
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate text-sm text-white">
+                      {model.displayName || model.name}
+                    </span>
+                    <span className="block truncate text-xs text-white/40">{model.name}</span>
+                  </div>
+                  {selectedFallbackModelId === model.id && (
                     <Check className="h-4 w-4 shrink-0 text-emerald-400" />
                   )}
                 </button>

@@ -147,6 +147,8 @@ export function CreateCharacterPage() {
               loadingModels={state.loadingModels}
               selectedModelId={state.selectedModelId}
               onSelectModel={actions.setSelectedModelId}
+              selectedFallbackModelId={state.selectedFallbackModelId}
+              onSelectFallbackModel={actions.setSelectedFallbackModelId}
               memoryType={state.memoryType}
               dynamicMemoryEnabled={state.dynamicMemoryEnabled}
               onMemoryTypeChange={actions.setMemoryType}

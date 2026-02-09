@@ -26,6 +26,8 @@ interface DescriptionStepProps {
   loadingModels: boolean;
   selectedModelId: string | null;
   onSelectModel: (value: string | null) => void;
+  selectedFallbackModelId: string | null;
+  onSelectFallbackModel: (value: string | null) => void;
   memoryType: "manual" | "dynamic";
   dynamicMemoryEnabled: boolean;
   onMemoryTypeChange: (value: "manual" | "dynamic") => void;
@@ -57,6 +59,8 @@ export function DescriptionStep({
   loadingModels,
   selectedModelId,
   onSelectModel,
+  selectedFallbackModelId,
+  onSelectFallbackModel,
   memoryType,
   dynamicMemoryEnabled,
   onMemoryTypeChange,
@@ -81,6 +85,8 @@ export function DescriptionStep({
   const wordCount = definition.trim().split(/\s+/).filter(Boolean).length;
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [showFallbackModelMenu, setShowFallbackModelMenu] = useState(false);
+  const [fallbackModelSearchQuery, setFallbackModelSearchQuery] = useState("");
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [voiceSearchQuery, setVoiceSearchQuery] = useState("");
 
@@ -297,6 +303,68 @@ export function DescriptionStep({
         )}
         <p className={cn(typography.bodySmall.size, "text-white/40")}>
           This model will power the character's responses
+        </p>
+      </div>
+
+      {/* Fallback Model Selection */}
+      <div className={spacing.field}>
+        <label
+          className={cn(
+            typography.label.size,
+            typography.label.weight,
+            typography.label.tracking,
+            "uppercase text-white/70",
+          )}
+        >
+          Fallback Model (Optional)
+        </label>
+        {loadingModels ? (
+          <div
+            className={cn(
+              "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+              radius.md,
+            )}
+          >
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+            <span className={cn(typography.body.size, "text-white/60")}>Loading models...</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowFallbackModelMenu(true)}
+            className={cn(
+              "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
+              radius.md,
+              interactive.transition.default,
+              "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
+              selectedFallbackModelId ? "border-white/20" : "border-white/10",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {selectedFallbackModelId ? (
+                getProviderIcon(
+                  models.find((m) => m.id === selectedFallbackModelId)?.providerId || "",
+                )
+              ) : (
+                <Cpu className="h-5 w-5 text-white/40" />
+              )}
+              <span
+                className={cn(
+                  "text-base",
+                  selectedFallbackModelId ? "text-white" : "text-white/50",
+                )}
+              >
+                {selectedFallbackModelId
+                  ? models.find((m) => m.id === selectedFallbackModelId)?.displayName ||
+                    "Selected Fallback Model"
+                  : "Off (no fallback)"}
+              </span>
+            </div>
+            <ChevronDown className="h-4 w-4 text-white/40" />
+          </button>
+        )}
+        <p className={cn(typography.bodySmall.size, "text-white/40")}>
+          Retries with this model only if the primary model fails
         </p>
       </div>
 
@@ -647,6 +715,96 @@ export function DescriptionStep({
                     <span className="block truncate text-xs text-white/40">{model.name}</span>
                   </div>
                   {selectedModelId === model.id && (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                  )}
+                </button>
+              ))}
+          </div>
+        </div>
+      </BottomMenu>
+
+      {/* Fallback Model Selection BottomMenu */}
+      <BottomMenu
+        isOpen={showFallbackModelMenu}
+        onClose={() => {
+          setShowFallbackModelMenu(false);
+          setFallbackModelSearchQuery("");
+        }}
+        title="Select Fallback Model"
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={fallbackModelSearchQuery}
+              onChange={(e) => setFallbackModelSearchQuery(e.target.value)}
+              placeholder="Search models..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 pl-10 text-sm text-white placeholder-white/40 focus:border-white/20 focus:outline-none"
+            />
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <div className="max-h-[50vh] space-y-2 overflow-y-auto">
+            <button
+              onClick={() => {
+                onSelectFallbackModel(null);
+                setShowFallbackModelMenu(false);
+                setFallbackModelSearchQuery("");
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                !selectedFallbackModelId
+                  ? "border-emerald-400/40 bg-emerald-400/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10",
+              )}
+            >
+              <Cpu className="h-5 w-5 text-white/40" />
+              <span className="text-sm text-white">Off (no fallback)</span>
+              {!selectedFallbackModelId && <Check className="ml-auto h-4 w-4 text-emerald-400" />}
+            </button>
+            {models
+              .filter((m) => m.id !== selectedModelId)
+              .filter((m) => {
+                if (!fallbackModelSearchQuery) return true;
+                const q = fallbackModelSearchQuery.toLowerCase();
+                return (
+                  m.displayName?.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q)
+                );
+              })
+              .map((model) => (
+                <button
+                  key={model.id}
+                  onClick={() => {
+                    onSelectFallbackModel(model.id);
+                    setShowFallbackModelMenu(false);
+                    setFallbackModelSearchQuery("");
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
+                    selectedFallbackModelId === model.id
+                      ? "border-emerald-400/40 bg-emerald-400/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10",
+                  )}
+                >
+                  {getProviderIcon(model.providerId)}
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-white">
+                      {model.displayName || model.name}
+                    </span>
+                    <span className="block truncate text-xs text-white/40">{model.name}</span>
+                  </div>
+                  {selectedFallbackModelId === model.id && (
                     <Check className="h-4 w-4 shrink-0 text-emerald-400" />
                   )}
                 </button>

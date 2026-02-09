@@ -340,8 +340,18 @@ export function useCharacterForm(draftCharacter?: any) {
     dispatch({ type: "SET_DEFINITION", payload: definition });
   }, []);
 
-  const setSelectedModelId = useCallback((id: string | null) => {
-    dispatch({ type: "SET_SELECTED_MODEL_ID", payload: id });
+  const setSelectedModelId = useCallback(
+    (id: string | null) => {
+      dispatch({ type: "SET_SELECTED_MODEL_ID", payload: id });
+      if (id && state.selectedFallbackModelId === id) {
+        dispatch({ type: "SET_SELECTED_FALLBACK_MODEL_ID", payload: null });
+      }
+    },
+    [state.selectedFallbackModelId],
+  );
+
+  const setSelectedFallbackModelId = useCallback((id: string | null) => {
+    dispatch({ type: "SET_SELECTED_FALLBACK_MODEL_ID", payload: id });
   }, []);
 
   const setSystemPromptTemplateId = useCallback((id: string | null) => {
@@ -649,6 +659,7 @@ export function useCharacterForm(draftCharacter?: any) {
       setDefinition,
       setDescription,
       setSelectedModelId,
+      setSelectedFallbackModelId,
       setSystemPromptTemplateId,
       setMemoryType,
       setDisableAvatarGradient,
