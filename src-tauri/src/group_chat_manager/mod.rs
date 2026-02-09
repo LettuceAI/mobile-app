@@ -2603,16 +2603,42 @@ fn build_group_system_prompt(
     };
 
     // Get content rules (same as normal chat)
-    let pure_mode_enabled = settings
+    let pure_mode_level = settings
         .app_state
-        .get("pureModeEnabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+        .get("pureModeLevel")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| {
+            if settings.app_state.get("pureModeEnabled").and_then(|v| v.as_bool()).unwrap_or(true) {
+                "standard"
+            } else {
+                "off"
+            }
+        });
 
-    let content_rules = if pure_mode_enabled {
-        "**Content Guidelines:**\n- Keep all interactions appropriate and respectful\n- Avoid sexual, adult, or explicit content".to_string()
-    } else {
-        String::new()
+    let content_rules = match pure_mode_level {
+        "off" => String::new(),
+        "low" => "**Content Guidelines:**\n\
+- Avoid explicit sexual content"
+            .to_string(),
+        "strict" => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
+- Never generate sexually explicit, pornographic, or erotic content\n\
+- Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
+- Never use vulgar sexual slang or explicit anatomical descriptions in sexual contexts\n\
+- If asked to generate such content, decline and redirect the conversation\n\
+- Romantic content is allowed but must remain PG-13 (no explicit physical descriptions)\n\
+- Violence descriptions should avoid gratuitous gore or torture\n\
+- Do not use slurs or hate speech under any circumstances\n\
+- Do not use suggestive, flirty, or sexually charged language or tone"
+            .to_string(),
+        _ => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
+- Never generate sexually explicit, pornographic, or erotic content\n\
+- Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
+- Never use vulgar sexual slang or explicit anatomical descriptions in sexual contexts\n\
+- If asked to generate such content, decline and redirect the conversation\n\
+- Romantic content is allowed but must remain PG-13 (no explicit physical descriptions)\n\
+- Violence descriptions should avoid gratuitous gore or torture\n\
+- Do not use slurs or hate speech under any circumstances"
+            .to_string(),
     };
 
     // Handle scene content for roleplay chats
@@ -3262,6 +3288,24 @@ async fn generate_character_response(
     );
 
     let text = text.ok_or_else(|| "Empty response from provider".to_string())?;
+
+    // Post-generation content filter check
+    if let Some(filter) = app.try_state::<crate::content_filter::ContentFilter>() {
+        if filter.is_enabled() {
+            let result = filter.check_text(&text);
+            if result.blocked {
+                crate::utils::log_warn(
+                    app,
+                    "group_chat_response",
+                    format!(
+                        "Content blocked by Pure Mode (score={:.1}, terms={:?})",
+                        result.score, result.matched_terms
+                    ),
+                );
+                return Err("Response blocked by Pure Mode. Try rephrasing your message.".to_string());
+            }
+        }
+    }
 
     let usage = extract_usage(api_response.data());
     let reasoning = extract_reasoning(api_response.data(), Some(&model.provider_id));

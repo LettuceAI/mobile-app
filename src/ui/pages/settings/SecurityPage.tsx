@@ -1,24 +1,126 @@
-import { useState, useEffect } from "react";
-import { Shield, Lock, Database, Power } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Shield, Lock, Database, Power, Search, ScrollText, Trash2 } from "lucide-react";
 import { isAnalyticsAvailable, readSettings } from "../../../core/storage/repo";
-import { setAnalyticsEnabled, setPureModeEnabled } from "../../../core/storage/appState";
+import { setAnalyticsEnabled, setPureModeLevel } from "../../../core/storage/appState";
+import type { PureModeLevel } from "../../../core/storage/schemas";
+import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { BottomMenu, MenuButton, MenuButtonGroup } from "../../components/BottomMenu";
 
+interface FilterLogEntry {
+  timestamp_ms: number;
+  text_snippet: string;
+  score: number;
+  blocked: boolean;
+  matched_terms: string[];
+  level: string;
+}
+
+const PURE_MODE_OPTIONS: {
+  value: PureModeLevel;
+  label: string;
+  description: string;
+  color: string;
+  activeColor: string;
+  activeBg: string;
+}[] = [
+  {
+    value: "off",
+    label: "Off",
+    description: "All content allowed",
+    color: "text-white/60",
+    activeColor: "text-orange-200",
+    activeBg: "border-orange-400/40 bg-orange-500/20",
+  },
+  {
+    value: "low",
+    label: "Low",
+    description: "Blocks explicit sexual content + slurs",
+    color: "text-white/60",
+    activeColor: "text-yellow-200",
+    activeBg: "border-yellow-400/40 bg-yellow-500/20",
+  },
+  {
+    value: "standard",
+    label: "Standard",
+    description: "Blocks NSFW + graphic violence",
+    color: "text-white/60",
+    activeColor: "text-emerald-200",
+    activeBg: "border-emerald-400/40 bg-emerald-500/20",
+  },
+  {
+    value: "strict",
+    label: "Strict",
+    description: "Maximum filtering + no suggestive tone",
+    color: "text-white/60",
+    activeColor: "text-blue-200",
+    activeBg: "border-blue-400/40 bg-blue-500/20",
+  },
+];
+const FILTER_DEBUG_ENABLED = import.meta.env.DEV;
+
 export function SecurityPage() {
-  const [isPureModeEnabled, setIsPureModeEnabled] = useState(true);
+  const [pureModeLevel, setPureModeLevelState] = useState<PureModeLevel>("standard");
   const [isGlitchEnabled, setIsGlitchEnabled] = useState(true);
   const [isAnalyticsEnabled, setIsAnalyticsEnabled] = useState(true);
   const [isAnalyticsAvailableState, setIsAnalyticsAvailableState] = useState(true);
   const [showRestartMenu, setShowRestartMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [debugInput, setDebugInput] = useState("");
+  const [debugResult, setDebugResult] = useState<Record<string, unknown> | null>(null);
+  const [filterLog, setFilterLog] = useState<FilterLogEntry[]>([]);
+
+  const handleDebugFilter = useCallback(async (text: string) => {
+    if (!text.trim()) {
+      setDebugResult(null);
+      return;
+    }
+    try {
+      const result = await invoke<Record<string, unknown>>("debug_content_filter", { text });
+      setDebugResult(result);
+    } catch (err) {
+      console.error("debug_content_filter failed:", err);
+    }
+  }, []);
+
+  const refreshFilterLog = useCallback(async () => {
+    try {
+      const log = await invoke<FilterLogEntry[]>("get_filter_log");
+      setFilterLog(log);
+    } catch (err) {
+      console.error("get_filter_log failed:", err);
+    }
+  }, []);
+
+  const clearFilterLog = useCallback(async () => {
+    try {
+      await invoke("clear_filter_log");
+      setFilterLog([]);
+    } catch (err) {
+      console.error("clear_filter_log failed:", err);
+    }
+  }, []);
+
+  // Load filter log on mount + poll every 5s
+  useEffect(() => {
+    if (!FILTER_DEBUG_ENABLED) {
+      return;
+    }
+    void refreshFilterLog();
+    const interval = setInterval(() => void refreshFilterLog(), 5000);
+    return () => clearInterval(interval);
+  }, [refreshFilterLog]);
 
   // Load settings on mount
   useEffect(() => {
     const load = async () => {
       try {
         const [settings, available] = await Promise.all([readSettings(), isAnalyticsAvailable()]);
-        setIsPureModeEnabled(settings.appState.pureModeEnabled ?? true);
+        // Read pureModeLevel with fallback to pureModeEnabled boolean
+        const level =
+          settings.appState.pureModeLevel ??
+          (settings.appState.pureModeEnabled ? "standard" : "off");
+        setPureModeLevelState(level);
         setIsAnalyticsEnabled(settings.appState.analyticsEnabled ?? true);
         setIsAnalyticsAvailableState(available);
         if (!available) {
@@ -42,17 +144,14 @@ export function SecurityPage() {
     void load();
   }, []);
 
-  // Save when toggled
-  const handleToggle = async () => {
-    const newValue = !isPureModeEnabled;
-    setIsPureModeEnabled(newValue);
-
+  const handleLevelChange = async (level: PureModeLevel) => {
+    const prev = pureModeLevel;
+    setPureModeLevelState(level);
     try {
-      await setPureModeEnabled(newValue);
+      await setPureModeLevel(level);
     } catch (err) {
-      console.error("Failed to save pure mode setting:", err);
-      // Revert on error
-      setIsPureModeEnabled(!newValue);
+      console.error("Failed to save pure mode level:", err);
+      setPureModeLevelState(prev);
     }
   };
 
@@ -84,8 +183,11 @@ export function SecurityPage() {
   };
 
   if (isLoading) {
-    return null; // Or a loading spinner
+    return null;
   }
+
+  const isEnabled = pureModeLevel !== "off";
+  const activeOption = PURE_MODE_OPTIONS.find((o) => o.value === pureModeLevel)!;
 
   return (
     <div className="flex h-full flex-col pb-16">
@@ -97,13 +199,12 @@ export function SecurityPage() {
           </h2>
           <div
             className={`relative overflow-hidden rounded-xl border px-4 py-3 transition-all duration-300 ${
-              isPureModeEnabled
+              isEnabled
                 ? "border-emerald-400/20 bg-linear-to-br from-emerald-500/10 via-white/5 to-white/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
                 : "border-white/10 bg-white/5"
             }`}
           >
-            {/* Subtle inner glow when enabled */}
-            {isPureModeEnabled && (
+            {isEnabled && (
               <div
                 className="pointer-events-none absolute inset-0 opacity-60"
                 style={{
@@ -116,60 +217,48 @@ export function SecurityPage() {
             <div className="relative flex items-start gap-3">
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                  isPureModeEnabled
+                  isEnabled
                     ? "border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/25"
                     : "border-white/10 bg-white/10"
                 }`}
               >
                 <Shield
                   className={`h-4 w-4 transition-colors duration-300 ${
-                    isPureModeEnabled ? "text-emerald-200" : "text-white/70"
+                    isEnabled ? "text-emerald-200" : "text-white/70"
                   }`}
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white">Pure Mode</span>
-                      <span
-                        className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-[0.25em] transition-all duration-300 ${
-                          isPureModeEnabled
-                            ? "border-emerald-400/50 bg-emerald-500/25 text-emerald-100 shadow-sm shadow-emerald-500/30"
-                            : "border-orange-400/40 bg-orange-500/20 text-orange-200"
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white">Pure Mode</span>
+                  <span
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-[0.25em] transition-all duration-300 ${activeOption.activeBg} ${activeOption.activeColor}`}
+                  >
+                    {activeOption.label}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-white/50">{activeOption.description}</div>
+
+                {/* Level selector */}
+                <div className="mt-3 flex gap-1.5">
+                  {PURE_MODE_OPTIONS.map((option) => {
+                    const isActive = pureModeLevel === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => handleLevelChange(option.value)}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-center text-[11px] font-medium transition-all duration-200 ${
+                          isActive
+                            ? `${option.activeBg} ${option.activeColor} shadow-sm`
+                            : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10"
                         }`}
                       >
-                        {isPureModeEnabled ? "On" : "Off"}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-white/50">
-                      {isPureModeEnabled ? "NSFW content blocked" : "All content allowed"}
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="pure-mode"
-                      type="checkbox"
-                      checked={isPureModeEnabled}
-                      onChange={handleToggle}
-                      className="peer sr-only"
-                    />
-                    <label
-                      htmlFor="pure-mode"
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${
-                        isPureModeEnabled
-                          ? "bg-emerald-500 shadow-lg shadow-emerald-500/30"
-                          : "bg-white/20"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          isPureModeEnabled ? "translate-x-5" : "translate-x-0"
-                        }`}
-                      />
-                    </label>
-                  </div>
+                        {option.label}
+                      </button>
+                    );
+                  })}
                 </div>
+
                 <div className="mt-2 text-[11px] text-white/45 leading-relaxed">
                   Restrict adult content in AI responses
                 </div>
@@ -324,14 +413,200 @@ export function SecurityPage() {
                     </span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-white/45 leading-relaxed">
-                    Events are anonymous and contain only the event name and not-identifying properties we
-                    define. We do not send message content or personal identifiers.
+                    Events are anonymous and contain only the event name and not-identifying
+                    properties we define. We do not send message content or personal identifiers.
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+        {FILTER_DEBUG_ENABLED && (
+          <div>
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">
+                Filter Log
+              </h2>
+              {filterLog.length > 0 && (
+                <button
+                  onClick={() => void clearFilterLog()}
+                  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-white/40 transition-colors hover:bg-white/10 hover:text-white/60"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              {filterLog.length === 0 ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10">
+                    <ScrollText className="h-4 w-4 text-white/70" />
+                  </div>
+                  <div className="text-[11px] text-white/40">
+                    No filter hits recorded yet. Matches will appear here as you chat.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {[...filterLog].reverse().map((entry, i) => {
+                    const time = new Date(entry.timestamp_ms);
+                    const timeStr = time.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    });
+                    return (
+                      <div
+                        key={`${entry.timestamp_ms}-${i}`}
+                        className={`rounded-lg border px-3 py-2 ${
+                          entry.blocked
+                            ? "border-red-400/30 bg-red-500/10"
+                            : "border-amber-400/20 bg-amber-500/5"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
+                                entry.blocked
+                                  ? "bg-red-500/20 text-red-300"
+                                  : "bg-amber-500/20 text-amber-300"
+                              }`}
+                            >
+                              {entry.blocked ? "Blocked" : "Hit"}
+                            </span>
+                            <span className="text-[10px] text-white/30">{entry.level}</span>
+                            <span className="text-[10px] text-white/30">
+                              score:{" "}
+                              <span className={entry.blocked ? "text-red-300" : "text-amber-200"}>
+                                {entry.score.toFixed(2)}
+                              </span>
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-white/25">{timeStr}</span>
+                        </div>
+                        <div className="text-[11px] text-white/60 line-clamp-2 break-all font-mono">
+                          {entry.text_snippet}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {entry.matched_terms.map((term, j) => (
+                            <span
+                              key={j}
+                              className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
+                                entry.blocked
+                                  ? "border-red-400/30 bg-red-500/15 text-red-200"
+                                  : "border-amber-400/20 bg-amber-500/10 text-amber-200"
+                              }`}
+                            >
+                              {term}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Section: Filter Debug (TEMP) */}
+        {FILTER_DEBUG_ENABLED && (
+          <div>
+            <h2 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">
+              Filter Pipeline Debug
+            </h2>
+            <div className="rounded-xl border border-amber-400/20 bg-amber-500/5 px-4 py-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-amber-300/70" />
+                <span className="text-[10px] font-medium uppercase tracking-widest text-amber-300/60">
+                  Temp — tokenization inspector
+                </span>
+              </div>
+              <input
+                type="text"
+                value={debugInput}
+                onChange={(e) => {
+                  setDebugInput(e.target.value);
+                  void handleDebugFilter(e.target.value);
+                }}
+                placeholder="Type a sentence to see how it gets processed..."
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-amber-400/40"
+              />
+              {debugResult && (
+                <div className="space-y-2 text-[11px] font-mono">
+                  {(() => {
+                    const pipeline = debugResult.pipeline as Record<string, unknown>;
+                    const result = debugResult.result as Record<string, unknown>;
+                    const steps: [string, string][] = [
+                      ["stripped", String(pipeline.stripped)],
+                      ["lowercase", String(pipeline.lowercased)],
+                      ["unicode norm", String(pipeline.unicode_normalized)],
+                      ["leet norm", String(pipeline.leet_normalized)],
+                      ["tokens", (pipeline.tokens as string[]).join(" | ")],
+                      ["collapsed", String(pipeline.collapsed)],
+                      ["collapsed tokens", (pipeline.collapsed_tokens as string[]).join(" | ")],
+                    ];
+                    // Hide steps that are identical to previous
+                    const visible = steps.filter((s, i) => i === 0 || s[1] !== steps[i - 1][1]);
+                    return (
+                      <>
+                        {visible.map(([label, value]) => (
+                          <div key={label} className="flex gap-2">
+                            <span className="shrink-0 w-28 text-right text-white/30">{label}</span>
+                            <span className="text-white/80 break-all">{value}</span>
+                          </div>
+                        ))}
+                        <div className="mt-1 border-t border-white/10 pt-2 flex flex-wrap gap-x-4 gap-y-1">
+                          <span className="text-white/40">
+                            level:{" "}
+                            <span className="text-white/70">{String(debugResult.level)}</span>
+                          </span>
+                          <span className="text-white/40">
+                            context:{" "}
+                            <span className="text-white/70">
+                              {debugResult.context_allowlist_hit ? "yes" : "no"}
+                            </span>
+                          </span>
+                          <span className="text-white/40">
+                            score:{" "}
+                            <span
+                              className={
+                                (result.score as number) > 0 ? "text-red-300" : "text-emerald-300"
+                              }
+                            >
+                              {(result.score as number).toFixed(2)}
+                            </span>
+                          </span>
+                          <span className="text-white/40">
+                            blocked:{" "}
+                            <span className={result.blocked ? "text-red-300" : "text-emerald-300"}>
+                              {result.blocked ? "yes" : "no"}
+                            </span>
+                          </span>
+                        </div>
+                        {(result.matched_terms as string[]).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {(result.matched_terms as string[]).map((term, i) => (
+                              <span
+                                key={i}
+                                className="rounded-md border border-red-400/30 bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200"
+                              >
+                                {term}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
       <BottomMenu
         isOpen={showRestartMenu}

@@ -9,6 +9,7 @@ use crate::{
         tooling::parse_tool_calls,
         types::{ErrorEnvelope, NormalizedEvent},
     },
+    content_filter::{ContentFilter, StreamFilterContext},
     serde_utils::{
         json_value_to_string, parse_body_to_value, sanitize_header_value, summarize_json,
     },
@@ -17,6 +18,53 @@ use crate::{
 };
 
 use super::ApiRequest;
+
+fn enforce_pure_mode_on_text(
+    app: &tauri::AppHandle,
+    req: &ApiRequest,
+    request_id: Option<&str>,
+    text: &str,
+) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Ok(());
+    }
+
+    use tauri::Manager;
+    let Some(filter) = app.try_state::<ContentFilter>() else {
+        return Ok(());
+    };
+    if !filter.is_enabled() {
+        return Ok(());
+    }
+
+    let result = filter.check_text(text);
+    if !result.blocked {
+        return Ok(());
+    }
+
+    log_warn(
+        app,
+        "api_request",
+        format!(
+            "[api_request] content blocked by Pure Mode (score={:.1}, terms={:?})",
+            result.score, result.matched_terms
+        ),
+    );
+
+    if let Some(req_id) = request_id {
+        let envelope = ErrorEnvelope {
+            code: Some("CONTENT_BLOCKED".to_string()),
+            message: "Response filtered by Pure Mode".to_string(),
+            provider_id: req.provider_id.clone(),
+            request_id: Some(req_id.to_string()),
+            retryable: Some(true),
+            status: None,
+        };
+        emit_normalized(app, req_id, NormalizedEvent::Error { envelope });
+    }
+
+    Err("Response blocked by Pure Mode. Try rephrasing your message.".to_string())
+}
 
 pub(crate) fn apply_query_params(
     app: &tauri::AppHandle,
@@ -165,6 +213,15 @@ pub(crate) async fn handle_streaming_response(
     let mut decoder = sse::SseDecoder::new();
     let mut aborted = false;
 
+    // Content filter: check if enabled and create streaming context
+    let content_filter_active = {
+        use tauri::Manager;
+        app.try_state::<ContentFilter>()
+            .map(|f| f.is_enabled())
+            .unwrap_or(false)
+    };
+    let mut stream_filter_ctx = StreamFilterContext::new();
+
     loop {
         tokio::select! {
             // Check for abort signal
@@ -181,13 +238,43 @@ pub(crate) async fn handle_streaming_response(
                 match chunk_result {
                     Some(Ok(chunk)) => {
                         let text = String::from_utf8_lossy(&chunk).to_string();
+                        let mut content_blocked = false;
                         for event in decoder.feed(&text, req.provider_id.as_deref()) {
+                            // Content filter: check deltas before emitting
+                            if content_filter_active {
+                                if let NormalizedEvent::Delta { text: ref delta_text } = event {
+                                    use tauri::Manager;
+                                    if let Some(filter) = app.try_state::<ContentFilter>() {
+                                        let result = filter.check_delta(&mut stream_filter_ctx, delta_text);
+                                        if result.blocked {
+                                            let envelope = ErrorEnvelope {
+                                                code: Some("CONTENT_BLOCKED".to_string()),
+                                                message: "Response filtered by Pure Mode".to_string(),
+                                                provider_id: req.provider_id.clone(),
+                                                request_id: Some(request_id.clone()),
+                                                retryable: Some(true),
+                                                status: None,
+                                            };
+                                            emit_normalized(app, &request_id, NormalizedEvent::Error { envelope });
+                                            content_blocked = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                             match &event {
                                 NormalizedEvent::Usage { .. } => { usage_emitted = true; }
                                 NormalizedEvent::Delta { .. } => { text_emitted = true; }
                                 _ => {}
                             }
                             emit_normalized(app, &request_id, event);
+                        }
+                        if content_blocked {
+                            // Unregister and return error to abort the command
+                            use tauri::Manager;
+                            let registry = app.state::<AbortRegistry>();
+                            registry.unregister(&request_id);
+                            return Err("Response blocked by Pure Mode. Try rephrasing your message.".to_string());
                         }
                         collected.extend_from_slice(&chunk);
                     }
@@ -251,6 +338,7 @@ pub(crate) async fn handle_streaming_response(
     if !text_emitted && ok {
         if let Some(content) = chat_request::extract_text(&value, req.provider_id.as_deref()) {
             if !content.is_empty() {
+                enforce_pure_mode_on_text(app, req, Some(&request_id), &content)?;
                 log_info(
                     app,
                     "api_request",
@@ -316,6 +404,13 @@ pub(crate) async fn handle_non_streaming_response(
                 ),
             );
             let value = parse_body_to_value(&text);
+            let filter_candidate = chat_request::extract_text(&value, req.provider_id.as_deref())
+                .or_else(|| value.as_str().map(|s| s.to_string()));
+            if ok {
+                if let Some(candidate_text) = filter_candidate.as_deref() {
+                    enforce_pure_mode_on_text(app, req, request_id.as_deref(), candidate_text)?;
+                }
+            }
             if let Some(req_id) = &request_id {
                 let calls =
                     parse_tool_calls(req.provider_id.as_deref().unwrap_or_default(), &value);

@@ -58,7 +58,7 @@ pub fn get_base_prompt_entries(prompt_type: PromptType) -> Vec<SystemPromptEntry
     }
 }
 
-pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
+pub fn default_character_rules(pure_mode_level: &str) -> Vec<String> {
     let mut rules = vec![
         "Embody the character naturally without breaking immersion".to_string(),
         "Respond based on your personality, background, and current situation".to_string(),
@@ -67,9 +67,27 @@ pub fn default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
         "You may roleplay as background characters or NPCs in the scene when needed (e.g., if you're a police officer and a witness appears, you can act as that witness). However, NEVER roleplay as the user's character - only control your own character and third-party characters".to_string(),
     ];
 
-    if pure_mode_enabled {
-        rules.push("Keep all interactions appropriate and respectful".to_string());
-        rules.push("Avoid sexual, adult, or NSFW content".to_string());
+    match pure_mode_level {
+        "off" => {}
+        "low" => {
+            rules.push("Avoid explicit sexual content".to_string());
+        }
+        "strict" => {
+            rules.push("Never generate sexually explicit, pornographic, or erotic content".to_string());
+            rules.push("Never describe sexual acts, nudity in sexual contexts, or sexual arousal".to_string());
+            rules.push("If asked to generate such content, decline and redirect the conversation".to_string());
+            rules.push("Romantic content must remain PG-13 — no explicit physical descriptions".to_string());
+            rules.push("Violence descriptions should avoid gratuitous gore or torture".to_string());
+            rules.push("Do not use suggestive, flirty, or sexually charged language or tone".to_string());
+        }
+        // "standard" and anything else
+        _ => {
+            rules.push("Never generate sexually explicit, pornographic, or erotic content".to_string());
+            rules.push("Never describe sexual acts, nudity in sexual contexts, or sexual arousal".to_string());
+            rules.push("If asked to generate such content, decline and redirect the conversation".to_string());
+            rules.push("Romantic content must remain PG-13 — no explicit physical descriptions".to_string());
+            rules.push("Violence descriptions should avoid gratuitous gore or torture".to_string());
+        }
     }
 
     rules

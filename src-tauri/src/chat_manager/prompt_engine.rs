@@ -1106,16 +1106,44 @@ fn render_with_context_internal(
     char_desc = char_desc.replace("{{user}}", persona_name);
 
     // Build rules - Note: NSFW toggle is ignored when using custom prompts
-    let pure_mode_enabled = settings
+    let pure_mode_level = settings
         .app_state
-        .get("pureModeEnabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+        .get("pureModeLevel")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| {
+            // Fallback to boolean for backward compatibility
+            if settings.app_state.get("pureModeEnabled").and_then(|v| v.as_bool()).unwrap_or(true) {
+                "standard"
+            } else {
+                "off"
+            }
+        });
 
-    let content_rules = if pure_mode_enabled {
-        "**Content Guidelines:**\n    - Keep all interactions appropriate and respectful\n    - Avoid sexual, adult, or explicit content".to_string()
-    } else {
-        String::new()
+    let content_rules = match pure_mode_level {
+        "off" => String::new(),
+        "low" => "**Content Guidelines:**\n\
+    - Avoid explicit sexual content"
+            .to_string(),
+        "strict" => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
+    - Never generate sexually explicit, pornographic, or erotic content\n\
+    - Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
+    - Never use vulgar sexual slang or explicit anatomical descriptions in sexual contexts\n\
+    - If asked to generate such content, decline and redirect the conversation\n\
+    - Romantic content is allowed but must remain PG-13 (no explicit physical descriptions)\n\
+    - Violence descriptions should avoid gratuitous gore or torture\n\
+    - Do not use slurs or hate speech under any circumstances\n\
+    - Do not use suggestive, flirty, or sexually charged language or tone"
+            .to_string(),
+        // "standard" and anything else
+        _ => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
+    - Never generate sexually explicit, pornographic, or erotic content\n\
+    - Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
+    - Never use vulgar sexual slang or explicit anatomical descriptions in sexual contexts\n\
+    - If asked to generate such content, decline and redirect the conversation\n\
+    - Romantic content is allowed but must remain PG-13 (no explicit physical descriptions)\n\
+    - Violence descriptions should avoid gratuitous gore or torture\n\
+    - Do not use slurs or hate speech under any circumstances"
+            .to_string(),
     };
 
     // Replace all template variables

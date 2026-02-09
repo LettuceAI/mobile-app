@@ -35,19 +35,30 @@ fn now_epoch() -> i64 {
     chrono::Utc::now().timestamp()
 }
 
-fn is_pure_mode_enabled(app: &AppHandle) -> bool {
+fn read_pure_mode_level(app: &AppHandle) -> String {
     if let Ok(Some(raw)) = internal_read_settings(app) {
         if let Ok(json) = serde_json::from_str::<Value>(&raw) {
-            if let Some(enabled) = json
-                .get("appState")
+            let app_state = json.get("appState");
+            // Check pureModeLevel first, fall back to pureModeEnabled boolean
+            if let Some(level) = app_state
+                .and_then(|v| v.get("pureModeLevel"))
+                .and_then(|v| v.as_str())
+            {
+                return level.to_string();
+            }
+            if let Some(enabled) = app_state
                 .and_then(|v| v.get("pureModeEnabled"))
                 .and_then(|v| v.as_bool())
             {
-                return enabled;
+                return if enabled {
+                    "standard".to_string()
+                } else {
+                    "off".to_string()
+                };
             }
         }
     }
-    true
+    "standard".to_string()
 }
 
 fn cache_get<T: DeserializeOwned>(key: &str) -> Option<T> {
@@ -158,9 +169,28 @@ pub struct DiscoverySearchResponse {
     pub query: Option<String>,
 }
 
-fn filter_nsfw_cards(cards: &mut Vec<DiscoveryCard>, pure_mode_enabled: bool) {
-    if pure_mode_enabled {
-        cards.retain(|card| !card.is_nsfw.unwrap_or(false));
+fn strict_suggestive_metadata(card: &DiscoveryCard) -> bool {
+    const STRICT_TERMS: [&str; 7] = ["nsfw", "18+", "sexual", "erotic", "porn", "fetish", "kink"];
+    let has_tag_term = card.tags.iter().any(|tag| {
+        STRICT_TERMS
+            .iter()
+            .any(|term| tag.to_ascii_lowercase().contains(term))
+    });
+    let has_warning_term = card.content_warnings.iter().any(|warning| {
+        STRICT_TERMS
+            .iter()
+            .any(|term| warning.to_ascii_lowercase().contains(term))
+    });
+    has_tag_term || has_warning_term
+}
+
+fn filter_nsfw_cards(cards: &mut Vec<DiscoveryCard>, pure_mode_level: &str) {
+    match pure_mode_level {
+        "off" => {}
+        "strict" => {
+            cards.retain(|card| !card.is_nsfw.unwrap_or(false) && !strict_suggestive_metadata(card))
+        }
+        _ => cards.retain(|card| !card.is_nsfw.unwrap_or(false)),
     }
 }
 
@@ -484,7 +514,7 @@ pub async fn discovery_fetch_card_detail(
         ));
     }
 
-    let pure_mode_enabled = is_pure_mode_enabled(&app);
+    let pure_mode_level = read_pure_mode_level(&app);
     let url = if path.starts_with("http://") || path.starts_with("https://") {
         path
     } else {
@@ -493,7 +523,7 @@ pub async fn discovery_fetch_card_detail(
     };
     let cache_key = format!("detail:{}", url);
     if let Some(cached) = cache_get::<DiscoveryCardDetailResponse>(&cache_key) {
-        if pure_mode_enabled && cached.card.is_nsfw.unwrap_or(false) {
+        if pure_mode_level != "off" && cached.card.is_nsfw.unwrap_or(false) {
             return Err(crate::utils::err_msg(
                 module_path!(),
                 line!(),
@@ -534,7 +564,7 @@ pub async fn discovery_fetch_card_detail(
         .await
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &detail, DISCOVERY_CACHE_TTL_SECS);
-    if pure_mode_enabled && detail.card.is_nsfw.unwrap_or(false) {
+    if pure_mode_level != "off" && detail.card.is_nsfw.unwrap_or(false) {
         return Err(crate::utils::err_msg(
             module_path!(),
             line!(),
@@ -599,8 +629,8 @@ pub async fn discovery_fetch_cards(
     let card_type = normalize_type(&card_type)?;
     let client = reqwest::Client::new();
     let mut cards = fetch_cards(&app, card_type, &client).await?;
-    let pure_mode_enabled = is_pure_mode_enabled(&app);
-    filter_nsfw_cards(&mut cards, pure_mode_enabled);
+    let pure_mode_level = read_pure_mode_level(&app);
+    filter_nsfw_cards(&mut cards, &pure_mode_level);
 
     let (default_key, default_desc) = default_sort_for_type(card_type);
     let key = parse_sort_key(sort_by.as_deref()).unwrap_or(default_key);
@@ -623,10 +653,10 @@ pub async fn discovery_fetch_sections(
         fetch_cards(&app, "trending", &client),
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let pure_mode_enabled = is_pure_mode_enabled(&app);
-    filter_nsfw_cards(&mut newest, pure_mode_enabled);
-    filter_nsfw_cards(&mut popular, pure_mode_enabled);
-    filter_nsfw_cards(&mut trending, pure_mode_enabled);
+    let pure_mode_level = read_pure_mode_level(&app);
+    filter_nsfw_cards(&mut newest, &pure_mode_level);
+    filter_nsfw_cards(&mut popular, &pure_mode_level);
+    filter_nsfw_cards(&mut trending, &pure_mode_level);
 
     let key_override = parse_sort_key(sort_by.as_deref());
     if let Some(key) = key_override {
@@ -657,7 +687,7 @@ pub async fn discovery_search_cards(
     page: Option<u32>,
     limit: Option<u32>,
 ) -> Result<DiscoverySearchResponse, String> {
-    let pure_mode_enabled = is_pure_mode_enabled(&app);
+    let pure_mode_level = read_pure_mode_level(&app);
     let query_value = query
         .map(|q| q.trim().to_string())
         .filter(|q| !q.is_empty());
@@ -671,7 +701,7 @@ pub async fn discovery_search_cards(
         limit_value
     );
     if let Some(mut cached) = cache_get::<DiscoverySearchResponse>(&cache_key) {
-        filter_nsfw_cards(&mut cached.hits, pure_mode_enabled);
+        filter_nsfw_cards(&mut cached.hits, &pure_mode_level);
         return Ok(cached);
     }
 
@@ -718,7 +748,7 @@ pub async fn discovery_search_cards(
         .await
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     cache_set(cache_key, &response, DISCOVERY_CACHE_TTL_SECS);
-    filter_nsfw_cards(&mut response.hits, pure_mode_enabled);
+    filter_nsfw_cards(&mut response.hits, &pure_mode_level);
     Ok(response)
 }
 

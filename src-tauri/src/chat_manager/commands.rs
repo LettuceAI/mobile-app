@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
 use rusqlite::{params, OptionalExtension};
@@ -1962,6 +1962,26 @@ pub async fn chat_completion(
         return Err(error_detail.to_string());
     }
 
+    // Post-generation content filter check
+    if let Some(filter) = app.try_state::<crate::content_filter::ContentFilter>() {
+        if filter.is_enabled() {
+            let result = filter.check_text(&text);
+            if result.blocked {
+                log_warn(
+                    &app,
+                    "chat_completion",
+                    format!(
+                        "Content blocked by Pure Mode (score={:.1}, terms={:?})",
+                        result.score, result.matched_terms
+                    ),
+                );
+                return Err(
+                    "Response blocked by Pure Mode. Try rephrasing your message.".to_string(),
+                );
+            }
+        }
+    }
+
     emit_debug(
         &app,
         "assistant_reply",
@@ -2673,6 +2693,26 @@ pub async fn chat_regenerate(
         return Err(error_detail.to_string());
     }
 
+    // Post-generation content filter check
+    if let Some(filter) = app.try_state::<crate::content_filter::ContentFilter>() {
+        if filter.is_enabled() {
+            let result = filter.check_text(&text);
+            if result.blocked {
+                log_warn(
+                    &app,
+                    "chat_regenerate",
+                    format!(
+                        "Content blocked by Pure Mode (score={:.1}, terms={:?})",
+                        result.score, result.matched_terms
+                    ),
+                );
+                return Err(
+                    "Response blocked by Pure Mode. Try rephrasing your message.".to_string(),
+                );
+            }
+        }
+    }
+
     let created_at = now_millis()?;
     let new_variant = new_assistant_variant(text.clone(), usage.clone(), created_at);
 
@@ -3298,6 +3338,26 @@ pub async fn chat_continue(
         return Err(error_detail.to_string());
     }
 
+    // Post-generation content filter check
+    if let Some(filter) = app.try_state::<crate::content_filter::ContentFilter>() {
+        if filter.is_enabled() {
+            let result = filter.check_text(&text);
+            if result.blocked {
+                log_warn(
+                    &app,
+                    "chat_continue",
+                    format!(
+                        "Content blocked by Pure Mode (score={:.1}, terms={:?})",
+                        result.score, result.matched_terms
+                    ),
+                );
+                return Err(
+                    "Response blocked by Pure Mode. Try rephrasing your message.".to_string(),
+                );
+            }
+        }
+    }
+
     emit_debug(
         &app,
         "continue_assistant_reply",
@@ -3429,8 +3489,8 @@ pub async fn chat_continue(
 }
 
 #[tauri::command]
-pub fn get_default_character_rules(pure_mode_enabled: bool) -> Vec<String> {
-    default_character_rules(pure_mode_enabled)
+pub fn get_default_character_rules(pure_mode_level: String) -> Vec<String> {
+    default_character_rules(&pure_mode_level)
 }
 
 #[tauri::command]

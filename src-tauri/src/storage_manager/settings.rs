@@ -5,6 +5,32 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use super::{db::now_ms, db::open_db, legacy::read_encrypted_file, legacy::settings_path};
 use crate::utils::{log_error, log_info};
 
+fn pure_mode_level_from_app_state(app_state: &JsonValue) -> crate::content_filter::PureModeLevel {
+    if let Some(level) = app_state
+        .get("pureModeLevel")
+        .and_then(|v| v.as_str())
+        .map(crate::content_filter::PureModeLevel::from_str)
+    {
+        return level;
+    }
+    let enabled = app_state
+        .get("pureModeEnabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    if enabled {
+        crate::content_filter::PureModeLevel::Standard
+    } else {
+        crate::content_filter::PureModeLevel::Off
+    }
+}
+
+fn sync_content_filter_from_app_state(app: &tauri::AppHandle, app_state: &JsonValue) {
+    use tauri::Manager;
+    if let Some(filter) = app.try_state::<crate::content_filter::ContentFilter>() {
+        filter.set_level(pure_mode_level_from_app_state(app_state));
+    }
+}
+
 fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, String> {
     log_info(app, "settings", "Reading settings from DB");
     let conn = open_db(app)?;
@@ -160,6 +186,7 @@ fn db_read_settings_json(app: &tauri::AppHandle) -> Result<Option<String>, Strin
         "theme": "light",
         "tooltips": {},
         "pureModeEnabled": true,
+        "pureModeLevel": "standard",
         "analyticsEnabled": true,
         "appActiveUsageMs": 0,
         "appActiveUsageByDayMs": {}
@@ -512,7 +539,13 @@ pub fn storage_read_settings(app: tauri::AppHandle) -> Result<Option<String>, St
 
 #[tauri::command]
 pub fn storage_write_settings(app: tauri::AppHandle, data: String) -> Result<(), String> {
-    db_write_settings_json(&app, data)
+    db_write_settings_json(&app, data.clone())?;
+    if let Ok(json) = serde_json::from_str::<JsonValue>(&data) {
+        if let Some(app_state) = json.get("appState") {
+            sync_content_filter_from_app_state(&app, app_state);
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -643,6 +676,9 @@ pub fn settings_set_app_state(app: tauri::AppHandle, state_json: String) -> Resu
         params![merged_state_json, now],
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    if let Ok(app_state) = serde_json::from_str::<JsonValue>(&merged_state_json) {
+        sync_content_filter_from_app_state(&app, &app_state);
+    }
     Ok(())
 }
 

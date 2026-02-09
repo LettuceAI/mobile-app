@@ -1459,11 +1459,15 @@ export function createDefaultOnboardingState(): OnboardingState {
 export const TooltipsStateSchema = z.record(z.boolean());
 export type TooltipsState = z.infer<typeof TooltipsStateSchema>;
 
+export const PureModeLevelSchema = z.enum(["off", "low", "standard", "strict"]);
+export type PureModeLevel = z.infer<typeof PureModeLevelSchema>;
+
 export const AppStateSchema = z.object({
   onboarding: OnboardingStateSchema,
   theme: z.enum(["light", "dark"]),
   tooltips: TooltipsStateSchema,
-  pureModeEnabled: z.boolean().default(true),
+  pureModeEnabled: z.boolean().default(true), // Kept for backward compat
+  pureModeLevel: PureModeLevelSchema.default("standard"),
   analyticsEnabled: z.boolean().default(true),
   appActiveUsageMs: z.number().int().nonnegative().default(0),
   appActiveUsageByDayMs: z.record(z.number().int().nonnegative()).default({}),
@@ -1503,6 +1507,7 @@ export function createDefaultAppState(): AppState {
     theme: "light",
     tooltips: {},
     pureModeEnabled: true,
+    pureModeLevel: "standard",
     analyticsEnabled: true,
     appActiveUsageMs: 0,
     appActiveUsageByDayMs: {},

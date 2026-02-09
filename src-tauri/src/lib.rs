@@ -1,6 +1,7 @@
 mod abort_manager;
 mod api;
 mod chat_manager;
+mod content_filter;
 mod creation_helper;
 mod discovery;
 mod embedding_model;
@@ -59,6 +60,38 @@ pub fn run() {
                 utils::log_error(app, "settings", format!("Failed to read settings: {}", err));
                 true
             }
+        }
+    }
+
+    fn read_pure_mode_level(app: &tauri::AppHandle) -> content_filter::PureModeLevel {
+        match crate::storage_manager::settings::internal_read_settings(app) {
+            Ok(Some(settings_json)) => {
+                let parsed: serde_json::Value = match serde_json::from_str(&settings_json) {
+                    Ok(value) => value,
+                    Err(_) => return content_filter::PureModeLevel::Standard,
+                };
+                let app_state = parsed.get("appState");
+                // Try pureModeLevel first, fall back to pureModeEnabled boolean
+                if let Some(level_str) = app_state
+                    .and_then(|v| v.get("pureModeLevel"))
+                    .and_then(|v| v.as_str())
+                {
+                    content_filter::PureModeLevel::from_str(level_str)
+                } else if let Some(enabled) = app_state
+                    .and_then(|v| v.get("pureModeEnabled"))
+                    .and_then(|v| v.as_bool())
+                {
+                    if enabled {
+                        content_filter::PureModeLevel::Standard
+                    } else {
+                        content_filter::PureModeLevel::Off
+                    }
+                } else {
+                    content_filter::PureModeLevel::Standard
+                }
+            }
+            Ok(None) => content_filter::PureModeLevel::Standard,
+            Err(_) => content_filter::PureModeLevel::Standard,
         }
     }
 
@@ -144,6 +177,9 @@ pub fn run() {
                     );
                 }
             }
+
+            let pure_mode_level = read_pure_mode_level(app.handle());
+            app.manage(content_filter::ContentFilter::new(pure_mode_level));
 
             if let Err(e) = storage_manager::importer::run_legacy_import(app.handle()) {
                 utils::log_error(
@@ -395,6 +431,10 @@ pub fn run() {
             discovery::discovery_import_character,
             llama_cpp::llamacpp_context_info,
             llama_cpp::llamacpp_unload,
+            content_filter::set_content_filter_level,
+            content_filter::debug_content_filter,
+            content_filter::get_filter_log,
+            content_filter::clear_filter_log,
             // Group chat commands
             storage_manager::group_sessions::group_sessions_list,
             storage_manager::group_sessions::group_sessions_list_all,

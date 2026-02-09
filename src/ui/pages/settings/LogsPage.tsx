@@ -111,7 +111,7 @@ export function LogsPage() {
       lines.push(`- Database size: ${formatBytes(dbSize)}`);
       lines.push("");
       lines.push("App State");
-      lines.push(`- Pure Mode: ${settings.appState.pureModeEnabled ? "enabled" : "disabled"}`);
+      lines.push(`- Pure Mode: ${settings.appState.pureModeLevel ?? (settings.appState.pureModeEnabled ? "standard" : "off")}`);
       lines.push(`- Analytics: ${settings.appState.analyticsEnabled ? "enabled" : "disabled"}`);
       lines.push("");
       lines.push("Providers");

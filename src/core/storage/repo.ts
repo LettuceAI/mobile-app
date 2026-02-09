@@ -230,9 +230,9 @@ export async function listCharacters(): Promise<Character[]> {
 
 export async function saveCharacter(c: Partial<Character>): Promise<Character> {
   const settings = await readSettings();
-  const pureModeEnabled = settings.appState.pureModeEnabled ?? true;
+  const pureModeLevel = settings.appState.pureModeLevel ?? (settings.appState.pureModeEnabled ? "standard" : "off");
   const defaultRules =
-    c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeEnabled);
+    c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeLevel);
   const timestamp = now();
 
   const scenes = c.scenes ?? [];

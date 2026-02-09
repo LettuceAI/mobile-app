@@ -1,5 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
 import { readSettings, setAppState } from "./repo";
-import { createDefaultAppState, type AppState } from "./schemas";
+import { createDefaultAppState, type AppState, type PureModeLevel } from "./schemas";
 
 type Theme = AppState["theme"];
 
@@ -10,6 +11,7 @@ function cloneAppState(state?: AppState): AppState {
     theme: source.theme,
     tooltips: { ...source.tooltips },
     pureModeEnabled: source.pureModeEnabled,
+    pureModeLevel: source.pureModeLevel ?? "standard",
     analyticsEnabled: source.analyticsEnabled ?? true,
     appActiveUsageMs: source.appActiveUsageMs ?? 0,
     appActiveUsageByDayMs: { ...(source.appActiveUsageByDayMs ?? {}) },
@@ -110,10 +112,18 @@ export async function setTheme(theme: Theme): Promise<void> {
   });
 }
 
-export async function setPureModeEnabled(enabled: boolean): Promise<void> {
+export async function setPureModeLevel(level: PureModeLevel): Promise<void> {
   await withAppState((state) => {
-    state.pureModeEnabled = enabled;
+    state.pureModeLevel = level;
+    state.pureModeEnabled = level !== "off";
   });
+  await invoke("set_content_filter_level", { level }).catch(() => {
+    // Filter state sync is best-effort; Rust side will re-read on next startup
+  });
+}
+
+export async function setPureModeEnabled(enabled: boolean): Promise<void> {
+  await setPureModeLevel(enabled ? "standard" : "off");
 }
 
 export async function setAnalyticsEnabled(enabled: boolean): Promise<void> {
