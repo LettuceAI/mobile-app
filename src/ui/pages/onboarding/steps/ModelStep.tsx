@@ -156,7 +156,7 @@ export function ModelStep({
         </div>
 
         {/* Right Panel - Config */}
-        <div className="w-[400px] shrink-0 p-8 overflow-y-auto">
+        <div className="w-100 shrink-0 p-8 overflow-y-auto">
           <div className="space-y-1 mb-6">
             <h1 className="text-xl font-bold text-white">
               {selectedCredential ? "Model Details" : "Set your default model"}
@@ -224,7 +224,7 @@ export function ModelStep({
           return (
             <button
               key={provider.id}
-              className={`w-full min-h-[60px] rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
+              className={`w-full min-h-15 rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
                 isActive
                   ? "border-white/25 bg-white/15 shadow-lg"
                   : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"

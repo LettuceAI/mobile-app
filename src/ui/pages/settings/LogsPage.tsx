@@ -347,7 +347,7 @@ export function LogsPage() {
                 <div
                   className={cn(
                     "overflow-y-auto",
-                    diagnosticsExpanded ? "max-h-[520px]" : "max-h-56",
+                    diagnosticsExpanded ? "max-h-130" : "max-h-56",
                   )}
                 >
                   <pre

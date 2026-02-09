@@ -336,7 +336,7 @@ export function GroupChatMemoriesPage() {
               <p
                 className={cn(
                   typography.bodySmall.size,
-                  "leading-relaxed line-clamp-4 min-h-[3.5rem]",
+                  "leading-relaxed line-clamp-4 min-h-14",
                   ui.summaryDraft
                     ? "text-emerald-50/70"
                     : "text-emerald-200/25 italic",
@@ -398,7 +398,7 @@ export function GroupChatMemoriesPage() {
                   onClick={() => setShowAddMemoryMenu(true)}
                   className={cn(
                     "flex items-center justify-center shrink-0",
-                    "h-[42px] w-[42px] rounded-lg",
+                    "h-10.5 w-10.5 rounded-lg",
                     "border border-white/10 bg-white/5",
                     "text-white/50",
                     "hover:bg-white/8 hover:text-white/70",
@@ -428,7 +428,7 @@ export function GroupChatMemoriesPage() {
                   <h3 className="mb-1 text-base font-semibold text-white">
                     {ui.searchTerm ? "No matching memories" : "No memories yet"}
                   </h3>
-                  <p className="text-center text-sm text-white/40 max-w-[240px]">
+                  <p className="text-center text-sm text-white/40 max-w-60">
                     {ui.searchTerm
                       ? "Try a different search term"
                       : "Tap the Add button above to create one"}

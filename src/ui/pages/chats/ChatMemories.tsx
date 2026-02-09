@@ -707,7 +707,7 @@ function ToolLog({ events }: { events: MemoryToolEvent[] }) {
           <Clock className="h-7 w-7 text-white/20" />
         </div>
         <h3 className="mb-1 text-base font-semibold text-white">No activity yet</h3>
-        <p className={cn("text-center text-sm max-w-[240px]", colors.text.tertiary)}>
+        <p className={cn("text-center text-sm max-w-60", colors.text.tertiary)}>
           Tool calls appear when AI manages memories in dynamic mode
         </p>
       </motion.div>
@@ -1387,7 +1387,7 @@ export function ChatMemoriesPage() {
                 <p
                   className={cn(
                     typography.bodySmall.size,
-                    "leading-relaxed line-clamp-4 min-h-[3.5rem]",
+                    "leading-relaxed line-clamp-4 min-h-14",
                     ui.summaryDraft
                       ? "text-emerald-50/70"
                       : "text-emerald-200/25 italic",
@@ -1450,7 +1450,7 @@ export function ChatMemoriesPage() {
                   onClick={() => setShowAddCategoryMenu(true)}
                   className={cn(
                     "flex items-center justify-center shrink-0",
-                    "h-[42px] w-[42px] rounded-lg",
+                    "h-10.5 w-10.5 rounded-lg",
                     "border border-white/10 bg-white/5",
                     "text-white/50",
                     "hover:bg-white/8 hover:text-white/70",
@@ -1518,7 +1518,7 @@ export function ChatMemoriesPage() {
                   <h3 className="mb-1 text-base font-semibold text-white">
                     {ui.searchTerm ? "No matching memories" : "No memories yet"}
                   </h3>
-                  <p className="text-center text-sm text-white/40 max-w-[240px]">
+                  <p className="text-center text-sm text-white/40 max-w-60">
                     {ui.searchTerm
                       ? "Try a different search term"
                       : "Tap the Add button above to create one"}
@@ -1747,7 +1747,7 @@ export function ChatMemoriesPage() {
                   <Pin className="h-7 w-7 text-white/20" />
                 </div>
                 <h3 className="mb-1 text-base font-semibold text-white">No pinned messages</h3>
-                <p className="text-center text-sm text-white/40 max-w-[240px]">
+                <p className="text-center text-sm text-white/40 max-w-60">
                   Pin important messages from the chat to always include them in context
                 </p>
               </motion.div>

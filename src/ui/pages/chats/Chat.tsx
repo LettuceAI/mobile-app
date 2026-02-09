@@ -1328,7 +1328,7 @@ export function ChatConversationPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="pointer-events-none fixed inset-0 z-[25]"
+            className="pointer-events-none fixed inset-0 z-25"
             style={swapOverlayStyle}
           />
         )}

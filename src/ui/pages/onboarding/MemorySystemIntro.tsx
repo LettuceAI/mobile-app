@@ -116,11 +116,11 @@ export function MemorySystemIntro() {
                     </div>
                 </div>
 
-                <p className={cn("text-gray-400 mb-4 leading-relaxed pl-[52px]", compact ? "text-xs" : "text-sm")}>
+                <p className={cn("text-gray-400 mb-4 leading-relaxed pl-13", compact ? "text-xs" : "text-sm")}>
                     Uses a <b>local embedding model</b> to smartly manage context. This cuts token costs while maintaining high quality, even in long chats.
                 </p>
 
-                <div className={cn("grid gap-2 pl-[52px]", compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+                <div className={cn("grid gap-2 pl-13", compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
                     <div className="flex items-center gap-2 text-xs text-gray-300">
                         <div className="w-1 h-1 rounded-full bg-emerald-500" />
                         Maintains quality in long chats
@@ -182,11 +182,11 @@ export function MemorySystemIntro() {
                     </div>
                 </div>
 
-                <p className={cn("text-gray-400 mb-4 leading-relaxed pl-[52px]", compact ? "text-xs" : "text-sm")}>
+                <p className={cn("text-gray-400 mb-4 leading-relaxed pl-13", compact ? "text-xs" : "text-sm")}>
                     You explicitly pin messages and edit the "World Info" or character definitions yourself. Good for total control.
                 </p>
 
-                <div className={cn("grid gap-2 pl-[52px]", compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+                <div className={cn("grid gap-2 pl-13", compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
                     <div className="flex items-center gap-2 text-xs text-gray-300">
                         <div className="w-1 h-1 rounded-full bg-blue-500" />
                         Total control over facts
