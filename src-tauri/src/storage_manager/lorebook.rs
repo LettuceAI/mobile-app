@@ -1,5 +1,7 @@
 use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value as JsonValue};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 use super::db::DbConnection;
@@ -40,6 +42,69 @@ pub struct LorebookEntry {
     pub display_order: i32,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct WorldInfoExport {
+    name: String,
+    description: String,
+    is_creation: bool,
+    scan_depth: i64,
+    token_budget: i64,
+    recursive_scanning: bool,
+    #[serde(default)]
+    extensions: JsonValue,
+    entries: BTreeMap<String, WorldInfoExportEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct WorldInfoExportEntry {
+    uid: i64,
+    #[serde(rename = "key")]
+    key: Vec<String>,
+    #[serde(default)]
+    keysecondary: Vec<String>,
+    comment: String,
+    content: String,
+    constant: bool,
+    selective: bool,
+    #[serde(rename = "selectiveLogic")]
+    selective_logic: i32,
+    order: i32,
+    position: i32,
+    disable: bool,
+    #[serde(rename = "addMemo")]
+    add_memo: bool,
+    #[serde(rename = "excludeRecursion")]
+    exclude_recursion: bool,
+    probability: i32,
+    #[serde(rename = "displayIndex")]
+    display_index: i32,
+    #[serde(rename = "useProbability")]
+    use_probability: bool,
+    secondary_keys: Vec<String>,
+    keys: Vec<String>,
+    id: i64,
+    priority: i32,
+    insertion_order: i32,
+    enabled: bool,
+    name: String,
+    #[serde(default)]
+    extensions: JsonValue,
+    case_sensitive: bool,
+    depth: i32,
+    #[serde(default)]
+    character_filter: Option<JsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct WorldInfoImport {
+    name: String,
+    #[serde(default)]
+    entries: JsonValue,
 }
 
 impl LorebookEntry {
@@ -525,6 +590,122 @@ pub fn update_entry_display_order(
     Ok(())
 }
 
+fn number_to_i32(value: Option<&JsonValue>) -> Option<i32> {
+    value
+        .and_then(|v| v.as_i64())
+        .or_else(|| value.and_then(|v| v.as_u64().map(|n| n as i64)))
+        .and_then(|n| i32::try_from(n).ok())
+}
+
+fn value_to_string_list(value: Option<&JsonValue>) -> Vec<String> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str())
+                .map(|item| item.trim().to_string())
+                .filter(|item| !item.is_empty())
+                .collect::<Vec<String>>()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_world_info_entries(entries_value: &JsonValue) -> Vec<LorebookEntry> {
+    let entries: Vec<(Option<i64>, &JsonValue)> = if let Some(map) = entries_value.as_object() {
+        map.iter()
+            .map(|(key, value)| (key.parse::<i64>().ok(), value))
+            .collect()
+    } else if let Some(list) = entries_value.as_array() {
+        list.iter()
+            .enumerate()
+            .map(|(index, value)| (Some(index as i64), value))
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let mut parsed: Vec<LorebookEntry> = entries
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, (map_index, value))| {
+            let obj = value.as_object()?;
+            let keys = {
+                let mut primary = value_to_string_list(obj.get("keys"));
+                if primary.is_empty() {
+                    primary = value_to_string_list(obj.get("key"));
+                }
+                primary
+            };
+            let title = obj
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .or_else(|| keys.first().cloned())
+                .unwrap_or_else(|| format!("Entry {}", index + 1));
+
+            let content = obj
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            if content.trim().is_empty() {
+                return None;
+            }
+
+            let enabled = obj
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| {
+                    !obj.get("disable")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                });
+
+            let display_order = number_to_i32(obj.get("insertion_order"))
+                .or_else(|| number_to_i32(obj.get("displayIndex")).map(|n| n.saturating_sub(1)))
+                .or_else(|| {
+                    map_index
+                        .and_then(|n| i32::try_from(n).ok())
+                        .map(|n| n.saturating_sub(1))
+                })
+                .unwrap_or(index as i32);
+
+            Some(LorebookEntry {
+                id: Uuid::new_v4().to_string(),
+                lorebook_id: String::new(),
+                title,
+                enabled,
+                always_active: obj
+                    .get("constant")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+                keywords: keys,
+                case_sensitive: obj
+                    .get("case_sensitive")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+                content,
+                priority: number_to_i32(obj.get("priority"))
+                    .or_else(|| number_to_i32(obj.get("order")))
+                    .unwrap_or(0),
+                display_order,
+                created_at: 0,
+                updated_at: 0,
+            })
+        })
+        .collect();
+
+    parsed.sort_by_key(|entry| entry.display_order);
+    for (idx, entry) in parsed.iter_mut().enumerate() {
+        entry.display_order = idx as i32;
+    }
+
+    parsed
+}
+
 // ============================================================================
 // Tauri Commands
 // ============================================================================
@@ -708,4 +889,115 @@ pub fn lorebook_entries_reorder(app: tauri::AppHandle, updates_json: String) -> 
 
     let conn = crate::storage_manager::db::open_db(&app)?;
     update_entry_display_order(&conn, updates)
+}
+
+#[tauri::command]
+pub fn lorebook_export(app: tauri::AppHandle, lorebook_id: String) -> Result<String, String> {
+    let conn = crate::storage_manager::db::open_db(&app)?;
+    let lorebook = get_lorebook(&conn, &lorebook_id)?.ok_or_else(|| {
+        crate::utils::err_msg(module_path!(), line!(), "Lorebook not found for export")
+    })?;
+    let entries = get_lorebook_entries(&conn, &lorebook_id)?;
+
+    let mut entry_map = BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let seq = (index + 1) as i64;
+        entry_map.insert(
+            seq.to_string(),
+            WorldInfoExportEntry {
+                uid: seq,
+                key: entry.keywords.clone(),
+                keysecondary: Vec::new(),
+                comment: String::new(),
+                content: entry.content.clone(),
+                constant: entry.always_active,
+                selective: false,
+                selective_logic: 0,
+                order: entry.priority,
+                position: 1,
+                disable: !entry.enabled,
+                add_memo: true,
+                exclude_recursion: true,
+                probability: 100,
+                display_index: index as i32 + 1,
+                use_probability: true,
+                secondary_keys: Vec::new(),
+                keys: entry.keywords.clone(),
+                id: seq,
+                priority: entry.priority,
+                insertion_order: entry.display_order,
+                enabled: entry.enabled,
+                name: entry.title.clone(),
+                extensions: JsonValue::Object(JsonMap::new()),
+                case_sensitive: entry.case_sensitive,
+                depth: 4,
+                character_filter: None,
+            },
+        );
+    }
+
+    let payload = WorldInfoExport {
+        name: lorebook.name,
+        description: String::new(),
+        is_creation: false,
+        scan_depth: 4,
+        token_budget: 0,
+        recursive_scanning: false,
+        extensions: JsonValue::Object(JsonMap::new()),
+        entries: entry_map,
+    };
+
+    serde_json::to_string_pretty(&payload).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to serialize lorebook export: {}", e),
+        )
+    })
+}
+
+#[tauri::command]
+pub fn lorebook_import(app: tauri::AppHandle, import_json: String) -> Result<String, String> {
+    let parsed: WorldInfoImport = serde_json::from_str(&import_json).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Invalid lorebook import JSON: {}", e),
+        )
+    })?;
+
+    let mut parsed_entries = parse_world_info_entries(&parsed.entries);
+    let now = now_millis()? as i64;
+    let lorebook = Lorebook {
+        id: Uuid::new_v4().to_string(),
+        name: parsed.name.trim().to_string(),
+        created_at: now,
+        updated_at: now,
+    };
+
+    if lorebook.name.is_empty() {
+        return Err(crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            "Lorebook name is required",
+        ));
+    }
+
+    let conn = crate::storage_manager::db::open_db(&app)?;
+    upsert_lorebook(&conn, &lorebook)?;
+    for (index, mut entry) in parsed_entries.drain(..).enumerate() {
+        entry.lorebook_id = lorebook.id.clone();
+        entry.created_at = now;
+        entry.updated_at = now;
+        entry.display_order = index as i32;
+        upsert_lorebook_entry(&conn, &entry)?;
+    }
+
+    serde_json::to_string(&lorebook).map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to serialize imported lorebook: {}", e),
+        )
+    })
 }

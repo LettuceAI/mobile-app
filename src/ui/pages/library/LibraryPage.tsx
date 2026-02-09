@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, memo, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   listCharacters,
@@ -22,6 +22,7 @@ import {
   Edit2,
   Trash2,
   Download,
+  Upload,
   Check,
   BookOpen,
   Users,
@@ -35,6 +36,7 @@ import {
   type CharacterFileFormat,
 } from "../../../core/storage/characterTransfer";
 import { exportPersona, generateExportFilename } from "../../../core/storage/personaTransfer";
+import { importLorebook, readFileAsText } from "../../../core/storage/lorebookTransfer";
 import { listen } from "@tauri-apps/api/event";
 
 type FilterOption = "All" | "Characters" | "Personas" | "Lorebooks";
@@ -64,6 +66,8 @@ export function LibraryPage() {
   const [exporting, setExporting] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<LibraryItem | null>(null);
+  const [importingLorebook, setImportingLorebook] = useState(false);
+  const lorebookImportRef = useRef<HTMLInputElement | null>(null);
   const rocket = useRocketEasterEgg();
 
   // Rename state
@@ -220,6 +224,25 @@ export function LibraryPage() {
     }
   };
 
+  const handleImportLorebook = async (file: File) => {
+    if (importingLorebook) return;
+    try {
+      setImportingLorebook(true);
+      const raw = await readFileAsText(file);
+      const imported = await importLorebook(raw);
+      await loadData();
+      navigate(`/library/lorebooks/${imported.id}`);
+    } catch (err) {
+      console.error("Failed to import lorebook:", err);
+      alert("Failed to import lorebook. " + String(err));
+    } finally {
+      setImportingLorebook(false);
+      if (lorebookImportRef.current) {
+        lorebookImportRef.current.value = "";
+      }
+    }
+  };
+
   const allItems: LibraryItem[] = [
     ...characters.map((c) => ({ ...c, itemType: "character" as const })),
     ...personas.map((p) => ({ ...p, itemType: "persona" as const })),
@@ -282,6 +305,16 @@ export function LibraryPage() {
                     ? "Create a persona to customize your chat identity"
                     : "Lorebooks are created from within a character's settings"}
             </p>
+            {filter === "Lorebooks" && (
+              <button
+                onClick={() => lorebookImportRef.current?.click()}
+                disabled={importingLorebook}
+                className="mb-3 flex items-center gap-2 rounded-xl border border-blue-400/40 bg-blue-400/20 px-5 py-2.5 text-sm font-medium text-blue-100 transition active:scale-95 active:bg-blue-400/30 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Upload className="h-4 w-4" />
+                {importingLorebook ? "Importing..." : "Import Lorebook"}
+              </button>
+            )}
             {filter !== "Lorebooks" && (
               <button
                 onClick={() =>
@@ -293,6 +326,18 @@ export function LibraryPage() {
                 {filter === "Personas" ? "Create Persona" : "Create Character"}
               </button>
             )}
+            <input
+              ref={lorebookImportRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleImportLorebook(file);
+                }
+              }}
+            />
           </motion.div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-24">

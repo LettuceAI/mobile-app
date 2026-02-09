@@ -1,6 +1,18 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { BookOpen, Trash2, ChevronRight, Star, Edit2, Search, GripVertical, X } from "lucide-react";
+import {
+  BookOpen,
+  Trash2,
+  ChevronRight,
+  Star,
+  Edit2,
+  Search,
+  GripVertical,
+  X,
+  Download,
+  Upload,
+  Loader2,
+} from "lucide-react";
 import { motion, type PanInfo, useDragControls } from "framer-motion";
 import type { Lorebook, LorebookEntry } from "../../../core/storage/schemas";
 import {
@@ -12,6 +24,13 @@ import {
   reorderLorebookEntries,
   saveLorebook,
 } from "../../../core/storage/repo";
+import {
+  exportLorebook,
+  importLorebook,
+  downloadJson,
+  readFileAsText,
+  generateLorebookExportFilename,
+} from "../../../core/storage/lorebookTransfer";
 import { BottomMenu, MenuButton } from "../../components";
 import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { TopNav } from "../../components/App";
@@ -447,6 +466,9 @@ export function StandaloneLorebookEditor() {
   const [showRenameMenu, setShowRenameMenu] = useState(false);
   const [newName, setNewName] = useState("");
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadData();
@@ -565,6 +587,38 @@ export function StandaloneLorebookEditor() {
     }
   };
 
+  const handleExportLorebook = async () => {
+    if (!lorebook || isExporting) return;
+    try {
+      setIsExporting(true);
+      const exportJson = await exportLorebook(lorebook.id);
+      await downloadJson(exportJson, generateLorebookExportFilename(lorebook.name));
+    } catch (error) {
+      console.error("Failed to export lorebook:", error);
+      alert("Failed to export lorebook. " + String(error));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportLorebook = async (file: File) => {
+    if (isImporting) return;
+    try {
+      setIsImporting(true);
+      const raw = await readFileAsText(file);
+      const imported = await importLorebook(raw);
+      navigate(`/library/lorebooks/${imported.id}`);
+    } catch (error) {
+      console.error("Failed to import lorebook:", error);
+      alert("Failed to import lorebook. " + String(error));
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
+  };
+
   const filteredEntries = useMemo(() => {
     if (!searchQuery.trim()) return entries;
     const query = searchQuery.toLowerCase();
@@ -635,6 +689,46 @@ export function StandaloneLorebookEditor() {
         currentPath="/library/lorebooks"
         titleOverride={`Lorebook - ${lorebook.name}`}
         onBackOverride={() => navigate("/library")}
+        rightAction={
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={isImporting}
+              className="flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full text-white/70 hover:text-white hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Import lorebook"
+            >
+              {isImporting ? (
+                <Loader2 size={18} className="animate-spin text-white" />
+              ) : (
+                <Upload size={18} className="text-white" />
+              )}
+            </button>
+            <button
+              onClick={handleExportLorebook}
+              disabled={isExporting}
+              className="flex items-center px-[0.6em] py-[0.3em] justify-center rounded-full text-white/70 hover:text-white hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Export lorebook"
+            >
+              {isExporting ? (
+                <Loader2 size={18} className="animate-spin text-white" />
+              ) : (
+                <Download size={18} className="text-white" />
+              )}
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleImportLorebook(file);
+                }
+              }}
+            />
+          </div>
+        }
       />
       <div className="flex h-full flex-col text-gray-200 overflow-hidden pb-6 pt-[calc(72px+env(safe-area-inset-top))]">
         {/* Search */}

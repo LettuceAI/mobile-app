@@ -259,6 +259,8 @@ pub fn run() {
             storage_manager::lorebook::lorebook_entry_delete,
             storage_manager::lorebook::lorebook_entry_create_blank,
             storage_manager::lorebook::lorebook_entries_reorder,
+            storage_manager::lorebook::lorebook_export,
+            storage_manager::lorebook::lorebook_import,
             storage_manager::entity_transfer::character_export,
             storage_manager::entity_transfer::character_export_with_format,
             storage_manager::entity_transfer::character_import,

@@ -1,7 +1,17 @@
-import { Brain, User, BookOpen, Loader2, Sparkles, Users, History, Plus } from "lucide-react";
+import {
+  Brain,
+  User,
+  BookOpen,
+  Loader2,
+  Sparkles,
+  Users,
+  History,
+  Plus,
+  Upload,
+} from "lucide-react";
 import { BottomMenu, MenuButton, MenuDivider, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listCharacters,
   listLorebooks,
@@ -12,6 +22,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { AvatarImage } from "../AvatarImage";
 import { useAvatar } from "../../hooks/useAvatar";
+import { importLorebook, readFileAsText } from "../../../core/storage/lorebookTransfer";
 
 type CreationGoal = "character" | "persona" | "lorebook";
 type CreationStatus = "active" | "previewShown" | "completed" | "cancelled";
@@ -79,12 +90,14 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   >("menu");
   const [lorebookName, setLorebookName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isImportingLorebook, setIsImportingLorebook] = useState(false);
   const [smartToolSelection, setSmartToolSelection] = useState(true);
   const [selectedGoal, setSelectedGoal] = useState<CreationGoal | null>(null);
   const [goalSessions, setGoalSessions] = useState<CreationSessionSummary[]>([]);
   const [loadingGoalSessions, setLoadingGoalSessions] = useState(false);
   const [editTargets, setEditTargets] = useState<EditTarget[]>([]);
   const [loadingEditTargets, setLoadingEditTargets] = useState(false);
+  const lorebookImportInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -105,6 +118,7 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       setMode("menu");
       setLorebookName("");
       setIsCreating(false);
+      setIsImportingLorebook(false);
       setSelectedGoal(null);
       setGoalSessions([]);
       setLoadingGoalSessions(false);
@@ -124,6 +138,24 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     } catch (error) {
       console.error("Failed to create lorebook:", error);
       setIsCreating(false);
+    }
+  };
+
+  const handleImportLorebookFile = async (file: File) => {
+    if (isImportingLorebook) return;
+    try {
+      setIsImportingLorebook(true);
+      const raw = await readFileAsText(file);
+      const imported = await importLorebook(raw);
+      navigate(`/library/lorebooks/${imported.id}`);
+      handleClose();
+    } catch (error) {
+      console.error("Failed to import lorebook:", error);
+      setIsImportingLorebook(false);
+    } finally {
+      if (lorebookImportInputRef.current) {
+        lorebookImportInputRef.current.value = "";
+      }
     }
   };
 
@@ -489,6 +521,18 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
               Back
             </button>
             <button
+              onClick={() => lorebookImportInputRef.current?.click()}
+              disabled={isImportingLorebook}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/15 py-3 text-sm font-medium text-blue-100 transition hover:border-blue-500/50 hover:bg-blue-500/25 disabled:opacity-50"
+            >
+              {isImportingLorebook ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {isImportingLorebook ? "Importing..." : "Import"}
+            </button>
+            <button
               onClick={handleCreateLorebook}
               disabled={isCreating || !lorebookName.trim()}
               className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/20 py-3 text-sm font-medium text-emerald-100 transition hover:border-emerald-500/50 hover:bg-emerald-500/30 disabled:opacity-50"
@@ -496,6 +540,18 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
               {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
               {isCreating ? "Creating..." : "Create"}
             </button>
+            <input
+              ref={lorebookImportInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  void handleImportLorebookFile(file);
+                }
+              }}
+            />
           </div>
         </div>
       )}
