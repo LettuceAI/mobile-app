@@ -543,8 +543,13 @@ function ChatSettingsContent({ character }: { character: Character }) {
 
   const handleViewHistory = useCallback(() => {
     if (!characterId) return;
-    navigate(Routes.chatHistory(characterId));
-  }, [characterId, navigate]);
+    const base = Routes.chatHistory(characterId);
+    if (currentSession?.id) {
+      navigate(`${base}?sessionId=${encodeURIComponent(currentSession.id)}`);
+      return;
+    }
+    navigate(base);
+  }, [characterId, currentSession?.id, navigate]);
 
   const avatarDisplay = useMemo(() => {
     if (avatarUrl && isImageLike(avatarUrl)) {
@@ -650,11 +655,7 @@ function ChatSettingsContent({ character }: { character: Character }) {
     if (characterId) {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get("sessionId");
-      if (sessionId) {
-        navigate(Routes.chatSession(characterId, sessionId));
-      } else {
-        navigate(Routes.chat);
-      }
+      backOrReplace(Routes.chatSession(characterId, sessionId));
     } else {
       backOrReplace(Routes.chat);
     }

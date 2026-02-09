@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Trash2, MessageCircle, AlertCircle, Edit3, Search, X } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 
 import type { Character } from "../../../core/storage/schemas";
 import {
   listCharacters,
   listSessionPreviews,
   deleteSession,
-  updateSessionTitle
+  updateSessionTitle,
 } from "../../../core/storage";
 import { typography, radius, cn, colors, interactive } from "../../design-tokens";
 import { BottomMenu, MenuButton, MenuButtonGroup, MenuDivider } from "../../components";
@@ -23,6 +23,7 @@ interface SessionPreview {
 
 export function ChatHistoryPage() {
   const { characterId } = useParams<{ characterId: string }>();
+  const location = useLocation();
   const { go, backOrReplace } = useNavigationManager();
   const [character, setCharacter] = useState<Character | null>(null);
   const [sessions, setSessions] = useState<SessionPreview[]>([]);
@@ -66,7 +67,7 @@ export function ChatHistoryPage() {
 
         // Load character
         const characters = await listCharacters();
-        const char = characters.find(c => c.id === characterId);
+        const char = characters.find((c) => c.id === characterId);
         setCharacter(char || null);
 
         const previews = await listSessionPreviews(characterId);
@@ -93,14 +94,14 @@ export function ChatHistoryPage() {
   }, [characterId]);
 
   const handleDelete = useCallback(async (sessionId: string) => {
-    setBusyIds(prev => new Set(prev).add(sessionId));
+    setBusyIds((prev) => new Set(prev).add(sessionId));
     try {
       await deleteSession(sessionId);
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (err) {
       setError(`Failed to delete: ${err}`);
     } finally {
-      setBusyIds(prev => {
+      setBusyIds((prev) => {
         const next = new Set(prev);
         next.delete(sessionId);
         return next;
@@ -109,16 +110,14 @@ export function ChatHistoryPage() {
   }, []);
 
   const handleRename = useCallback(async (sessionId: string, newTitle: string) => {
-    setBusyIds(prev => new Set(prev).add(sessionId));
+    setBusyIds((prev) => new Set(prev).add(sessionId));
     try {
       await updateSessionTitle(sessionId, newTitle);
-      setSessions(prev => prev.map(s => 
-        s.id === sessionId ? { ...s, title: newTitle } : s
-      ));
+      setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)));
     } catch (err) {
       setError(`Failed to rename: ${err}`);
     } finally {
-      setBusyIds(prev => {
+      setBusyIds((prev) => {
         const next = new Set(prev);
         next.delete(sessionId);
         return next;
@@ -136,14 +135,16 @@ export function ChatHistoryPage() {
     });
   }, [query, sessions]);
 
+  const sessionId = useMemo(() => {
+    return new URLSearchParams(location.search).get("sessionId");
+  }, [location.search]);
+
   if (!characterId) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <div className="text-center">
           <MessageCircle className="mx-auto mb-4 h-12 w-12 text-white/30" />
-          <p className={cn(typography.body.size, "text-white/60")}>
-            Character not found
-          </p>
+          <p className={cn(typography.body.size, "text-white/60")}>Character not found</p>
         </div>
       </div>
     );
@@ -163,13 +164,17 @@ export function ChatHistoryPage() {
       <header
         className={cn(
           "z-20 shrink-0 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] sticky top-0",
-          "bg-[#050505]"
+          "bg-[#050505]",
         )}
       >
         <div className="flex items-center gap-3">
           <div className="flex flex-1 items-center min-w-0">
             <button
-              onClick={() => backOrReplace(characterId ? Routes.chatSettings(characterId) : Routes.chat)}
+              onClick={() =>
+                backOrReplace(
+                  characterId ? Routes.chatSettingsSession(characterId, sessionId) : Routes.chat,
+                )
+              }
               className="flex shrink-0 px-[0.6em] py-[0.3em] items-center justify-center -ml-2 text-white transition hover:text-white/80"
               aria-label="Back to chat settings"
             >
@@ -178,7 +183,9 @@ export function ChatHistoryPage() {
             <div className="min-w-0 flex-1 text-left">
               <p className="truncate text-xl font-bold text-white/90">Chat History</p>
               <p className="mt-0.5 truncate text-xs text-white/50">
-                {character ? `Previous conversations with ${character.name}` : "Previous conversations"}
+                {character
+                  ? `Previous conversations with ${character.name}`
+                  : "Previous conversations"}
               </p>
             </div>
           </div>
@@ -188,20 +195,17 @@ export function ChatHistoryPage() {
       {/* Content */}
       <main className="flex-1 overflow-y-auto px-3 pt-4">
         {error && (
-          <div className={cn(
-            "mb-4 p-4 border border-red-400/30 bg-red-400/10 text-center",
-            radius.lg
-          )}>
+          <div
+            className={cn("mb-4 p-4 border border-red-400/30 bg-red-400/10 text-center", radius.lg)}
+          >
             <AlertCircle className="mx-auto mb-2 h-5 w-5 text-red-400" />
-            <p className={cn(typography.bodySmall.size, "text-red-200")}>
-              {error}
-            </p>
+            <p className={cn(typography.bodySmall.size, "text-red-200")}>{error}</p>
             <button
               onClick={() => window.location.reload()}
               className={cn(
                 "mt-3 px-4 py-2 border border-red-400/40 bg-red-400/20 text-red-100",
                 radius.md,
-                "active:scale-95 transition-transform"
+                "active:scale-95 transition-transform",
               )}
             >
               Retry
@@ -212,7 +216,12 @@ export function ChatHistoryPage() {
         {sessions.length > 0 && (
           <div className="mb-4">
             <div className={cn("relative")}>
-              <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4", colors.text.tertiary)} />
+              <Search
+                className={cn(
+                  "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4",
+                  colors.text.tertiary,
+                )}
+              />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -224,7 +233,7 @@ export function ChatHistoryPage() {
                   radius.lg,
                   typography.bodySmall.size,
                   "text-white placeholder-white/40",
-                  "focus:outline-none focus:ring-2 focus:ring-white/10 focus:border-white/20"
+                  "focus:outline-none focus:ring-2 focus:ring-white/10 focus:border-white/20",
                 )}
               />
               {query.trim().length > 0 && (
@@ -238,7 +247,7 @@ export function ChatHistoryPage() {
                     colors.text.tertiary,
                     "hover:text-white",
                     interactive.transition.fast,
-                    interactive.active.scale
+                    interactive.active.scale,
                   )}
                   aria-label="Clear search"
                 >
@@ -248,7 +257,8 @@ export function ChatHistoryPage() {
             </div>
             {query.trim() ? (
               <p className={cn(typography.caption.size, colors.text.tertiary, "mt-2")}>
-                {filteredSessions.length.toLocaleString()} result{filteredSessions.length === 1 ? "" : "s"}
+                {filteredSessions.length.toLocaleString()} result
+                {filteredSessions.length === 1 ? "" : "s"}
               </p>
             ) : null}
           </div>
@@ -264,46 +274,44 @@ export function ChatHistoryPage() {
               Start chatting to see your history here
             </p>
           </div>
+        ) : filteredSessions.length === 0 ? (
+          <div className="text-center py-20">
+            <MessageCircle className="mx-auto mb-4 h-12 w-12 text-white/30" />
+            <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white/70 mb-2")}>
+              No matching chats
+            </h3>
+            <p className={cn(typography.bodySmall.size, "text-white/40 mb-6")}>
+              Try a different search term
+            </p>
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className={cn(
+                "px-4 py-2 border bg-white/5 text-white/80",
+                colors.border.subtle,
+                radius.md,
+                typography.bodySmall.size,
+                interactive.active.scale,
+                interactive.hover.brightness,
+                interactive.transition.fast,
+              )}
+            >
+              Clear search
+            </button>
+          </div>
         ) : (
-          filteredSessions.length === 0 ? (
-            <div className="text-center py-20">
-              <MessageCircle className="mx-auto mb-4 h-12 w-12 text-white/30" />
-              <h3 className={cn(typography.h3.size, typography.h3.weight, "text-white/70 mb-2")}>
-                No matching chats
-              </h3>
-              <p className={cn(typography.bodySmall.size, "text-white/40 mb-6")}>
-                Try a different search term
-              </p>
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className={cn(
-                  "px-4 py-2 border bg-white/5 text-white/80",
-                  colors.border.subtle,
-                  radius.md,
-                  typography.bodySmall.size,
-                  interactive.active.scale,
-                  interactive.hover.brightness,
-                  interactive.transition.fast
-                )}
-              >
-                Clear search
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredSessions.map((session) => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  onSelect={() => go(Routes.chatSession(characterId!, session.id))}
-                  onDelete={() => setDeleteTarget(session)}
-                  onRename={(newTitle) => handleRename(session.id, newTitle)}
-                  isBusy={busyIds.has(session.id)}
-                />
-              ))}
-            </div>
-          )
+          <div className="space-y-3">
+            {filteredSessions.map((session) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                onSelect={() => go(Routes.chatSession(characterId!, session.id))}
+                onDelete={() => setDeleteTarget(session)}
+                onRename={(newTitle) => handleRename(session.id, newTitle)}
+                isBusy={busyIds.has(session.id)}
+              />
+            ))}
+          </div>
         )}
       </main>
 
@@ -389,11 +397,13 @@ function SessionCard({
   };
 
   return (
-    <div className={cn(
-      "border border-white/10 bg-white/5 overflow-hidden",
-      radius.lg,
-      session.archived && "border-amber-400/20 bg-amber-400/5"
-    )}>
+    <div
+      className={cn(
+        "border border-white/10 bg-white/5 overflow-hidden",
+        radius.lg,
+        session.archived && "border-amber-400/20 bg-amber-400/5",
+      )}
+    >
       {/* Main content - tap to open */}
       <button
         onClick={onSelect}
@@ -409,7 +419,9 @@ function SessionCard({
         </p>
 
         {session.lastMessage && (
-          <p className={cn(typography.bodySmall.size, "text-white/70 line-clamp-2 leading-relaxed")}>
+          <p
+            className={cn(typography.bodySmall.size, "text-white/70 line-clamp-2 leading-relaxed")}
+          >
             {session.lastMessage}
           </p>
         )}
@@ -431,7 +443,7 @@ function SessionCard({
               "w-full px-3 py-2 bg-white/10 border border-white/20 text-white mb-2",
               radius.md,
               typography.body.size,
-              "focus:outline-none focus:border-blue-400/60"
+              "focus:outline-none focus:border-blue-400/60",
             )}
             placeholder="Chat title..."
           />
@@ -443,7 +455,7 @@ function SessionCard({
                 "flex-1 px-3 py-2 border border-blue-400/40 bg-blue-400/20 text-blue-100",
                 radius.md,
                 typography.bodySmall.size,
-                "active:scale-95 disabled:opacity-50 transition-all"
+                "active:scale-95 disabled:opacity-50 transition-all",
               )}
             >
               Save
@@ -454,7 +466,7 @@ function SessionCard({
                 "flex-1 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
                 radius.md,
                 typography.bodySmall.size,
-                "active:scale-95 transition-all"
+                "active:scale-95 transition-all",
               )}
             >
               Cancel
@@ -473,7 +485,7 @@ function SessionCard({
               "flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
               radius.md,
               typography.bodySmall.size,
-              "active:scale-95 active:bg-blue-400/10 active:text-blue-300 active:border-blue-400/40 disabled:opacity-50 transition-all"
+              "active:scale-95 active:bg-blue-400/10 active:text-blue-300 active:border-blue-400/40 disabled:opacity-50 transition-all",
             )}
           >
             <Edit3 size={14} />
@@ -486,7 +498,7 @@ function SessionCard({
               "flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 text-white/60",
               radius.md,
               typography.bodySmall.size,
-              "active:scale-95 active:bg-red-400/10 active:text-red-300 active:border-red-400/40 disabled:opacity-50 transition-all"
+              "active:scale-95 active:bg-red-400/10 active:text-red-300 active:border-red-400/40 disabled:opacity-50 transition-all",
             )}
           >
             <Trash2 size={14} />
