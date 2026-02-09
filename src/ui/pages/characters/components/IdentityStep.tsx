@@ -307,7 +307,7 @@ export function IdentityStep({
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30",
           )}
         >
-          Continue to Starting Scene
+          Continue to Description
         </motion.button>
       </div>
 

@@ -76,10 +76,10 @@ export function CreateCharacterPage() {
 
   const handleBack = () => {
     if (state.step === Step.Extras) {
-      actions.setStep(Step.Description);
-    } else if (state.step === Step.Description) {
       actions.setStep(Step.StartingScene);
     } else if (state.step === Step.StartingScene) {
+      actions.setStep(Step.Description);
+    } else if (state.step === Step.Description) {
       actions.setStep(Step.Identity);
     } else {
       navigate(-1);
@@ -125,21 +125,11 @@ export function CreateCharacterPage() {
               onBackgroundImageUpload={actions.handleBackgroundImageUpload}
               disableAvatarGradient={state.disableAvatarGradient}
               onDisableAvatarGradientChange={actions.setDisableAvatarGradient}
-              onContinue={() => actions.setStep(Step.StartingScene)}
+              onContinue={() => actions.setStep(Step.Description)}
               canContinue={computed.canContinueIdentity}
               importingAvatar={state.importingAvatar}
               avatarImportError={state.avatarImportError}
               onImport={actions.handleImport}
-            />
-          ) : state.step === Step.StartingScene ? (
-            <StartingSceneStep
-              key="starting-scene"
-              scenes={state.scenes}
-              onScenesChange={actions.setScenes}
-              defaultSceneId={state.defaultSceneId}
-              onDefaultSceneIdChange={actions.setDefaultSceneId}
-              onContinue={() => actions.setStep(Step.Description)}
-              canContinue={computed.canContinueStartingScene}
             />
           ) : state.step === Step.Description ? (
             <DescriptionStep
@@ -170,11 +160,21 @@ export function CreateCharacterPage() {
               providerVoices={providerVoices}
               loadingVoices={loadingVoices}
               voiceError={voiceError}
-              onSave={() => actions.setStep(Step.Extras)}
+              onSave={() => actions.setStep(Step.StartingScene)}
               canSave={computed.canSaveDescription}
               saving={false}
               error={state.error}
-              submitLabel="Continue"
+              submitLabel="Continue to Starting Scenes"
+            />
+          ) : state.step === Step.StartingScene ? (
+            <StartingSceneStep
+              key="starting-scene"
+              scenes={state.scenes}
+              onScenesChange={actions.setScenes}
+              defaultSceneId={state.defaultSceneId}
+              onDefaultSceneIdChange={actions.setDefaultSceneId}
+              onContinue={() => actions.setStep(Step.Extras)}
+              canContinue={computed.canContinueStartingScene}
             />
           ) : (
             <ExtrasStep

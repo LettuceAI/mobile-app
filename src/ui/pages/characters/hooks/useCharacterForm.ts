@@ -31,8 +31,8 @@ import {
 } from "../../../../core/prompts/constants";
 export enum Step {
   Identity = 1,
-  StartingScene = 2,
-  Description = 3,
+  Description = 2,
+  StartingScene = 3,
   Extras = 4,
 }
 

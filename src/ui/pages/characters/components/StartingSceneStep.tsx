@@ -373,7 +373,7 @@ export function StartingSceneStep({
               : "cursor-not-allowed border border-white/5 bg-white/5 text-white/30",
           )}
         >
-          Continue to Details
+          Continue to Extras
         </button>
       </div>
 
