@@ -107,7 +107,7 @@ export function CreateCharacterPage() {
         stepLabel={stepLabel}
       />*/}
 
-      <main className="flex flex-1 flex-col overflow-y-auto px-4 pb-20 pt-[calc(72px+env(safe-area-inset-top))]">
+      <main className="flex flex-1 flex-col overflow-y-auto px-4 pb-20 pt-[calc(72px+env(safe-area-inset-top))] lg:px-8 lg:mx-auto lg:w-full lg:max-w-5xl">
         <AnimatePresence mode="wait">
           {state.step === Step.Identity ? (
             <IdentityStep

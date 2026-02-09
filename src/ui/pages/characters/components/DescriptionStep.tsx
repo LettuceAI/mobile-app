@@ -123,482 +123,497 @@ export function DescriptionStep({
         <p className={cn(typography.body.size, "text-white/50")}>Define personality and behavior</p>
       </div>
 
-      {/* Definition Textarea */}
-      <div className={spacing.field}>
-        <div className="flex items-center justify-between">
-          <label
-            className={cn(
-              typography.label.size,
-              typography.label.weight,
-              typography.label.tracking,
-              "uppercase text-white/70",
-            )}
-          >
-            Definition *
-          </label>
-          {definition.trim() && (
-            <motion.span
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={cn(typography.caption.size, typography.caption.weight, "text-white/40")}
-            >
-              {wordCount} {wordCount === 1 ? "word" : "words"}
-            </motion.span>
-          )}
-        </div>
-        <div className="relative">
-          <textarea
-            value={definition}
-            onChange={(e) => onDefinitionChange(e.target.value)}
-            rows={8}
-            placeholder="Describe personality, speaking style, background, knowledge areas..."
-            className={cn(
-              "w-full resize-none border bg-black/20 px-4 py-3 text-base leading-relaxed text-white placeholder-white/40 backdrop-blur-xl",
-              radius.md,
-              interactive.transition.default,
-              "focus:bg-black/30 focus:outline-none",
-              definition.trim()
-                ? "border-emerald-400/30 focus:border-emerald-400/40"
-                : "border-white/10 focus:border-white/30",
-            )}
-            autoFocus
-          />
-          {definition.trim() && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="pointer-events-none absolute bottom-3 right-3"
-            >
-              <div
+      {/* Desktop: Two-column layout / Mobile: stacked */}
+      <div className="flex flex-col lg:flex-row lg:gap-8">
+        {/* Left column: Definition + Description textareas */}
+        <div className="lg:flex-1 lg:min-w-0 space-y-6">
+          {/* Definition Textarea */}
+          <div className={spacing.field}>
+            <div className="flex items-center justify-between">
+              <label
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center",
-                  radius.full,
-                  "border border-emerald-400/30 bg-emerald-400/15",
+                  typography.label.size,
+                  typography.label.weight,
+                  typography.label.tracking,
+                  "uppercase text-white/70",
                 )}
               >
-                <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
-              </div>
-            </motion.div>
-          )}
-        </div>
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          Be specific about tone, traits, and conversation style
-        </p>
-        <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-4 py-3">
-          <div className="text-xs font-medium text-blue-200">Available Placeholders:</div>
-          <div className="mt-2 space-y-1 text-xs text-blue-200/70">
-            <div>
-              <code className="text-emerald-300">{"{{char}}"}</code> - Character name
-            </div>
-            <div>
-              <code className="text-emerald-300">{"{{user}}"}</code> - Persona name (preferred,
-              empty if none)
-            </div>
-            <div>
-              <code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (alias)
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* UI Description */}
-      <div className={spacing.field}>
-        <div className="flex items-center justify-between">
-          <label
-            className={cn(
-              typography.label.size,
-              typography.label.weight,
-              typography.label.tracking,
-              "uppercase text-white/70",
-            )}
-          >
-            Description
-          </label>
-        </div>
-        <textarea
-          value={description}
-          onChange={(e) => onDescriptionChange(e.target.value)}
-          rows={3}
-          placeholder="Short summary shown on cards and lists..."
-          className={cn(
-            "w-full resize-none border bg-black/20 px-4 py-3 text-base leading-relaxed text-white placeholder-white/40 backdrop-blur-xl",
-            radius.md,
-            interactive.transition.default,
-            "focus:bg-black/30 focus:outline-none",
-            description.trim()
-              ? "border-white/20 focus:border-white/40"
-              : "border-white/10 focus:border-white/30",
-          )}
-        />
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          Optional short description for the UI; the full definition is used in prompts.
-        </p>
-      </div>
-
-      {/* Model Selection */}
-      <div className={spacing.field}>
-        <label
-          className={cn(
-            typography.label.size,
-            typography.label.weight,
-            typography.label.tracking,
-            "uppercase text-white/70",
-          )}
-        >
-          AI Model *
-        </label>
-        {loadingModels ? (
-          <div
-            className={cn(
-              "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
-              radius.md,
-            )}
-          >
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
-            <span className={cn(typography.body.size, "text-white/60")}>Loading models...</span>
-          </div>
-        ) : models.length ? (
-          <button
-            type="button"
-            onClick={() => setShowModelMenu(true)}
-            className={cn(
-              "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
-              radius.md,
-              interactive.transition.default,
-              "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
-              selectedModelId ? "border-white/20" : "border-white/10",
-            )}
-          >
-            <div className="flex items-center gap-2">
-              {selectedModelId ? (
-                getProviderIcon(models.find((m) => m.id === selectedModelId)?.providerId || "")
-              ) : (
-                <Cpu className="h-5 w-5 text-white/40" />
+                Definition *
+              </label>
+              {definition.trim() && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(typography.caption.size, typography.caption.weight, "text-white/40")}
+                >
+                  {wordCount} {wordCount === 1 ? "word" : "words"}
+                </motion.span>
               )}
-              <span className={cn("text-base", selectedModelId ? "text-white" : "text-white/50")}>
-                {selectedModelId
-                  ? models.find((m) => m.id === selectedModelId)?.displayName || "Selected Model"
-                  : "Select a model"}
-              </span>
             </div>
-            <ChevronDown className="h-4 w-4 text-white/40" />
-          </button>
-        ) : (
-          <div
-            className={cn(
-              "border border-amber-400/20 bg-amber-400/10 px-4 py-3 backdrop-blur-xl",
-              radius.md,
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-              <div>
-                <p className={cn(typography.body.size, typography.h3.weight, "text-amber-200/90")}>
-                  No models configured
-                </p>
-                <p className={cn(typography.bodySmall.size, "mt-1 text-amber-200/70")}>
-                  Add a provider in settings first to continue
-                </p>
+            <div className="relative">
+              <textarea
+                value={definition}
+                onChange={(e) => onDefinitionChange(e.target.value)}
+                rows={8}
+                placeholder="Describe personality, speaking style, background, knowledge areas..."
+                className={cn(
+                  "w-full resize-none border bg-black/20 px-4 py-3 text-base leading-relaxed text-white placeholder-white/40 backdrop-blur-xl lg:rows-12",
+                  radius.md,
+                  interactive.transition.default,
+                  "focus:bg-black/30 focus:outline-none",
+                  definition.trim()
+                    ? "border-emerald-400/30 focus:border-emerald-400/40"
+                    : "border-white/10 focus:border-white/30",
+                )}
+                autoFocus
+              />
+              {definition.trim() && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="pointer-events-none absolute bottom-3 right-3"
+                >
+                  <div
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center",
+                      radius.full,
+                      "border border-emerald-400/30 bg-emerald-400/15",
+                    )}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
+                  </div>
+                </motion.div>
+              )}
+            </div>
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              Be specific about tone, traits, and conversation style
+            </p>
+            <div className="rounded-xl border border-blue-400/20 bg-blue-400/10 px-4 py-3">
+              <div className="text-xs font-medium text-blue-200">Available Placeholders:</div>
+              <div className="mt-2 space-y-1 text-xs text-blue-200/70">
+                <div>
+                  <code className="text-emerald-300">{"{{char}}"}</code> - Character name
+                </div>
+                <div>
+                  <code className="text-emerald-300">{"{{user}}"}</code> - Persona name (preferred,
+                  empty if none)
+                </div>
+                <div>
+                  <code className="text-emerald-300">{"{{persona}}"}</code> - Persona name (alias)
+                </div>
               </div>
             </div>
           </div>
-        )}
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          This model will power the character's responses
-        </p>
-      </div>
 
-      {/* Fallback Model Selection */}
-      <div className={spacing.field}>
-        <label
-          className={cn(
-            typography.label.size,
-            typography.label.weight,
-            typography.label.tracking,
-            "uppercase text-white/70",
-          )}
-        >
-          Fallback Model (Optional)
-        </label>
-        {loadingModels ? (
-          <div
-            className={cn(
-              "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
-              radius.md,
-            )}
-          >
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
-            <span className={cn(typography.body.size, "text-white/60")}>Loading models...</span>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowFallbackModelMenu(true)}
-            className={cn(
-              "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
-              radius.md,
-              interactive.transition.default,
-              "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
-              selectedFallbackModelId ? "border-white/20" : "border-white/10",
-            )}
-          >
-            <div className="flex items-center gap-2">
-              {selectedFallbackModelId ? (
-                getProviderIcon(
-                  models.find((m) => m.id === selectedFallbackModelId)?.providerId || "",
-                )
-              ) : (
-                <Cpu className="h-5 w-5 text-white/40" />
-              )}
-              <span
+          {/* UI Description */}
+          <div className={spacing.field}>
+            <div className="flex items-center justify-between">
+              <label
                 className={cn(
-                  "text-base",
-                  selectedFallbackModelId ? "text-white" : "text-white/50",
+                  typography.label.size,
+                  typography.label.weight,
+                  typography.label.tracking,
+                  "uppercase text-white/70",
                 )}
               >
-                {selectedFallbackModelId
-                  ? models.find((m) => m.id === selectedFallbackModelId)?.displayName ||
-                    "Selected Fallback Model"
-                  : "Off (no fallback)"}
-              </span>
+                Description
+              </label>
             </div>
-            <ChevronDown className="h-4 w-4 text-white/40" />
-          </button>
-        )}
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          Retries with this model only if the primary model fails
-        </p>
-      </div>
-
-      {/* Memory Mode */}
-      <div className={spacing.field}>
-        <div className="flex items-center justify-between">
-          <label
-            className={cn(
-              typography.label.size,
-              typography.label.weight,
-              typography.label.tracking,
-              "uppercase text-white/70",
-            )}
-          >
-            Memory Mode
-          </label>
-          {!dynamicMemoryEnabled && (
-            <span className="text-[11px] text-white/45">Enable in Settings to switch</span>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => onMemoryTypeChange("manual")}
-            className={cn(
-              "flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition",
-              memoryType === "manual"
-                ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]"
-                : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/10",
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              <span className="text-sm font-semibold">Manual Memory</span>
-            </div>
-            <p className="text-xs text-white/60">
-              Current system: add and manage memory notes yourself.
-            </p>
-          </button>
-          <button
-            type="button"
-            disabled={!dynamicMemoryEnabled}
-            onClick={() => dynamicMemoryEnabled && onMemoryTypeChange("dynamic")}
-            className={cn(
-              "flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition",
-              memoryType === "dynamic" && dynamicMemoryEnabled
-                ? "border-blue-400/60 bg-blue-500/15 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
-                : "border-white/10 bg-white/5 text-white/60",
-              !dynamicMemoryEnabled && "cursor-not-allowed opacity-50",
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-sm font-semibold">Dynamic Memory</span>
-            </div>
-            <p className="text-xs text-white/60">
-              Automatic summaries and context updates for this character.
-            </p>
-          </button>
-        </div>
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          Dynamic memory requires it to be enabled in Advanced settings. Otherwise, manual memory is
-          used.
-        </p>
-      </div>
-
-      {/* System Prompt Selection */}
-      <div className={spacing.field}>
-        <label
-          className={cn(
-            typography.label.size,
-            typography.label.weight,
-            typography.label.tracking,
-            "uppercase text-white/70",
-          )}
-        >
-          System Prompt (Optional)
-        </label>
-        {loadingTemplates ? (
-          <div
-            className={cn(
-              "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
-              radius.md,
-            )}
-          >
-            <Loader2 className="h-4 w-4 animate-spin text-white/60" />
-            <span className={cn(typography.body.size, "text-white/60")}>Loading templates...</span>
-          </div>
-        ) : (
-          <div className="relative">
-            <select
-              value={systemPromptTemplateId ?? ""}
-              onChange={(e) => onSelectSystemPrompt(e.target.value || null)}
+            <textarea
+              value={description}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              rows={3}
+              placeholder="Short summary shown on cards and lists..."
               className={cn(
-                "w-full appearance-none border bg-black/20 px-4 py-3.5 pr-10 text-base text-white backdrop-blur-xl",
+                "w-full resize-none border bg-black/20 px-4 py-3 text-base leading-relaxed text-white placeholder-white/40 backdrop-blur-xl",
                 radius.md,
                 interactive.transition.default,
-                "focus:border-white/30 focus:bg-black/30 focus:outline-none",
-                systemPromptTemplateId ? "border-white/20" : "border-white/10",
+                "focus:bg-black/30 focus:outline-none",
+                description.trim()
+                  ? "border-white/20 focus:border-white/40"
+                  : "border-white/10 focus:border-white/30",
               )}
-            >
-              <option value="" className="bg-[#0b0b0d] text-white">
-                Use app default
-              </option>
-              {promptTemplates
-                .filter((t) => t.name !== "App Default")
-                .map((template) => (
-                  <option key={template.id} value={template.id} className="bg-[#0b0b0d] text-white">
-                    {template.name}
-                  </option>
-                ))}
-            </select>
-            {/* Custom dropdown icon */}
-            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-              <FileText className="h-4 w-4 text-white/40" />
-            </div>
-          </div>
-        )}
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          Choose a custom system prompt or use the default
-        </p>
-      </div>
-
-      {/* Voice Configuration */}
-      <div className={spacing.field}>
-        <label
-          className={cn(
-            typography.label.size,
-            typography.label.weight,
-            typography.label.tracking,
-            "uppercase text-white/70",
-          )}
-        >
-          Voice (Optional)
-        </label>
-        {loadingVoices ? (
-          <div
-            className={cn(
-              "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
-              radius.md,
-            )}
-          >
-            <Loader2 className="h-4 w-4 animate-spin text-white/60" />
-            <span className={cn(typography.body.size, "text-white/60")}>Loading voices...</span>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowVoiceMenu(true)}
-            className={cn(
-              "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
-              radius.md,
-              interactive.transition.default,
-              "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
-              voiceSelectionValue ? "border-white/20" : "border-white/10",
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <Volume2 className="h-5 w-5 text-white/40" />
-              <span
-                className={cn("text-base", voiceSelectionValue ? "text-white" : "text-white/50")}
-              >
-                {voiceSelectionValue
-                  ? (() => {
-                      if (voiceConfig?.source === "user") {
-                        const v = userVoices.find((uv) => uv.id === voiceConfig.userVoiceId);
-                        return v?.name || "Custom Voice";
-                      }
-                      if (voiceConfig?.source === "provider") {
-                        const pv = providerVoices[voiceConfig.providerId || ""]?.find(
-                          (pv) => pv.voiceId === voiceConfig.voiceId,
-                        );
-                        return pv?.name || "Provider Voice";
-                      }
-                      return "Selected Voice";
-                    })()
-                  : "No voice assigned"}
-              </span>
-            </div>
-            <ChevronDown className="h-4 w-4 text-white/40" />
-          </button>
-        )}
-        {voiceError && (
-          <p className={cn(typography.bodySmall.size, "font-medium text-rose-300")}>{voiceError}</p>
-        )}
-        {!loadingVoices && audioProviders.length === 0 && userVoices.length === 0 && (
-          <p className={cn(typography.bodySmall.size, "text-white/40")}>
-            Add voices in Settings → Voices
-          </p>
-        )}
-        <p className={cn(typography.bodySmall.size, "text-white/40")}>
-          Assign a voice for future text-to-speech playback
-        </p>
-
-        {/* Voice Autoplay Toggle */}
-        <div
-          className={cn(
-            "flex items-center justify-between border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
-            radius.md,
-            !voiceConfig && "opacity-50",
-          )}
-        >
-          <div>
-            <p className={cn(typography.body.size, "font-medium text-white")}>Autoplay voice</p>
-            <p className={cn(typography.bodySmall.size, "mt-1 text-white/50")}>
-              {voiceConfig ? "Play this character's replies automatically" : "Select a voice first"}
+            />
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              Optional short description for the UI; the full definition is used in prompts.
             </p>
           </div>
-          <div className="flex items-center">
-            <input
-              id="character-voice-autoplay"
-              type="checkbox"
-              checked={voiceAutoplay}
-              onChange={() => onVoiceAutoplayChange(!voiceAutoplay)}
-              disabled={!voiceConfig}
-              className="peer sr-only"
-            />
+        </div>
+
+        {/* Right sidebar: Settings (desktop) / continues stacked (mobile) */}
+        <div className="lg:w-80 lg:shrink-0 space-y-6 mt-6 lg:mt-0">
+          {/* Model Selection */}
+          <div className={spacing.field}>
             <label
-              htmlFor="character-voice-autoplay"
               className={cn(
-                "relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all",
-                voiceAutoplay ? "bg-emerald-500" : "bg-white/20",
-                voiceConfig ? "cursor-pointer" : "cursor-not-allowed",
+                typography.label.size,
+                typography.label.weight,
+                typography.label.tracking,
+                "uppercase text-white/70",
               )}
             >
-              <span
-                className={cn(
-                  "mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white transition",
-                  voiceAutoplay ? "translate-x-5" : "translate-x-0.5",
-                )}
-              />
+              AI Model *
             </label>
+            {loadingModels ? (
+              <div
+                className={cn(
+                  "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+                  radius.md,
+                )}
+              >
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+                <span className={cn(typography.body.size, "text-white/60")}>Loading models...</span>
+              </div>
+            ) : models.length ? (
+              <button
+                type="button"
+                onClick={() => setShowModelMenu(true)}
+                className={cn(
+                  "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
+                  radius.md,
+                  interactive.transition.default,
+                  "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
+                  selectedModelId ? "border-white/20" : "border-white/10",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {selectedModelId ? (
+                    getProviderIcon(models.find((m) => m.id === selectedModelId)?.providerId || "")
+                  ) : (
+                    <Cpu className="h-5 w-5 text-white/40" />
+                  )}
+                  <span className={cn("text-sm", selectedModelId ? "text-white" : "text-white/50")}>
+                    {selectedModelId
+                      ? models.find((m) => m.id === selectedModelId)?.displayName || "Selected Model"
+                      : "Select a model"}
+                  </span>
+                </div>
+                <ChevronDown className="h-4 w-4 text-white/40" />
+              </button>
+            ) : (
+              <div
+                className={cn(
+                  "border border-amber-400/20 bg-amber-400/10 px-4 py-3 backdrop-blur-xl",
+                  radius.md,
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+                  <div>
+                    <p className={cn(typography.body.size, typography.h3.weight, "text-amber-200/90")}>
+                      No models configured
+                    </p>
+                    <p className={cn(typography.bodySmall.size, "mt-1 text-amber-200/70")}>
+                      Add a provider in settings first to continue
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              This model will power the character's responses
+            </p>
+          </div>
+
+          {/* Fallback Model Selection */}
+          <div className={spacing.field}>
+            <label
+              className={cn(
+                typography.label.size,
+                typography.label.weight,
+                typography.label.tracking,
+                "uppercase text-white/70",
+              )}
+            >
+              Fallback Model (Optional)
+            </label>
+            {loadingModels ? (
+              <div
+                className={cn(
+                  "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+                  radius.md,
+                )}
+              >
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+                <span className={cn(typography.body.size, "text-white/60")}>Loading models...</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowFallbackModelMenu(true)}
+                className={cn(
+                  "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
+                  radius.md,
+                  interactive.transition.default,
+                  "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
+                  selectedFallbackModelId ? "border-white/20" : "border-white/10",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {selectedFallbackModelId ? (
+                    getProviderIcon(
+                      models.find((m) => m.id === selectedFallbackModelId)?.providerId || "",
+                    )
+                  ) : (
+                    <Cpu className="h-5 w-5 text-white/40" />
+                  )}
+                  <span
+                    className={cn(
+                      "text-sm",
+                      selectedFallbackModelId ? "text-white" : "text-white/50",
+                    )}
+                  >
+                    {selectedFallbackModelId
+                      ? models.find((m) => m.id === selectedFallbackModelId)?.displayName ||
+                        "Selected Fallback Model"
+                      : "Off (no fallback)"}
+                  </span>
+                </div>
+                <ChevronDown className="h-4 w-4 text-white/40" />
+              </button>
+            )}
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              Retries with this model only if the primary model fails
+            </p>
+          </div>
+
+          {/* Memory Mode */}
+          <div className={spacing.field}>
+            <div className="flex items-center justify-between">
+              <label
+                className={cn(
+                  typography.label.size,
+                  typography.label.weight,
+                  typography.label.tracking,
+                  "uppercase text-white/70",
+                )}
+              >
+                Memory Mode
+              </label>
+              {!dynamicMemoryEnabled && (
+                <span className="text-[11px] text-white/45">Enable in Settings to switch</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onMemoryTypeChange("manual")}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition",
+                  memoryType === "manual"
+                    ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]"
+                    : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/10",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  <span className="text-sm font-semibold">Manual</span>
+                </div>
+                <p className="text-xs text-white/60 hidden lg:block">
+                  Add and manage memory notes yourself.
+                </p>
+                <p className="text-xs text-white/60 lg:hidden">
+                  Current system: add and manage memory notes yourself.
+                </p>
+              </button>
+              <button
+                type="button"
+                disabled={!dynamicMemoryEnabled}
+                onClick={() => dynamicMemoryEnabled && onMemoryTypeChange("dynamic")}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition",
+                  memoryType === "dynamic" && dynamicMemoryEnabled
+                    ? "border-blue-400/60 bg-blue-500/15 text-blue-50 shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                    : "border-white/10 bg-white/5 text-white/60",
+                  !dynamicMemoryEnabled && "cursor-not-allowed opacity-50",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  <span className="text-sm font-semibold">Dynamic</span>
+                </div>
+                <p className="text-xs text-white/60 hidden lg:block">
+                  Automatic summaries and context updates.
+                </p>
+                <p className="text-xs text-white/60 lg:hidden">
+                  Automatic summaries and context updates for this character.
+                </p>
+              </button>
+            </div>
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              Dynamic memory requires it to be enabled in Advanced settings. Otherwise, manual memory is
+              used.
+            </p>
+          </div>
+
+          {/* System Prompt Selection */}
+          <div className={spacing.field}>
+            <label
+              className={cn(
+                typography.label.size,
+                typography.label.weight,
+                typography.label.tracking,
+                "uppercase text-white/70",
+              )}
+            >
+              System Prompt (Optional)
+            </label>
+            {loadingTemplates ? (
+              <div
+                className={cn(
+                  "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+                  radius.md,
+                )}
+              >
+                <Loader2 className="h-4 w-4 animate-spin text-white/60" />
+                <span className={cn(typography.body.size, "text-white/60")}>Loading templates...</span>
+              </div>
+            ) : (
+              <div className="relative">
+                <select
+                  value={systemPromptTemplateId ?? ""}
+                  onChange={(e) => onSelectSystemPrompt(e.target.value || null)}
+                  className={cn(
+                    "w-full appearance-none border bg-black/20 px-4 py-3.5 pr-10 text-sm text-white backdrop-blur-xl",
+                    radius.md,
+                    interactive.transition.default,
+                    "focus:border-white/30 focus:bg-black/30 focus:outline-none",
+                    systemPromptTemplateId ? "border-white/20" : "border-white/10",
+                  )}
+                >
+                  <option value="" className="bg-[#0b0b0d] text-white">
+                    Use app default
+                  </option>
+                  {promptTemplates
+                    .filter((t) => t.name !== "App Default")
+                    .map((template) => (
+                      <option key={template.id} value={template.id} className="bg-[#0b0b0d] text-white">
+                        {template.name}
+                      </option>
+                    ))}
+                </select>
+                {/* Custom dropdown icon */}
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                  <FileText className="h-4 w-4 text-white/40" />
+                </div>
+              </div>
+            )}
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              Choose a custom system prompt or use the default
+            </p>
+          </div>
+
+          {/* Voice Configuration */}
+          <div className={spacing.field}>
+            <label
+              className={cn(
+                typography.label.size,
+                typography.label.weight,
+                typography.label.tracking,
+                "uppercase text-white/70",
+              )}
+            >
+              Voice (Optional)
+            </label>
+            {loadingVoices ? (
+              <div
+                className={cn(
+                  "flex items-center gap-3 border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+                  radius.md,
+                )}
+              >
+                <Loader2 className="h-4 w-4 animate-spin text-white/60" />
+                <span className={cn(typography.body.size, "text-white/60")}>Loading voices...</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowVoiceMenu(true)}
+                className={cn(
+                  "flex w-full items-center justify-between border bg-black/20 px-4 py-3.5 text-left backdrop-blur-xl",
+                  radius.md,
+                  interactive.transition.default,
+                  "focus:border-white/30 focus:bg-black/30 focus:outline-none hover:bg-black/30",
+                  voiceSelectionValue ? "border-white/20" : "border-white/10",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Volume2 className="h-5 w-5 text-white/40" />
+                  <span
+                    className={cn("text-sm", voiceSelectionValue ? "text-white" : "text-white/50")}
+                  >
+                    {voiceSelectionValue
+                      ? (() => {
+                          if (voiceConfig?.source === "user") {
+                            const v = userVoices.find((uv) => uv.id === voiceConfig.userVoiceId);
+                            return v?.name || "Custom Voice";
+                          }
+                          if (voiceConfig?.source === "provider") {
+                            const pv = providerVoices[voiceConfig.providerId || ""]?.find(
+                              (pv) => pv.voiceId === voiceConfig.voiceId,
+                            );
+                            return pv?.name || "Provider Voice";
+                          }
+                          return "Selected Voice";
+                        })()
+                      : "No voice assigned"}
+                  </span>
+                </div>
+                <ChevronDown className="h-4 w-4 text-white/40" />
+              </button>
+            )}
+            {voiceError && (
+              <p className={cn(typography.bodySmall.size, "font-medium text-rose-300")}>{voiceError}</p>
+            )}
+            {!loadingVoices && audioProviders.length === 0 && userVoices.length === 0 && (
+              <p className={cn(typography.bodySmall.size, "text-white/40")}>
+                Add voices in Settings → Voices
+              </p>
+            )}
+            <p className={cn(typography.bodySmall.size, "text-white/40")}>
+              Assign a voice for future text-to-speech playback
+            </p>
+
+            {/* Voice Autoplay Toggle */}
+            <div
+              className={cn(
+                "flex items-center justify-between border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-xl",
+                radius.md,
+                !voiceConfig && "opacity-50",
+              )}
+            >
+              <div>
+                <p className={cn(typography.body.size, "font-medium text-white")}>Autoplay voice</p>
+                <p className={cn(typography.bodySmall.size, "mt-1 text-white/50")}>
+                  {voiceConfig ? "Play this character's replies automatically" : "Select a voice first"}
+                </p>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="character-voice-autoplay"
+                  type="checkbox"
+                  checked={voiceAutoplay}
+                  onChange={() => onVoiceAutoplayChange(!voiceAutoplay)}
+                  disabled={!voiceConfig}
+                  className="peer sr-only"
+                />
+                <label
+                  htmlFor="character-voice-autoplay"
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 rounded-full transition-all",
+                    voiceAutoplay ? "bg-emerald-500" : "bg-white/20",
+                    voiceConfig ? "cursor-pointer" : "cursor-not-allowed",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white transition",
+                      voiceAutoplay ? "translate-x-5" : "translate-x-0.5",
+                    )}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>

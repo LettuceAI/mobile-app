@@ -123,233 +123,244 @@ export function StartingSceneStep({
         </p>
       </div>
 
-      {/* Existing Scenes */}
-      <div className={cn(spacing.item, "space-y-2")}>
-        <AnimatePresence initial={false}>
-          {scenes.map((scene, index) => {
-            const isEditing = editingSceneId === scene.id;
-            const isDefault = defaultSceneId === scene.id;
-            const isExpanded = expandedSceneId === scene.id || isEditing;
+      {/* Desktop: Side-by-side / Mobile: stacked */}
+      <div className="flex flex-col lg:flex-row lg:gap-6">
+        {/* Left: Existing Scenes */}
+        <div className={cn("lg:flex-1 lg:min-w-0", spacing.item, "space-y-2")}>
+          <AnimatePresence initial={false}>
+            {scenes.map((scene, index) => {
+              const isEditing = editingSceneId === scene.id;
+              const isDefault = defaultSceneId === scene.id;
+              const isExpanded = expandedSceneId === scene.id || isEditing;
 
-            return (
-              <motion.div
-                key={scene.id}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className={cn(
-                  "overflow-hidden rounded-xl border transition-colors duration-150",
-                  isDefault
-                    ? "border-emerald-400/30 bg-emerald-400/5"
-                    : "border-white/10 bg-white/5",
-                )}
-              >
-                {/* Scene Header - clickable to expand/collapse */}
-                <button
-                  onClick={() => !isEditing && setExpandedSceneId(isExpanded ? null : scene.id)}
+              return (
+                <motion.div
+                  key={scene.id}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                   className={cn(
-                    "flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left transition-colors duration-150",
+                    "overflow-hidden rounded-xl border transition-colors duration-150",
                     isDefault
-                      ? "border-emerald-400/20 bg-emerald-400/10"
+                      ? "border-emerald-400/30 bg-emerald-400/5"
                       : "border-white/10 bg-white/5",
                   )}
                 >
-                  {/* Scene number badge */}
-                  <div
+                  {/* Scene Header - clickable to expand/collapse */}
+                  <button
+                    onClick={() => !isEditing && setExpandedSceneId(isExpanded ? null : scene.id)}
                     className={cn(
-                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium",
+                      "flex w-full items-center gap-2 border-b px-3.5 py-2.5 text-left transition-colors duration-150",
                       isDefault
-                        ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
-                        : "border-white/10 bg-white/5 text-white/60",
+                        ? "border-emerald-400/20 bg-emerald-400/10"
+                        : "border-white/10 bg-white/5",
                     )}
                   >
-                    {index + 1}
-                  </div>
-
-                  {/* Default badge */}
-                  {isDefault && (
-                    <div className="flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-2 py-0.5">
-                      <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                      <span className="text-[10px] font-medium text-emerald-200">Default</span>
-                    </div>
-                  )}
-
-                  {/* Direction indicator */}
-                  {scene.direction && (
+                    {/* Scene number badge */}
                     <div
-                      className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5"
-                      title="Has scene direction"
-                    >
-                      <EyeOff className="h-3 w-3 text-white/40" />
-                    </div>
-                  )}
-
-                  {/* Preview text when collapsed */}
-                  {!isExpanded && !isEditing && (
-                    <span className="flex-1 truncate text-sm text-white/50">
-                      {scene.content.slice(0, 50)}
-                      {scene.content.length > 50 ? "..." : ""}
-                    </span>
-                  )}
-
-                  {/* Expand indicator */}
-                  {!isEditing && (
-                    <ChevronDown
                       className={cn(
-                        "h-4 w-4 text-white/40 ml-auto transition-transform duration-150",
-                        isExpanded && "rotate-180",
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-xs font-medium",
+                        isDefault
+                          ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-300"
+                          : "border-white/10 bg-white/5 text-white/60",
                       )}
-                    />
-                  )}
-                </button>
+                    >
+                      {index + 1}
+                    </div>
 
-                {/* Scene Content */}
-                <div
-                  className={cn(
-                    "grid transition-[grid-template-rows] duration-200 ease-out",
-                    isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                  )}
-                >
-                  <div className="overflow-hidden">
-                    <div className="p-3.5">
-                      <div className="space-y-3">
-                        <p className="text-sm leading-relaxed text-white/90">{scene.content}</p>
+                    {/* Default badge */}
+                    {isDefault && (
+                      <div className="flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-400/20 px-2 py-0.5">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        <span className="text-[10px] font-medium text-emerald-200">Default</span>
+                      </div>
+                    )}
 
-                        {/* Scene Direction */}
-                        {scene.direction && (
-                          <div className="pt-2 border-t border-white/5">
-                            <p className="text-[10px] font-medium text-white/40 mb-1">
-                              Scene Direction
-                            </p>
-                            <p className="text-xs leading-relaxed text-white/50 italic">
-                              {scene.direction}
-                            </p>
-                          </div>
+                    {/* Direction indicator */}
+                    {scene.direction && (
+                      <div
+                        className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5"
+                        title="Has scene direction"
+                      >
+                        <EyeOff className="h-3 w-3 text-white/40" />
+                      </div>
+                    )}
+
+                    {/* Preview text when collapsed */}
+                    {!isExpanded && !isEditing && (
+                      <span className="flex-1 truncate text-sm text-white/50">
+                        {scene.content.slice(0, 50)}
+                        {scene.content.length > 50 ? "..." : ""}
+                      </span>
+                    )}
+
+                    {/* Expand indicator */}
+                    {!isEditing && (
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 text-white/40 ml-auto transition-transform duration-150",
+                          isExpanded && "rotate-180",
                         )}
+                      />
+                    )}
+                  </button>
 
-                        {/* Actions when expanded */}
-                        <div className="flex items-center gap-2 pt-2 border-t border-white/5">
-                          {!isDefault && (
+                  {/* Scene Content */}
+                  <div
+                    className={cn(
+                      "grid transition-[grid-template-rows] duration-200 ease-out",
+                      isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="p-3.5">
+                        <div className="space-y-3">
+                          <p className="text-sm leading-relaxed text-white/90">{scene.content}</p>
+
+                          {/* Scene Direction */}
+                          {scene.direction && (
+                            <div className="pt-2 border-t border-white/5">
+                              <p className="text-[10px] font-medium text-white/40 mb-1">
+                                Scene Direction
+                              </p>
+                              <p className="text-xs leading-relaxed text-white/50 italic">
+                                {scene.direction}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Actions when expanded */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                            {!isDefault && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDefaultSceneIdChange(scene.id);
+                                }}
+                                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-white/60 transition active:scale-95 active:bg-white/10"
+                              >
+                                Set as Default
+                              </button>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onDefaultSceneIdChange(scene.id);
+                                startEditingScene(scene);
                               }}
-                              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-white/60 transition active:scale-95 active:bg-white/10"
+                              className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/60 transition active:scale-95 active:bg-white/10"
                             >
-                              Set as Default
+                              <Edit2 className="h-3.5 w-3.5" />
                             </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEditingScene(scene);
-                            }}
-                            className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/60 transition active:scale-95 active:bg-white/10"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteScene(scene.id);
-                            }}
-                            className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 transition active:bg-red-400/10 active:text-red-400"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteScene(scene.id);
+                              }}
+                              className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/50 transition active:bg-red-400/10 active:text-red-400"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+
+          {scenes.length === 0 && (
+            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
+              <BookOpen className="mx-auto h-8 w-8 text-white/20 mb-2" />
+              <p className="text-sm text-white/40">No scenes yet</p>
+              <p className="text-xs text-white/30 mt-1">Create your first scene to get started</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Add New Scene */}
+        <div className={cn("lg:flex-1 lg:min-w-0 mt-3 lg:mt-0", spacing.item)}>
+          <textarea
+            value={newSceneContent}
+            onChange={(e) => setNewSceneContent(e.target.value)}
+            rows={6}
+            placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
+            className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+          />
+          <div className="flex items-center justify-between mt-1">
+            {!showNewDirectionInput && !newSceneDirection ? (
+              <button
+                type="button"
+                onClick={() => setShowNewDirectionInput(true)}
+                className="flex items-center gap-1.5 text-[11px] text-white/40 hover:text-white/60 transition"
+              >
+                <EyeOff className="h-3 w-3" />+ Add Direction
+              </button>
+            ) : (
+              <span className="text-[11px] text-white/40">Direction added</span>
+            )}
+            <span className="text-[11px] text-white/40">{wordCount(newSceneContent)} words</span>
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">
+            Use <code className="text-emerald-300">{"{{char}}"}</code> for the character and{" "}
+            <code className="text-emerald-300">{"{{user}}"}</code> (alias{" "}
+            <code className="text-emerald-300">{"{{persona}}"}</code>) for the persona.
+          </div>
+
+          {/* Scene Direction Input - CSS grid for smooth height */}
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows] duration-150 ease-out",
+              showNewDirectionInput || newSceneDirection ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+          >
+            <div className="overflow-hidden">
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
+                    <EyeOff className="h-3 w-3" />
+                    Scene Direction
+                  </span>
+                  {!newSceneDirection && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewDirectionInput(false)}
+                      className="text-[11px] text-white/40 hover:text-white/60"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-
-      {/* Add New Scene */}
-      <div className={spacing.item}>
-        <textarea
-          value={newSceneContent}
-          onChange={(e) => setNewSceneContent(e.target.value)}
-          rows={6}
-          placeholder="Create a starting scene or scenario for roleplay (e.g., 'You find yourself in a mystical forest at twilight...')"
-          className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 text-sm leading-relaxed text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
-        />
-        <div className="flex items-center justify-between mt-1">
-          {!showNewDirectionInput && !newSceneDirection ? (
-            <button
-              type="button"
-              onClick={() => setShowNewDirectionInput(true)}
-              className="flex items-center gap-1.5 text-[11px] text-white/40 hover:text-white/60 transition"
-            >
-              <EyeOff className="h-3 w-3" />+ Add Direction
-            </button>
-          ) : (
-            <span className="text-[11px] text-white/40">Direction added</span>
-          )}
-          <span className="text-[11px] text-white/40">{wordCount(newSceneContent)} words</span>
-        </div>
-        <div className="mt-2 text-[11px] text-white/50">
-          Use <code className="text-emerald-300">{"{{char}}"}</code> for the character and{" "}
-          <code className="text-emerald-300">{"{{user}}"}</code> (alias{" "}
-          <code className="text-emerald-300">{"{{persona}}"}</code>) for the persona.
-        </div>
-
-        {/* Scene Direction Input - CSS grid for smooth height */}
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows] duration-150 ease-out",
-            showNewDirectionInput || newSceneDirection ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-          )}
-        >
-          <div className="overflow-hidden">
-            <div className="mt-3 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
-                  <EyeOff className="h-3 w-3" />
-                  Scene Direction
-                </span>
-                {!newSceneDirection && (
-                  <button
-                    type="button"
-                    onClick={() => setShowNewDirectionInput(false)}
-                    className="text-[11px] text-white/40 hover:text-white/60"
-                  >
-                    Cancel
-                  </button>
-                )}
+                <textarea
+                  value={newSceneDirection}
+                  onChange={(e) => setNewSceneDirection(e.target.value)}
+                  rows={2}
+                  placeholder="e.g., 'The hostage will be rescued' or 'Maintain tense atmosphere'"
+                  className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-white/20 focus:outline-none"
+                />
+                <p className="text-[10px] text-white/30">
+                  Hidden guidance for the AI on how this scene should unfold
+                </p>
               </div>
-              <textarea
-                value={newSceneDirection}
-                onChange={(e) => setNewSceneDirection(e.target.value)}
-                rows={2}
-                placeholder="e.g., 'The hostage will be rescued' or 'Maintain tense atmosphere'"
-                className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-relaxed text-white placeholder-white/30 transition focus:border-white/20 focus:outline-none"
-              />
-              <p className="text-[10px] text-white/30">
-                Hidden guidance for the AI on how this scene should unfold
-              </p>
             </div>
           </div>
-        </div>
 
-        <button
-          onClick={addScene}
-          disabled={!newSceneContent.trim()}
-          className={cn(
-            "mt-3 flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition active:scale-[0.98]",
-            newSceneContent.trim()
-              ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
-              : "border border-white/10 bg-white/5 text-white/40",
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          Add Scene
-        </button>
+          <button
+            onClick={addScene}
+            disabled={!newSceneContent.trim()}
+            className={cn(
+              "mt-3 flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition active:scale-[0.98]",
+              newSceneContent.trim()
+                ? "border border-blue-400/40 bg-blue-400/20 text-blue-100 active:bg-blue-400/30"
+                : "border border-white/10 bg-white/5 text-white/40",
+            )}
+          >
+            <Plus className="h-4 w-4" />
+            Add Scene
+          </button>
+        </div>
       </div>
 
       {/* Continue Button - moved to bottom */}
