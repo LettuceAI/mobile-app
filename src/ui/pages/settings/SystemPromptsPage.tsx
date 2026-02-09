@@ -39,6 +39,7 @@ import {
   getPromptTypeLabel,
 } from "../../../core/prompts/constants";
 import { BottomMenu } from "../../components";
+import { toast } from "../../components/toast";
 import { downloadJson, readFileAsText } from "../../../core/storage/personaTransfer";
 
 type TemplateUsage = {
@@ -82,6 +83,11 @@ type ExternalPromptExport = {
     character_id: number;
     order: Array<{ identifier: string; enabled?: boolean }>;
   }>;
+};
+
+type PromptOrderEntry = {
+  identifier: string;
+  enabled?: boolean;
 };
 
 const EXTERNAL_MARKER_IDENTIFIERS = new Set([
@@ -162,8 +168,58 @@ function toSystemEntry(
     enabled: input.enabled ?? true,
     injectionPosition,
     injectionDepth,
-    systemPrompt: input.system_prompt ?? false,
+    // Imported entries should stay user-editable/deletable.
+    systemPrompt: false,
   };
+}
+
+function flattenPromptOrder(input: unknown): PromptOrderEntry[] {
+  const flattened: PromptOrderEntry[] = [];
+  const visit = (node: unknown) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (typeof node !== "object") return;
+
+    const obj = node as Record<string, unknown>;
+    const identifier = typeof obj.identifier === "string" ? obj.identifier.trim() : "";
+    const enabled = typeof obj.enabled === "boolean" ? obj.enabled : undefined;
+    if (identifier) {
+      flattened.push({ identifier, enabled });
+    }
+
+    if (obj.order) visit(obj.order);
+  };
+
+  visit(input);
+  return flattened;
+}
+
+function collectPromptOrderBlocks(input: unknown): PromptOrderEntry[][] {
+  const blocks: PromptOrderEntry[][] = [];
+  const visit = (node: unknown) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (typeof node !== "object") return;
+
+    const obj = node as Record<string, unknown>;
+    if (obj.order) {
+      const block = flattenPromptOrder(obj.order);
+      if (block.length > 0) {
+        blocks.push(block);
+      }
+    }
+
+    Object.values(obj).forEach(visit);
+  };
+
+  visit(input);
+  return blocks;
 }
 
 function getTemplateIcon(templateId: string) {
@@ -494,10 +550,50 @@ export function SystemPromptsPage() {
       const raw = await readFileAsText(file);
       const parsed = JSON.parse(raw) as ExternalPromptExport;
       const promptEntries = Array.isArray(parsed.prompts) ? parsed.prompts : [];
+      const promptIdentifiers = new Set(
+        promptEntries
+          .map((prompt) => (typeof prompt.identifier === "string" ? prompt.identifier.trim() : ""))
+          .filter(Boolean),
+      );
+      const orderBlocks = collectPromptOrderBlocks(parsed.prompt_order);
+      const orderedRefs =
+        orderBlocks.length > 0
+          ? orderBlocks.slice().sort((a, b) => {
+              const aMatches = a.filter((entry) => promptIdentifiers.has(entry.identifier)).length;
+              const bMatches = b.filter((entry) => promptIdentifiers.has(entry.identifier)).length;
+              if (aMatches !== bMatches) return bMatches - aMatches;
+              return b.length - a.length;
+            })[0]
+          : flattenPromptOrder(parsed.prompt_order);
+      const orderIndexById = new Map<string, number>();
+      const enabledById = new Map<string, boolean>();
+      orderedRefs.forEach((entry, index) => {
+        if (!orderIndexById.has(entry.identifier)) {
+          orderIndexById.set(entry.identifier, index);
+        }
+        if (typeof entry.enabled === "boolean") {
+          enabledById.set(entry.identifier, entry.enabled);
+        }
+      });
 
       const importedEntries = promptEntries
         .map((prompt, index) => toSystemEntry(prompt, index))
-        .filter((entry): entry is SystemPromptEntry => Boolean(entry));
+        .map((entry, index) => ({ entry, index }))
+        .filter((item): item is { entry: SystemPromptEntry; index: number } => Boolean(item.entry))
+        .map((item) => {
+          const overrideEnabled = enabledById.get(item.entry.id);
+          if (typeof overrideEnabled === "boolean") {
+            item.entry.enabled = overrideEnabled;
+          }
+          return item;
+        })
+        .sort((a, b) => {
+          const aOrder = orderIndexById.get(a.entry.id) ?? Number.MAX_SAFE_INTEGER;
+          const bOrder = orderIndexById.get(b.entry.id) ?? Number.MAX_SAFE_INTEGER;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return a.index - b.index;
+        })
+        .map((item) => item.entry);
 
       if (importedEntries.length === 0) {
         alert("No importable prompts found in this file.");
@@ -507,9 +603,10 @@ export function SystemPromptsPage() {
       const baseName = file.name.replace(/\.[^/.]+$/, "") || "Imported Prompt Set";
       await createPromptTemplate(baseName, "appWide", [], "", importedEntries);
       await loadData();
+      toast.success("Imported successfully", `Prompt set "${baseName}" was imported.`);
     } catch (error) {
       console.error("Failed to import system prompts:", error);
-      alert("Failed to import system prompts. " + String(error));
+      toast.error("Import failed", String(error));
     } finally {
       setImporting(false);
     }
@@ -679,10 +776,6 @@ export function SystemPromptsPage() {
                 <Upload className="h-3.5 w-3.5" />
                 {importing ? "Importing..." : "Import"}
               </button>
-            </div>
-
-            {/* Filter Tags */}
-            <div className="flex flex-wrap items-center gap-1.5">
               {FILTER_TAGS.map((tag) => {
                 const isActive = activeTag === tag.key;
                 return (
