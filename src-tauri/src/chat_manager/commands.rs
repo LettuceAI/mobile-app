@@ -1610,16 +1610,6 @@ pub async fn chat_completion(
             );
             attempts.push((fallback_model, fallback_cred, true));
         }
-    } else if let Some((fallback_model, fallback_cred)) = app_default_fallback_candidate {
-        log_info(
-            &app,
-            "chat_completion",
-            format!(
-                "using app default model {} as fallback candidate",
-                fallback_model.name
-            ),
-        );
-        attempts.push((fallback_model, fallback_cred, true));
     }
 
     let mut selected_model = model;
@@ -4965,16 +4955,6 @@ fn build_model_attempts<'a>(
             );
             attempts.push((fallback_model, fallback_cred, true));
         }
-    } else if let Some((fallback_model, fallback_cred)) = app_default_fallback_candidate {
-        log_info(
-            app,
-            log_scope,
-            format!(
-                "using app default model {} as fallback candidate",
-                fallback_model.name
-            ),
-        );
-        attempts.push((fallback_model, fallback_cred, true));
     }
 
     attempts
