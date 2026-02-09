@@ -5,12 +5,74 @@ use super::db::{now_ms, open_db};
 use crate::utils::{log_error, log_info};
 
 fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, String> {
-    let (name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, bg_path, description, definition, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at): (String, Option<String>, Option<f64>, Option<f64>, Option<f64>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, i64, i64, Option<String>, Option<String>, Option<String>, i64, i64) = conn
+    let (
+        name,
+        avatar_path,
+        avatar_crop_x,
+        avatar_crop_y,
+        avatar_crop_scale,
+        bg_path,
+        description,
+        definition,
+        nickname,
+        scenario,
+        creator_notes,
+        creator,
+        creator_notes_multilingual,
+        source,
+        tags,
+        default_scene_id,
+        default_model_id,
+        fallback_model_id,
+        prompt_template_id,
+        system_prompt,
+        voice_config,
+        voice_autoplay,
+        memory_type,
+        disable_avatar_gradient,
+        custom_gradient_enabled,
+        custom_gradient_colors,
+        custom_text_color,
+        custom_text_secondary,
+        created_at,
+        updated_at,
+    ): (
+        String,
+        Option<String>,
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<i64>,
+        Option<String>,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        i64,
+        i64,
+    ) = conn
         .query_row(
-            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, nickname, scenario, creator_notes, creator, creator_notes_multilingual, source, tags, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![id],
             |r| Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get::<_, i64>(16)?, r.get::<_, i64>(17)?, r.get(18)?, r.get(19)?, r.get(20)?, r.get(21)?, r.get(22)?
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?, r.get(14)?, r.get(15)?, r.get(16)?, r.get(17)?, r.get(18)?, r.get(19)?, r.get(20)?, r.get(21)?, r.get(22)?, r.get::<_, i64>(23)?, r.get::<_, i64>(24)?, r.get(25)?, r.get(26)?, r.get(27)?, r.get(28)?, r.get(29)?
             )),
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -107,6 +169,35 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
     }
     if let Some(d) = description {
         root.insert("description".into(), JsonValue::String(d));
+    }
+    if let Some(value) = nickname {
+        root.insert("nickname".into(), JsonValue::String(value));
+    }
+    if let Some(value) = scenario {
+        root.insert("scenario".into(), JsonValue::String(value));
+    }
+    if let Some(value) = creator_notes {
+        root.insert("creatorNotes".into(), JsonValue::String(value));
+    }
+    if let Some(value) = creator {
+        root.insert("creator".into(), JsonValue::String(value));
+    }
+    if let Some(value) = creator_notes_multilingual {
+        if let Ok(parsed) = serde_json::from_str::<JsonValue>(&value) {
+            if parsed.is_object() {
+                root.insert("creatorNotesMultilingual".into(), parsed);
+            }
+        }
+    }
+    if let Some(value) = source {
+        if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&value) {
+            root.insert("source".into(), serde_json::json!(parsed));
+        }
+    }
+    if let Some(value) = tags {
+        if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&value) {
+            root.insert("tags".into(), serde_json::json!(parsed));
+        }
     }
     root.insert("rules".into(), JsonValue::Array(rules));
     root.insert("scenes".into(), JsonValue::Array(scenes));
@@ -256,6 +347,39 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| description.clone());
+    let nickname = c
+        .get("nickname")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let scenario = c
+        .get("scenario")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let creator_notes = c
+        .get("creatorNotes")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let creator = c
+        .get("creator")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let creator_notes_multilingual: Option<String> =
+        c.get("creatorNotesMultilingual").and_then(|v| {
+            if v.is_null() {
+                None
+            } else {
+                serde_json::to_string(v).ok()
+            }
+        });
+    let source: Option<String> = c
+        .get("source")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| serde_json::to_string(arr).ok())
+        .or_else(|| Some("[\"lettuceai\"]".to_string()));
+    let tags: Option<String> = c
+        .get("tags")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| serde_json::to_string(arr).ok());
     let default_model_id = c
         .get("defaultModelId")
         .and_then(|v| v.as_str())
@@ -324,8 +448,8 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
     let created_at = existing_created.unwrap_or(now);
 
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, nickname, scenario, creator_notes, creator, creator_notes_multilingual, source, tags, default_scene_id, default_model_id, fallback_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               avatar_path=excluded.avatar_path,
@@ -335,6 +459,13 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
               background_image_path=excluded.background_image_path,
               description=excluded.description,
               definition=excluded.definition,
+              nickname=excluded.nickname,
+              scenario=excluded.scenario,
+              creator_notes=excluded.creator_notes,
+              creator=excluded.creator,
+              creator_notes_multilingual=excluded.creator_notes_multilingual,
+              source=excluded.source,
+              tags=excluded.tags,
               default_model_id=excluded.default_model_id,
               fallback_model_id=excluded.fallback_model_id,
               prompt_template_id=excluded.prompt_template_id,
@@ -358,6 +489,13 @@ pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result
             bg_path,
             description,
             definition,
+            nickname,
+            scenario,
+            creator_notes,
+            creator,
+            creator_notes_multilingual,
+            source,
+            tags,
             default_model_id,
             fallback_model_id,
             prompt_template_id,

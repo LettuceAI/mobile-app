@@ -32,6 +32,13 @@ type EditCharacterState = {
   name: string;
   definition: string;
   description: string;
+  scenario: string;
+  nickname: string;
+  creator: string;
+  creatorNotes: string;
+  creatorNotesMultilingualText: string;
+  sourceText: string;
+  tagsText: string;
   avatarPath: string;
   avatarCrop: AvatarCrop | null;
   avatarRoundPath: string | null;
@@ -77,6 +84,13 @@ const initialState: EditCharacterState = {
   name: "",
   definition: "",
   description: "",
+  scenario: "",
+  nickname: "",
+  creator: "",
+  creatorNotes: "",
+  creatorNotesMultilingualText: "",
+  sourceText: "",
+  tagsText: "",
   avatarPath: "",
   avatarCrop: null,
   avatarRoundPath: null,
@@ -134,6 +148,13 @@ export function useEditCharacterForm(characterId: string | undefined) {
     name: string;
     definition: string;
     description: string;
+    scenario: string;
+    nickname: string;
+    creator: string;
+    creatorNotes: string;
+    creatorNotesMultilingualText: string;
+    sourceText: string;
+    tagsText: string;
     avatarPath: string;
     avatarCrop: string;
     avatarRoundPath: string;
@@ -238,6 +259,15 @@ export function useEditCharacterForm(characterId: string | undefined) {
         name: character.name,
         definition: character.definition || character.description || "",
         description: character.description || "",
+        scenario: character.scenario || "",
+        nickname: character.nickname || "",
+        creator: character.creator || "",
+        creatorNotes: character.creatorNotes || "",
+        creatorNotesMultilingualText: character.creatorNotesMultilingual
+          ? JSON.stringify(character.creatorNotesMultilingual, null, 2)
+          : "",
+        sourceText: Array.isArray(character.source) ? character.source.join(", ") : "",
+        tagsText: Array.isArray(character.tags) ? character.tags.join(", ") : "",
         avatarPath: loadedAvatarPath,
         avatarCrop: character.avatarCrop ?? null,
         avatarRoundPath: loadedAvatarRoundPath,
@@ -263,6 +293,15 @@ export function useEditCharacterForm(characterId: string | undefined) {
         name: character.name,
         definition: character.definition || character.description || "",
         description: character.description || "",
+        scenario: character.scenario || "",
+        nickname: character.nickname || "",
+        creator: character.creator || "",
+        creatorNotes: character.creatorNotes || "",
+        creatorNotesMultilingualText: character.creatorNotesMultilingual
+          ? JSON.stringify(character.creatorNotesMultilingual, null, 2)
+          : "",
+        sourceText: Array.isArray(character.source) ? character.source.join(", ") : "",
+        tagsText: Array.isArray(character.tags) ? character.tags.join(", ") : "",
         avatarPath: loadedAvatarPath,
         avatarCrop: JSON.stringify(character.avatarCrop ?? null),
         avatarRoundPath: JSON.stringify(loadedAvatarRoundPath ?? null),
@@ -339,6 +378,30 @@ export function useEditCharacterForm(characterId: string | undefined) {
       setSaving(true);
       setError(null);
 
+      const parseCommaSeparated = (raw: string): string[] =>
+        raw
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+      const tags = parseCommaSeparated(state.tagsText);
+      let creatorNotesMultilingual: Record<string, string> | null | undefined = undefined;
+      if (state.creatorNotesMultilingualText.trim()) {
+        try {
+          const parsed = JSON.parse(state.creatorNotesMultilingualText);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("creatorNotesMultilingual must be a JSON object");
+          }
+          const normalized: Record<string, string> = {};
+          for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+            if (typeof value === "string") normalized[key] = value;
+          }
+          creatorNotesMultilingual = normalized;
+        } catch {
+          setError("Creator notes multilingual must be valid JSON object");
+          return;
+        }
+      }
+
       // Save avatar using new centralized system if it's a new upload (data URL)
       let avatarFilename: string | undefined = undefined;
       if (state.avatarPath) {
@@ -372,6 +435,11 @@ export function useEditCharacterForm(characterId: string | undefined) {
         name: state.name.trim(),
         definition: state.definition.trim(),
         description: state.description.trim() || undefined,
+        nickname: state.nickname.trim() || undefined,
+        creator: state.creator.trim() || undefined,
+        creatorNotes: state.creatorNotes.trim() || undefined,
+        creatorNotesMultilingual,
+        tags: tags.length > 0 ? tags : undefined,
         avatarPath: avatarFilename,
         avatarCrop: avatarFilename ? (state.avatarCrop ?? undefined) : undefined,
         backgroundImagePath: backgroundImageId,
@@ -397,6 +465,13 @@ export function useEditCharacterForm(characterId: string | undefined) {
         name: state.name.trim(),
         definition: state.definition.trim(),
         description: state.description.trim(),
+        scenario: state.scenario.trim(),
+        nickname: state.nickname.trim(),
+        creator: state.creator.trim(),
+        creatorNotes: state.creatorNotes.trim(),
+        creatorNotesMultilingualText: state.creatorNotesMultilingualText.trim(),
+        sourceText: state.sourceText.trim(),
+        tagsText: state.tagsText.trim(),
       });
 
       // Update initial state ref to match current state (for change detection)
@@ -404,6 +479,13 @@ export function useEditCharacterForm(characterId: string | undefined) {
         name: state.name.trim(),
         definition: state.definition.trim(),
         description: state.description.trim(),
+        scenario: state.scenario.trim(),
+        nickname: state.nickname.trim(),
+        creator: state.creator.trim(),
+        creatorNotes: state.creatorNotes.trim(),
+        creatorNotesMultilingualText: state.creatorNotesMultilingualText.trim(),
+        sourceText: state.sourceText.trim(),
+        tagsText: state.tagsText.trim(),
         avatarPath: state.avatarPath,
         avatarCrop: JSON.stringify(state.avatarCrop ?? null),
         avatarRoundPath: JSON.stringify(state.avatarRoundPath ?? null),
@@ -587,6 +669,13 @@ export function useEditCharacterForm(characterId: string | undefined) {
       name: initial.name,
       definition: initial.definition,
       description: initial.description,
+      scenario: initial.scenario,
+      nickname: initial.nickname,
+      creator: initial.creator,
+      creatorNotes: initial.creatorNotes,
+      creatorNotesMultilingualText: initial.creatorNotesMultilingualText,
+      sourceText: initial.sourceText,
+      tagsText: initial.tagsText,
       avatarPath: initial.avatarPath,
       avatarCrop: JSON.parse(initial.avatarCrop) as AvatarCrop | null,
       avatarRoundPath: JSON.parse(initial.avatarRoundPath) as string | null,
@@ -641,6 +730,13 @@ export function useEditCharacterForm(characterId: string | undefined) {
           state.name !== initial.name ||
           state.definition !== initial.definition ||
           state.description !== initial.description ||
+          state.scenario !== initial.scenario ||
+          state.nickname !== initial.nickname ||
+          state.creator !== initial.creator ||
+          state.creatorNotes !== initial.creatorNotes ||
+          state.creatorNotesMultilingualText !== initial.creatorNotesMultilingualText ||
+          state.sourceText !== initial.sourceText ||
+          state.tagsText !== initial.tagsText ||
           state.avatarPath !== initial.avatarPath ||
           JSON.stringify(state.avatarCrop ?? null) !== initial.avatarCrop ||
           JSON.stringify(state.avatarRoundPath ?? null) !== initial.avatarRoundPath ||

@@ -48,6 +48,7 @@ interface DescriptionStepProps {
   canSave: boolean;
   saving: boolean;
   error: string | null;
+  submitLabel?: string;
 }
 
 export function DescriptionStep({
@@ -81,6 +82,7 @@ export function DescriptionStep({
   canSave,
   saving,
   error,
+  submitLabel = "Create Character",
 }: DescriptionStepProps) {
   const wordCount = definition.trim().split(/\s+/).filter(Boolean).length;
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -646,7 +648,7 @@ export function DescriptionStep({
               <span>Creating Character...</span>
             </div>
           ) : (
-            "Create Character"
+            submitLabel
           )}
         </motion.button>
       </div>

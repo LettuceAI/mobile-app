@@ -79,6 +79,11 @@ export function EditCharacterPage() {
     name,
     definition,
     description,
+    nickname,
+    creator,
+    creatorNotes,
+    creatorNotesMultilingualText,
+    tagsText,
     avatarPath,
     avatarCrop,
     avatarRoundPath,
@@ -616,6 +621,69 @@ export function EditCharacterPage() {
                 <p className="text-xs text-white/50">
                   Optional short description for display purposes.
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
+                  Nickname
+                </label>
+                <input
+                  value={nickname}
+                  onChange={(e) => setFields({ nickname: e.target.value })}
+                  placeholder="Optional nickname..."
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
+                    Creator
+                  </label>
+                  <input
+                    value={creator}
+                    onChange={(e) => setFields({ creator: e.target.value })}
+                    placeholder="Optional creator name..."
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
+                    Tags
+                  </label>
+                  <input
+                    value={tagsText}
+                    onChange={(e) => setFields({ tagsText: e.target.value })}
+                    placeholder="tag1, tag2"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
+                  Creator Notes
+                </label>
+                <textarea
+                  value={creatorNotes}
+                  onChange={(e) => setFields({ creatorNotes: e.target.value })}
+                  rows={3}
+                  placeholder="Optional creator notes..."
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-white/50">
+                  Creator Notes Multilingual (JSON)
+                </label>
+                <textarea
+                  value={creatorNotesMultilingualText}
+                  onChange={(e) => setFields({ creatorNotesMultilingualText: e.target.value })}
+                  rows={4}
+                  placeholder='{"en":"note","ja":"メモ"}'
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-white placeholder-white/40 transition focus:border-white/25 focus:outline-none"
+                />
               </div>
 
               {/* Personality Section */}

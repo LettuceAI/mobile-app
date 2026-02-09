@@ -7,7 +7,7 @@ use crate::storage_manager::{settings::storage_read_settings, settings::storage_
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 33;
+pub const CURRENT_MIGRATION_VERSION: u32 = 34;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -19,6 +19,7 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         migrate_v30_to_v31(app)?;
         migrate_v31_to_v32(app)?;
         migrate_v32_to_v33(app)?;
+        migrate_v33_to_v34(app)?;
         log_info(
             app,
             "migrations",
@@ -371,6 +372,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v32_to_v33(app)?;
         version = 33;
+    }
+
+    if version < 34 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v33 -> v34: Add character metadata columns",
+        );
+        migrate_v33_to_v34(app)?;
+        version = 34;
     }
 
     // Update the stored version
@@ -1363,6 +1374,68 @@ fn migrate_v32_to_v33(app: &AppHandle) -> Result<(), String> {
         "#,
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    Ok(())
+}
+
+fn migrate_v33_to_v34(app: &AppHandle) -> Result<(), String> {
+    use crate::storage_manager::db::open_db;
+
+    let conn = open_db(app)?;
+
+    let mut has_nickname = false;
+    let mut has_scenario = false;
+    let mut has_creator_notes = false;
+    let mut has_creator = false;
+    let mut has_creator_notes_multilingual = false;
+    let mut has_source = false;
+    let mut has_tags = false;
+
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(characters)")
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    for col in rows {
+        let name = col.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        match name.as_str() {
+            "nickname" => has_nickname = true,
+            "scenario" => has_scenario = true,
+            "creator_notes" => has_creator_notes = true,
+            "creator" => has_creator = true,
+            "creator_notes_multilingual" => has_creator_notes_multilingual = true,
+            "source" => has_source = true,
+            "tags" => has_tags = true,
+            _ => {}
+        }
+    }
+
+    if !has_nickname {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN nickname TEXT", []);
+    }
+    if !has_scenario {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN scenario TEXT", []);
+    }
+    if !has_creator_notes {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN creator_notes TEXT", []);
+    }
+    if !has_creator {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN creator TEXT", []);
+    }
+    if !has_creator_notes_multilingual {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN creator_notes_multilingual TEXT",
+            [],
+        );
+    }
+    if !has_source {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN source TEXT", []);
+    }
+    if !has_tags {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN tags TEXT", []);
+    }
+
     Ok(())
 }
 

@@ -37,6 +37,14 @@ export interface CharacterImportPreview {
   name: string;
   description: string;
   definition: string;
+  scenario?: string;
+  nickname?: string;
+  creator?: string;
+  creatorNotes?: string;
+  creatorNotesMultilingual?: Record<string, unknown> | null;
+  source?: string[];
+  tags?: string[];
+  characterBook?: CharacterBookImport | null;
   scenes: SceneExport[];
   defaultSceneId: string | null;
   promptTemplateId: string | null;
@@ -46,6 +54,24 @@ export interface CharacterImportPreview {
   avatarData?: string | null;
   avatarCrop?: AvatarCrop;
   backgroundImageData?: string | null;
+}
+
+export interface CharacterBookEntryImport {
+  name?: string;
+  keys?: string[];
+  secondary_keys?: string[];
+  content?: string;
+  enabled?: boolean;
+  insertion_order?: number;
+  case_sensitive?: boolean;
+  priority?: number;
+  constant?: boolean;
+}
+
+export interface CharacterBookImport {
+  name?: string;
+  description?: string;
+  entries: CharacterBookEntryImport[];
 }
 
 /**

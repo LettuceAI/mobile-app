@@ -7,6 +7,7 @@ import { useCharacterForm, Step } from "./hooks/useCharacterForm";
 import { IdentityStep } from "./components/IdentityStep";
 import { StartingSceneStep } from "./components/StartingSceneStep";
 import { DescriptionStep } from "./components/DescriptionStep";
+import { ExtrasStep } from "./components/ExtrasStep";
 import { TopNav } from "../../components/App";
 import {
   listAudioProviders,
@@ -74,7 +75,9 @@ export function CreateCharacterPage() {
   }, [state.step, hasLoadedVoices, loadVoices]);
 
   const handleBack = () => {
-    if (state.step === Step.Description) {
+    if (state.step === Step.Extras) {
+      actions.setStep(Step.Description);
+    } else if (state.step === Step.Description) {
       actions.setStep(Step.StartingScene);
     } else if (state.step === Step.StartingScene) {
       actions.setStep(Step.Identity);
@@ -124,6 +127,8 @@ export function CreateCharacterPage() {
               onDisableAvatarGradientChange={actions.setDisableAvatarGradient}
               onContinue={() => actions.setStep(Step.StartingScene)}
               canContinue={computed.canContinueIdentity}
+              importingAvatar={state.importingAvatar}
+              avatarImportError={state.avatarImportError}
               onImport={actions.handleImport}
             />
           ) : state.step === Step.StartingScene ? (
@@ -136,7 +141,7 @@ export function CreateCharacterPage() {
               onContinue={() => actions.setStep(Step.Description)}
               canContinue={computed.canContinueStartingScene}
             />
-          ) : (
+          ) : state.step === Step.Description ? (
             <DescriptionStep
               key="description"
               definition={state.definition}
@@ -165,8 +170,26 @@ export function CreateCharacterPage() {
               providerVoices={providerVoices}
               loadingVoices={loadingVoices}
               voiceError={voiceError}
-              onSave={handleSave}
+              onSave={() => actions.setStep(Step.Extras)}
               canSave={computed.canSaveDescription}
+              saving={false}
+              error={state.error}
+              submitLabel="Continue"
+            />
+          ) : (
+            <ExtrasStep
+              key="extras"
+              nickname={state.nickname}
+              onNicknameChange={actions.setNickname}
+              creator={state.creator}
+              onCreatorChange={actions.setCreator}
+              creatorNotes={state.creatorNotes}
+              onCreatorNotesChange={actions.setCreatorNotes}
+              creatorNotesMultilingualText={state.creatorNotesMultilingualText}
+              onCreatorNotesMultilingualTextChange={actions.setCreatorNotesMultilingualText}
+              tagsText={state.tagsText}
+              onTagsTextChange={actions.setTagsText}
+              onSave={handleSave}
               saving={state.saving}
               error={state.error}
             />

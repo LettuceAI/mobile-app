@@ -42,6 +42,22 @@ pub struct CharacterExportData {
     pub description: Option<String>,
     #[serde(default)]
     pub definition: Option<String>,
+    #[serde(default)]
+    pub scenario: Option<String>,
+    #[serde(default)]
+    pub nickname: Option<String>,
+    #[serde(default)]
+    pub creator: Option<String>,
+    #[serde(default)]
+    pub creator_notes: Option<String>,
+    #[serde(default)]
+    pub creator_notes_multilingual: Option<JsonValue>,
+    #[serde(default)]
+    pub source: Option<Vec<String>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub character_book: Option<JsonValue>,
     pub rules: Vec<String>,
     pub scenes: Vec<SceneExport>,
     pub default_scene_id: Option<String>,
@@ -161,6 +177,49 @@ fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, Stri
         .and_then(|value| value.as_str())
         .map(|value| value.to_string())
         .or_else(|| description.clone());
+    let scenario = payload
+        .get("scenario")
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_string());
+    let nickname = payload
+        .get("nickname")
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_string());
+    let creator = payload
+        .get("creator")
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_string());
+    let creator_notes = payload
+        .get("creatorNotes")
+        .or_else(|| payload.get("creator_notes"))
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_string());
+    let creator_notes_multilingual = payload
+        .get("creatorNotesMultilingual")
+        .or_else(|| payload.get("creator_notes_multilingual"))
+        .cloned();
+    let source = payload
+        .get("source")
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                .collect::<Vec<String>>()
+        });
+    let tags = payload
+        .get("tags")
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                .collect::<Vec<String>>()
+        });
+    let character_book = payload
+        .get("characterBook")
+        .or_else(|| payload.get("character_book"))
+        .cloned();
 
     let rules = payload
         .get("rules")
@@ -290,6 +349,14 @@ fn parse_uec_character(value: &JsonValue) -> Result<CharacterExportPackage, Stri
             name,
             description,
             definition,
+            scenario,
+            nickname,
+            creator,
+            creator_notes,
+            creator_notes_multilingual,
+            source,
+            tags,
+            character_book,
             rules,
             scenes,
             default_scene_id,
@@ -452,6 +519,13 @@ fn load_character_export_snapshot(
         bg_path,
         description,
         definition,
+        nickname,
+        scenario,
+        creator_notes,
+        creator,
+        creator_notes_multilingual,
+        source,
+        tags,
         default_scene_id,
         default_model_id,
         prompt_template_id,
@@ -470,31 +544,38 @@ fn load_character_export_snapshot(
         created_at,
         updated_at,
     ): (
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<i64>,
-        Option<String>,
-        i64,
-        i64,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<f64>,
-        Option<f64>,
-        Option<f64>,
-        i64,
-        i64,
+        String,         // name
+        Option<String>, // avatar_path
+        Option<String>, // background_image_path
+        Option<String>, // description
+        Option<String>, // definition
+        Option<String>, // nickname
+        Option<String>, // scenario
+        Option<String>, // creator_notes
+        Option<String>, // creator
+        Option<String>, // creator_notes_multilingual
+        Option<String>, // source
+        Option<String>, // tags
+        Option<String>, // default_scene_id
+        Option<String>, // default_model_id
+        Option<String>, // prompt_template_id
+        Option<String>, // system_prompt
+        Option<String>, // voice_config
+        Option<i64>,    // voice_autoplay
+        Option<String>, // memory_type
+        i64,            // disable_avatar_gradient
+        i64,            // custom_gradient_enabled
+        Option<String>, // custom_gradient_colors
+        Option<String>, // custom_text_color
+        Option<String>, // custom_text_secondary
+        Option<f64>,    // avatar_crop_x
+        Option<f64>,    // avatar_crop_y
+        Option<f64>,    // avatar_crop_scale
+        i64,            // created_at
+        i64,            // updated_at
     ) = conn
         .query_row(
-            "SELECT name, avatar_path, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, avatar_crop_x, avatar_crop_y, avatar_crop_scale, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, background_image_path, description, definition, nickname, scenario, creator_notes, creator, creator_notes_multilingual, source, tags, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, avatar_crop_x, avatar_crop_y, avatar_crop_scale, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| {
                 Ok((
@@ -510,16 +591,23 @@ fn load_character_export_snapshot(
                     r.get(9)?,
                     r.get(10)?,
                     r.get(11)?,
-                    r.get::<_, i64>(12)?,
-                    r.get::<_, i64>(13)?,
+                    r.get(12)?,
+                    r.get(13)?,
                     r.get(14)?,
                     r.get(15)?,
                     r.get(16)?,
                     r.get(17)?,
                     r.get(18)?,
-                    r.get(19)?,
-                    r.get(20)?,
+                    r.get::<_, i64>(19)?,
+                    r.get::<_, i64>(20)?,
                     r.get(21)?,
+                    r.get(22)?,
+                    r.get(23)?,
+                    r.get(24)?,
+                    r.get(25)?,
+                    r.get(26)?,
+                    r.get(27)?,
+                    r.get(28)?,
                 ))
             },
         )
@@ -610,6 +698,16 @@ fn load_character_export_snapshot(
         .and_then(|vc| serde_json::from_str::<JsonValue>(&vc).ok())
         .filter(|v| !v.is_null());
     let voice_autoplay = voice_autoplay_raw.map(|v| v != 0);
+    let creator_notes_multilingual = creator_notes_multilingual
+        .as_ref()
+        .and_then(|value| serde_json::from_str::<JsonValue>(value).ok())
+        .filter(|value| value.is_object());
+    let source = source
+        .as_ref()
+        .and_then(|value| serde_json::from_str::<Vec<String>>(value).ok());
+    let tags = tags
+        .as_ref()
+        .and_then(|value| serde_json::from_str::<Vec<String>>(value).ok());
 
     let custom_gradient_colors = custom_gradient_colors
         .as_ref()
@@ -626,6 +724,14 @@ fn load_character_export_snapshot(
             name,
             description: description.clone(),
             definition: resolved_definition,
+            scenario,
+            nickname,
+            creator,
+            creator_notes,
+            creator_notes_multilingual,
+            source,
+            tags,
+            character_book: None,
             rules,
             scenes,
             default_scene_id,
@@ -708,6 +814,30 @@ fn build_uec_from_package(
     }
     if let Some(dm) = package.character.default_model_id.clone() {
         payload.insert("defaultModelId".into(), JsonValue::String(dm));
+    }
+    if let Some(value) = package.character.scenario.clone() {
+        payload.insert("scenario".into(), JsonValue::String(value));
+    }
+    if let Some(value) = package.character.nickname.clone() {
+        payload.insert("nickname".into(), JsonValue::String(value));
+    }
+    if let Some(value) = package.character.creator.clone() {
+        payload.insert("creator".into(), JsonValue::String(value));
+    }
+    if let Some(value) = package.character.creator_notes.clone() {
+        payload.insert("creatorNotes".into(), JsonValue::String(value));
+    }
+    if let Some(value) = package.character.creator_notes_multilingual.clone() {
+        payload.insert("creatorNotesMultilingual".into(), value);
+    }
+    if let Some(value) = package.character.source.clone() {
+        payload.insert("source".into(), serde_json::json!(value));
+    }
+    if let Some(value) = package.character.tags.clone() {
+        payload.insert("tags".into(), serde_json::json!(value));
+    }
+    if let Some(value) = package.character.character_book.clone() {
+        payload.insert("characterBook".into(), value);
     }
 
     let mut system_prompt_is_id = false;
@@ -982,12 +1112,21 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
     // Save avatar if provided
     let avatar_path = if let Some(ref avatar_base64) = package.avatar_data {
         if is_http_url(avatar_base64) {
-            log_info(
+            match save_avatar_from_url(
                 &app,
-                "character_import",
-                "Skipping remote avatar URL during import",
-            );
-            None
+                &format!("character-{}", new_character_id),
+                avatar_base64,
+            ) {
+                Ok(filename) => Some(filename),
+                Err(e) => {
+                    log_info(
+                        &app,
+                        "character_import",
+                        format!("Warning: Failed to import remote avatar URL: {}", e),
+                    );
+                    None
+                }
+            }
         } else {
             match save_avatar_from_base64(
                 &app,
@@ -1047,6 +1186,17 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
         .and_then(|colors| serde_json::to_string(colors).ok());
     let custom_text_color = package.character.custom_text_color.clone();
     let custom_text_secondary = package.character.custom_text_secondary.clone();
+    let creator_notes_multilingual = package
+        .character
+        .creator_notes_multilingual
+        .as_ref()
+        .and_then(|value| serde_json::to_string(value).ok());
+    let source = Some("[\"lettuceai\"]".to_string());
+    let tags = package
+        .character
+        .tags
+        .as_ref()
+        .and_then(|value| serde_json::to_string(value).ok());
     let (avatar_crop_x, avatar_crop_y, avatar_crop_scale) = package
         .character
         .avatar_crop
@@ -1065,8 +1215,8 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
 
     // Insert character
     tx.execute(
-        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO characters (id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, nickname, scenario, creator_notes, creator, creator_notes_multilingual, source, tags, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         params![
             &new_character_id,
             &package.character.name,
@@ -1081,6 +1231,13 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
                 .definition
                 .clone()
                 .or(package.character.description.clone()),
+            package.character.nickname,
+            package.character.scenario,
+            package.character.creator_notes,
+            package.character.creator,
+            creator_notes_multilingual,
+            source,
+            tags,
             package.character.default_model_id,
             package.character.prompt_template_id,
             package.character.system_prompt,
@@ -1234,6 +1391,14 @@ pub fn character_import_preview(import_json: String) -> Result<String, String> {
         "name": package.character.name,
         "description": description,
         "definition": definition,
+        "scenario": package.character.scenario,
+        "nickname": package.character.nickname,
+        "creator": package.character.creator,
+        "creatorNotes": package.character.creator_notes,
+        "creatorNotesMultilingual": package.character.creator_notes_multilingual,
+        "source": package.character.source,
+        "tags": package.character.tags,
+        "characterBook": package.character.character_book,
         "scenes": scenes,
         "defaultSceneId": package.character.default_scene_id,
         "promptTemplateId": package.character.prompt_template_id,
@@ -1666,6 +1831,59 @@ fn save_avatar_from_base64(
         )
     })?;
 
+    save_avatar_from_bytes(app, entity_id, &bytes)
+}
+
+fn save_avatar_from_url(
+    app: &tauri::AppHandle,
+    entity_id: &str,
+    url: &str,
+) -> Result<String, String> {
+    let rt = tokio::runtime::Runtime::new().map_err(|e| {
+        crate::utils::err_msg(
+            module_path!(),
+            line!(),
+            format!("Failed to create runtime: {}", e),
+        )
+    })?;
+
+    let bytes = rt.block_on(async {
+        let response = reqwest::get(url).await.map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to download avatar image: {}", e),
+            )
+        })?;
+
+        if !response.status().is_success() {
+            return Err(crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!(
+                    "Failed to download avatar image: HTTP {}",
+                    response.status()
+                ),
+            ));
+        }
+
+        response.bytes().await.map_err(|e| {
+            crate::utils::err_msg(
+                module_path!(),
+                line!(),
+                format!("Failed to read avatar image bytes: {}", e),
+            )
+        })
+    })?;
+
+    save_avatar_from_bytes(app, entity_id, &bytes)
+}
+
+fn save_avatar_from_bytes(
+    app: &tauri::AppHandle,
+    entity_id: &str,
+    bytes: &[u8],
+) -> Result<String, String> {
     let avatars_dir = storage_root(app)?.join("avatars").join(entity_id);
 
     crate::utils::log_debug(
@@ -1683,7 +1901,7 @@ fn save_avatar_from_base64(
     })?;
 
     // Convert to WebP
-    let webp_bytes = match image::load_from_memory(&bytes) {
+    let webp_bytes = match image::load_from_memory(bytes) {
         Ok(img) => {
             let mut webp_data: Vec<u8> = Vec::new();
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp_data);
@@ -1696,7 +1914,7 @@ fn save_avatar_from_base64(
             })?;
             webp_data
         }
-        Err(_) => bytes,
+        Err(_) => bytes.to_vec(),
     };
 
     let base_filename = "avatar_base.webp";
@@ -1772,6 +1990,13 @@ fn read_imported_character(
         bg_path,
         description,
         definition,
+        nickname,
+        scenario,
+        creator_notes,
+        creator,
+        creator_notes_multilingual,
+        source,
+        tags,
         default_scene_id,
         default_model_id,
         prompt_template_id,
@@ -1787,31 +2012,38 @@ fn read_imported_character(
         created_at,
         updated_at,
     ): (
-        String,
-        Option<String>,
-        Option<f64>,
-        Option<f64>,
-        Option<f64>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<i64>,
-        Option<String>,
-        i64,
-        i64,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        i64,
-        i64,
+        String,         // name
+        Option<String>, // avatar_path
+        Option<f64>,    // avatar_crop_x
+        Option<f64>,    // avatar_crop_y
+        Option<f64>,    // avatar_crop_scale
+        Option<String>, // background_image_path
+        Option<String>, // description
+        Option<String>, // definition
+        Option<String>, // nickname
+        Option<String>, // scenario
+        Option<String>, // creator_notes
+        Option<String>, // creator
+        Option<String>, // creator_notes_multilingual
+        Option<String>, // source
+        Option<String>, // tags
+        Option<String>, // default_scene_id
+        Option<String>, // default_model_id
+        Option<String>, // prompt_template_id
+        Option<String>, // system_prompt
+        Option<String>, // voice_config
+        Option<i64>,    // voice_autoplay
+        Option<String>, // memory_type
+        i64,            // disable_avatar_gradient
+        i64,            // custom_gradient_enabled
+        Option<String>, // custom_gradient_colors
+        Option<String>, // custom_text_color
+        Option<String>, // custom_text_secondary
+        i64,            // created_at
+        i64,            // updated_at
     ) = conn
         .query_row(
-            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
+            "SELECT name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, background_image_path, description, definition, nickname, scenario, creator_notes, creator, creator_notes_multilingual, source, tags, default_scene_id, default_model_id, prompt_template_id, system_prompt, voice_config, voice_autoplay, memory_type, disable_avatar_gradient, custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, created_at, updated_at FROM characters WHERE id = ?",
             params![character_id],
             |r| {
                 Ok((
@@ -1830,13 +2062,20 @@ fn read_imported_character(
                     r.get(12)?,
                     r.get(13)?,
                     r.get(14)?,
-                    r.get::<_, i64>(15)?,
-                    r.get::<_, i64>(16)?,
+                    r.get(15)?,
+                    r.get(16)?,
                     r.get(17)?,
                     r.get(18)?,
                     r.get(19)?,
                     r.get(20)?,
                     r.get(21)?,
+                    r.get::<_, i64>(22)?,
+                    r.get::<_, i64>(23)?,
+                    r.get(24)?,
+                    r.get(25)?,
+                    r.get(26)?,
+                    r.get(27)?,
+                    r.get(28)?,
                 ))
             },
         )
@@ -1941,6 +2180,35 @@ fn read_imported_character(
     }
     if let Some(d) = description {
         root.insert("description".into(), JsonValue::String(d));
+    }
+    if let Some(value) = nickname {
+        root.insert("nickname".into(), JsonValue::String(value));
+    }
+    if let Some(value) = scenario {
+        root.insert("scenario".into(), JsonValue::String(value));
+    }
+    if let Some(value) = creator_notes {
+        root.insert("creatorNotes".into(), JsonValue::String(value));
+    }
+    if let Some(value) = creator {
+        root.insert("creator".into(), JsonValue::String(value));
+    }
+    if let Some(value) = creator_notes_multilingual {
+        if let Ok(parsed) = serde_json::from_str::<JsonValue>(&value) {
+            if parsed.is_object() {
+                root.insert("creatorNotesMultilingual".into(), parsed);
+            }
+        }
+    }
+    if let Some(value) = source {
+        if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&value) {
+            root.insert("source".into(), serde_json::json!(parsed));
+        }
+    }
+    if let Some(value) = tags {
+        if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&value) {
+            root.insert("tags".into(), serde_json::json!(parsed));
+        }
     }
     root.insert("rules".into(), JsonValue::Array(rules));
     root.insert("scenes".into(), JsonValue::Array(scenes));
@@ -2130,12 +2398,18 @@ pub fn persona_import(app: tauri::AppHandle, import_json: String) -> Result<Stri
     // Save avatar if provided
     let avatar_path = if let Some(ref avatar_base64) = package.avatar_data {
         if is_http_url(avatar_base64) {
-            log_info(
-                &app,
-                "persona_import",
-                "Skipping remote avatar URL during import",
-            );
-            None
+            match save_avatar_from_url(&app, &format!("persona-{}", new_persona_id), avatar_base64)
+            {
+                Ok(filename) => Some(filename),
+                Err(e) => {
+                    log_info(
+                        &app,
+                        "persona_import",
+                        format!("Warning: Failed to import remote avatar URL: {}", e),
+                    );
+                    None
+                }
+            }
         } else {
             match save_avatar_from_base64(
                 &app,

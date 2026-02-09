@@ -1,5 +1,11 @@
 import { useReducer, useEffect, useCallback } from "react";
-import { readSettings, saveCharacter } from "../../../../core/storage";
+import {
+  readSettings,
+  saveCharacter,
+  saveLorebook,
+  saveLorebookEntry,
+  setCharacterLorebooks,
+} from "../../../../core/storage";
 import { saveAvatar } from "../../../../core/storage/avatars";
 import { convertToImageRef } from "../../../../core/storage/images";
 import type {
@@ -16,6 +22,7 @@ import {
   previewCharacterImport,
   readFileAsText,
   type CharacterFileFormat,
+  type CharacterBookImport,
 } from "../../../../core/storage/characterTransfer";
 import { toast } from "../../../components/toast";
 import {
@@ -26,6 +33,7 @@ export enum Step {
   Identity = 1,
   StartingScene = 2,
   Description = 3,
+  Extras = 4,
 }
 
 const FORMAT_LABELS: Record<CharacterFileFormat, string> = {
@@ -48,6 +56,12 @@ interface CharacterFormState {
   defaultSceneId: string | null;
   definition: string;
   description: string;
+  nickname: string;
+  creator: string;
+  creatorNotes: string;
+  creatorNotesMultilingualText: string;
+  tagsText: string;
+  importedCharacterBook: CharacterBookImport | null;
   selectedModelId: string | null;
   selectedFallbackModelId: string | null;
   systemPromptTemplateId: string | null;
@@ -68,6 +82,8 @@ interface CharacterFormState {
   // UI state
   saving: boolean;
   error: string | null;
+  importingAvatar: boolean;
+  avatarImportError: string | null;
 }
 
 type CharacterFormAction =
@@ -81,6 +97,12 @@ type CharacterFormAction =
   | { type: "SET_DEFAULT_SCENE_ID"; payload: string | null }
   | { type: "SET_DEFINITION"; payload: string }
   | { type: "SET_DESCRIPTION"; payload: string }
+  | { type: "SET_NICKNAME"; payload: string }
+  | { type: "SET_CREATOR"; payload: string }
+  | { type: "SET_CREATOR_NOTES"; payload: string }
+  | { type: "SET_CREATOR_NOTES_MULTILINGUAL_TEXT"; payload: string }
+  | { type: "SET_TAGS_TEXT"; payload: string }
+  | { type: "SET_IMPORTED_CHARACTER_BOOK"; payload: CharacterBookImport | null }
   | { type: "SET_SELECTED_MODEL_ID"; payload: string | null }
   | { type: "SET_SELECTED_FALLBACK_MODEL_ID"; payload: string | null }
   | { type: "SET_SYSTEM_PROMPT_TEMPLATE_ID"; payload: string | null }
@@ -95,6 +117,8 @@ type CharacterFormAction =
   | { type: "SET_LOADING_TEMPLATES"; payload: boolean }
   | { type: "SET_SAVING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
+  | { type: "SET_IMPORTING_AVATAR"; payload: boolean }
+  | { type: "SET_AVATAR_IMPORT_ERROR"; payload: string | null }
   | { type: "RESET_FORM" };
 
 const initialState: CharacterFormState = {
@@ -108,6 +132,12 @@ const initialState: CharacterFormState = {
   defaultSceneId: null,
   definition: "",
   description: "",
+  nickname: "",
+  creator: "",
+  creatorNotes: "",
+  creatorNotesMultilingualText: "",
+  tagsText: "",
+  importedCharacterBook: null,
   selectedModelId: null,
   selectedFallbackModelId: null,
   systemPromptTemplateId: null,
@@ -122,6 +152,8 @@ const initialState: CharacterFormState = {
   loadingTemplates: true,
   saving: false,
   error: null,
+  importingAvatar: false,
+  avatarImportError: null,
 };
 
 function characterFormReducer(
@@ -149,6 +181,18 @@ function characterFormReducer(
       return { ...state, definition: action.payload };
     case "SET_DESCRIPTION":
       return { ...state, description: action.payload };
+    case "SET_NICKNAME":
+      return { ...state, nickname: action.payload };
+    case "SET_CREATOR":
+      return { ...state, creator: action.payload };
+    case "SET_CREATOR_NOTES":
+      return { ...state, creatorNotes: action.payload };
+    case "SET_CREATOR_NOTES_MULTILINGUAL_TEXT":
+      return { ...state, creatorNotesMultilingualText: action.payload };
+    case "SET_TAGS_TEXT":
+      return { ...state, tagsText: action.payload };
+    case "SET_IMPORTED_CHARACTER_BOOK":
+      return { ...state, importedCharacterBook: action.payload };
     case "SET_SELECTED_MODEL_ID":
       return { ...state, selectedModelId: action.payload };
     case "SET_SELECTED_FALLBACK_MODEL_ID":
@@ -177,6 +221,10 @@ function characterFormReducer(
       return { ...state, saving: action.payload };
     case "SET_ERROR":
       return { ...state, error: action.payload };
+    case "SET_IMPORTING_AVATAR":
+      return { ...state, importingAvatar: action.payload };
+    case "SET_AVATAR_IMPORT_ERROR":
+      return { ...state, avatarImportError: action.payload };
     case "RESET_FORM":
       return initialState;
     default:
@@ -208,6 +256,23 @@ export function useCharacterForm(draftCharacter?: any) {
             payload: draftCharacter.definition || draftCharacter.description || "",
           });
           dispatch({ type: "SET_DESCRIPTION", payload: draftCharacter.description || "" });
+          dispatch({ type: "SET_NICKNAME", payload: draftCharacter.nickname || "" });
+          dispatch({ type: "SET_CREATOR", payload: draftCharacter.creator || "" });
+          dispatch({ type: "SET_CREATOR_NOTES", payload: draftCharacter.creatorNotes || "" });
+          dispatch({
+            type: "SET_CREATOR_NOTES_MULTILINGUAL_TEXT",
+            payload: draftCharacter.creatorNotesMultilingual
+              ? JSON.stringify(draftCharacter.creatorNotesMultilingual, null, 2)
+              : "",
+          });
+          dispatch({
+            type: "SET_TAGS_TEXT",
+            payload: Array.isArray(draftCharacter.tags) ? draftCharacter.tags.join(", ") : "",
+          });
+          dispatch({
+            type: "SET_IMPORTED_CHARACTER_BOOK",
+            payload: draftCharacter.characterBook ?? null,
+          });
           dispatch({ type: "SET_AVATAR_PATH", payload: draftCharacter.avatarPath || "" });
           dispatch({
             type: "SET_AVATAR_CROP",
@@ -310,6 +375,8 @@ export function useCharacterForm(draftCharacter?: any) {
 
   const setAvatarPath = useCallback((path: string) => {
     dispatch({ type: "SET_AVATAR_PATH", payload: path });
+    dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+    dispatch({ type: "SET_AVATAR_IMPORT_ERROR", payload: null });
   }, []);
 
   const setAvatarCrop = useCallback((crop: AvatarCrop | null) => {
@@ -334,6 +401,26 @@ export function useCharacterForm(draftCharacter?: any) {
 
   const setDescription = useCallback((description: string) => {
     dispatch({ type: "SET_DESCRIPTION", payload: description });
+  }, []);
+
+  const setNickname = useCallback((nickname: string) => {
+    dispatch({ type: "SET_NICKNAME", payload: nickname });
+  }, []);
+
+  const setCreator = useCallback((creator: string) => {
+    dispatch({ type: "SET_CREATOR", payload: creator });
+  }, []);
+
+  const setCreatorNotes = useCallback((creatorNotes: string) => {
+    dispatch({ type: "SET_CREATOR_NOTES", payload: creatorNotes });
+  }, []);
+
+  const setCreatorNotesMultilingualText = useCallback((text: string) => {
+    dispatch({ type: "SET_CREATOR_NOTES_MULTILINGUAL_TEXT", payload: text });
+  }, []);
+
+  const setTagsText = useCallback((tagsText: string) => {
+    dispatch({ type: "SET_TAGS_TEXT", payload: tagsText });
   }, []);
 
   const setDefinition = useCallback((definition: string) => {
@@ -462,6 +549,12 @@ export function useCharacterForm(draftCharacter?: any) {
       const newDefaultSceneId = characterData.defaultSceneId
         ? sceneIdMap.get(characterData.defaultSceneId) || newScenes[0]?.id || null
         : newScenes[0]?.id || null;
+      const defaultSceneDirection = characterData.scenario?.trim();
+      const scenesWithScenario = defaultSceneDirection
+        ? newScenes.map((scene) =>
+            scene.id === newDefaultSceneId ? { ...scene, direction: defaultSceneDirection } : scene,
+          )
+        : newScenes;
 
       dispatch({ type: "SET_NAME", payload: characterData.name });
       dispatch({
@@ -469,8 +562,25 @@ export function useCharacterForm(draftCharacter?: any) {
         payload: characterData.definition || characterData.description || "",
       });
       dispatch({ type: "SET_DESCRIPTION", payload: characterData.description || "" });
-      dispatch({ type: "SET_SCENES", payload: newScenes });
+      dispatch({ type: "SET_NICKNAME", payload: characterData.nickname || "" });
+      dispatch({ type: "SET_CREATOR", payload: characterData.creator || "" });
+      dispatch({ type: "SET_CREATOR_NOTES", payload: characterData.creatorNotes || "" });
+      dispatch({
+        type: "SET_CREATOR_NOTES_MULTILINGUAL_TEXT",
+        payload: characterData.creatorNotesMultilingual
+          ? JSON.stringify(characterData.creatorNotesMultilingual, null, 2)
+          : "",
+      });
+      dispatch({
+        type: "SET_TAGS_TEXT",
+        payload: Array.isArray(characterData.tags) ? characterData.tags.join(", ") : "",
+      });
+      dispatch({ type: "SET_SCENES", payload: scenesWithScenario });
       dispatch({ type: "SET_DEFAULT_SCENE_ID", payload: newDefaultSceneId });
+      dispatch({
+        type: "SET_IMPORTED_CHARACTER_BOOK",
+        payload: characterData.characterBook ?? null,
+      });
       dispatch({
         type: "SET_DISABLE_AVATAR_GRADIENT",
         payload: characterData.disableAvatarGradient || false,
@@ -486,8 +596,64 @@ export function useCharacterForm(draftCharacter?: any) {
       });
 
       if (characterData.avatarData) {
-        dispatch({ type: "SET_AVATAR_PATH", payload: characterData.avatarData });
-        dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+        if (/^https?:\/\//i.test(characterData.avatarData)) {
+          dispatch({ type: "SET_IMPORTING_AVATAR", payload: true });
+          dispatch({ type: "SET_AVATAR_IMPORT_ERROR", payload: null });
+          dispatch({ type: "SET_AVATAR_PATH", payload: "" });
+          dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+          dispatch({ type: "SET_AVATAR_CROP", payload: null });
+
+          const imageDataUrl = await new Promise<string>((resolve, reject) => {
+            const image = new Image();
+            image.crossOrigin = "anonymous";
+
+            const cleanup = () => {
+              image.onload = null;
+              image.onerror = null;
+            };
+
+            image.onload = () => {
+              try {
+                const canvas = document.createElement("canvas");
+                canvas.width = image.naturalWidth;
+                canvas.height = image.naturalHeight;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) {
+                  cleanup();
+                  reject(new Error("Failed to process avatar image"));
+                  return;
+                }
+                ctx.drawImage(image, 0, 0);
+                const dataUrl = canvas.toDataURL("image/png");
+                cleanup();
+                resolve(dataUrl);
+              } catch {
+                cleanup();
+                reject(new Error("Avatar URL could not be converted"));
+              }
+            };
+
+            image.onerror = () => {
+              cleanup();
+              reject(new Error("Failed to load avatar URL"));
+            };
+
+            image.src = characterData.avatarData as string;
+          });
+
+          dispatch({ type: "SET_AVATAR_PATH", payload: imageDataUrl });
+          dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+          dispatch({ type: "SET_AVATAR_CROP", payload: null });
+          dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+        } else {
+          dispatch({ type: "SET_AVATAR_PATH", payload: characterData.avatarData });
+          dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+          dispatch({ type: "SET_AVATAR_CROP", payload: null });
+          dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+          dispatch({ type: "SET_AVATAR_IMPORT_ERROR", payload: null });
+        }
+      } else {
+        dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
       }
       if (characterData.avatarCrop) {
         dispatch({ type: "SET_AVATAR_CROP", payload: characterData.avatarCrop });
@@ -504,6 +670,17 @@ export function useCharacterForm(draftCharacter?: any) {
     } catch (error: any) {
       console.error("Failed to import character:", error);
       dispatch({ type: "SET_ERROR", payload: error?.message || "Failed to import character" });
+      dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+      if (
+        String(error?.message || "")
+          .toLowerCase()
+          .includes("avatar")
+      ) {
+        dispatch({
+          type: "SET_AVATAR_IMPORT_ERROR",
+          payload: error?.message || "Avatar URL failed to load",
+        });
+      }
     } finally {
       // Clear the file input
       event.target.value = "";
@@ -540,6 +717,33 @@ export function useCharacterForm(draftCharacter?: any) {
     try {
       dispatch({ type: "SET_SAVING", payload: true });
       dispatch({ type: "SET_ERROR", payload: null });
+
+      const parseCommaSeparated = (raw: string): string[] =>
+        raw
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+      const tags = parseCommaSeparated(state.tagsText);
+      let creatorNotesMultilingual: Record<string, string> | null | undefined = undefined;
+      if (state.creatorNotesMultilingualText.trim()) {
+        try {
+          const parsed = JSON.parse(state.creatorNotesMultilingualText);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("creatorNotesMultilingual must be a JSON object");
+          }
+          const normalized: Record<string, string> = {};
+          for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+            if (typeof value === "string") normalized[key] = value;
+          }
+          creatorNotesMultilingual = normalized;
+        } catch {
+          dispatch({
+            type: "SET_ERROR",
+            payload: "Creator notes multilingual must be valid JSON object",
+          });
+          return false;
+        }
+      }
 
       console.log(
         "[CreateCharacter] Saving with avatarPath:",
@@ -591,6 +795,11 @@ export function useCharacterForm(draftCharacter?: any) {
         backgroundImagePath: backgroundImageId || undefined,
         definition: state.definition.trim(),
         description: state.description.trim() || undefined,
+        nickname: state.nickname.trim() || undefined,
+        creator: state.creator.trim() || undefined,
+        creatorNotes: state.creatorNotes.trim() || undefined,
+        creatorNotesMultilingual,
+        tags: tags.length > 0 ? tags : undefined,
         scenes: state.scenes,
         defaultSceneId: state.defaultSceneId || state.scenes[0]?.id || null,
         defaultModelId: state.selectedModelId,
@@ -608,6 +817,39 @@ export function useCharacterForm(draftCharacter?: any) {
       );
 
       await saveCharacter(characterData);
+
+      if (state.importedCharacterBook?.entries?.length) {
+        const lorebook = await saveLorebook({
+          name: state.importedCharacterBook.name?.trim() || `${state.name.trim()} Lorebook`,
+        });
+
+        const sanitize = (value: unknown): string =>
+          typeof value === "string" ? value.trim() : "";
+
+        for (let i = 0; i < state.importedCharacterBook.entries.length; i += 1) {
+          const item = state.importedCharacterBook.entries[i];
+          const keys = [
+            ...(Array.isArray(item.keys) ? item.keys : []),
+            ...(Array.isArray(item.secondary_keys) ? item.secondary_keys : []),
+          ]
+            .map(sanitize)
+            .filter(Boolean);
+
+          await saveLorebookEntry({
+            lorebookId: lorebook.id,
+            title: sanitize(item.name) || keys[0] || `Entry ${i + 1}`,
+            content: sanitize(item.content),
+            keywords: Array.from(new Set(keys)),
+            enabled: item.enabled !== false,
+            caseSensitive: item.case_sensitive === true,
+            alwaysActive: item.constant === true,
+            priority: typeof item.priority === "number" ? item.priority : 0,
+            displayOrder: typeof item.insertion_order === "number" ? item.insertion_order : i,
+          });
+        }
+
+        await setCharacterLorebooks(characterId, [lorebook.id]);
+      }
 
       return true; // Success
     } catch (e: any) {
@@ -627,6 +869,12 @@ export function useCharacterForm(draftCharacter?: any) {
     state.defaultSceneId,
     state.definition,
     state.description,
+    state.nickname,
+    state.creator,
+    state.creatorNotes,
+    state.creatorNotesMultilingualText,
+    state.tagsText,
+    state.importedCharacterBook,
     state.selectedModelId,
     state.selectedFallbackModelId,
     state.systemPromptTemplateId,
@@ -638,12 +886,19 @@ export function useCharacterForm(draftCharacter?: any) {
   ]);
 
   // Computed values
-  const canContinueIdentity = state.name.trim().length > 0 && !state.saving;
+  const canContinueIdentity =
+    state.name.trim().length > 0 && !state.saving && !state.importingAvatar;
   const canContinueStartingScene = state.scenes.length > 0 && !state.saving;
   const canSaveDescription =
     state.definition.trim().length > 0 && state.selectedModelId !== null && !state.saving;
   const progress =
-    state.step === Step.Identity ? 0.33 : state.step === Step.StartingScene ? 0.66 : 1;
+    state.step === Step.Identity
+      ? 0.25
+      : state.step === Step.StartingScene
+        ? 0.5
+        : state.step === Step.Description
+          ? 0.75
+          : 1;
 
   return {
     state,
@@ -658,6 +913,11 @@ export function useCharacterForm(draftCharacter?: any) {
       setDefaultSceneId,
       setDefinition,
       setDescription,
+      setNickname,
+      setCreator,
+      setCreatorNotes,
+      setCreatorNotesMultilingualText,
+      setTagsText,
       setSelectedModelId,
       setSelectedFallbackModelId,
       setSystemPromptTemplateId,

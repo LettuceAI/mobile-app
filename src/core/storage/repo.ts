@@ -230,22 +230,33 @@ export async function listCharacters(): Promise<Character[]> {
 
 export async function saveCharacter(c: Partial<Character>): Promise<Character> {
   const settings = await readSettings();
-  const pureModeLevel = settings.appState.pureModeLevel ?? (settings.appState.pureModeEnabled ? "standard" : "off");
+  const pureModeLevel =
+    settings.appState.pureModeLevel ?? (settings.appState.pureModeEnabled ? "standard" : "off");
   const defaultRules =
     c.rules && c.rules.length > 0 ? c.rules : await getDefaultCharacterRules(pureModeLevel);
   const timestamp = now();
 
   const scenes = c.scenes ?? [];
+  const defaultSceneId = c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null);
+  const derivedScenario =
+    scenes.find((scene) => scene.id === defaultSceneId)?.direction?.trim() || undefined;
   const entity: Character = {
     id: c.id ?? globalThis.crypto?.randomUUID?.() ?? uuidv4(),
     name: c.name!,
+    nickname: c.nickname,
     avatarPath: c.avatarPath,
     avatarCrop: c.avatarCrop,
     backgroundImagePath: c.backgroundImagePath,
     definition: c.definition,
     description: c.description,
+    scenario: derivedScenario,
+    creatorNotes: c.creatorNotes,
+    creator: c.creator,
+    creatorNotesMultilingual: c.creatorNotesMultilingual,
+    source: ["lettuceai"],
+    tags: c.tags,
     scenes,
-    defaultSceneId: c.defaultSceneId ?? (scenes.length === 1 ? scenes[0].id : null),
+    defaultSceneId,
     rules: defaultRules,
     defaultModelId: c.defaultModelId ?? null,
     fallbackModelId: c.fallbackModelId ?? null,

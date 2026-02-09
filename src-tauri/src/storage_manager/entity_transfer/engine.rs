@@ -161,6 +161,8 @@ pub struct CharaCardV3Data {
     #[serde(default)]
     pub source: Option<Vec<String>>,
     #[serde(default)]
+    pub avatar: Option<String>,
+    #[serde(default)]
     pub group_only_greetings: Vec<String>,
     #[serde(default)]
     pub creation_date: Option<i64>,
@@ -212,6 +214,8 @@ pub struct CharaCardV2Data {
     pub character_version: String,
     #[serde(default = "empty_object")]
     pub extensions: JsonValue,
+    #[serde(default)]
+    pub avatar: Option<String>,
 }
 
 fn deserialize_null_as_empty_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
@@ -498,6 +502,14 @@ pub fn parse_chara_card_v1(value: &JsonValue) -> Result<CharacterExportPackage, 
             name: card.name,
             description: Some(card.description).filter(|v| !v.trim().is_empty()),
             definition,
+            scenario: Some(card.scenario).filter(|v| !v.trim().is_empty()),
+            nickname: None,
+            creator: None,
+            creator_notes: None,
+            creator_notes_multilingual: None,
+            source: None,
+            tags: None,
+            character_book: None,
             rules: Vec::new(),
             scenes,
             default_scene_id,
@@ -540,6 +552,7 @@ pub fn parse_chara_card_v2(value: &JsonValue) -> Result<CharacterExportPackage, 
 
     let (scenes, default_scene_id) =
         build_scenes_from_greetings(&data.first_mes, &data.alternate_greetings);
+    let avatar_data = data.avatar.filter(|value| !value.trim().is_empty());
 
     Ok(CharacterExportPackage {
         version: 1,
@@ -548,6 +561,17 @@ pub fn parse_chara_card_v2(value: &JsonValue) -> Result<CharacterExportPackage, 
             name: data.name,
             description: Some(data.description).filter(|v| !v.trim().is_empty()),
             definition,
+            scenario: Some(data.scenario).filter(|v| !v.trim().is_empty()),
+            nickname: None,
+            creator: Some(data.creator).filter(|v| !v.trim().is_empty()),
+            creator_notes: Some(data.creator_notes).filter(|v| !v.trim().is_empty()),
+            creator_notes_multilingual: None,
+            source: None,
+            tags: Some(data.tags).filter(|v| !v.is_empty()),
+            character_book: data
+                .character_book
+                .as_ref()
+                .and_then(|book| serde_json::to_value(book).ok()),
             rules: Vec::new(),
             scenes,
             default_scene_id,
@@ -564,7 +588,7 @@ pub fn parse_chara_card_v2(value: &JsonValue) -> Result<CharacterExportPackage, 
             custom_text_color: None,
             custom_text_secondary: None,
         },
-        avatar_data: None,
+        avatar_data,
         background_image_data: None,
     })
 }
@@ -604,17 +628,20 @@ pub fn parse_chara_card_v3(value: &JsonValue) -> Result<CharacterExportPackage, 
     let (scenes, default_scene_id) =
         build_scenes_from_greetings(&data.first_mes, &data.alternate_greetings);
 
-    let (avatar_data, background_image_data) = data
+    let asset_icon_uri = data
         .assets
         .as_ref()
-        .map(|assets| {
-            let icon_uri = resolve_asset_uri(assets, "icon");
-            let background_uri = resolve_asset_uri(assets, "background");
-            let icon = icon_uri.filter(|uri| uri.starts_with("data:"));
-            let background = background_uri.filter(|uri| uri.starts_with("data:"));
-            (icon, background)
-        })
-        .unwrap_or((None, None));
+        .and_then(|assets| resolve_asset_uri(assets, "icon"));
+    let asset_background_uri = data
+        .assets
+        .as_ref()
+        .and_then(|assets| resolve_asset_uri(assets, "background"));
+    let avatar_data = data
+        .avatar
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| asset_icon_uri.filter(|value| !value.trim().is_empty()));
+    let background_image_data = asset_background_uri.filter(|uri| uri.starts_with("data:"));
 
     Ok(CharacterExportPackage {
         version: 1,
@@ -623,6 +650,17 @@ pub fn parse_chara_card_v3(value: &JsonValue) -> Result<CharacterExportPackage, 
             name: data.name,
             description: Some(data.description).filter(|v| !v.trim().is_empty()),
             definition,
+            scenario: Some(data.scenario).filter(|v| !v.trim().is_empty()),
+            nickname: data.nickname,
+            creator: Some(data.creator).filter(|v| !v.trim().is_empty()),
+            creator_notes: Some(data.creator_notes).filter(|v| !v.trim().is_empty()),
+            creator_notes_multilingual: data.creator_notes_multilingual,
+            source: data.source,
+            tags: Some(data.tags).filter(|v| !v.is_empty()),
+            character_book: data
+                .character_book
+                .as_ref()
+                .and_then(|book| serde_json::to_value(book).ok()),
             rules: Vec::new(),
             scenes,
             default_scene_id,
@@ -679,18 +717,27 @@ pub fn export_chara_card_v2(package: &CharacterExportPackage) -> CharaCardV2 {
             name: package.character.name.clone(),
             description,
             personality: sections.personality,
-            scenario: sections.scenario,
+            scenario: package
+                .character
+                .scenario
+                .clone()
+                .unwrap_or_else(|| sections.scenario.clone()),
             first_mes,
             mes_example: sections.mes_example,
-            creator_notes: String::new(),
+            creator_notes: package.character.creator_notes.clone().unwrap_or_default(),
             system_prompt: sections.system_prompt,
             post_history_instructions: sections.post_history_instructions,
             alternate_greetings,
-            character_book: None,
-            tags: Vec::new(),
-            creator: String::new(),
+            character_book: package
+                .character
+                .character_book
+                .clone()
+                .and_then(|book| serde_json::from_value(book).ok()),
+            tags: package.character.tags.clone().unwrap_or_default(),
+            creator: package.character.creator.clone().unwrap_or_default(),
             character_version: String::new(),
             extensions: JsonValue::Object(JsonMap::new()),
+            avatar: package.avatar_data.clone(),
         },
     }
 }
@@ -734,22 +781,31 @@ pub fn export_chara_card_v3(
             name: package.character.name.clone(),
             description,
             personality: sections.personality,
-            scenario: sections.scenario,
+            scenario: package
+                .character
+                .scenario
+                .clone()
+                .unwrap_or_else(|| sections.scenario.clone()),
             first_mes,
             mes_example: sections.mes_example,
-            creator_notes: String::new(),
+            creator_notes: package.character.creator_notes.clone().unwrap_or_default(),
             system_prompt: sections.system_prompt,
             post_history_instructions: sections.post_history_instructions,
             alternate_greetings,
-            character_book: None,
-            tags: Vec::new(),
-            creator: String::new(),
+            character_book: package
+                .character
+                .character_book
+                .clone()
+                .and_then(|book| serde_json::from_value(book).ok()),
+            tags: package.character.tags.clone().unwrap_or_default(),
+            creator: package.character.creator.clone().unwrap_or_default(),
             character_version: String::new(),
             extensions: JsonValue::Object(JsonMap::new()),
             assets: None,
-            nickname: None,
-            creator_notes_multilingual: None,
-            source: None,
+            nickname: package.character.nickname.clone(),
+            creator_notes_multilingual: package.character.creator_notes_multilingual.clone(),
+            source: package.character.source.clone(),
+            avatar: package.avatar_data.clone(),
             group_only_greetings: Vec::new(),
             creation_date: created_at.map(|v| v / 1000),
             modification_date: updated_at.map(|v| v / 1000),

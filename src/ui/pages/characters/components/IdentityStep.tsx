@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Camera, Image, Upload, Sparkles } from "lucide-react";
+import { X, Camera, Image, Upload, Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { typography, radius, spacing, interactive, shadows, cn } from "../../../design-tokens";
 import { AvatarPicker } from "../../../components/AvatarPicker";
 import type { AvatarCrop } from "../../../../core/storage/schemas";
@@ -20,6 +20,8 @@ interface IdentityStepProps {
   onDisableAvatarGradientChange: (value: boolean) => void;
   onContinue: () => void;
   canContinue: boolean;
+  importingAvatar?: boolean;
+  avatarImportError?: string | null;
   onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -39,6 +41,8 @@ export function IdentityStep({
   onDisableAvatarGradientChange,
   onContinue,
   canContinue,
+  importingAvatar = false,
+  avatarImportError = null,
   onImport,
 }: IdentityStepProps) {
   return (
@@ -70,7 +74,11 @@ export function IdentityStep({
             avatarRoundPath={avatarRoundPath}
             onAvatarRoundChange={onAvatarRoundChange}
             avatarPreview={
-              avatarPath ? undefined : (
+              importingAvatar ? (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Loader2 className="animate-spin text-white/50" size={34} />
+                </div>
+              ) : avatarPath ? undefined : (
                 <div className="flex h-full w-full items-center justify-center">
                   <Camera className="text-white/30" size={36} />
                 </div>
@@ -93,6 +101,13 @@ export function IdentityStep({
           )}
         </div>
         <p className="mt-3 text-xs text-white/40">Tap camera to add or generate avatar</p>
+        {importingAvatar && <p className="mt-1 text-xs text-emerald-300">Importing avatar...</p>}
+        {avatarImportError && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-red-300">
+            <AlertCircle size={12} />
+            <span>{avatarImportError}</span>
+          </div>
+        )}
       </div>
 
       {/* Name Input */}
