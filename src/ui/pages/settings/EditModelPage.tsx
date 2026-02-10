@@ -64,6 +64,7 @@ export function EditModelPage() {
   const [isManualInput, setIsManualInput] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyFreeModels, setShowOnlyFreeModels] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [showPlatformSelector, setShowPlatformSelector] = useState(false);
   const [llamaContextInfo, setLlamaContextInfo] = useState<LlamaCppContextInfo | null>(null);
@@ -162,10 +163,30 @@ export function EditModelPage() {
   useEffect(() => {
     if (!showModelSelector) {
       setSearchQuery("");
+      setShowOnlyFreeModels(false);
     }
   }, [showModelSelector]);
 
+  const isOpenRouterProvider = editorModel?.providerId === "openrouter";
+  const isFreeOpenRouterModel = (model: {
+    id: string;
+    inputPrice?: number;
+    outputPrice?: number;
+  }) => {
+    const inputPrice = typeof model.inputPrice === "number" ? model.inputPrice : Number.NaN;
+    const outputPrice = typeof model.outputPrice === "number" ? model.outputPrice : Number.NaN;
+    const hasZeroPricing =
+      Number.isFinite(inputPrice) &&
+      Number.isFinite(outputPrice) &&
+      inputPrice <= 0 &&
+      outputPrice <= 0;
+    return hasZeroPricing || model.id.toLowerCase().includes(":free");
+  };
+
   const filteredModels = fetchedModels.filter((m) => {
+    if (isOpenRouterProvider && showOnlyFreeModels && !isFreeOpenRouterModel(m)) {
+      return false;
+    }
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -469,6 +490,35 @@ export function EditModelPage() {
                     isOpen={showModelSelector}
                     onClose={() => setShowModelSelector(false)}
                     title="Select Model"
+                    rightAction={
+                      isOpenRouterProvider ? (
+                        <label className="flex items-center gap-2">
+                          <span className="text-xs text-white/70 whitespace-nowrap">
+                            only free models
+                          </span>
+                          <span className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200">
+                            <input
+                              type="checkbox"
+                              checked={showOnlyFreeModels}
+                              onChange={(e) => setShowOnlyFreeModels(e.target.checked)}
+                              className="sr-only"
+                            />
+                            <span
+                              className={cn(
+                                "inline-block h-full w-full rounded-full transition-colors duration-200",
+                                showOnlyFreeModels ? "bg-emerald-500" : "bg-white/10",
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                "absolute h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-200",
+                                showOnlyFreeModels ? "translate-x-4.5" : "translate-x-1",
+                              )}
+                            />
+                          </span>
+                        </label>
+                      ) : null
+                    }
                   >
                     <div className="px-4 pb-2 sticky top-0 z-10 bg-[#0f1014]">
                       <div className="relative">
