@@ -139,6 +139,9 @@ export function ChatConversationPage() {
   const [helpMeReplyError, setHelpMeReplyError] = useState<string | null>(null);
   const [helpMeReplyEnabled, setHelpMeReplyEnabled] = useState(true);
   const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
+  const helpMeReplyRequestIdRef = useRef<string | null>(null);
+  const helpMeReplyUnlistenRef = useRef<UnlistenFn | null>(null);
+  const helpMeReplyLoadingTimeoutRef = useRef<number | null>(null);
 
   const handleImageClick = useCallback((src: string, alt: string) => {
     setSelectedImage({ src, alt });
@@ -926,6 +929,37 @@ export function ChatConversationPage() {
     setSwapPlaces(false);
   }, []);
 
+  const clearHelpMeReplyRuntime = useCallback(() => {
+    if (helpMeReplyLoadingTimeoutRef.current !== null) {
+      window.clearTimeout(helpMeReplyLoadingTimeoutRef.current);
+      helpMeReplyLoadingTimeoutRef.current = null;
+    }
+    if (helpMeReplyUnlistenRef.current) {
+      helpMeReplyUnlistenRef.current();
+      helpMeReplyUnlistenRef.current = null;
+    }
+    helpMeReplyRequestIdRef.current = null;
+  }, []);
+
+  const cancelHelpMeReplyGeneration = useCallback(async () => {
+    const requestId = helpMeReplyRequestIdRef.current;
+    clearHelpMeReplyRuntime();
+    setGeneratingReply(false);
+    if (!requestId) return;
+    try {
+      await invoke("abort_request", { requestId });
+    } catch (err) {
+      console.error("Failed to abort Help Me Reply request:", err);
+    }
+  }, [clearHelpMeReplyRuntime]);
+
+  const handleCloseHelpMeReplyResultMenu = useCallback(() => {
+    setShowResultMenu(false);
+    setGeneratedReply(null);
+    setHelpMeReplyError(null);
+    void cancelHelpMeReplyGeneration();
+  }, [cancelHelpMeReplyGeneration]);
+
   const handleHelpMeReply = useCallback(
     async (mode: "new" | "enrich") => {
       if (!session?.id) return;
@@ -938,12 +972,12 @@ export function ChatConversationPage() {
       setShowResultMenu(true);
 
       const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-      let unlistenNormalized: UnlistenFn | null = null;
+      helpMeReplyRequestIdRef.current = requestId;
       let streamingText = "";
       let hasStartedStreaming = false;
 
       // Timeout to clear loading state if streaming doesn't start within 5 seconds
-      const loadingTimeout = setTimeout(() => {
+      helpMeReplyLoadingTimeoutRef.current = window.setTimeout(() => {
         if (!hasStartedStreaming) {
           setGeneratingReply(false);
         }
@@ -951,7 +985,8 @@ export function ChatConversationPage() {
 
       try {
         // Set up streaming listener
-        unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+        const unlistenNormalized = await listen<any>(`api-normalized://${requestId}`, (event) => {
+          if (helpMeReplyRequestIdRef.current !== requestId) return;
           try {
             const payload =
               typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
@@ -961,7 +996,10 @@ export function ChatConversationPage() {
               if (!hasStartedStreaming) {
                 hasStartedStreaming = true;
                 setGeneratingReply(false);
-                clearTimeout(loadingTimeout);
+                if (helpMeReplyLoadingTimeoutRef.current !== null) {
+                  window.clearTimeout(helpMeReplyLoadingTimeoutRef.current);
+                  helpMeReplyLoadingTimeoutRef.current = null;
+                }
               }
               streamingText += String(payload.data.text);
               setGeneratedReply(streamingText);
@@ -973,12 +1011,16 @@ export function ChatConversationPage() {
                 "Help Me Reply failed.";
               setHelpMeReplyError(String(message));
               setGeneratingReply(false);
-              clearTimeout(loadingTimeout);
+              if (helpMeReplyLoadingTimeoutRef.current !== null) {
+                window.clearTimeout(helpMeReplyLoadingTimeoutRef.current);
+                helpMeReplyLoadingTimeoutRef.current = null;
+              }
             }
           } catch (err) {
             console.error("Error processing streaming event:", err);
           }
         });
+        helpMeReplyUnlistenRef.current = unlistenNormalized;
 
         const currentDraft = mode === "enrich" && draft.trim() ? draft : undefined;
         const result = await generateUserReply(session.id, currentDraft, requestId, swapPlaces);
@@ -995,7 +1037,10 @@ export function ChatConversationPage() {
         // Clear loading state once API call completes (for non-streaming case)
         if (!hasStartedStreaming) {
           setGeneratingReply(false);
-          clearTimeout(loadingTimeout);
+          if (helpMeReplyLoadingTimeoutRef.current !== null) {
+            window.clearTimeout(helpMeReplyLoadingTimeoutRef.current);
+            helpMeReplyLoadingTimeoutRef.current = null;
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1005,13 +1050,12 @@ export function ChatConversationPage() {
         if (!hasStartedStreaming) {
           setGeneratingReply(false);
         }
-        clearTimeout(loadingTimeout);
-        if (unlistenNormalized) {
-          unlistenNormalized();
+        if (helpMeReplyRequestIdRef.current === requestId) {
+          clearHelpMeReplyRuntime();
         }
       }
     },
-    [session?.id, draft, swapPlaces],
+    [session?.id, draft, swapPlaces, clearHelpMeReplyRuntime],
   );
 
   const handleUseReply = useCallback(() => {
@@ -1038,6 +1082,13 @@ export function ChatConversationPage() {
       void handleHelpMeReply("new");
     }
   }, [draft, handleHelpMeReply]);
+
+  useEffect(
+    () => () => {
+      void cancelHelpMeReplyGeneration();
+    },
+    [cancelHelpMeReplyGeneration],
+  );
 
   const loadOlderFromDb = useCallback(async () => {
     if (!hasMoreMessagesBefore) return;
@@ -1672,11 +1723,7 @@ export function ChatConversationPage() {
       {/* Result Menu - Show generated reply with Regenerate/Use options */}
       <BottomMenu
         isOpen={showResultMenu}
-        onClose={() => {
-          setShowResultMenu(false);
-          setGeneratedReply(null);
-          setHelpMeReplyError(null);
-        }}
+        onClose={handleCloseHelpMeReplyResultMenu}
         title="Suggested Reply"
       >
         <div className="space-y-4">
