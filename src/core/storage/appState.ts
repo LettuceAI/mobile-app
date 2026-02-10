@@ -12,6 +12,7 @@ function cloneAppState(state?: AppState): AppState {
     tooltips: { ...source.tooltips },
     pureModeEnabled: source.pureModeEnabled,
     pureModeLevel: source.pureModeLevel ?? "standard",
+    autoDownloadCharacterCardAvatars: source.autoDownloadCharacterCardAvatars ?? true,
     analyticsEnabled: source.analyticsEnabled ?? true,
     appActiveUsageMs: source.appActiveUsageMs ?? 0,
     appActiveUsageByDayMs: { ...(source.appActiveUsageByDayMs ?? {}) },
@@ -129,6 +130,12 @@ export async function setPureModeEnabled(enabled: boolean): Promise<void> {
 export async function setAnalyticsEnabled(enabled: boolean): Promise<void> {
   await withAppState((state) => {
     state.analyticsEnabled = enabled;
+  });
+}
+
+export async function setAutoDownloadCharacterCardAvatars(enabled: boolean): Promise<void> {
+  await withAppState((state) => {
+    state.autoDownloadCharacterCardAvatars = enabled;
   });
 }
 

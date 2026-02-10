@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { Shield, Lock, Database, Power, Search, ScrollText, Trash2 } from "lucide-react";
 import { isAnalyticsAvailable, readSettings } from "../../../core/storage/repo";
-import { setAnalyticsEnabled, setPureModeLevel } from "../../../core/storage/appState";
+import {
+  setAnalyticsEnabled,
+  setAutoDownloadCharacterCardAvatars,
+  setPureModeLevel,
+} from "../../../core/storage/appState";
 import type { PureModeLevel } from "../../../core/storage/schemas";
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -62,6 +66,8 @@ const FILTER_DEBUG_ENABLED = import.meta.env.DEV;
 export function SecurityPage() {
   const [pureModeLevel, setPureModeLevelState] = useState<PureModeLevel>("standard");
   const [isGlitchEnabled, setIsGlitchEnabled] = useState(true);
+  const [autoDownloadCharacterCardAvatars, setAutoDownloadCharacterCardAvatarsState] =
+    useState(true);
   const [isAnalyticsEnabled, setIsAnalyticsEnabled] = useState(true);
   const [isAnalyticsAvailableState, setIsAnalyticsAvailableState] = useState(true);
   const [showRestartMenu, setShowRestartMenu] = useState(false);
@@ -120,7 +126,14 @@ export function SecurityPage() {
         const level =
           settings.appState.pureModeLevel ??
           (settings.appState.pureModeEnabled ? "standard" : "off");
+        const legacyState = settings.appState as unknown as Record<string, unknown>;
+        const autoDownloadAvatars =
+          settings.appState.autoDownloadCharacterCardAvatars ??
+          (typeof legacyState.autoDownloadDiscoveryAvatars === "boolean"
+            ? legacyState.autoDownloadDiscoveryAvatars
+            : true);
         setPureModeLevelState(level);
+        setAutoDownloadCharacterCardAvatarsState(autoDownloadAvatars);
         setIsAnalyticsEnabled(settings.appState.analyticsEnabled ?? true);
         setIsAnalyticsAvailableState(available);
         if (!available) {
@@ -179,6 +192,17 @@ export function SecurityPage() {
     } catch (err) {
       console.error("Failed to save analytics setting:", err);
       setIsAnalyticsEnabled(!newValue);
+    }
+  };
+
+  const handleAutoDownloadCharacterCardAvatarsToggle = async () => {
+    const newValue = !autoDownloadCharacterCardAvatars;
+    setAutoDownloadCharacterCardAvatarsState(newValue);
+    try {
+      await setAutoDownloadCharacterCardAvatars(newValue);
+    } catch (err) {
+      console.error("Failed to save character avatar auto-download setting:", err);
+      setAutoDownloadCharacterCardAvatarsState(!newValue);
     }
   };
 
@@ -332,6 +356,63 @@ export function SecurityPage() {
             Data Protection
           </h2>
           <div className="space-y-2">
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10">
+                  <Shield className="h-4 w-4 text-white/70" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">
+                          Remote Avatar Download
+                        </span>
+                        <span
+                          className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-[0.25em] ${
+                            autoDownloadCharacterCardAvatars
+                              ? "border-emerald-400/50 bg-emerald-500/25 text-emerald-100"
+                              : "border-white/10 bg-white/10 text-white/60"
+                          }`}
+                        >
+                          {autoDownloadCharacterCardAvatars ? "On" : "Off"}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/50">
+                        Auto-download avatar images from HTTPS URLs during character card import
+                      </div>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        id="remote-avatar-download"
+                        type="checkbox"
+                        checked={autoDownloadCharacterCardAvatars}
+                        onChange={handleAutoDownloadCharacterCardAvatarsToggle}
+                        className="peer sr-only"
+                      />
+                      <label
+                        htmlFor="remote-avatar-download"
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/40 ${
+                          autoDownloadCharacterCardAvatars
+                            ? "bg-emerald-500 shadow-lg shadow-emerald-500/30"
+                            : "bg-white/20"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            autoDownloadCharacterCardAvatars ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[11px] text-white/45 leading-relaxed">
+                    Disable this to prevent network avatar fetches when importing character cards
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex items-start gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10">

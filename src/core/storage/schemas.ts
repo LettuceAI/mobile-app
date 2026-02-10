@@ -1468,6 +1468,7 @@ export const AppStateSchema = z.object({
   tooltips: TooltipsStateSchema,
   pureModeEnabled: z.boolean().default(true), // Kept for backward compat
   pureModeLevel: PureModeLevelSchema.default("standard"),
+  autoDownloadCharacterCardAvatars: z.boolean().default(true),
   analyticsEnabled: z.boolean().default(true),
   appActiveUsageMs: z.number().int().nonnegative().default(0),
   appActiveUsageByDayMs: z.record(z.number().int().nonnegative()).default({}),
@@ -1508,6 +1509,7 @@ export function createDefaultAppState(): AppState {
     tooltips: {},
     pureModeEnabled: true,
     pureModeLevel: "standard",
+    autoDownloadCharacterCardAvatars: true,
     analyticsEnabled: true,
     appActiveUsageMs: 0,
     appActiveUsageByDayMs: {},

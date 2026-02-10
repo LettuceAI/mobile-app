@@ -10,6 +10,7 @@ use tauri::Manager;
 
 use super::db::{now_ms, open_db};
 use super::legacy::storage_root;
+use crate::storage_manager::internal_read_settings;
 use crate::utils::log_info;
 
 mod engine;
@@ -486,6 +487,29 @@ fn parse_character_import_payload(
 
 fn is_http_url(value: &str) -> bool {
     value.starts_with("http://") || value.starts_with("https://")
+}
+
+fn should_auto_download_character_card_avatars(app: &tauri::AppHandle) -> bool {
+    if let Ok(Some(raw)) = internal_read_settings(app) {
+        if let Ok(json) = serde_json::from_str::<JsonValue>(&raw) {
+            if let Some(app_state) = json.get("appState").and_then(|v| v.as_object()) {
+                if let Some(enabled) = app_state
+                    .get("autoDownloadCharacterCardAvatars")
+                    .and_then(|v| v.as_bool())
+                {
+                    return enabled;
+                }
+                // Backward-compat fallback for older in-flight setting key.
+                if let Some(enabled) = app_state
+                    .get("autoDownloadDiscoveryAvatars")
+                    .and_then(|v| v.as_bool())
+                {
+                    return enabled;
+                }
+            }
+        }
+    }
+    true
 }
 
 fn legacy_entity_id(raw_value: &JsonValue, key: &str) -> Option<String> {
@@ -1109,23 +1133,34 @@ pub fn character_import(app: tauri::AppHandle, import_json: String) -> Result<St
         format!("Importing as new character: {}", new_character_id),
     );
 
+    let auto_download_character_card_avatars = should_auto_download_character_card_avatars(&app);
+
     // Save avatar if provided
     let avatar_path = if let Some(ref avatar_base64) = package.avatar_data {
         if is_http_url(avatar_base64) {
-            match save_avatar_from_url(
-                &app,
-                &format!("character-{}", new_character_id),
-                avatar_base64,
-            ) {
-                Ok(filename) => Some(filename),
-                Err(e) => {
-                    log_info(
-                        &app,
-                        "character_import",
-                        format!("Warning: Failed to import remote avatar URL: {}", e),
-                    );
-                    None
+            if auto_download_character_card_avatars {
+                match save_avatar_from_url(
+                    &app,
+                    &format!("character-{}", new_character_id),
+                    avatar_base64,
+                ) {
+                    Ok(filename) => Some(filename),
+                    Err(e) => {
+                        log_info(
+                            &app,
+                            "character_import",
+                            format!("Warning: Failed to import remote avatar URL: {}", e),
+                        );
+                        None
+                    }
                 }
+            } else {
+                log_info(
+                    &app,
+                    "character_import",
+                    "Skipping remote avatar URL import because auto-download is disabled",
+                );
+                None
             }
         } else {
             match save_avatar_from_base64(

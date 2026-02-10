@@ -105,9 +105,11 @@ export function IdentityStep({
           <p className="mt-3 text-xs text-white/40">Tap camera to add or generate avatar</p>
           {importingAvatar && <p className="mt-1 text-xs text-emerald-300">Importing avatar...</p>}
           {avatarImportError && (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-red-300">
-              <AlertCircle size={12} />
-              <span>{avatarImportError}</span>
+            <div className="mt-2 flex items-start gap-1.5 text-xs text-red-300">
+              <AlertCircle size={12} className="mt-0.5 shrink-0" />
+              <span className="max-w-[320px] whitespace-pre-line leading-4">
+                {avatarImportError}
+              </span>
             </div>
           )}
         </div>
@@ -276,7 +278,9 @@ export function IdentityStep({
                   </div>
                   <div className="text-center">
                     <p className={cn(typography.bodySmall.size, "text-white/70")}>Add Background</p>
-                    <p className={cn(typography.caption.size, "text-white/40")}>Tap to select image</p>
+                    <p className={cn(typography.caption.size, "text-white/40")}>
+                      Tap to select image
+                    </p>
                   </div>
                   <input
                     type="file"

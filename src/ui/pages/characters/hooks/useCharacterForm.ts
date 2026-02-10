@@ -500,6 +500,13 @@ export function useCharacterForm(draftCharacter?: any) {
       const jsonContent = await readFileAsText(file);
 
       const characterData = await previewCharacterImport(jsonContent);
+      const settings = await readSettings();
+      const legacyState = settings.appState as unknown as Record<string, unknown>;
+      const autoDownloadCharacterCardAvatars =
+        settings.appState.autoDownloadCharacterCardAvatars ??
+        (typeof legacyState.autoDownloadDiscoveryAvatars === "boolean"
+          ? legacyState.autoDownloadDiscoveryAvatars
+          : true);
       if (characterData.fileFormat) {
         const label = FORMAT_LABELS[characterData.fileFormat] || characterData.fileFormat;
         if (characterData.fileFormat === "legacy_json") {
@@ -597,54 +604,66 @@ export function useCharacterForm(draftCharacter?: any) {
 
       if (characterData.avatarData) {
         if (/^https?:\/\//i.test(characterData.avatarData)) {
-          dispatch({ type: "SET_IMPORTING_AVATAR", payload: true });
-          dispatch({ type: "SET_AVATAR_IMPORT_ERROR", payload: null });
-          dispatch({ type: "SET_AVATAR_PATH", payload: "" });
-          dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
-          dispatch({ type: "SET_AVATAR_CROP", payload: null });
+          if (!autoDownloadCharacterCardAvatars) {
+            dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+            dispatch({
+              type: "SET_AVATAR_IMPORT_ERROR",
+              payload:
+                "Remote avatar download is disabled in Security settings.\nUpload an avatar manually.",
+            });
+            dispatch({ type: "SET_AVATAR_PATH", payload: "" });
+            dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+            dispatch({ type: "SET_AVATAR_CROP", payload: null });
+          } else {
+            dispatch({ type: "SET_IMPORTING_AVATAR", payload: true });
+            dispatch({ type: "SET_AVATAR_IMPORT_ERROR", payload: null });
+            dispatch({ type: "SET_AVATAR_PATH", payload: "" });
+            dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+            dispatch({ type: "SET_AVATAR_CROP", payload: null });
 
-          const imageDataUrl = await new Promise<string>((resolve, reject) => {
-            const image = new Image();
-            image.crossOrigin = "anonymous";
+            const imageDataUrl = await new Promise<string>((resolve, reject) => {
+              const image = new Image();
+              image.crossOrigin = "anonymous";
 
-            const cleanup = () => {
-              image.onload = null;
-              image.onerror = null;
-            };
+              const cleanup = () => {
+                image.onload = null;
+                image.onerror = null;
+              };
 
-            image.onload = () => {
-              try {
-                const canvas = document.createElement("canvas");
-                canvas.width = image.naturalWidth;
-                canvas.height = image.naturalHeight;
-                const ctx = canvas.getContext("2d");
-                if (!ctx) {
+              image.onload = () => {
+                try {
+                  const canvas = document.createElement("canvas");
+                  canvas.width = image.naturalWidth;
+                  canvas.height = image.naturalHeight;
+                  const ctx = canvas.getContext("2d");
+                  if (!ctx) {
+                    cleanup();
+                    reject(new Error("Failed to process avatar image"));
+                    return;
+                  }
+                  ctx.drawImage(image, 0, 0);
+                  const dataUrl = canvas.toDataURL("image/png");
                   cleanup();
-                  reject(new Error("Failed to process avatar image"));
-                  return;
+                  resolve(dataUrl);
+                } catch {
+                  cleanup();
+                  reject(new Error("Avatar URL could not be converted"));
                 }
-                ctx.drawImage(image, 0, 0);
-                const dataUrl = canvas.toDataURL("image/png");
+              };
+
+              image.onerror = () => {
                 cleanup();
-                resolve(dataUrl);
-              } catch {
-                cleanup();
-                reject(new Error("Avatar URL could not be converted"));
-              }
-            };
+                reject(new Error("Failed to load avatar URL"));
+              };
 
-            image.onerror = () => {
-              cleanup();
-              reject(new Error("Failed to load avatar URL"));
-            };
+              image.src = characterData.avatarData as string;
+            });
 
-            image.src = characterData.avatarData as string;
-          });
-
-          dispatch({ type: "SET_AVATAR_PATH", payload: imageDataUrl });
-          dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
-          dispatch({ type: "SET_AVATAR_CROP", payload: null });
-          dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+            dispatch({ type: "SET_AVATAR_PATH", payload: imageDataUrl });
+            dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
+            dispatch({ type: "SET_AVATAR_CROP", payload: null });
+            dispatch({ type: "SET_IMPORTING_AVATAR", payload: false });
+          }
         } else {
           dispatch({ type: "SET_AVATAR_PATH", payload: characterData.avatarData });
           dispatch({ type: "SET_AVATAR_ROUND_PATH", payload: null });
