@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import {
@@ -59,11 +59,43 @@ type LlamaCppContextInfo = {
   modelSizeBytes?: number | null;
 };
 
+const normalizeSearchText = (value?: string) =>
+  (value ?? "")
+    .toLowerCase()
+    .replace(/[_:/.-]+/g, " ")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getEditDistance = (a: string, b: string) => {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp = Array.from({ length: rows }, (_, i) => {
+    const row = new Array<number>(cols).fill(0);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j < cols; j++) dp[0][j] = j;
+
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[rows - 1][cols - 1];
+};
+
 export function EditModelPage() {
   const [showParameterSupport, setShowParameterSupport] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [showOnlyFreeModels, setShowOnlyFreeModels] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [showPlatformSelector, setShowPlatformSelector] = useState(false);
@@ -163,9 +195,17 @@ export function EditModelPage() {
   useEffect(() => {
     if (!showModelSelector) {
       setSearchQuery("");
+      setDebouncedSearchQuery("");
       setShowOnlyFreeModels(false);
     }
   }, [showModelSelector]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   const isOpenRouterProvider = editorModel?.providerId === "openrouter";
   const isFreeOpenRouterModel = (model: {
@@ -183,18 +223,153 @@ export function EditModelPage() {
     return hasZeroPricing || model.id.toLowerCase().includes(":free");
   };
 
-  const filteredModels = fetchedModels.filter((m) => {
-    if (isOpenRouterProvider && showOnlyFreeModels && !isFreeOpenRouterModel(m)) {
-      return false;
+  const filteredModels = useMemo(() => {
+    const query = normalizeSearchText(debouncedSearchQuery);
+    const tokens = query.length > 0 ? query.split(" ").filter(Boolean) : [];
+    const hasQuery = tokens.length > 0;
+    const selectedModelId = editorModel?.name ?? "";
+
+    const ranked = fetchedModels
+      .map((model, index) => {
+        if (isOpenRouterProvider && showOnlyFreeModels && !isFreeOpenRouterModel(model)) {
+          return null;
+        }
+
+        if (!hasQuery) {
+          return { model, index, score: 0 };
+        }
+
+        const id = normalizeSearchText(model.id);
+        const name = normalizeSearchText(model.displayName);
+        const description = normalizeSearchText(model.description);
+        const idWords = id.split(" ").filter(Boolean);
+        const nameWords = name.split(" ").filter(Boolean);
+        const descWords = description.split(" ").filter(Boolean);
+        const combined = `${id} ${name} ${description}`;
+
+        if (!tokens.every((token) => combined.includes(token))) {
+          return null;
+        }
+
+        let score = 0;
+
+        if (id === query) score += 2000;
+        if (name === query) score += 1800;
+        if (id.startsWith(query)) score += 1300;
+        if (name.startsWith(query)) score += 1100;
+        if (id.includes(query)) score += 700;
+        if (name.includes(query)) score += 550;
+        if (description.includes(query)) score += 120;
+
+        for (const token of tokens) {
+          if (idWords.some((word) => word === token)) score += 140;
+          else if (idWords.some((word) => word.startsWith(token))) score += 95;
+          else if (id.includes(token)) score += 60;
+
+          if (nameWords.some((word) => word === token)) score += 120;
+          else if (nameWords.some((word) => word.startsWith(token))) score += 85;
+          else if (name.includes(token)) score += 50;
+
+          if (descWords.some((word) => word === token)) score += 30;
+          else if (descWords.some((word) => word.startsWith(token))) score += 20;
+          else if (description.includes(token)) score += 10;
+        }
+
+        if (model.id === selectedModelId) {
+          score += 35;
+        }
+
+        return { model, index, score };
+      })
+      .filter(
+        (entry): entry is { model: (typeof fetchedModels)[number]; index: number; score: number } =>
+          !!entry,
+      );
+
+    if (hasQuery) {
+      ranked.sort((a, b) => b.score - a.score || a.index - b.index);
     }
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      m.id.toLowerCase().includes(q) ||
-      (m.displayName && m.displayName.toLowerCase().includes(q)) ||
-      (m.description && m.description.toLowerCase().includes(q))
-    );
-  });
+
+    return ranked.map((entry) => entry.model);
+  }, [
+    fetchedModels,
+    debouncedSearchQuery,
+    isOpenRouterProvider,
+    showOnlyFreeModels,
+    editorModel?.name,
+  ]);
+  const didYouMeanSuggestions = useMemo(() => {
+    if (filteredModels.length > 0) return [];
+    const query = normalizeSearchText(debouncedSearchQuery);
+    if (!query) return [];
+
+    const threshold = query.length <= 4 ? 1 : 2;
+    const queryWords = query.split(" ").filter(Boolean);
+
+    const ranked = fetchedModels
+      .map((model, index) => {
+        if (isOpenRouterProvider && showOnlyFreeModels && !isFreeOpenRouterModel(model)) {
+          return null;
+        }
+
+        const id = normalizeSearchText(model.id);
+        const name = normalizeSearchText(model.displayName);
+        const idWords = id.split(" ").filter(Boolean);
+        const nameWords = name.split(" ").filter(Boolean);
+        const bestDistance = Math.min(
+          getEditDistance(query, id),
+          name ? getEditDistance(query, name) : Number.MAX_SAFE_INTEGER,
+        );
+        const sharedPrefix = (a: string, b: string) => {
+          const max = Math.min(a.length, b.length);
+          let i = 0;
+          while (i < max && a[i] === b[i]) i++;
+          return i;
+        };
+        const hasNearPrefix = [...idWords, ...nameWords].some((word) =>
+          queryWords.some((qWord) => {
+            if (!word || !qWord) return false;
+            return (
+              word.startsWith(qWord) || qWord.startsWith(word) || sharedPrefix(word, qWord) >= 3
+            );
+          }),
+        );
+        const softMatch =
+          id.includes(query) ||
+          name.includes(query) ||
+          id.startsWith(query) ||
+          name.startsWith(query) ||
+          idWords.some((word) => word.startsWith(query) || query.startsWith(word)) ||
+          nameWords.some((word) => word.startsWith(query) || query.startsWith(word)) ||
+          hasNearPrefix;
+
+        if (bestDistance > threshold && !softMatch) {
+          return null;
+        }
+
+        const score = bestDistance * 100 + (softMatch ? -20 : 0);
+        return {
+          model,
+          index,
+          score,
+        };
+      })
+      .filter(
+        (entry): entry is { model: (typeof fetchedModels)[number]; index: number; score: number } =>
+          !!entry,
+      )
+      .sort((a, b) => a.score - b.score || a.index - b.index)
+      .slice(0, 3)
+      .map((entry) => entry.model);
+
+    return ranked;
+  }, [
+    filteredModels.length,
+    debouncedSearchQuery,
+    fetchedModels,
+    isOpenRouterProvider,
+    showOnlyFreeModels,
+  ]);
   const modelIdLabel = isLocalModel ? "Model Path (GGUF)" : "Model ID";
   const modelIdPlaceholder = isLocalModel ? "/path/to/model.gguf" : "e.g. gpt-4o";
 
@@ -553,8 +728,25 @@ export function EditModelPage() {
                           );
                         })
                       ) : (
-                        <div className="py-12 text-center text-sm text-white/40">
-                          No models found matching "{searchQuery}"
+                        <div className="py-10 text-center text-sm text-white/40">
+                          <p>No models found matching "{searchQuery}"</p>
+                          {didYouMeanSuggestions.length > 0 && (
+                            <div className="mt-4">
+                              <p className="mb-2 text-xs text-white/50">Did you mean:</p>
+                              <div className="flex flex-wrap justify-center gap-2">
+                                {didYouMeanSuggestions.map((model) => (
+                                  <button
+                                    key={model.id}
+                                    type="button"
+                                    onClick={() => setSearchQuery(model.id)}
+                                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/80 transition hover:border-white/30 hover:bg-white/10"
+                                  >
+                                    {model.displayName || model.id}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </MenuSection>
