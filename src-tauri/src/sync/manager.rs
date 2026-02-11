@@ -485,8 +485,8 @@ async fn handle_driver_connection(
 async fn handle_sync_request(
     app: &AppHandle,
     framed: &mut Framed<TcpStream, P2PCodec>,
-    _passenger_manifest: Manifest,
-    _passenger_manifest_v2: Option<ManifestV2>,
+    passenger_manifest: Manifest,
+    passenger_manifest_v2: Option<ManifestV2>,
     allow_group: bool,
     peer_protocol_version: u32,
 ) -> Result<(), String> {
@@ -521,38 +521,63 @@ async fn handle_sync_request(
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
-    // 2. Compare and find what Passenger needs vs what Driver needs
-    // Assumption: Last Write Wins.
-    // If Driver is newer, send to Passenger.
-    // If Passenger is newer, we request it?
-    // Current simple implementation: "Driver pushes updates to Passenger".
-    // The implementation plan implies bi-directional but let's implement the "Driver pushes" part first,
-    // or strictly follow "Sync" which implies convergence.
-
-    // Check Lorebooks
+    // Host-authoritative sync policy:
+    // - Host is always the source of truth.
+    // - Any timestamp mismatch is resolved by sending host's record to passenger.
+    // This ensures client-side newer values never overwrite host canonical state.
     let mut lb_ids_to_send = Vec::new();
-    for id in local_manifest.lorebooks.keys() {
-        lb_ids_to_send.push(id.clone());
+    for (id, host_updated_at) in local_manifest.lorebooks.iter() {
+        let passenger_updated_at = passenger_manifest.lorebooks.get(id).copied();
+        if passenger_updated_at != Some(*host_updated_at) {
+            lb_ids_to_send.push(id.clone());
+        }
     }
 
-    // Check Characters
     let mut char_ids_to_send = Vec::new();
-    for id in local_manifest.characters.keys() {
-        char_ids_to_send.push(id.clone());
+    for (id, host_updated_at) in local_manifest.characters.iter() {
+        let passenger_updated_at = passenger_manifest.characters.get(id).copied();
+        if passenger_updated_at != Some(*host_updated_at) {
+            char_ids_to_send.push(id.clone());
+        }
     }
 
-    // Check Sessions
     let mut session_ids_to_send = Vec::new();
-    for id in local_manifest.sessions.keys() {
-        session_ids_to_send.push(id.clone());
+    for (id, host_updated_at) in local_manifest.sessions.iter() {
+        let passenger_updated_at = passenger_manifest.sessions.get(id).copied();
+        if passenger_updated_at != Some(*host_updated_at) {
+            session_ids_to_send.push(id.clone());
+        }
     }
 
     let mut group_session_ids_to_send = Vec::new();
-    if let Some(manifest_v2) = &local_manifest_v2 {
-        for id in manifest_v2.group_sessions.keys() {
-            group_session_ids_to_send.push(id.clone());
+    if allow_group {
+        if let (Some(host_v2), Some(passenger_v2)) =
+            (local_manifest_v2.as_ref(), passenger_manifest_v2.as_ref())
+        {
+            for (id, host_updated_at) in host_v2.group_sessions.iter() {
+                let passenger_updated_at = passenger_v2.group_sessions.get(id).copied();
+                if passenger_updated_at != Some(*host_updated_at) {
+                    group_session_ids_to_send.push(id.clone());
+                }
+            }
+        } else if let Some(host_v2) = local_manifest_v2.as_ref() {
+            for id in host_v2.group_sessions.keys() {
+                group_session_ids_to_send.push(id.clone());
+            }
         }
     }
+
+    log_info(
+        app,
+        "sync_driver",
+        format!(
+            "Host-authoritative diff: lorebooks={} characters={} sessions={} group_sessions={}",
+            lb_ids_to_send.len(),
+            char_ids_to_send.len(),
+            session_ids_to_send.len(),
+            group_session_ids_to_send.len()
+        ),
+    );
 
     // Send Globals
     framed
