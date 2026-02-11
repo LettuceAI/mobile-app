@@ -7,6 +7,7 @@ import {
   Pin,
   PinOff,
   Brain,
+  BookOpen,
   GitBranch,
   Users,
   TriangleAlert,
@@ -144,6 +145,7 @@ export function MessageActionsBottomSheet({
 
   const modelLabel = modelName ?? (settings ? "Unknown model" : "Loading model...");
   const usedFallback = Boolean(messageAction?.message.fallbackFromModelId);
+  const usedLorebookEntries = messageAction?.message.usedLorebookEntries ?? [];
 
   const handleCopy = async () => {
     if (!messageAction) return;
@@ -239,6 +241,28 @@ export function MessageActionsBottomSheet({
                     </div>
                   </div>
                 )}
+
+              {usedLorebookEntries.length > 0 && (
+                <div className="mb-3 p-3 rounded-lg border border-sky-500/20 bg-sky-500/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BookOpen size={14} className="text-sky-300" />
+                    <span className="text-xs font-medium text-sky-200">Lorebook usage</span>
+                  </div>
+                  <p className="text-xs text-sky-100/90 mb-2">
+                    This response used the following lorebook entries.
+                  </p>
+                  <div className="space-y-1">
+                    {usedLorebookEntries.map((entry, idx) => (
+                      <div
+                        key={`${entry}-${idx}`}
+                        className="text-xs text-sky-100/85 rounded bg-black/20 border border-sky-500/10 px-2 py-1.5"
+                      >
+                        {entry}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Basic actions */}
               {canEdit && (

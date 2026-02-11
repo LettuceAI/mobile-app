@@ -257,6 +257,8 @@ pub struct Message {
     pub selected_variant_id: Option<String>,
     pub is_pinned: i64,
     pub memory_refs: String,
+    #[serde(default)]
+    pub used_lorebook_entries: String,
     pub attachments: String,
     pub reasoning: Option<String>,
 }

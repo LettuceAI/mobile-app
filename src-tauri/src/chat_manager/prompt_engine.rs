@@ -9,6 +9,7 @@ use super::types::{
     SystemPromptEntry,
 };
 use crate::storage_manager::db::open_db;
+use crate::storage_manager::lorebook::get_lorebook;
 
 pub fn default_system_prompt_template() -> String {
     join_entries(&default_modular_prompt_entries())
@@ -568,6 +569,69 @@ fn get_lorebook_content(
     );
 
     Ok(format_lorebook_for_prompt(&active_entries))
+}
+
+pub fn resolve_used_lorebook_entries(
+    app: &AppHandle,
+    character_id: &str,
+    session: &Session,
+    rendered_entries: &[SystemPromptEntry],
+) -> Vec<String> {
+    let conn = match open_db(app) {
+        Ok(conn) => conn,
+        Err(_) => return Vec::new(),
+    };
+
+    let recent_messages: Vec<String> = session
+        .messages
+        .iter()
+        .rev()
+        .take(10)
+        .rev()
+        .map(|msg| msg.content.clone())
+        .collect();
+
+    let active_entries = match get_active_lorebook_entries(&conn, character_id, &recent_messages) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+    if active_entries.is_empty() {
+        return Vec::new();
+    }
+
+    let mut used: Vec<String> = Vec::new();
+    for entry in active_entries {
+        let content = entry.content.trim();
+        if content.is_empty() {
+            continue;
+        }
+
+        let was_injected = rendered_entries
+            .iter()
+            .any(|prompt_entry| prompt_entry.content.contains(content));
+        if !was_injected {
+            continue;
+        }
+
+        let lorebook_name = get_lorebook(&conn, &entry.lorebook_id)
+            .ok()
+            .flatten()
+            .map(|l| l.name)
+            .unwrap_or_else(|| "Lorebook".to_string());
+        let entry_name = if !entry.title.trim().is_empty() {
+            entry.title.trim().to_string()
+        } else if let Some(first_keyword) = entry.keywords.first() {
+            first_keyword.trim().to_string()
+        } else {
+            format!("[{}]", &entry.id[..6.min(entry.id.len())])
+        };
+        let label = format!("{} / {}", lorebook_name, entry_name);
+        if !used.iter().any(|existing| existing == &label) {
+            used.push(label);
+        }
+    }
+
+    used
 }
 
 pub fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {

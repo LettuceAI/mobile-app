@@ -362,6 +362,9 @@ pub struct StoredMessage {
     pub selected_variant_id: Option<String>,
     #[serde(default)]
     pub memory_refs: Vec<String>,
+    /// Lorebook entries used during this message generation.
+    #[serde(default)]
+    pub used_lorebook_entries: Vec<String>,
     #[serde(default)]
     pub is_pinned: bool,
     #[serde(default)]

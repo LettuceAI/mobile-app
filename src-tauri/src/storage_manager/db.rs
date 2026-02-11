@@ -439,6 +439,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           selected_variant_id TEXT,
           is_pinned INTEGER NOT NULL DEFAULT 0,
           memory_refs TEXT NOT NULL DEFAULT '[]',
+          used_lorebook_entries TEXT NOT NULL DEFAULT '[]',
           attachments TEXT NOT NULL DEFAULT '[]',
           reasoning TEXT,
           FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -985,6 +986,32 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     if !has_condense_prompt_entries {
         let _ = conn.execute(
             "ALTER TABLE prompt_templates ADD COLUMN condense_prompt_entries INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+
+    let mut stmt_messages = conn
+        .prepare("PRAGMA table_info(messages)")
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut has_used_lorebook_entries = false;
+    let mut rows_messages = stmt_messages
+        .query([])
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    while let Some(row) = rows_messages
+        .next()
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
+    {
+        let col_name: String = row
+            .get(1)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        if col_name == "used_lorebook_entries" {
+            has_used_lorebook_entries = true;
+            break;
+        }
+    }
+    if !has_used_lorebook_entries {
+        let _ = conn.execute(
+            "ALTER TABLE messages ADD COLUMN used_lorebook_entries TEXT NOT NULL DEFAULT '[]'",
             [],
         );
     }

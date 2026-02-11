@@ -319,6 +319,7 @@ fn fetch_conversation_messages_range(
                 variants: Vec::new(),
                 selected_variant_id: None,
                 memory_refs: Vec::new(),
+                used_lorebook_entries: Vec::new(),
                 is_pinned: is_pinned != 0,
                 attachments: Vec::new(),
                 reasoning: None,
@@ -1333,6 +1334,7 @@ pub async fn chat_completion(
         variants: Vec::new(),
         selected_variant_id: None,
         memory_refs: Vec::new(),
+        used_lorebook_entries: Vec::new(),
         is_pinned: false,
         attachments: persisted_attachments,
         reasoning: None,
@@ -1371,6 +1373,12 @@ pub async fn chat_completion(
             settings,
         )
     };
+    let used_lorebook_entries = super::prompt_engine::resolve_used_lorebook_entries(
+        &app,
+        &character.id,
+        &session,
+        &prompt_entries,
+    );
     let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     // Determine message window: use conversation_window for dynamic memory (limited context),
@@ -2037,6 +2045,7 @@ pub async fn chat_completion(
         } else {
             Vec::new()
         },
+        used_lorebook_entries,
         is_pinned: false,
         attachments: persisted_assistant_attachments,
         reasoning,
@@ -2328,6 +2337,12 @@ pub async fn chat_regenerate(
             settings,
         )
     };
+    let used_lorebook_entries = super::prompt_engine::resolve_used_lorebook_entries(
+        &app,
+        &character.id,
+        &session,
+        &prompt_entries,
+    );
     let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     let system_role = super::request_builder::system_role_for(provider_cred);
@@ -2761,6 +2776,7 @@ pub async fn chat_regenerate(
                 })
                 .collect();
         }
+        assistant_message.used_lorebook_entries = used_lorebook_entries.clone();
         if !persisted_assistant_attachments.is_empty() {
             assistant_message.attachments = persisted_assistant_attachments;
         }
@@ -2996,6 +3012,12 @@ pub async fn chat_continue(
             settings,
         )
     };
+    let used_lorebook_entries = super::prompt_engine::resolve_used_lorebook_entries(
+        &app,
+        &character.id,
+        &session,
+        &prompt_entries,
+    );
     let (relative_entries, in_chat_entries) = partition_prompt_entries(prompt_entries);
 
     let (pinned_msgs, recent_msgs) = if dynamic_memory_enabled {
@@ -3411,6 +3433,7 @@ pub async fn chat_continue(
         } else {
             Vec::new()
         },
+        used_lorebook_entries,
         is_pinned: false,
         attachments: persisted_assistant_attachments,
         reasoning,

@@ -217,7 +217,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
     };
 
     // messages
-    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut mstmt = conn.prepare("SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning FROM messages WHERE session_id = ? ORDER BY created_at ASC").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mrows = mstmt
         .query_map(params![id], |r| {
             Ok((
@@ -233,6 +233,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
                 r.get::<_, Option<String>>(9)?,
                 r.get::<_, Option<String>>(10)?,
                 r.get::<_, Option<String>>(11)?,
+                r.get::<_, Option<String>>(12)?,
             ))
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -249,6 +250,7 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
             selected_variant_id,
             is_pinned,
             memory_refs_json,
+            used_lorebook_entries_json,
             attachments_json,
             reasoning,
         ) = mr.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -300,6 +302,11 @@ fn read_session(conn: &rusqlite::Connection, id: &str) -> Result<Option<JsonValu
         if let Some(refs_json) = memory_refs_json {
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(&refs_json) {
                 mobj.insert("memoryRefs".into(), parsed);
+            }
+        }
+        if let Some(lorebook_json) = used_lorebook_entries_json {
+            if let Ok(parsed) = serde_json::from_str::<JsonValue>(&lorebook_json) {
+                mobj.insert("usedLorebookEntries".into(), parsed);
             }
         }
         // Parse and insert attachments
@@ -375,7 +382,7 @@ fn fetch_messages_page(
     before_id: Option<&str>,
 ) -> Result<Vec<JsonValue>, String> {
     let mut sql = String::from(
-        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ?1",
+        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning FROM messages WHERE session_id = ?1",
     );
 
     let use_before = before_created_at.is_some() && before_id.is_some();
@@ -409,6 +416,7 @@ fn fetch_messages_page(
                             r.get::<_, Option<String>>(9)?,
                             r.get::<_, Option<String>>(10)?,
                             r.get::<_, Option<String>>(11)?,
+                            r.get::<_, Option<String>>(12)?,
                         ))
                     },
                 )
@@ -435,6 +443,7 @@ fn fetch_messages_page(
                         r.get::<_, Option<String>>(9)?,
                         r.get::<_, Option<String>>(10)?,
                         r.get::<_, Option<String>>(11)?,
+                        r.get::<_, Option<String>>(12)?,
                     ))
                 })
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -507,6 +516,7 @@ fn fetch_messages_page(
         selected_variant_id,
         is_pinned,
         memory_refs_json,
+        used_lorebook_entries_json,
         attachments_json,
         reasoning,
     ) in raw_messages
@@ -531,6 +541,11 @@ fn fetch_messages_page(
         if let Some(refs_json) = memory_refs_json {
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(&refs_json) {
                 mobj.insert("memoryRefs".into(), parsed);
+            }
+        }
+        if let Some(lorebook_json) = used_lorebook_entries_json {
+            if let Ok(parsed) = serde_json::from_str::<JsonValue>(&lorebook_json) {
+                mobj.insert("usedLorebookEntries".into(), parsed);
             }
         }
         if let Some(att_json) = attachments_json {
@@ -730,7 +745,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
 
     let placeholders = pinned_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
-        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id = ?1 AND id IN ({}) ORDER BY created_at ASC, id ASC",
+        "SELECT id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning FROM messages WHERE session_id = ?1 AND id IN ({}) ORDER BY created_at ASC, id ASC",
         placeholders
     );
     let mut mstmt = conn
@@ -757,6 +772,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
                 r.get::<_, Option<String>>(9)?,
                 r.get::<_, Option<String>>(10)?,
                 r.get::<_, Option<String>>(11)?,
+                r.get::<_, Option<String>>(12)?,
             ))
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -829,6 +845,7 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         selected_variant_id,
         is_pinned,
         memory_refs_json,
+        used_lorebook_entries_json,
         attachments_json,
         reasoning,
     ) in raw_messages
@@ -853,6 +870,11 @@ pub fn messages_list_pinned(app: tauri::AppHandle, session_id: String) -> Result
         if let Some(refs_json) = memory_refs_json {
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(&refs_json) {
                 mobj.insert("memoryRefs".into(), parsed);
+            }
+        }
+        if let Some(lorebook_json) = used_lorebook_entries_json {
+            if let Ok(parsed) = serde_json::from_str::<JsonValue>(&lorebook_json) {
+                mobj.insert("usedLorebookEntries".into(), parsed);
             }
         }
         if let Some(att_json) = attachments_json {
@@ -1080,6 +1102,10 @@ pub fn messages_upsert_batch(
             .get("memoryRefs")
             .cloned()
             .unwrap_or_else(|| JsonValue::Array(Vec::new()));
+        let used_lorebook_entries = m
+            .get("usedLorebookEntries")
+            .cloned()
+            .unwrap_or_else(|| JsonValue::Array(Vec::new()));
         let attachments = m
             .get("attachments")
             .cloned()
@@ -1090,8 +1116,8 @@ pub fn messages_upsert_batch(
             .map(|s| s.to_string());
 
         tx.execute(
-            r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  session_id=excluded.session_id,
                  role=excluded.role,
@@ -1103,6 +1129,7 @@ pub fn messages_upsert_batch(
                  selected_variant_id=excluded.selected_variant_id,
                  is_pinned=excluded.is_pinned,
                  memory_refs=excluded.memory_refs,
+                 used_lorebook_entries=excluded.used_lorebook_entries,
                  attachments=excluded.attachments,
                  reasoning=excluded.reasoning"#,
             params![
@@ -1117,6 +1144,7 @@ pub fn messages_upsert_batch(
                 selected_variant_id,
                 is_pinned,
                 memory_refs.to_string(),
+                used_lorebook_entries.to_string(),
                 attachments.to_string(),
                 reasoning
             ],
@@ -1429,6 +1457,10 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                 .get("memoryRefs")
                 .cloned()
                 .unwrap_or_else(|| JsonValue::Array(Vec::new()));
+            let used_lorebook_entries = m
+                .get("usedLorebookEntries")
+                .cloned()
+                .unwrap_or_else(|| JsonValue::Array(Vec::new()));
             let attachments = m
                 .get("attachments")
                 .cloned()
@@ -1438,8 +1470,8 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
             tx.execute(
-                r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                r#"INSERT INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      session_id=excluded.session_id,
                      role=excluded.role,
@@ -1451,6 +1483,7 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                      selected_variant_id=excluded.selected_variant_id,
                      is_pinned=excluded.is_pinned,
                      memory_refs=excluded.memory_refs,
+                     used_lorebook_entries=excluded.used_lorebook_entries,
                      attachments=excluded.attachments,
                      reasoning=excluded.reasoning"#,
                 params![
@@ -1465,6 +1498,7 @@ pub fn session_upsert(app: tauri::AppHandle, session_json: String) -> Result<(),
                     selected_variant_id,
                     is_pinned,
                     memory_refs.to_string(),
+                    used_lorebook_entries.to_string(),
                     attachments.to_string(),
                     reasoning
                 ],

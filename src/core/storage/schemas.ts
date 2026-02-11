@@ -1212,6 +1212,7 @@ export const MessageSchema = z.object({
   selectedVariantId: z.string().uuid().nullish(),
   isPinned: z.boolean().default(false).optional(),
   memoryRefs: z.array(z.string()).optional().default([]),
+  usedLorebookEntries: z.array(z.string()).optional(),
   /** Image attachments for multimodal messages */
   attachments: z.array(ImageAttachmentSchema).optional(),
   /** Reasoning/thinking content from thinking models (not sent in API requests) */

@@ -664,7 +664,7 @@ fn fetch_sessions(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, String
         .collect();
 
     // Messages
-    let sql_msg = format!("SELECT id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning FROM messages WHERE session_id IN ({})", placeholders);
+    let sql_msg = format!("SELECT id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning FROM messages WHERE session_id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql_msg)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -682,8 +682,9 @@ fn fetch_sessions(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, String
                 selected_variant_id: r.get(8)?,
                 is_pinned: r.get(9)?,
                 memory_refs: r.get(10)?,
-                attachments: r.get(11)?,
-                reasoning: r.get(12)?,
+                used_lorebook_entries: r.get(11)?,
+                attachments: r.get(12)?,
+                reasoning: r.get(13)?,
             })
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
@@ -1618,9 +1619,14 @@ fn apply_sessions(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
     }
 
     for m in messages {
-        tx.execute(r#"INSERT OR REPLACE INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, attachments, reasoning)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"#,
-                    params![m.id, m.session_id, m.role, m.content, m.created_at, m.prompt_tokens, m.completion_tokens, m.total_tokens, m.selected_variant_id, m.is_pinned, m.memory_refs, m.attachments, m.reasoning]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let used_lorebook_entries = if m.used_lorebook_entries.is_empty() {
+            "[]".to_string()
+        } else {
+            m.used_lorebook_entries.clone()
+        };
+        tx.execute(r#"INSERT OR REPLACE INTO messages (id, session_id, role, content, created_at, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"#,
+                    params![m.id, m.session_id, m.role, m.content, m.created_at, m.prompt_tokens, m.completion_tokens, m.total_tokens, m.selected_variant_id, m.is_pinned, m.memory_refs, used_lorebook_entries, m.attachments, m.reasoning]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     for v in variants {
@@ -1765,6 +1771,7 @@ fn deserialize_sessions(
                 selected_variant_id: m.selected_variant_id,
                 is_pinned: m.is_pinned,
                 memory_refs: m.memory_refs,
+                used_lorebook_entries: "[]".to_string(),
                 attachments: m.attachments,
                 reasoning: None,
             })
@@ -1837,6 +1844,7 @@ fn deserialize_sessions(
                 selected_variant_id: m.selected_variant_id,
                 is_pinned: m.is_pinned,
                 memory_refs: m.memory_refs,
+                used_lorebook_entries: "[]".to_string(),
                 attachments: m.attachments,
                 reasoning: None,
             })
