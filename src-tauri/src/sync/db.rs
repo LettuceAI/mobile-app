@@ -329,7 +329,7 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
         .collect();
 
     // Prompt Templates
-    let mut stmt = conn.prepare("SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let mut stmt = conn.prepare("SELECT id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at FROM prompt_templates").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let templates: Vec<PromptTemplate> = stmt
         .query_map([], |r| {
             Ok(PromptTemplate {
@@ -339,8 +339,9 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
                 target_ids: r.get(3)?,
                 content: r.get(4)?,
                 entries: r.get(5)?,
-                created_at: r.get(6)?,
-                updated_at: r.get(7)?,
+                condense_prompt_entries: r.get(6)?,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
             })
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?
@@ -1027,6 +1028,7 @@ fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
                         target_ids: template.target_ids,
                         content: template.content,
                         entries: "[]".to_string(),
+                        condense_prompt_entries: 0,
                         created_at: template.created_at,
                         updated_at: template.updated_at,
                     })
@@ -1087,8 +1089,8 @@ fn apply_globals(conn: &mut DbConnection, data: &[u8]) -> Result<(), String> {
 
     // Prompt Templates
     for t in templates {
-        tx.execute(r#"INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
-                   params![t.id, t.name, t.scope, t.target_ids, t.content, t.entries, t.created_at, t.updated_at]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        tx.execute(r#"INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+                   params![t.id, t.name, t.scope, t.target_ids, t.content, t.entries, t.condense_prompt_entries, t.created_at, t.updated_at]).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     }
 
     // Pricing

@@ -280,6 +280,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
           target_ids TEXT NOT NULL, -- JSON array of strings
           content TEXT NOT NULL,
           entries TEXT NOT NULL DEFAULT '[]',
+          condense_prompt_entries INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         );
@@ -957,6 +958,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .prepare("PRAGMA table_info(prompt_templates)")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_prompt_entries = false;
+    let mut has_condense_prompt_entries = false;
     let mut rows_prompt_templates = stmt_prompt_templates
         .query([])
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -969,7 +971,9 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         if col_name == "entries" {
             has_prompt_entries = true;
-            break;
+        }
+        if col_name == "condense_prompt_entries" {
+            has_condense_prompt_entries = true;
         }
     }
     if !has_prompt_entries {
@@ -978,13 +982,19 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             [],
         );
     }
+    if !has_condense_prompt_entries {
+        let _ = conn.execute(
+            "ALTER TABLE prompt_templates ADD COLUMN condense_prompt_entries INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
 
     let default_content = crate::chat_manager::prompt_engine::default_system_prompt_template();
     let now = now_ms();
     conn
         .execute(
-            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at)
-             VALUES (?1, ?2, ?3, '[]', ?4, '[]', ?5, ?5)",
+            "INSERT OR IGNORE INTO prompt_templates (id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at)
+             VALUES (?1, ?2, ?3, '[]', ?4, '[]', 0, ?5, ?5)",
             params![
                 "prompt_app_default",
                 "App Default",

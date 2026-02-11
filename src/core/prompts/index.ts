@@ -11,6 +11,7 @@ export async function createPromptTemplate(
   targetIds: string[],
   content: string,
   entries?: SystemPromptTemplate["entries"],
+  condensePromptEntries?: boolean,
 ): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("create_prompt_template", {
     name,
@@ -18,6 +19,7 @@ export async function createPromptTemplate(
     targetIds,
     content,
     entries,
+    condensePromptEntries,
   });
 }
 
@@ -29,6 +31,7 @@ export async function updatePromptTemplate(
     targetIds?: string[];
     content?: string;
     entries?: SystemPromptTemplate["entries"];
+    condensePromptEntries?: boolean;
   },
 ): Promise<SystemPromptTemplate> {
   return await invoke<SystemPromptTemplate>("update_prompt_template", {
@@ -38,6 +41,7 @@ export async function updatePromptTemplate(
     targetIds: updates.targetIds,
     content: updates.content,
     entries: updates.entries,
+    condensePromptEntries: updates.condensePromptEntries,
   });
 }
 

@@ -601,7 +601,7 @@ export function SystemPromptsPage() {
       }
 
       const baseName = file.name.replace(/\.[^/.]+$/, "") || "Imported Prompt Set";
-      await createPromptTemplate(baseName, "appWide", [], "", importedEntries);
+      await createPromptTemplate(baseName, "appWide", [], "", importedEntries, false);
       await loadData();
       toast.success("Imported successfully", `Prompt set "${baseName}" was imported.`);
     } catch (error) {
@@ -678,7 +678,14 @@ export function SystemPromptsPage() {
       const contentToSave = template.content.trim()
         ? template.content
         : getTemplatePreviewText(template);
-      await createPromptTemplate(name, "appWide", [], contentToSave, template.entries);
+      await createPromptTemplate(
+        name,
+        "appWide",
+        [],
+        contentToSave,
+        template.entries,
+        Boolean(template.condensePromptEntries),
+      );
       await loadData();
     } catch (error) {
       console.error("Failed to duplicate template:", error);

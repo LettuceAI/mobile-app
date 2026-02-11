@@ -3503,8 +3503,17 @@ pub fn create_prompt_template(
     target_ids: Vec<String>,
     content: String,
     entries: Option<Vec<SystemPromptEntry>>,
+    condense_prompt_entries: Option<bool>,
 ) -> Result<SystemPromptTemplate, String> {
-    prompts::create_template(&app, name, scope, target_ids, content, entries)
+    prompts::create_template(
+        &app,
+        name,
+        scope,
+        target_ids,
+        content,
+        entries,
+        condense_prompt_entries,
+    )
 }
 
 #[tauri::command]
@@ -3516,8 +3525,18 @@ pub fn update_prompt_template(
     target_ids: Option<Vec<String>>,
     content: Option<String>,
     entries: Option<Vec<SystemPromptEntry>>,
+    condense_prompt_entries: Option<bool>,
 ) -> Result<SystemPromptTemplate, String> {
-    prompts::update_template(&app, id, name, scope, target_ids, content, entries)
+    prompts::update_template(
+        &app,
+        id,
+        name,
+        scope,
+        target_ids,
+        content,
+        entries,
+        condense_prompt_entries,
+    )
 }
 
 #[tauri::command]

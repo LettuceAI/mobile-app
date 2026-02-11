@@ -255,7 +255,7 @@ fn export_secrets(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
 fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, String> {
     let conn = open_db(app)?;
     let mut stmt = conn
-        .prepare("SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates")
+        .prepare("SELECT id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at FROM prompt_templates")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     let rows = stmt
@@ -271,8 +271,9 @@ fn export_prompt_templates(app: &tauri::AppHandle) -> Result<Vec<JsonValue>, Str
                 "target_ids": r.get::<_, String>(3)?,
                 "content": r.get::<_, String>(4)?,
                 "entries": entries_value,
-                "created_at": r.get::<_, i64>(6)?,
-                "updated_at": r.get::<_, i64>(7)?,
+                "condense_prompt_entries": r.get::<_, i64>(6)? != 0,
+                "created_at": r.get::<_, i64>(7)?,
+                "updated_at": r.get::<_, i64>(8)?,
             }))
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -1315,8 +1316,8 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
             };
 
             conn.execute(
-                "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT OR REPLACE INTO prompt_templates (id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     id,
                     item.get("name").and_then(|v| v.as_str()),
@@ -1324,6 +1325,9 @@ fn import_prompt_templates(app: &tauri::AppHandle, data: &JsonValue) -> Result<(
                     item.get("target_ids").and_then(|v| v.as_str()),
                     item.get("content").and_then(|v| v.as_str()),
                     entries_str,
+                    item.get("condense_prompt_entries")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                     item.get("created_at").and_then(|v| v.as_i64()),
                     item.get("updated_at").and_then(|v| v.as_i64()),
                 ],

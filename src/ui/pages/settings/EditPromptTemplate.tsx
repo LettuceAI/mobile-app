@@ -609,12 +609,14 @@ export function EditPromptTemplate() {
     name: string;
     content: string;
     entries: string;
+    condensePromptEntries: boolean;
   } | null>(null);
 
   // Form state
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [entries, setEntries] = useState<SystemPromptEntry[]>([]);
+  const [condensePromptEntries, setCondensePromptEntries] = useState(false);
 
   // Preview state
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -721,7 +723,8 @@ export function EditPromptTemplate() {
     initialRef.current !== null &&
     (name.trim() !== initialRef.current.name ||
       content !== initialRef.current.content ||
-      serializeEntries(entries) !== initialRef.current.entries);
+      serializeEntries(entries) !== initialRef.current.entries ||
+      condensePromptEntries !== initialRef.current.condensePromptEntries);
   const canSave = isDirty && name.trim().length > 0 && (hasEntryContent || hasContent);
 
   // Expose save state to TopNav via window globals
@@ -838,6 +841,7 @@ export function EditPromptTemplate() {
               : [createDefaultEntry(template.content)];
           const normalizedEntries = ensureSystemEntry(nextEntries);
           setEntries(normalizedEntries);
+          setCondensePromptEntries(Boolean(template.condensePromptEntries));
           setCollapsedEntries(
             Object.fromEntries(normalizedEntries.map((entry) => [entry.id, true])),
           );
@@ -845,6 +849,7 @@ export function EditPromptTemplate() {
             name: template.name,
             content: template.content,
             entries: serializeEntries(normalizedEntries),
+            condensePromptEntries: Boolean(template.condensePromptEntries),
           };
 
           if (isProtected) {
@@ -857,11 +862,13 @@ export function EditPromptTemplate() {
         setContent(def);
         const seedEntries = [createDefaultEntry(def)];
         setEntries(seedEntries);
+        setCondensePromptEntries(false);
         setCollapsedEntries(Object.fromEntries(seedEntries.map((entry) => [entry.id, true])));
         initialRef.current = {
           name: "",
           content: def,
           entries: serializeEntries(seedEntries),
+          condensePromptEntries: false,
         };
       }
     } catch (error) {
@@ -936,6 +943,7 @@ export function EditPromptTemplate() {
           name: nameSnapshot,
           content: contentToSave,
           entries: usesEntryEditor ? entriesSnapshot : undefined,
+          condensePromptEntries,
         });
       } else {
         await createPromptTemplate(
@@ -944,6 +952,7 @@ export function EditPromptTemplate() {
           [],
           contentToSave,
           usesEntryEditor ? entriesSnapshot : undefined,
+          condensePromptEntries,
         );
       }
       backOrReplace("/settings/prompts");
@@ -982,6 +991,7 @@ export function EditPromptTemplate() {
         updated = await resetHelpMeReplyTemplate();
       }
       setContent(updated.content);
+      setCondensePromptEntries(Boolean(updated.condensePromptEntries));
       if (usesEntryEditor) {
         const nextEntries =
           updated.entries?.length > 0 ? updated.entries : [createDefaultEntry(updated.content)];
@@ -1004,6 +1014,7 @@ export function EditPromptTemplate() {
       setName(initialRef.current.name);
       setContent(initialRef.current.content);
       setEntries(nextEntries);
+      setCondensePromptEntries(initialRef.current.condensePromptEntries);
       setCollapsedEntries(Object.fromEntries(nextEntries.map((entry) => [entry.id, true])));
       setMobileEntryEditorId(null);
     } catch (error) {
@@ -1361,6 +1372,36 @@ export function EditPromptTemplate() {
                   <label className="text-xs font-medium uppercase tracking-wider text-white/50">
                     {usesEntryEditor ? "Prompt Entries" : "Prompt Content"}
                   </label>
+                  {usesEntryEditor && (
+                    <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5">
+                      <input
+                        id="condense-prompt-entries"
+                        type="checkbox"
+                        checked={condensePromptEntries}
+                        onChange={() => setCondensePromptEntries((prev) => !prev)}
+                        className="peer sr-only"
+                      />
+                      <label
+                        htmlFor="condense-prompt-entries"
+                        className={cn(
+                          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full",
+                          "border-2 border-transparent transition-all duration-200 ease-in-out",
+                          condensePromptEntries ? "bg-emerald-500" : "bg-white/20",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm",
+                            "ring-0 transition duration-200 ease-in-out",
+                            condensePromptEntries ? "translate-x-4" : "translate-x-0",
+                          )}
+                        />
+                      </label>
+                      <span className="text-xs text-white/70">
+                        Send entries as one system message
+                      </span>
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     {usesEntryEditor && (
                       <button

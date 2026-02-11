@@ -31,6 +31,7 @@ export const SystemPromptTemplateSchema = z.object({
   targetIds: z.array(z.string()).default([]),
   content: z.string(),
   entries: z.array(SystemPromptEntrySchema).default([]),
+  condensePromptEntries: z.boolean().default(false),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

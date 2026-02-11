@@ -2523,7 +2523,13 @@ fn build_group_system_prompt(
     let template = prompts::get_template(app, template_id)
         .ok()
         .flatten()
-        .map(|template| (template.content, template.entries))
+        .map(|template| {
+            (
+                template.content,
+                template.entries,
+                template.condense_prompt_entries,
+            )
+        })
         .unwrap_or_else(|| {
             let content = if is_roleplay {
                 get_base_prompt(PromptType::GroupChatRoleplayPrompt)
@@ -2542,6 +2548,7 @@ fn build_group_system_prompt(
                     injection_depth: 0,
                     system_prompt: true,
                 }],
+                false,
             )
         });
 
@@ -2608,7 +2615,12 @@ fn build_group_system_prompt(
         .get("pureModeLevel")
         .and_then(|v| v.as_str())
         .unwrap_or_else(|| {
-            if settings.app_state.get("pureModeEnabled").and_then(|v| v.as_bool()).unwrap_or(true) {
+            if settings
+                .app_state
+                .get("pureModeEnabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true)
+            {
                 "standard"
             } else {
                 "off"
@@ -2620,7 +2632,8 @@ fn build_group_system_prompt(
         "low" => "**Content Guidelines:**\n\
 - Avoid explicit sexual content"
             .to_string(),
-        "strict" => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
+        "strict" => {
+            "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
 - Never generate sexually explicit, pornographic, or erotic content\n\
 - Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
 - Never use vulgar sexual slang or explicit anatomical descriptions in sexual contexts\n\
@@ -2629,7 +2642,8 @@ fn build_group_system_prompt(
 - Violence descriptions should avoid gratuitous gore or torture\n\
 - Do not use slurs or hate speech under any circumstances\n\
 - Do not use suggestive, flirty, or sexually charged language or tone"
-            .to_string(),
+                .to_string()
+        }
         _ => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
 - Never generate sexually explicit, pornographic, or erotic content\n\
 - Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
@@ -2667,7 +2681,7 @@ fn build_group_system_prompt(
         (String::new(), String::new())
     };
 
-    let (template_content, template_entries) = template;
+    let (template_content, template_entries, condense_prompt_entries) = template;
     let entries = if template_entries.is_empty() && !template_content.trim().is_empty() {
         vec![SystemPromptEntry {
             id: "entry_system".to_string(),
@@ -2718,7 +2732,11 @@ fn build_group_system_prompt(
         });
     }
 
-    rendered_entries
+    if condense_prompt_entries {
+        condense_entries_into_single_system_message(rendered_entries)
+    } else {
+        rendered_entries
+    }
 }
 
 /// Replace character name placeholders in scene content
@@ -2754,6 +2772,38 @@ fn replace_character_name_placeholders(content: &str, characters: &[CharacterInf
     }
 
     result
+}
+
+fn condense_entries_into_single_system_message(
+    entries: Vec<SystemPromptEntry>,
+) -> Vec<SystemPromptEntry> {
+    let merged = entries
+        .into_iter()
+        .filter_map(|entry| {
+            let trimmed = entry.content.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    if merged.trim().is_empty() {
+        return Vec::new();
+    }
+
+    vec![SystemPromptEntry {
+        id: "entry_condensed_system".to_string(),
+        name: "Condensed System Prompt".to_string(),
+        role: PromptEntryRole::System,
+        content: merged,
+        enabled: true,
+        injection_position: PromptEntryPosition::Relative,
+        injection_depth: 0,
+        system_prompt: true,
+    }]
 }
 
 /// Load persona from database
@@ -3302,7 +3352,9 @@ async fn generate_character_response(
                         result.score, result.matched_terms
                     ),
                 );
-                return Err("Response blocked by Pure Mode. Try rephrasing your message.".to_string());
+                return Err(
+                    "Response blocked by Pure Mode. Try rephrasing your message.".to_string(),
+                );
             }
         }
     }

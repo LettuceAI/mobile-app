@@ -62,6 +62,8 @@ pub struct SystemPromptTemplate {
     pub content: String,
     #[serde(default)]
     pub entries: Vec<SystemPromptEntry>,
+    #[serde(default)]
+    pub condense_prompt_entries: bool,
     pub created_at: u64,
     pub updated_at: u64,
 }

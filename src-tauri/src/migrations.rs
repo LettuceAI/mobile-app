@@ -940,6 +940,7 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
                     Some(Vec::new()), // clear target ids
                     None,
                     None,
+                    None,
                 )?;
                 changed += 1;
             }
@@ -968,6 +969,7 @@ fn migrate_v2_to_v3(app: &AppHandle) -> Result<(), String> {
                 None,
                 Some(new_scope),
                 Some(new_target_ids),
+                None,
                 None,
                 None,
             )?;
@@ -1026,6 +1028,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                             vec![],
                             prompt_content.clone(),
                             None,
+                            None,
                         )?;
                         prompt_map.insert(prompt_content.clone(), template.id.clone());
                         templates_created += 1;
@@ -1059,6 +1062,7 @@ fn migrate_v1_to_v2(app: &AppHandle) -> Result<(), String> {
                                         PromptScope::ModelSpecific,
                                         vec![model_id.to_string()],
                                         prompt_content.clone(),
+                                        None,
                                         None,
                                     )?;
                                     prompt_map.insert(prompt_content.clone(), template.id.clone());

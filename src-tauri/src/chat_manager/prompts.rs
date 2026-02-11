@@ -169,6 +169,7 @@ fn maybe_backfill_entries(
         None,
         Some(template.content),
         Some(entries),
+        None,
     )?;
     Ok(())
 }
@@ -280,8 +281,9 @@ fn row_to_template(row: &rusqlite::Row<'_>) -> Result<SystemPromptTemplate, rusq
     let target_ids_json: String = row.get(3)?;
     let content: String = row.get(4)?;
     let entries_json: String = row.get(5)?;
-    let created_at: u64 = row.get(6)?;
-    let updated_at: u64 = row.get(7)?;
+    let condense_prompt_entries: bool = row.get(6)?;
+    let created_at: u64 = row.get(7)?;
+    let updated_at: u64 = row.get(8)?;
 
     let scope = str_to_scope(&scope_str).map_err(|_| rusqlite::Error::InvalidQuery)?;
     let target_ids: Vec<String> = serde_json::from_str(&target_ids_json).unwrap_or_default();
@@ -299,6 +301,7 @@ fn row_to_template(row: &rusqlite::Row<'_>) -> Result<SystemPromptTemplate, rusq
         target_ids,
         content,
         entries,
+        condense_prompt_entries,
         created_at,
         updated_at,
     })
@@ -308,7 +311,7 @@ pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, Stri
     let conn = open_db(app)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
+            "SELECT id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
         )
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let rows = stmt
@@ -324,7 +327,7 @@ pub fn load_templates(app: &AppHandle) -> Result<Vec<SystemPromptTemplate>, Stri
         // Reload
         let mut stmt2 = conn
             .prepare(
-                "SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
+                "SELECT id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at FROM prompt_templates ORDER BY created_at ASC",
             )
             .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let rows2 = stmt2
@@ -345,6 +348,7 @@ pub fn create_template(
     target_ids: Vec<String>,
     content: String,
     entries: Option<Vec<SystemPromptEntry>>,
+    condense_prompt_entries: Option<bool>,
 ) -> Result<SystemPromptTemplate, String> {
     let conn = open_db(app)?;
     let id = generate_id();
@@ -360,8 +364,9 @@ pub fn create_template(
     });
     let entries_json = serde_json::to_string(&entries)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    let condense_prompt_entries = condense_prompt_entries.unwrap_or(false);
     conn.execute(
-        "INSERT INTO prompt_templates (id, name, scope, target_ids, content, entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        "INSERT INTO prompt_templates (id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
         params![
             id,
             name,
@@ -369,6 +374,7 @@ pub fn create_template(
             target_ids_json,
             content,
             entries_json,
+            condense_prompt_entries,
             now
         ],
     )
@@ -384,6 +390,7 @@ pub fn update_template(
     target_ids: Option<Vec<String>>,
     content: Option<String>,
     entries: Option<Vec<SystemPromptEntry>>,
+    condense_prompt_entries: Option<bool>,
 ) -> Result<SystemPromptTemplate, String> {
     // Prevent changing scope of app default
     if is_app_default_template(&id) {
@@ -406,6 +413,8 @@ pub fn update_template(
     let new_target_ids = target_ids.unwrap_or(current.target_ids);
     let new_content = content.unwrap_or(current.content);
     let new_entries = entries.unwrap_or(current.entries);
+    let new_condense_prompt_entries =
+        condense_prompt_entries.unwrap_or(current.condense_prompt_entries);
 
     // Validate required variables for protected templates
     if is_app_default_template(&id) {
@@ -432,13 +441,14 @@ pub fn update_template(
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     conn.execute(
-        "UPDATE prompt_templates SET name = ?1, scope = ?2, target_ids = ?3, content = ?4, entries = ?5, updated_at = ?6 WHERE id = ?7",
+        "UPDATE prompt_templates SET name = ?1, scope = ?2, target_ids = ?3, content = ?4, entries = ?5, condense_prompt_entries = ?6, updated_at = ?7 WHERE id = ?8",
         params![
             new_name,
             scope_to_str(&new_scope),
             target_ids_json,
             new_content,
             entries_json,
+            new_condense_prompt_entries,
             updated_at,
             id
         ],
@@ -475,7 +485,7 @@ pub fn get_template(app: &AppHandle, id: &str) -> Result<Option<SystemPromptTemp
     let conn = open_db(app)?;
     conn
         .query_row(
-            "SELECT id, name, scope, target_ids, content, entries, created_at, updated_at FROM prompt_templates WHERE id = ?1",
+            "SELECT id, name, scope, target_ids, content, entries, condense_prompt_entries, created_at, updated_at FROM prompt_templates WHERE id = ?1",
             params![id],
             |row| row_to_template(row),
         )
@@ -594,6 +604,7 @@ pub fn reset_app_default_template(app: &AppHandle) -> Result<SystemPromptTemplat
         None,
         Some(content.clone()),
         Some(default_modular_prompt_entries()),
+        None,
     )
 }
 
@@ -608,6 +619,7 @@ pub fn reset_dynamic_summary_template(app: &AppHandle) -> Result<SystemPromptTem
         None,
         Some(content.clone()),
         Some(entries),
+        None,
     )
 }
 
@@ -622,6 +634,7 @@ pub fn reset_dynamic_memory_template(app: &AppHandle) -> Result<SystemPromptTemp
         None,
         Some(content.clone()),
         Some(entries),
+        None,
     )
 }
 
@@ -696,6 +709,7 @@ pub fn reset_help_me_reply_template(app: &AppHandle) -> Result<SystemPromptTempl
         None,
         Some(content.clone()),
         Some(entries),
+        None,
     )
 }
 
@@ -712,6 +726,7 @@ pub fn reset_help_me_reply_conversational_template(
         None,
         Some(content.clone()),
         Some(entries),
+        None,
     )
 }
 

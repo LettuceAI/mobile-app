@@ -74,6 +74,8 @@ pub struct PromptTemplate {
     pub target_ids: String,
     pub content: String,
     pub entries: String,
+    #[serde(default)]
+    pub condense_prompt_entries: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }

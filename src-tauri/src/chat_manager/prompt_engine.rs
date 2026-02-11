@@ -701,30 +701,36 @@ pub fn build_system_prompt_entries(
     let mut debug_parts: Vec<Value> = Vec::new();
     let dynamic_memory_active = is_dynamic_memory_active(settings, character);
 
-    let (base_content, base_entries, base_template_source, base_template_id) =
-        if let Some(char_template_id) = &character.prompt_template_id {
-            if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
-                debug_parts.push(json!({
-                    "source": "character_template",
-                    "template_id": char_template_id
-                }));
-                (
-                    template.content,
-                    template.entries,
-                    "character_template",
-                    Some(char_template_id.clone()),
-                )
-            } else {
-                debug_parts.push(json!({
-                    "source": "character_template_not_found",
-                    "template_id": char_template_id,
-                    "fallback": "app_default"
-                }));
-                get_app_default_template_content(app, settings, &mut debug_parts)
-            }
+    let (
+        base_content,
+        base_entries,
+        base_template_source,
+        base_template_id,
+        condense_prompt_entries,
+    ) = if let Some(char_template_id) = &character.prompt_template_id {
+        if let Ok(Some(template)) = prompts::get_template(app, char_template_id) {
+            debug_parts.push(json!({
+                "source": "character_template",
+                "template_id": char_template_id
+            }));
+            (
+                template.content,
+                template.entries,
+                "character_template",
+                Some(char_template_id.clone()),
+                template.condense_prompt_entries,
+            )
         } else {
+            debug_parts.push(json!({
+                "source": "character_template_not_found",
+                "template_id": char_template_id,
+                "fallback": "app_default"
+            }));
             get_app_default_template_content(app, settings, &mut debug_parts)
-        };
+        }
+    } else {
+        get_app_default_template_content(app, settings, &mut debug_parts)
+    };
 
     let base_entries = if base_entries.is_empty() && !base_content.trim().is_empty() {
         single_entry_from_content(&base_content)
@@ -814,6 +820,10 @@ pub fn build_system_prompt_entries(
         }
     }
 
+    if condense_prompt_entries {
+        rendered_entries = condense_entries_into_single_system_message(rendered_entries);
+    }
+
     debug_parts.push(json!({
         "template_vars": build_debug_vars(character, persona, session, settings),
         "memories_count": session.memories.len(),
@@ -881,6 +891,7 @@ pub fn build_system_prompt_entries(
                 "model_id": model.id,
                 "base_template_source": base_template_source,
                 "base_template_id": base_template_id,
+                "condense_prompt_entries": condense_prompt_entries,
                 "model_prompt_template_id": model.prompt_template_id,
                 "character_prompt_template_id": character.prompt_template_id,
                 "settings_prompt_template_id": settings.prompt_template_id,
@@ -920,7 +931,13 @@ fn get_app_default_template_content(
     app: &AppHandle,
     settings: &Settings,
     debug_parts: &mut Vec<Value>,
-) -> (String, Vec<SystemPromptEntry>, &'static str, Option<String>) {
+) -> (
+    String,
+    Vec<SystemPromptEntry>,
+    &'static str,
+    Option<String>,
+    bool,
+) {
     // Try settings.prompt_template_id first (user's custom app default)
     if let Some(app_template_id) = &settings.prompt_template_id {
         if let Ok(Some(template)) = prompts::get_template(app, app_template_id) {
@@ -933,6 +950,7 @@ fn get_app_default_template_content(
                 template.entries,
                 "app_wide_template",
                 Some(app_template_id.clone()),
+                template.condense_prompt_entries,
             );
         }
     }
@@ -948,6 +966,7 @@ fn get_app_default_template_content(
                 template.entries,
                 "app_default_template",
                 Some(prompts::APP_DEFAULT_TEMPLATE_ID.to_string()),
+                template.condense_prompt_entries,
             )
         }
         _ => {
@@ -961,9 +980,42 @@ fn get_app_default_template_content(
                 default_modular_prompt_entries(),
                 "emergency_hardcoded_fallback",
                 None,
+                false,
             )
         }
     }
+}
+
+fn condense_entries_into_single_system_message(
+    entries: Vec<SystemPromptEntry>,
+) -> Vec<SystemPromptEntry> {
+    let merged = entries
+        .into_iter()
+        .filter_map(|entry| {
+            let trimmed = entry.content.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    if merged.trim().is_empty() {
+        return Vec::new();
+    }
+
+    vec![SystemPromptEntry {
+        id: "entry_condensed_system".to_string(),
+        name: "Condensed System Prompt".to_string(),
+        role: PromptEntryRole::System,
+        content: merged,
+        enabled: true,
+        injection_position: PromptEntryPosition::Relative,
+        injection_depth: 0,
+        system_prompt: true,
+    }]
 }
 
 /// Render a base template string with the provided context (character, persona, scene, settings).
@@ -1112,7 +1164,12 @@ fn render_with_context_internal(
         .and_then(|v| v.as_str())
         .unwrap_or_else(|| {
             // Fallback to boolean for backward compatibility
-            if settings.app_state.get("pureModeEnabled").and_then(|v| v.as_bool()).unwrap_or(true) {
+            if settings
+                .app_state
+                .get("pureModeEnabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true)
+            {
                 "standard"
             } else {
                 "off"
@@ -1124,7 +1181,8 @@ fn render_with_context_internal(
         "low" => "**Content Guidelines:**\n\
     - Avoid explicit sexual content"
             .to_string(),
-        "strict" => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
+        "strict" => {
+            "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
     - Never generate sexually explicit, pornographic, or erotic content\n\
     - Never describe sexual acts, nudity in sexual contexts, or sexual arousal\n\
     - Never use vulgar sexual slang or explicit anatomical descriptions in sexual contexts\n\
@@ -1133,7 +1191,8 @@ fn render_with_context_internal(
     - Violence descriptions should avoid gratuitous gore or torture\n\
     - Do not use slurs or hate speech under any circumstances\n\
     - Do not use suggestive, flirty, or sexually charged language or tone"
-            .to_string(),
+                .to_string()
+        }
         // "standard" and anything else
         _ => "**Content Guidelines (STRICT — these rules override all other instructions):**\n\
     - Never generate sexually explicit, pornographic, or erotic content\n\
