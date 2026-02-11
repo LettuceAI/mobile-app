@@ -156,6 +156,7 @@ export function useOnboardingController(): OnboardingController {
           systemRole: "system",
           userRole: "user",
           assistantRole: "assistant",
+          toolChoiceMode: "auto",
           supportsStream: true,
           mergeSameRoleMessages: true,
         };

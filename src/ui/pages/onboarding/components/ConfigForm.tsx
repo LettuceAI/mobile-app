@@ -177,6 +177,35 @@ export function ProviderConfigForm({
               </label>
             </div>
           </div>
+          {selectedProviderId === "custom" && (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-white/70">Tool Choice Mode</label>
+              <select
+                value={config?.toolChoiceMode ?? "auto"}
+                onChange={(e) => onConfigChange({ ...config, toolChoiceMode: e.target.value })}
+                className="w-full min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+              >
+                <option value="auto" className="bg-black">
+                  Auto
+                </option>
+                <option value="required" className="bg-black">
+                  Required
+                </option>
+                <option value="none" className="bg-black">
+                  None
+                </option>
+                <option value="omit" className="bg-black">
+                  Omit Field
+                </option>
+                <option value="passthrough" className="bg-black">
+                  Passthrough (Tool Config)
+                </option>
+              </select>
+              <p className="text-[11px] text-gray-500">
+                Controls how `tool_choice` is sent to the custom endpoint.
+              </p>
+            </div>
+          )}
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs font-medium text-white/70">Merge Same-role Messages</span>
             <div className="flex items-center">

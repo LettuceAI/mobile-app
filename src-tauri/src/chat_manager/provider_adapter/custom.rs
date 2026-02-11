@@ -58,6 +58,12 @@ impl CustomGenericAdapter {
         let separator = if url.contains('?') { '&' } else { '?' };
         format!("{}{}{}={}", url, separator, name, api_key)
     }
+
+    fn tool_choice_mode(&self) -> String {
+        self.config_value("toolChoiceMode")
+            .unwrap_or_else(|| "auto".to_string())
+            .to_lowercase()
+    }
 }
 
 impl ProviderAdapter for CustomGenericAdapter {
@@ -198,7 +204,15 @@ impl ProviderAdapter for CustomGenericAdapter {
         let (tools, tool_choice) = if let Some(cfg) = tool_config {
             let tools = openai_tools(cfg);
             let choice = if tools.is_some() {
-                openai_tool_choice(cfg.choice.as_ref())
+                match self.tool_choice_mode().as_str() {
+                    "auto" => Some(Value::String("auto".to_string())),
+                    "none" => Some(Value::String("none".to_string())),
+                    "required" => Some(Value::String("required".to_string())),
+                    "omit" => None,
+                    // "passthrough" preserves adapter/tool-config driven behavior.
+                    "passthrough" => openai_tool_choice(cfg.choice.as_ref()),
+                    _ => Some(Value::String("auto".to_string())),
+                }
             } else {
                 None
             };
