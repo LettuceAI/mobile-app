@@ -17,8 +17,11 @@ export function useSessionAttachment(
   const [loadedData, setLoadedData] = useState<string | undefined>(undefined);
   const lastPathRef = useRef<string | null | undefined>(undefined);
   const loadingRef = useRef<boolean>(false);
+  const requestVersionRef = useRef<number>(0);
 
   useEffect(() => {
+    const requestVersion = ++requestVersionRef.current;
+
     if (data) {
       setLoadedData(data);
       return;
@@ -43,10 +46,16 @@ export function useSessionAttachment(
 
     invoke<string>("storage_get_session_attachment_path", { storagePath })
       .then((fullPath) => {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
         setLoadedData(convertFileSrc(fullPath));
         loadingRef.current = false;
       })
       .catch((err) => {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
         console.error("[useSessionAttachment] Failed to load attachment:", storagePath, err);
         setLoadedData(undefined);
         loadingRef.current = false;
@@ -100,8 +109,12 @@ export function useSessionAttachments(
   const [loadedAttachments, setLoadedAttachments] = useState<LazyAttachment[]>([]);
   const loadingMapRef = useRef<Map<string, boolean>>(new Map());
   const dataMapRef = useRef<Map<string, string>>(new Map());
+  const requestVersionRef = useRef<number>(0);
 
   useEffect(() => {
+    const requestVersion = ++requestVersionRef.current;
+    let cancelled = false;
+
     if (!attachments || attachments.length === 0) {
       setLoadedAttachments([]);
       loadingMapRef.current.clear();
@@ -148,6 +161,10 @@ export function useSessionAttachments(
 
         invoke<string>("storage_get_session_attachment_path", { storagePath: att.storagePath })
           .then((fullPath) => {
+            if (cancelled || requestVersionRef.current !== requestVersion) {
+              loadingMapRef.current.delete(att.id);
+              return;
+            }
             const url = convertFileSrc(fullPath);
             dataMapRef.current.set(att.id, url);
             loadingMapRef.current.set(att.id, false);
@@ -158,11 +175,19 @@ export function useSessionAttachments(
             trimCacheToLimit(dataMapRef.current, MAX_ATTACHMENT_CACHE_ENTRIES);
           })
           .catch((err) => {
+            if (cancelled || requestVersionRef.current !== requestVersion) {
+              loadingMapRef.current.delete(att.id);
+              return;
+            }
             console.error("[useSessionAttachments] Failed to load:", att.storagePath, err);
             loadingMapRef.current.set(att.id, false);
           });
       }
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [attachments]);
 
   return loadedAttachments;
