@@ -393,18 +393,24 @@ function ChatMessageInner({
 
   // Load attachments with lazy loading support for persisted images
   const loadedAttachments = useSessionAttachments(message.attachments);
+  const useLayoutAnimation = !sending && regeneratingMessageId === null;
 
   return (
     <motion.div
-      layout="position"
+      layout={useLayoutAnimation ? "position" : false}
       animate={{ x: crossShift }}
       transition={
-        swapPlaces
-          ? {
-              x: { type: "tween", duration: 0.42, ease: [0.22, 0.61, 0.36, 1] },
-              layout: { type: "spring", stiffness: 260, damping: 28, mass: 0.85 },
-            }
-          : { x: { duration: 0.16, ease: "easeOut" }, layout: { duration: 0.16, ease: "easeOut" } }
+        !useLayoutAnimation
+          ? { x: { duration: 0.12, ease: "easeOut" } }
+          : swapPlaces
+            ? {
+                x: { type: "tween", duration: 0.42, ease: [0.22, 0.61, 0.36, 1] },
+                layout: { type: "spring", stiffness: 260, damping: 28, mass: 0.85 },
+              }
+            : {
+                x: { duration: 0.16, ease: "easeOut" },
+                layout: { duration: 0.16, ease: "easeOut" },
+              }
       }
       className={cn(
         "relative flex gap-2",
