@@ -1514,15 +1514,11 @@ export function ChatConversationPage() {
                   key={message.id}
                   id={`message-${message.id}`}
                   className="scroll-mt-24 transition-colors duration-500"
-                  layout={isGenerating ? false : "position"}
-                  transition={
-                    isGenerating
-                      ? { duration: 0 }
-                      : {
-                          layout: { type: "spring", stiffness: 280, damping: 30, mass: 0.9 },
-                          duration: 0.18,
-                        }
-                  }
+                  layout="position"
+                  transition={{
+                    layout: { type: "spring", stiffness: 280, damping: 30, mass: 0.9 },
+                    duration: 0.18,
+                  }}
                 >
                   <ChatMessage
                     key={message.id}
