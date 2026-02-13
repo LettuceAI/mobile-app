@@ -611,24 +611,34 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
   const b = next.message;
   const aAttachments = a.attachments ?? [];
   const bAttachments = b.attachments ?? [];
+
+  const attachmentDataFingerprint = (value?: string | null) =>
+    value ? `${value.length}:${value.slice(0, 64)}:${value.slice(-32)}` : "";
+
+  const areAttachmentsEqual = (() => {
+    if (aAttachments === bAttachments) return true;
+    if (aAttachments.length !== bAttachments.length) return false;
+    return aAttachments.every((att, idx) => {
+      const other = bAttachments[idx];
+      return (
+        att.id === other?.id &&
+        att.storagePath === other?.storagePath &&
+        att.mimeType === other?.mimeType &&
+        att.filename === other?.filename &&
+        att.width === other?.width &&
+        att.height === other?.height &&
+        attachmentDataFingerprint(att.data) === attachmentDataFingerprint(other?.data)
+      );
+    });
+  })();
+
   return (
     a.id === b.id &&
     a.role === b.role &&
     a.content === b.content &&
     a.selectedVariantId === b.selectedVariantId &&
     (a.variants?.length ?? 0) === (b.variants?.length ?? 0) &&
-    aAttachments.length === bAttachments.length &&
-    aAttachments.every((att, idx) => {
-      const other = bAttachments[idx];
-      return (
-        att.id === other?.id &&
-        att.data === other?.data &&
-        att.storagePath === other?.storagePath &&
-        att.mimeType === other?.mimeType &&
-        att.width === other?.width &&
-        att.height === other?.height
-      );
-    }) &&
+    areAttachmentsEqual &&
     prev.index === next.index &&
     prev.messagesLength === next.messagesLength &&
     prev.heldMessageId === next.heldMessageId &&
