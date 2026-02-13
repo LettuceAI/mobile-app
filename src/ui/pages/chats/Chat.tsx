@@ -1319,19 +1319,21 @@ export function ChatConversationPage() {
     if (!jumpToMessageId || loading) return;
 
     let cancelled = false;
+    let rafId: number | null = null;
+    let highlightTimeoutId: number | null = null;
 
-    (async () => {
+    const run = async () => {
       await ensureMessageLoaded(jumpToMessageId);
       if (cancelled) return;
 
-      let rafId: number | null = null;
       let tries = 0;
       const tryScroll = () => {
+        if (cancelled) return;
         const element = document.getElementById(`message-${jumpToMessageId}`);
         if (element) {
           element.scrollIntoView({ behavior: "smooth", block: "center" });
           element.classList.add("bg-white/10", "rounded-lg", "transition-colors", "duration-1000");
-          window.setTimeout(() => {
+          highlightTimeoutId = window.setTimeout(() => {
             element.classList.remove("bg-white/10");
           }, 2000);
           return;
@@ -1344,15 +1346,20 @@ export function ChatConversationPage() {
       };
 
       rafId = window.requestAnimationFrame(tryScroll);
-      return () => {
-        if (rafId !== null) window.cancelAnimationFrame(rafId);
-      };
-    })();
+    };
+
+    void run();
 
     return () => {
       cancelled = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      if (highlightTimeoutId !== null) {
+        window.clearTimeout(highlightTimeoutId);
+      }
     };
-  }, [ensureMessageLoaded, jumpToMessageId, loading, messages.length]);
+  }, [ensureMessageLoaded, jumpToMessageId, loading]);
 
   if (loading) {
     return <LoadingSpinner />;
