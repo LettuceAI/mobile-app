@@ -1032,7 +1032,9 @@ export function useChatController(
         });
         messagesRef.current = replaced;
         const updatedSession: Session = {
-          ...result.session,
+          ...state.session,
+          id: result.sessionId,
+          updatedAt: result.sessionUpdatedAt,
           messages: replaced,
         };
         dispatch({
@@ -1046,6 +1048,9 @@ export function useChatController(
             },
           ],
         });
+        if (result.assistantMessage.reasoning) {
+          dispatch({ type: "CLEAR_STREAMING_REASONING", payload: result.assistantMessage.id });
+        }
 
         void runInChatImageGeneration(result.assistantMessage.id);
       } catch (err) {
@@ -1164,7 +1169,15 @@ export function useChatController(
         dispatch({
           type: "BATCH",
           actions: [
-            { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
+            {
+              type: "SET_SESSION",
+              payload: {
+                ...state.session,
+                id: result.sessionId,
+                updatedAt: result.sessionUpdatedAt,
+                messages: replaced,
+              },
+            },
             { type: "SET_MESSAGES", payload: replaced },
             // Transfer reasoning from placeholder to real message ID
             {
@@ -1173,6 +1186,9 @@ export function useChatController(
             },
           ],
         });
+        if (result.assistantMessage.reasoning) {
+          dispatch({ type: "CLEAR_STREAMING_REASONING", payload: result.assistantMessage.id });
+        }
 
         void runInChatImageGeneration(result.assistantMessage.id);
       } catch (err) {
@@ -1252,6 +1268,7 @@ export function useChatController(
           { type: "SET_SENDING", payload: true },
           { type: "SET_ERROR", payload: null },
           { type: "SET_HELD_MESSAGE_ID", payload: null },
+          { type: "CLEAR_STREAMING_REASONING", payload: message.id },
           {
             type: "SET_MESSAGES",
             payload: state.messages.map((msg) =>
@@ -1315,10 +1332,21 @@ export function useChatController(
         dispatch({
           type: "BATCH",
           actions: [
-            { type: "SET_SESSION", payload: { ...result.session, messages: replaced } },
+            {
+              type: "SET_SESSION",
+              payload: {
+                ...state.session,
+                id: result.sessionId,
+                updatedAt: result.sessionUpdatedAt,
+                messages: replaced,
+              },
+            },
             { type: "SET_MESSAGES", payload: replaced },
           ],
         });
+        if (result.assistantMessage.reasoning) {
+          dispatch({ type: "CLEAR_STREAMING_REASONING", payload: result.assistantMessage.id });
+        }
 
         void runInChatImageGeneration(result.assistantMessage.id);
 

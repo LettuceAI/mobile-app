@@ -1,4 +1,27 @@
-import type { Character, Persona, Session, StoredMessage, ImageAttachment } from "../../../../core/storage/schemas";
+import type {
+  Character,
+  Persona,
+  Session,
+  StoredMessage,
+  ImageAttachment,
+} from "../../../../core/storage/schemas";
+
+const MAX_STREAMING_REASONING_CHARS = 200_000;
+
+function pruneStreamingReasoning(
+  streamingReasoning: Record<string, string>,
+  messages: StoredMessage[],
+): Record<string, string> {
+  if (Object.keys(streamingReasoning).length === 0) return streamingReasoning;
+  const validIds = new Set(messages.map((message) => message.id));
+  const next: Record<string, string> = {};
+  for (const [messageId, reasoning] of Object.entries(streamingReasoning)) {
+    if (validIds.has(messageId)) {
+      next[messageId] = reasoning;
+    }
+  }
+  return next;
+}
 
 export interface MessageActionState {
   message: StoredMessage;
@@ -57,7 +80,15 @@ export type ChatAction =
   | { type: "SET_ACTIVE_REQUEST_ID"; payload: string | null }
   | { type: "RESET_MESSAGE_ACTIONS" }
   | { type: "UPDATE_MESSAGE_CONTENT"; payload: { messageId: string; content: string } }
-  | { type: "REPLACE_PLACEHOLDER_MESSAGES"; payload: { userPlaceholder: StoredMessage; assistantPlaceholder: StoredMessage; userMessage: StoredMessage; assistantMessage: StoredMessage } }
+  | {
+      type: "REPLACE_PLACEHOLDER_MESSAGES";
+      payload: {
+        userPlaceholder: StoredMessage;
+        assistantPlaceholder: StoredMessage;
+        userMessage: StoredMessage;
+        assistantMessage: StoredMessage;
+      };
+    }
   | { type: "REWIND_TO_MESSAGE"; payload: { messageId: string; messages: StoredMessage[] } }
   | { type: "SET_PENDING_ATTACHMENTS"; payload: ImageAttachment[] }
   | { type: "ADD_PENDING_ATTACHMENT"; payload: ImageAttachment }
@@ -104,7 +135,11 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, session: action.payload };
 
     case "SET_MESSAGES":
-      return { ...state, messages: action.payload };
+      return {
+        ...state,
+        messages: action.payload,
+        streamingReasoning: pruneStreamingReasoning(state.streamingReasoning, action.payload),
+      };
 
     case "SET_DRAFT":
       return { ...state, draft: action.payload };
@@ -157,12 +192,13 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: state.messages.map((msg) =>
           msg.id === action.payload.messageId
             ? { ...msg, content: msg.content + action.payload.content }
-            : msg
+            : msg,
         ),
       };
 
     case "REPLACE_PLACEHOLDER_MESSAGES":
-      const { userPlaceholder, assistantPlaceholder, userMessage, assistantMessage } = action.payload;
+      const { userPlaceholder, assistantPlaceholder, userMessage, assistantMessage } =
+        action.payload;
       return {
         ...state,
         messages: state.messages.map((msg) => {
@@ -176,6 +212,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: action.payload.messages,
+        streamingReasoning: pruneStreamingReasoning(
+          state.streamingReasoning,
+          action.payload.messages,
+        ),
       };
 
     case "SET_PENDING_ATTACHMENTS":
@@ -187,18 +227,23 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "REMOVE_PENDING_ATTACHMENT":
       return {
         ...state,
-        pendingAttachments: state.pendingAttachments.filter(a => a.id !== action.payload)
+        pendingAttachments: state.pendingAttachments.filter((a) => a.id !== action.payload),
       };
 
     case "CLEAR_PENDING_ATTACHMENTS":
       return { ...state, pendingAttachments: [] };
 
     case "UPDATE_MESSAGE_REASONING":
+      const existingReasoning = state.streamingReasoning[action.payload.messageId] || "";
+      const combinedReasoning = (existingReasoning + action.payload.reasoning).slice(
+        0,
+        MAX_STREAMING_REASONING_CHARS,
+      );
       return {
         ...state,
         streamingReasoning: {
           ...state.streamingReasoning,
-          [action.payload.messageId]: (state.streamingReasoning[action.payload.messageId] || '') + action.payload.reasoning,
+          [action.payload.messageId]: combinedReasoning,
         },
       };
 

@@ -25,7 +25,7 @@ use super::prompts;
 use super::prompts::{APP_DYNAMIC_MEMORY_TEMPLATE_ID, APP_DYNAMIC_SUMMARY_TEMPLATE_ID};
 use super::request::{
     ensure_assistant_variant, extract_error_message, extract_reasoning, extract_text,
-    extract_usage, new_assistant_variant,
+    extract_usage, new_assistant_variant, push_assistant_variant,
 };
 use super::service::{
     record_failed_usage, record_usage_if_available, resolve_api_key, ChatContext,
@@ -2106,8 +2106,8 @@ pub async fn chat_completion(
     }
 
     Ok(ChatTurnResult {
-        session: session.clone(),
         session_id: session.id,
+        session_updated_at: session.updated_at,
         request_id,
         user_message: user_msg,
         assistant_message,
@@ -2759,10 +2759,7 @@ pub async fn chat_regenerate(
         assistant_message.reasoning = reasoning.clone();
         assistant_message.model_id = Some(selected_model.id.clone());
         assistant_message.fallback_from_model_id = fallback_from_model_id.clone();
-        assistant_message.variants.push(new_variant);
-        if let Some(last) = assistant_message.variants.last() {
-            assistant_message.selected_variant_id = Some(last.id.clone());
-        }
+        push_assistant_variant(assistant_message, new_variant);
 
         if dynamic_memory_enabled {
             assistant_message.memory_refs = relevant_memories
@@ -2826,8 +2823,8 @@ pub async fn chat_regenerate(
     .await;
 
     Ok(RegenerateResult {
-        session: session.clone(),
         session_id: session.id,
+        session_updated_at: session.updated_at,
         request_id,
         assistant_message: assistant_clone,
     })
@@ -3494,8 +3491,8 @@ pub async fn chat_continue(
     }
 
     Ok(ContinueResult {
-        session: session.clone(),
         session_id: session.id,
+        session_updated_at: session.updated_at,
         request_id,
         assistant_message,
     })

@@ -138,6 +138,9 @@ pub fn run() {
                 logger::LogManager::new(app.handle()).expect("Failed to initialize log manager");
             app.manage(log_manager);
             logger::set_global_app_handle(app.handle().clone());
+            if let Err(err) = utils::init_tracing(app.handle().clone()) {
+                eprintln!("Failed to initialize tracing: {}", err);
+            }
             std::panic::set_hook(Box::new(|info| {
                 let message = format!("{}", info);
                 utils::log_error_global("panic", message);

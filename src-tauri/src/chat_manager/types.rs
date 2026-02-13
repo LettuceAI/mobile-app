@@ -566,8 +566,8 @@ pub struct UsageSummary {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatTurnResult {
-    pub session: Session,
     pub session_id: String,
+    pub session_updated_at: u64,
     pub request_id: Option<String>,
     pub user_message: StoredMessage,
     pub assistant_message: StoredMessage,
@@ -652,8 +652,8 @@ pub struct ChatAddMessageAttachmentArgs {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegenerateResult {
-    pub session: Session,
     pub session_id: String,
+    pub session_updated_at: u64,
     pub request_id: Option<String>,
     pub assistant_message: StoredMessage,
 }
@@ -661,8 +661,8 @@ pub struct RegenerateResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResult {
-    pub session: Session,
     pub session_id: String,
+    pub session_updated_at: u64,
     pub request_id: Option<String>,
     pub assistant_message: StoredMessage,
 }

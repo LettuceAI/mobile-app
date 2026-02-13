@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { StoredMessage, UsageSummary, ImageAttachment, Session } from "../storage/schemas";
+import type { StoredMessage, UsageSummary, ImageAttachment } from "../storage/schemas";
 
 export interface ChatTurnResult {
-  session: Session;
   sessionId: string;
+  sessionUpdatedAt: number;
   requestId?: string;
   userMessage: StoredMessage;
   assistantMessage: StoredMessage;
@@ -11,15 +11,15 @@ export interface ChatTurnResult {
 }
 
 export interface ChatRegenerateResult {
-  session: Session;
   sessionId: string;
+  sessionUpdatedAt: number;
   requestId?: string;
   assistantMessage: StoredMessage;
 }
 
 export interface ChatContinueResult {
-  session: Session;
   sessionId: string;
+  sessionUpdatedAt: number;
   requestId?: string;
   assistantMessage: StoredMessage;
 }

@@ -2,6 +2,7 @@ import { isDevelopmentMode } from "./env";
 import { invoke } from "@tauri-apps/api/core";
 
 type LogLevel = "debug" | "info" | "warn" | "error" | "log";
+const MAX_SERIALIZED_ARG_CHARS = 2048;
 
 export type LoggerOptions = {
   component: string; // e.g. useChatController, Chat.tsx, SettingsPage
@@ -17,15 +18,15 @@ export interface Logger {
   with: (ctx: Partial<LoggerOptions>) => Logger;
 }
 
-const _enabled = true;
+let _enabled = isDevelopmentMode();
 let _minLevel: LogLevel = isDevelopmentMode() ? "debug" : "info";
 
 export function setLoggingEnabled(enabled: boolean) {
-  if (!enabled) return;
+  _enabled = enabled;
 }
 
 export function isLoggingEnabled() {
-  return true;
+  return _enabled;
 }
 
 export function setMinLogLevel(level: LogLevel) {
@@ -37,8 +38,50 @@ function fmtPrefix(level: LogLevel, opts: LoggerOptions): string {
   const hh = `${ts.getHours()}`.padStart(2, "0");
   const mm = `${ts.getMinutes()}`.padStart(2, "0");
   const ss = `${ts.getSeconds()}`.padStart(2, "0");
-  const scope = opts.fn ? `${opts.component}/${opts.fn}` : opts.component;
-  return `[${hh}:${mm}:${ss}] ${scope} ${level.toUpperCase()}`;
+  return `[${hh}:${mm}:${ss}] ${level.toUpperCase()} ${opts.component}`;
+}
+
+function serializeError(err: Error): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    name: err.name,
+    message: err.message,
+  };
+  if (err.stack) out.stack = err.stack;
+  const cause = (err as any).cause;
+  if (cause instanceof Error) {
+    out.cause = serializeError(cause);
+  } else if (cause !== undefined) {
+    out.cause = String(cause);
+  }
+  return out;
+}
+
+function serializeArg(arg: any): string {
+  const clamp = (value: string): string =>
+    value.length > MAX_SERIALIZED_ARG_CHARS
+      ? `${value.slice(0, MAX_SERIALIZED_ARG_CHARS)}... <truncated>`
+      : value;
+
+  if (arg instanceof Error) {
+    return clamp(JSON.stringify(serializeError(arg)));
+  }
+  if (typeof arg === "string") return clamp(arg);
+  if (typeof arg === "number" || typeof arg === "boolean" || arg == null) return clamp(String(arg));
+  try {
+    const seen = new WeakSet<object>();
+    const serialized = JSON.stringify(arg, (_key, value) => {
+      if (value instanceof Error) return serializeError(value);
+      if (typeof value === "bigint") return value.toString();
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return "[Circular]";
+        seen.add(value);
+      }
+      return value;
+    });
+    return clamp(serialized);
+  } catch {
+    return clamp(String(arg));
+  }
 }
 
 function write(level: LogLevel, opts: LoggerOptions, args: any[]) {
@@ -53,13 +96,15 @@ function write(level: LogLevel, opts: LoggerOptions, args: any[]) {
   if (levelRank[level] < levelRank[_minLevel]) return;
   const method: (...data: any[]) => void = (console as any)[level] || console.log;
   const prefix = fmtPrefix(level, opts);
-  method(prefix, ...args);
+  if (opts.fn) {
+    method(`${prefix} at=${opts.fn} |`, ...args);
+  } else {
+    method(`${prefix} |`, ...args);
+  }
 
   // Also log to file
   try {
-    const message = args
-      .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
-      .join(" ");
+    const message = args.map((arg) => serializeArg(arg)).join(" | ");
 
     invoke("log_to_file", {
       timestamp: new Date().toISOString(),

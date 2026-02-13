@@ -85,16 +85,14 @@ impl LogManager {
         }
 
         if let Some(ref mut file) = *file_lock {
-            let scope = if let Some(ref f) = entry.function {
-                format!("{}/{}", entry.component, f)
-            } else {
-                entry.component.clone()
-            };
-
-            let log_line = format!(
-                "[{}] {} {} {}\n",
-                entry.timestamp, scope, entry.level, entry.message
-            );
+            let mut log_line = format!("[{}] {} {}", entry.timestamp, entry.level, entry.component);
+            if let Some(ref f) = entry.function {
+                log_line.push_str(" at=");
+                log_line.push_str(f);
+            }
+            log_line.push_str(" | ");
+            log_line.push_str(&entry.message);
+            log_line.push('\n');
 
             file.write_all(log_line.as_bytes()).map_err(|e| {
                 crate::utils::err_msg(
