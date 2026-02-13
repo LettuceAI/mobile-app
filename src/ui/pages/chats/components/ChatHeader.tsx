@@ -56,6 +56,7 @@ export function ChatHeader({
     let unlistenProcessing: (() => void) | undefined;
     let unlistenSuccess: (() => void) | undefined;
     let unlistenError: (() => void) | undefined;
+    let disposed = false;
 
     const setupListeners = async () => {
       unlistenProcessing = await listen("dynamic-memory:processing", (event: any) => {
@@ -67,6 +68,10 @@ export function ChatHeader({
         if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
         setMemoryBusy(true);
       });
+      if (disposed) {
+        unlistenProcessing();
+        return;
+      }
 
       unlistenSuccess = await listen("dynamic-memory:success", (event: any) => {
         if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
@@ -74,6 +79,10 @@ export function ChatHeader({
         setMemoryError(null);
         onSessionUpdate?.();
       });
+      if (disposed) {
+        unlistenSuccess();
+        return;
+      }
 
       unlistenError = await listen("dynamic-memory:error", (event: any) => {
         if (event.payload?.sessionId && sessionId && event.payload.sessionId !== sessionId) return;
@@ -84,11 +93,15 @@ export function ChatHeader({
             : event.payload?.error || "Unknown error",
         );
       });
+      if (disposed) {
+        unlistenError();
+      }
     };
 
-    setupListeners();
+    void setupListeners();
 
     return () => {
+      disposed = true;
       unlistenProcessing?.();
       unlistenSuccess?.();
       unlistenError?.();
