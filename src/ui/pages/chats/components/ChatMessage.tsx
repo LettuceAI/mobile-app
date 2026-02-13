@@ -660,6 +660,8 @@ export const ChatMessage = React.memo(ChatMessageInner, (prev, next) => {
     prev.persona?.avatarCrop?.x === next.persona?.avatarCrop?.x &&
     prev.persona?.avatarCrop?.y === next.persona?.avatarCrop?.y &&
     prev.persona?.avatarCrop?.scale === next.persona?.avatarCrop?.scale &&
+    prev.displayContent === next.displayContent &&
+    prev.swapPlaces === next.swapPlaces &&
     prev.audioStatus === next.audioStatus &&
     a.reasoning === b.reasoning &&
     prev.reasoning === next.reasoning &&
