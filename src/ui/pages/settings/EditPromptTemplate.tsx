@@ -15,8 +15,10 @@ import {
   GripVertical,
   Plus,
   Trash2,
+  Layers,
 } from "lucide-react";
 import { cn, radius, interactive } from "../../design-tokens";
+import { MessageStructurePreview } from "./components/MessageStructurePreview";
 import { BottomMenu } from "../../components";
 import { confirmBottomMenu } from "../../components/ConfirmBottomMenu";
 import { useNavigationManager } from "../../navigation";
@@ -194,6 +196,7 @@ function PromptEntryCard({
   onToggle,
   onToggleCollapse,
   collapsed,
+  highlighted,
   onTextareaRef,
   onTextareaFocus,
 }: {
@@ -203,6 +206,7 @@ function PromptEntryCard({
   onToggle: (id: string) => void;
   onToggleCollapse: (id: string) => void;
   collapsed: boolean;
+  highlighted?: boolean;
   onTextareaRef: (id: string, el: HTMLTextAreaElement | null) => void;
   onTextareaFocus: (id: string) => void;
 }) {
@@ -216,7 +220,13 @@ function PromptEntryCard({
       dragListener={false}
       dragControls={controls}
       layout="position"
-      className={cn("rounded-xl border border-white/10 bg-white/5 p-4", "space-y-3")}
+      className={cn(
+        "rounded-xl border bg-white/5 p-4 space-y-3",
+        interactive.transition.default,
+        highlighted
+          ? "border-emerald-400/50 ring-2 ring-emerald-400/30 ring-offset-1 ring-offset-black"
+          : "border-white/10",
+      )}
     >
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -712,7 +722,10 @@ export function EditPromptTemplate() {
   const [saving, setSaving] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(false);
+  const [editorView, setEditorView] = useState<"entries" | "structure">("entries");
+  const [mobilePreviewTab, setMobilePreviewTab] = useState<"content" | "structure">("content");
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
+  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
 
   // Template metadata
   const [isAppDefault, setIsAppDefault] = useState(false);
@@ -991,6 +1004,38 @@ export function EditPromptTemplate() {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 150);
+  };
+
+  const handleStructureEdit = (entryId: string) => {
+    setEditorView("entries");
+    setCollapsedEntries((prev) => ({ ...prev, [entryId]: false }));
+    window.setTimeout(() => {
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+      const targetId = isMobile
+        ? `prompt-entry-row-mobile-${entryId}`
+        : `prompt-entry-row-${entryId}`;
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        entryTextareaRefs.current[entryId]?.focus();
+      }, 300);
+    }, 200);
+  };
+
+  const handleStructureDelete = (entryId: string) => {
+    handleEntryDelete(entryId);
+  };
+
+  const handleStructureReorder = (entryId: string) => {
+    setEditorView("entries");
+    setHighlightedEntryId(entryId);
+    window.setTimeout(() => {
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+      const targetId = isMobile
+        ? `prompt-entry-row-mobile-${entryId}`
+        : `prompt-entry-row-${entryId}`;
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+    window.setTimeout(() => setHighlightedEntryId(null), 4000);
   };
 
   const selectedMobileEntry = mobileEntryEditorId
@@ -1447,9 +1492,41 @@ export function EditPromptTemplate() {
               {/* Content Editor */}
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-xs font-medium uppercase tracking-wider text-white/50">
-                    {usesEntryEditor ? "Prompt Entries" : "Prompt Content"}
-                  </label>
+                  {usesEntryEditor ? (
+                    <div className="flex items-center gap-1 p-0.5 rounded-md border border-white/10 bg-black/20">
+                      <button
+                        onClick={() => setEditorView("entries")}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium",
+                          radius.sm,
+                          "transition",
+                          editorView === "entries"
+                            ? "bg-white/10 text-white"
+                            : "text-white/40 hover:text-white/60",
+                        )}
+                      >
+                        Entries
+                      </button>
+                      <button
+                        onClick={() => setEditorView("structure")}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium",
+                          radius.sm,
+                          "transition",
+                          editorView === "structure"
+                            ? "bg-white/10 text-white"
+                            : "text-white/40 hover:text-white/60",
+                        )}
+                      >
+                        <Layers className="h-3 w-3" />
+                        Structure
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="text-xs font-medium uppercase tracking-wider text-white/50">
+                      Prompt Content
+                    </label>
+                  )}
                   {usesEntryEditor && (
                     <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5">
                       <input
@@ -1529,61 +1606,89 @@ export function EditPromptTemplate() {
                 </div>
 
                 {usesEntryEditor ? (
-                  <div className="space-y-3">
-                    <Reorder.Group
-                      axis="y"
-                      values={entries}
-                      onReorder={setEntries}
-                      className="space-y-3 hidden lg:flex lg:flex-col"
-                    >
-                      {entries.map((entry) => (
-                        <PromptEntryCard
-                          key={entry.id}
-                          entry={entry}
-                          onUpdate={handleEntryUpdate}
-                          onDelete={handleEntryDelete}
-                          onToggle={handleEntryToggle}
-                          onToggleCollapse={handleToggleEntryCollapse}
-                          collapsed={collapsedEntries[entry.id] ?? true}
-                          onTextareaRef={(id, el) => {
-                            entryTextareaRefs.current[id] = el;
-                          }}
-                          onTextareaFocus={(id) => {
-                            activeEntryIdRef.current = id;
-                          }}
-                        />
-                      ))}
-                    </Reorder.Group>
-
-                    <Reorder.Group
-                      axis="y"
-                      values={entries}
-                      onReorder={setEntries}
-                      className="space-y-2 lg:hidden"
-                    >
-                      {entries.map((entry) => (
-                        <PromptEntryListItem
-                          key={entry.id}
-                          entry={entry}
-                          onToggle={handleEntryToggle}
-                          onDelete={handleEntryDelete}
-                          onEdit={(id) => setMobileEntryEditorId(id)}
-                        />
-                      ))}
-                    </Reorder.Group>
-
-                    <div className="flex items-center justify-end">
-                      <span
-                        className={cn(
-                          "px-2 py-1 rounded-md bg-black/60",
-                          "text-xs font-medium",
-                          charCountColor,
-                        )}
+                  <AnimatePresence mode="wait" initial={false}>
+                    {editorView === "structure" ? (
+                      <motion.div
+                        key="structure-view"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
                       >
-                        {charCount.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
+                        <MessageStructurePreview
+                          entries={entries}
+                          condensePromptEntries={condensePromptEntries}
+                          onEditEntry={handleStructureEdit}
+                          onDeleteEntry={handleStructureDelete}
+                          onReorderEntry={handleStructureReorder}
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="entries-view"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="space-y-3"
+                      >
+                        <Reorder.Group
+                          axis="y"
+                          values={entries}
+                          onReorder={setEntries}
+                          className="space-y-3 hidden lg:flex lg:flex-col"
+                        >
+                          {entries.map((entry) => (
+                            <PromptEntryCard
+                              key={entry.id}
+                              entry={entry}
+                              onUpdate={handleEntryUpdate}
+                              onDelete={handleEntryDelete}
+                              onToggle={handleEntryToggle}
+                              onToggleCollapse={handleToggleEntryCollapse}
+                              collapsed={collapsedEntries[entry.id] ?? true}
+                              highlighted={highlightedEntryId === entry.id}
+                              onTextareaRef={(id, el) => {
+                                entryTextareaRefs.current[id] = el;
+                              }}
+                              onTextareaFocus={(id) => {
+                                activeEntryIdRef.current = id;
+                              }}
+                            />
+                          ))}
+                        </Reorder.Group>
+
+                        <Reorder.Group
+                          axis="y"
+                          values={entries}
+                          onReorder={setEntries}
+                          className="space-y-2 lg:hidden"
+                        >
+                          {entries.map((entry) => (
+                            <PromptEntryListItem
+                              key={entry.id}
+                              entry={entry}
+                              onToggle={handleEntryToggle}
+                              onDelete={handleEntryDelete}
+                              onEdit={(id) => setMobileEntryEditorId(id)}
+                            />
+                          ))}
+                        </Reorder.Group>
+
+                        <div className="flex items-center justify-end">
+                          <span
+                            className={cn(
+                              "px-2 py-1 rounded-md bg-black/60",
+                              "text-xs font-medium",
+                              charCountColor,
+                            )}
+                          >
+                            {charCount.toLocaleString()}
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 ) : (
                   <div className="relative">
                     <textarea
@@ -1662,15 +1767,15 @@ export function EditPromptTemplate() {
                   )}
                 </AnimatePresence>
               </div>
+
             </div>
 
-            {/* Desktop Sidebar - Quick Insert Only */}
+            {/* Desktop Sidebar - Quick Insert */}
             <motion.div
               ref={sidebarRef}
               style={{ y: quickInsertY }}
               className="hidden lg:block w-80 shrink-0 space-y-4 self-start relative z-20"
             >
-              {/* Quick Insert Panel */}
               <div className={cn(radius.lg, "border border-white/10 bg-white/5 p-4")}>
                 <h3 className="text-sm font-medium text-white mb-1">Quick Insert</h3>
                 <p className="text-xs text-white/40 mb-3">Click to insert at cursor</p>
@@ -1722,7 +1827,6 @@ export function EditPromptTemplate() {
                   })}
                 </div>
 
-                {/* Info text */}
                 <div className="flex items-start gap-2 mt-3 pt-3 border-t border-white/10">
                   <span className="text-white/30 text-xs mt-0.5">ⓘ</span>
                   <p className="text-xs text-white/40 leading-relaxed">
@@ -1839,9 +1943,49 @@ export function EditPromptTemplate() {
       <BottomMenu
         isOpen={showMobilePreview}
         onClose={() => setShowMobilePreview(false)}
-        title="Prompt Preview"
+        title="Preview"
       >
-        <PreviewPanel isMobile />
+        {usesEntryEditor && (
+          <div className="flex items-center gap-1 p-1 rounded-lg border border-white/10 bg-white/5 mb-3">
+            <button
+              onClick={() => setMobilePreviewTab("content")}
+              className={cn(
+                "flex-1 flex items-center justify-center px-3 py-1.5",
+                radius.md,
+                "text-xs font-medium transition",
+                mobilePreviewTab === "content"
+                  ? "bg-emerald-500/20 text-emerald-300"
+                  : "text-white/50 hover:text-white/70",
+              )}
+            >
+              Content
+            </button>
+            <button
+              onClick={() => setMobilePreviewTab("structure")}
+              className={cn(
+                "flex-1 flex items-center justify-center px-3 py-1.5",
+                radius.md,
+                "text-xs font-medium transition",
+                mobilePreviewTab === "structure"
+                  ? "bg-emerald-500/20 text-emerald-300"
+                  : "text-white/50 hover:text-white/70",
+              )}
+            >
+              Structure
+            </button>
+          </div>
+        )}
+        {mobilePreviewTab === "content" || !usesEntryEditor ? (
+          <PreviewPanel isMobile />
+        ) : (
+          <MessageStructurePreview
+            entries={entries}
+            condensePromptEntries={condensePromptEntries}
+            onEditEntry={handleStructureEdit}
+            onDeleteEntry={handleStructureDelete}
+            onReorderEntry={handleStructureReorder}
+          />
+        )}
       </BottomMenu>
 
       {/* Entry Editor Bottom Sheet (Mobile only) */}
