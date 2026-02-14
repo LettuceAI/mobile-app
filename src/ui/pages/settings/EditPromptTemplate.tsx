@@ -124,6 +124,8 @@ const ENTRY_ROLE_OPTIONS = [
 const ENTRY_POSITION_OPTIONS = [
   { value: "relative", label: "Relative" },
   { value: "inChat", label: "In Chat" },
+  { value: "conditional", label: "Conditional" },
+  { value: "interval", label: "Interval" },
 ] as const;
 
 const DRAG_HOLD_MS = 450;
@@ -135,6 +137,8 @@ const createEntryId = () =>
 
 const DEFAULT_ENTRY_ROLE: SystemPromptEntry["role"] = "system";
 const DEFAULT_ENTRY_POSITION: SystemPromptEntry["injectionPosition"] = "relative";
+const DEFAULT_CONDITIONAL_MIN_MESSAGES = 6;
+const DEFAULT_INTERVAL_TURNS = 3;
 
 const createDefaultEntry = (
   content: string,
@@ -147,12 +151,29 @@ const createDefaultEntry = (
   enabled: true,
   injectionPosition: DEFAULT_ENTRY_POSITION,
   injectionDepth: 0,
+  conditionalMinMessages: null,
+  intervalTurns: null,
   systemPrompt: true,
   ...overrides,
 });
 
 const createExtraEntry = (overrides?: Partial<SystemPromptEntry>) =>
   createDefaultEntry("", { name: "Prompt Entry", systemPrompt: false, ...overrides });
+
+function getInjectionModeHint(position: SystemPromptEntry["injectionPosition"]) {
+  switch (position) {
+    case "relative":
+      return "Before chat history (system context).";
+    case "inChat":
+      return "Always inject inside chat history.";
+    case "conditional":
+      return "Inject only after a minimum number of chat messages.";
+    case "interval":
+      return "Inject every N chat messages.";
+    default:
+      return "";
+  }
+}
 
 const entriesToContent = (entries: SystemPromptEntry[]) =>
   entries
@@ -292,7 +313,7 @@ function PromptEntryCard({
               <select
                 value={entry.role}
                 onChange={(event) => onUpdate(entry.id, { role: event.target.value as any })}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+                className="h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white"
               >
                 {ENTRY_ROLE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -303,10 +324,21 @@ function PromptEntryCard({
 
               <select
                 value={entry.injectionPosition}
-                onChange={(event) =>
-                  onUpdate(entry.id, { injectionPosition: event.target.value as any })
-                }
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+                onChange={(event) => {
+                  const nextPosition = event.target.value as SystemPromptEntry["injectionPosition"];
+                  onUpdate(entry.id, {
+                    injectionPosition: nextPosition,
+                    conditionalMinMessages:
+                      nextPosition === "conditional"
+                        ? (entry.conditionalMinMessages ?? DEFAULT_CONDITIONAL_MIN_MESSAGES)
+                        : (entry.conditionalMinMessages ?? null),
+                    intervalTurns:
+                      nextPosition === "interval"
+                        ? (entry.intervalTurns ?? DEFAULT_INTERVAL_TURNS)
+                        : (entry.intervalTurns ?? null),
+                  });
+                }}
+                className="h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white"
               >
                 {ENTRY_POSITION_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -315,19 +347,63 @@ function PromptEntryCard({
                 ))}
               </select>
 
-              {entry.injectionPosition === "inChat" && (
-                <input
-                  type="number"
-                  min={0}
-                  value={entry.injectionDepth}
-                  onChange={(event) =>
-                    onUpdate(entry.id, { injectionDepth: Number(event.target.value) })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
-                  placeholder="Depth"
-                />
+              {entry.injectionPosition !== "relative" && (
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-[11px] text-white/50">Depth</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={entry.injectionDepth}
+                    onChange={(event) =>
+                      onUpdate(entry.id, { injectionDepth: Number(event.target.value) })
+                    }
+                    className="h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white"
+                    placeholder="0"
+                    title="Insertion Depth"
+                    aria-label="Insertion Depth"
+                  />
+                </div>
               )}
             </div>
+            <p className="text-[11px] text-white/50">
+              {getInjectionModeHint(entry.injectionPosition)}
+            </p>
+
+            {entry.injectionPosition === "conditional" && (
+              <div className="space-y-1">
+                <p className="text-[11px] text-white/50">Min Messages</p>
+                <input
+                  type="number"
+                  min={1}
+                  value={entry.conditionalMinMessages ?? DEFAULT_CONDITIONAL_MIN_MESSAGES}
+                  onChange={(event) =>
+                    onUpdate(entry.id, {
+                      conditionalMinMessages: Math.max(1, Number(event.target.value) || 1),
+                    })
+                  }
+                  className="h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white"
+                  placeholder="Inject after at least N messages"
+                />
+              </div>
+            )}
+
+            {entry.injectionPosition === "interval" && (
+              <div className="space-y-1">
+                <p className="text-[11px] text-white/50">Every N Messages</p>
+                <input
+                  type="number"
+                  min={1}
+                  value={entry.intervalTurns ?? DEFAULT_INTERVAL_TURNS}
+                  onChange={(event) =>
+                    onUpdate(entry.id, {
+                      intervalTurns: Math.max(1, Number(event.target.value) || 1),
+                    })
+                  }
+                  className="h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white"
+                  placeholder="Inject every N messages"
+                />
+              </div>
+            )}
 
             <textarea
               ref={(el) => {
@@ -715,6 +791,8 @@ export function EditPromptTemplate() {
         enabled: entry.enabled,
         injectionPosition: entry.injectionPosition,
         injectionDepth: entry.injectionDepth,
+        conditionalMinMessages: entry.conditionalMinMessages ?? null,
+        intervalTurns: entry.intervalTurns ?? null,
         systemPrompt: entry.systemPrompt,
       })),
     );
@@ -1795,7 +1873,7 @@ export function EditPromptTemplate() {
                       role: event.target.value as any,
                     })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white"
                 >
                   {ENTRY_ROLE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1811,12 +1889,23 @@ export function EditPromptTemplate() {
               <div className="space-y-1">
                 <select
                   value={selectedMobileEntry.injectionPosition}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextPosition = event.target
+                      .value as SystemPromptEntry["injectionPosition"];
                     handleEntryUpdate(selectedMobileEntry.id, {
-                      injectionPosition: event.target.value as any,
-                    })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      injectionPosition: nextPosition,
+                      conditionalMinMessages:
+                        nextPosition === "conditional"
+                          ? (selectedMobileEntry.conditionalMinMessages ??
+                            DEFAULT_CONDITIONAL_MIN_MESSAGES)
+                          : (selectedMobileEntry.conditionalMinMessages ?? null),
+                      intervalTurns:
+                        nextPosition === "interval"
+                          ? (selectedMobileEntry.intervalTurns ?? DEFAULT_INTERVAL_TURNS)
+                          : (selectedMobileEntry.intervalTurns ?? null),
+                    });
+                  }}
+                  className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white"
                 >
                   {ENTRY_POSITION_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1825,12 +1914,13 @@ export function EditPromptTemplate() {
                   ))}
                 </select>
                 <p className="text-[11px] text-white/50">
-                  Relative adds before chat, in-chat places inside history.
+                  {getInjectionModeHint(selectedMobileEntry.injectionPosition)}
                 </p>
               </div>
 
-              {selectedMobileEntry.injectionPosition === "inChat" && (
+              {selectedMobileEntry.injectionPosition !== "relative" && (
                 <div className="space-y-1">
+                  <p className="text-[11px] text-white/50">Insertion Depth</p>
                   <input
                     type="number"
                     min={0}
@@ -1840,12 +1930,54 @@ export function EditPromptTemplate() {
                         injectionDepth: Number(event.target.value),
                       })
                     }
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
-                    placeholder="Depth"
+                    className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white"
+                    placeholder="0 = newest context"
                   />
                   <p className="text-[11px] text-white/50">
                     Depth 0 is newest; higher numbers insert earlier.
                   </p>
+                </div>
+              )}
+
+              {selectedMobileEntry.injectionPosition === "conditional" && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-white/50">Min Messages</p>
+                  <input
+                    type="number"
+                    min={1}
+                    value={
+                      selectedMobileEntry.conditionalMinMessages ?? DEFAULT_CONDITIONAL_MIN_MESSAGES
+                    }
+                    onChange={(event) =>
+                      handleEntryUpdate(selectedMobileEntry.id, {
+                        conditionalMinMessages: Math.max(1, Number(event.target.value) || 1),
+                      })
+                    }
+                    className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white"
+                    placeholder="Inject after at least N messages"
+                  />
+                  <p className="text-[11px] text-white/50">
+                    Inject only when at least this many chat messages are in context.
+                  </p>
+                </div>
+              )}
+
+              {selectedMobileEntry.injectionPosition === "interval" && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-white/50">Every N Messages</p>
+                  <input
+                    type="number"
+                    min={1}
+                    value={selectedMobileEntry.intervalTurns ?? DEFAULT_INTERVAL_TURNS}
+                    onChange={(event) =>
+                      handleEntryUpdate(selectedMobileEntry.id, {
+                        intervalTurns: Math.max(1, Number(event.target.value) || 1),
+                      })
+                    }
+                    className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white"
+                    placeholder="Inject every N messages"
+                  />
+                  <p className="text-[11px] text-white/50">Inject every N context turns.</p>
                 </div>
               )}
             </div>

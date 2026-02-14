@@ -2546,6 +2546,8 @@ fn build_group_system_prompt(
                     enabled: true,
                     injection_position: PromptEntryPosition::Relative,
                     injection_depth: 0,
+                    conditional_min_messages: None,
+                    interval_turns: None,
                     system_prompt: true,
                 }],
                 false,
@@ -2691,6 +2693,8 @@ fn build_group_system_prompt(
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: true,
         }]
     } else {
@@ -2802,6 +2806,8 @@ fn condense_entries_into_single_system_message(
         enabled: true,
         injection_position: PromptEntryPosition::Relative,
         injection_depth: 0,
+        conditional_min_messages: None,
+        interval_turns: None,
         system_prompt: true,
     }]
 }

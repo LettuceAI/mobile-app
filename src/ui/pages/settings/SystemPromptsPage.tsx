@@ -64,6 +64,8 @@ type ExternalPromptEntry = {
   role?: string;
   injection_position?: number | string;
   injection_depth?: number;
+  conditional_min_messages?: number;
+  interval_turns?: number;
   forbid_overrides?: boolean;
   enabled?: boolean;
 };
@@ -108,6 +110,12 @@ function normalizePromptVariables(content: string) {
 function entryToExternal(entry: SystemPromptEntry): ExternalPromptEntry {
   const role: "system" | "user" | "assistant" =
     entry.role === "assistant" || entry.role === "user" ? entry.role : "system";
+  const injectionPosition =
+    entry.injectionPosition === "relative"
+      ? 0
+      : entry.injectionPosition === "inChat"
+        ? 1
+        : entry.injectionPosition;
   return {
     identifier: entry.id,
     name: entry.name,
@@ -115,8 +123,10 @@ function entryToExternal(entry: SystemPromptEntry): ExternalPromptEntry {
     marker: false,
     content: normalizePromptVariables(entry.content),
     role,
-    injection_position: entry.injectionPosition === "inChat" ? 1 : 0,
+    injection_position: injectionPosition,
     injection_depth: entry.injectionDepth,
+    conditional_min_messages: entry.conditionalMinMessages ?? undefined,
+    interval_turns: entry.intervalTurns ?? undefined,
     forbid_overrides: false,
     enabled: entry.enabled,
   };
@@ -155,7 +165,13 @@ function toSystemEntry(
       : `imported_${fallbackIndex}_${Math.random().toString(36).slice(2, 8)}`;
   const role = input.role === "user" || input.role === "assistant" ? input.role : "system";
   const injectionPosition =
-    input.injection_position === 1 || input.injection_position === "inChat" ? "inChat" : "relative";
+    input.injection_position === "conditional"
+      ? "conditional"
+      : input.injection_position === "interval"
+        ? "interval"
+        : input.injection_position === 1 || input.injection_position === "inChat"
+          ? "inChat"
+          : "relative";
   const injectionDepth =
     typeof input.injection_depth === "number" && Number.isFinite(input.injection_depth)
       ? input.injection_depth
@@ -168,6 +184,15 @@ function toSystemEntry(
     enabled: input.enabled ?? true,
     injectionPosition,
     injectionDepth,
+    conditionalMinMessages:
+      typeof input.conditional_min_messages === "number" &&
+      Number.isFinite(input.conditional_min_messages)
+        ? Math.max(1, Math.floor(input.conditional_min_messages))
+        : null,
+    intervalTurns:
+      typeof input.interval_turns === "number" && Number.isFinite(input.interval_turns)
+        ? Math.max(1, Math.floor(input.interval_turns))
+        : null,
     // Imported entries should stay user-editable/deletable.
     systemPrompt: false,
   };

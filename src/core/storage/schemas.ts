@@ -9,7 +9,7 @@ export type PromptScope = z.infer<typeof PromptScopeSchema>;
 export const PromptEntryRoleSchema = z.enum(["system", "user", "assistant"]);
 export type PromptEntryRole = z.infer<typeof PromptEntryRoleSchema>;
 
-export const PromptEntryPositionSchema = z.enum(["relative", "inChat"]);
+export const PromptEntryPositionSchema = z.enum(["relative", "inChat", "conditional", "interval"]);
 export type PromptEntryPosition = z.infer<typeof PromptEntryPositionSchema>;
 
 export const SystemPromptEntrySchema = z.object({
@@ -20,6 +20,8 @@ export const SystemPromptEntrySchema = z.object({
   enabled: z.boolean().default(true),
   injectionPosition: PromptEntryPositionSchema.default("relative"),
   injectionDepth: z.number().int().min(0).default(0),
+  conditionalMinMessages: z.number().int().min(1).nullable().optional(),
+  intervalTurns: z.number().int().min(1).nullable().optional(),
   systemPrompt: z.boolean().default(false),
 });
 export type SystemPromptEntry = z.infer<typeof SystemPromptEntrySchema>;

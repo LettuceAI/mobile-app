@@ -38,6 +38,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: true,
         },
         SystemPromptEntry {
@@ -49,6 +51,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
         SystemPromptEntry {
@@ -59,6 +63,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
         SystemPromptEntry {
@@ -69,6 +75,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
         SystemPromptEntry {
@@ -80,6 +88,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
         SystemPromptEntry {
@@ -90,6 +100,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
         SystemPromptEntry {
@@ -102,6 +114,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
         SystemPromptEntry {
@@ -112,6 +126,8 @@ fn default_modular_prompt_entries() -> Vec<SystemPromptEntry> {
             enabled: true,
             injection_position: PromptEntryPosition::Relative,
             injection_depth: 0,
+            conditional_min_messages: None,
+            interval_turns: None,
             system_prompt: false,
         },
     ]
@@ -126,6 +142,8 @@ fn single_entry_from_content(content: &str) -> Vec<SystemPromptEntry> {
         enabled: true,
         injection_position: PromptEntryPosition::Relative,
         injection_depth: 0,
+        conditional_min_messages: None,
+        interval_turns: None,
         system_prompt: true,
     }]
 }

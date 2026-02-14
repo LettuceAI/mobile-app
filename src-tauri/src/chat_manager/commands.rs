@@ -113,13 +113,29 @@ fn partition_prompt_entries(
     let mut relative = Vec::new();
     let mut in_chat = Vec::new();
     for entry in entries {
-        if entry.injection_position == PromptEntryPosition::InChat {
-            in_chat.push(entry);
-        } else {
-            relative.push(entry);
+        match entry.injection_position {
+            PromptEntryPosition::Relative => relative.push(entry),
+            PromptEntryPosition::InChat
+            | PromptEntryPosition::Conditional
+            | PromptEntryPosition::Interval => in_chat.push(entry),
         }
     }
     (relative, in_chat)
+}
+
+fn should_insert_in_chat_prompt_entry(entry: &SystemPromptEntry, turn_count: usize) -> bool {
+    match entry.injection_position {
+        PromptEntryPosition::InChat => true,
+        PromptEntryPosition::Conditional => {
+            let min_messages = entry.conditional_min_messages.unwrap_or(1) as usize;
+            turn_count >= min_messages
+        }
+        PromptEntryPosition::Interval => {
+            let interval = entry.interval_turns.unwrap_or(0) as usize;
+            interval > 0 && turn_count > 0 && turn_count % interval == 0
+        }
+        PromptEntryPosition::Relative => false,
+    }
 }
 
 fn insert_in_chat_prompt_entries(
@@ -131,13 +147,17 @@ fn insert_in_chat_prompt_entries(
         return;
     }
     let base_len = messages.len();
+    let turn_count = base_len;
     let mut inserts: Vec<(usize, usize, &SystemPromptEntry)> = entries
         .iter()
         .enumerate()
-        .map(|(idx, entry)| {
+        .filter_map(|(idx, entry)| {
+            if !should_insert_in_chat_prompt_entry(entry, turn_count) {
+                return None;
+            }
             let depth = entry.injection_depth as usize;
             let pos = base_len.saturating_sub(depth);
-            (pos, idx, entry)
+            Some((pos, idx, entry))
         })
         .collect();
     inserts.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));

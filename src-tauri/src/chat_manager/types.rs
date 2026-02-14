@@ -25,6 +25,8 @@ pub enum PromptEntryRole {
 pub enum PromptEntryPosition {
     Relative,
     InChat,
+    Conditional,
+    Interval,
 }
 
 impl Default for PromptEntryPosition {
@@ -46,6 +48,10 @@ pub struct SystemPromptEntry {
     pub injection_position: PromptEntryPosition,
     #[serde(default)]
     pub injection_depth: u32,
+    #[serde(default)]
+    pub conditional_min_messages: Option<u32>,
+    #[serde(default)]
+    pub interval_turns: Option<u32>,
     #[serde(default)]
     pub system_prompt: bool,
 }
